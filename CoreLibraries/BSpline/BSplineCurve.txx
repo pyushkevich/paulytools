@@ -3,8 +3,9 @@
 #include <iostream>
 
 template <class TReal, unsigned int VOrder, unsigned int VJetOrder>
+void
 BSplineKnotList<TReal,VOrder,VJetOrder>
-::BSplineKnotList(unsigned int m) 
+::SetUniformKnots(unsigned int m) 
 {
   // Save the m
   m_PieglM = m; 
@@ -31,12 +32,12 @@ BSplineKnotList<TReal,VOrder,VJetOrder>
 template <class TReal, unsigned int VOrder, unsigned int VJetOrder>
 void
 BSplineKnotList<TReal,VOrder,VJetOrder>
-::ComputeBasisJet(unsigned int i,TReal u,BasisVectorType *N) 
+::ComputeBasisJet(unsigned int i,TReal u,BasisVectorType *N) const
 {
   // We use the variables p and n because we want the code to match the code in Piegl
   const unsigned int p = VOrder;
   const unsigned int n = VJetOrder;
-  TReal *U = m_Knots.data_block();
+  const TReal *U = m_Knots.data_block();
 
   // Left and right arrays are not dynallocated for effifiency.  Don't pass p >= 10
   TReal ndu[p+1][p+1],a[2][p+1],left[p+1],right[p+1];
@@ -112,7 +113,7 @@ BSplineKnotList<TReal,VOrder,VJetOrder>
 template <class TReal, unsigned int VOrder, unsigned int VJetOrder>
 vnl_vector<unsigned int>
 BSplineKnotList<TReal,VOrder,VJetOrder>
-::GetKnotSequence(unsigned int nPoints, const TReal *x) 
+::GetKnotSequence(unsigned int nPoints, const TReal *x) const
 {
   vnl_vector<unsigned int> z(nPoints);
   
@@ -130,7 +131,7 @@ BSplineKnotList<TReal,VOrder,VJetOrder>
 template <class TReal, unsigned int VOrder, unsigned int VJetOrder>
 unsigned int
 BSplineKnotList<TReal,VOrder,VJetOrder>
-::GetKnotAtParameterValue(TReal u) 
+::GetKnotAtParameterValue(TReal u) const
 {
   unsigned int n = m_NumberOfControlPoints - 1;
   if (u >= m_Knots[n+1]) 
@@ -148,7 +149,7 @@ BSplineKnotList<TReal,VOrder,VJetOrder>
 template <unsigned int VDimension, class TReal, unsigned int VOrder, unsigned int VJetOrder>
 void 
 BSplineCurve<VDimension,TReal,VOrder,VJetOrder>
-::FitToPoints(unsigned int nPoints, const Point *points) 
+::FitToPoints(unsigned int nPoints, const Point *points)
 {
   unsigned int i;
 
@@ -172,7 +173,7 @@ BSplineCurve<VDimension,TReal,VOrder,VJetOrder>
     }
 
   // Find knot indices of each uk
-  vnl_vector<unsigned int> uki = m_KnotList->GetKnotSequence(m+1,uk.data_block());
+  vnl_vector<unsigned int> uki = m_KnotList.GetKnotSequence(m+1,uk.data_block());
 
   // Constuct a 'band' matrix of N_i,p(u_j)
   typedef vnl_matrix<TReal> MatrixType;
@@ -180,7 +181,7 @@ BSplineCurve<VDimension,TReal,VOrder,VJetOrder>
   for (int r=0;r<=m;r++)
     {
     BasisVector W[VJetOrder + 1];
-    m_KnotList->ComputeBasisJet(uki[r],uk[r],W);
+    m_KnotList.ComputeBasisJet(uki[r],uk[r],W);
     unsigned int c0 = uki[r] - VOrder;
     unsigned int c1 = c0 + VOrder < n ? c0 + VOrder : n;
     for (unsigned int c=c0;c<=c1;c++)
@@ -224,10 +225,10 @@ BSplineCurve<VDimension,TReal,VOrder,VJetOrder>
 template <unsigned int VDimension, class TReal, unsigned int VOrder, unsigned int VJetOrder>
 void
 BSplineCurve<VDimension,TReal,VOrder,VJetOrder>
-::CreateEvaluationGrid(unsigned int nPoints, const TReal *points, EvaluationGrid &grid)
+::CreateEvaluationGrid(unsigned int nPoints, const TReal *points, EvaluationGrid &grid) const
 {
   // Get the knot indices for the points
-  vnl_vector<unsigned int> uk = m_KnotList->GetKnotSequence(nPoints,points);
+  vnl_vector<unsigned int> uk = m_KnotList.GetKnotSequence(nPoints,points);
 
   // Create the grid
   grid.resize(nPoints);
@@ -235,14 +236,14 @@ BSplineCurve<VDimension,TReal,VOrder,VJetOrder>
     {
     grid[i].u = points[i];
     grid[i].iKnot = uk[i];
-    m_KnotList->ComputeBasisJet(grid[i].iKnot,grid[i].u,grid[i].basis);
+    m_KnotList.ComputeBasisJet(grid[i].iKnot,grid[i].u,grid[i].basis);
     }
 }
 
 template <unsigned int VDimension, class TReal, unsigned int VOrder, unsigned int VJetOrder>
 void
 BSplineCurve<VDimension,TReal,VOrder,VJetOrder>
-::CreateUniformEvaluationGrid(unsigned int nPoints, EvaluationGrid &grid)
+::CreateUniformEvaluationGrid(unsigned int nPoints, EvaluationGrid &grid) const
 {
   double *values = new double[nPoints];
   double step = 1.0 / (nPoints - 1);

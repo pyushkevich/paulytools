@@ -34,8 +34,11 @@ using namespace pauly;
 #include <vtkSTLReader.h>
 #include <vtkTriangleFilter.h>
 
-#include "bspline.h"
+// Include my BSpline library
+#include "BSplineCurve.h"
 
+// Typedef of the spline
+typedef BSplineCurve<3> SplineType;
 typedef vnl_vector_fixed<double,3> Vec;
 typedef pauly::Vector OptVec;
 
@@ -52,7 +55,10 @@ struct Curve {
   vector <CurvePoint> points;
 
   // A b-spline representing the grey points
-  SimpleBSplineCurve *splWhite, *splGrey;
+  SplineType splWhite, splGrey;
+
+  // Interpolation grids for the splines (speedier)
+  SplineType::EvaluationGrid gridWhite, gridGrey;
 };
 
 typedef struct Curve CurveType;
@@ -105,19 +111,17 @@ void drawRibbons(const vector<CurveType> &curves, unsigned int currentCurve)
     vtkPoints *points = vtkPoints::New();
 
     // Create the array of points
-    for(unsigned int j=0;j<curve.splGrey->GetInterpolationGridSize();j++)
+    for(unsigned int j=0;j<curve.gridGrey.size();j++)
       {
-      float xGrey[3], xWhite[3];
-      curve.splGrey->InterpolateGrid(j,xGrey);
-      curve.splWhite->InterpolateGrid(j,xWhite);
-     
-              
-      points->InsertNextPoint(xGrey);
-      points->InsertNextPoint(xWhite);
+      SplineType::Point xGrey = curve.splGrey.EvaluateGridPoint(curve.gridGrey, j, 0);
+      SplineType::Point xWhite = curve.splWhite.EvaluateGridPoint(curve.gridWhite, j, 0);
+      
+      points->InsertNextPoint(xGrey.data_block());
+      points->InsertNextPoint(xWhite.data_block());
       }
 
     // Create an array of cells
-    for(unsigned int k=0;k<curve.splGrey->GetInterpolationGridSize()-1;k++)
+    for(unsigned int k=0;k<curve.gridGrey.size()-1;k++)
       {
       vtkIdType id1[3] = {k,k+1,k+3};
       vtkIdType id2[3] = {k+1,k+3,k+2};
@@ -198,9 +202,8 @@ public:
     unsigned int j = 0;
     for(unsigned int i = 0;i < v.size(); i++)
       {
-      v(j++) = m_Curve.splWhite->GetControlPoint(i + m_Start,0);
-      v(j++) = m_Curve.splWhite->GetControlPoint(i + m_Start,1);
-      v(j++) = m_Curve.splWhite->GetControlPoint(i + m_Start,2);
+      SplineType::Point point = m_Curve.splWhite.GetControlPoint(i + m_Start);
+      v(j++) = point(0); v(j++) = point(1); v(j++) = point(2);
       }
     return v;
     }
@@ -228,9 +231,9 @@ public:
     unsigned int j = 0;
     for(unsigned int i = 0;i < m_Length;i++)
       {
-      m_Curve.splWhite->SetControlPoint(i + m_Start, 0, v(j++));
-      m_Curve.splWhite->SetControlPoint(i + m_Start, 1, v(j++));
-      m_Curve.splWhite->SetControlPoint(i + m_Start, 2, v(j++));
+      SplineType::Point point;
+      point(0) = v(j++); point(1) = v(j++); point(2) = v(j++);
+      m_Curve.splWhite.SetControlPoint(i + m_Start, point);
       }
     return m_Curve;
     }
@@ -250,14 +253,15 @@ public:
     double xGreyCount = 0.0;
 
     // Integrate the function over the ribbon
-    vector< vnl_vector_fixed<float,3> > xWhite(m_Curve.splWhite->GetInterpolationGridSize()); 
-    vector< vnl_vector_fixed<float,3> > xGrey(m_Curve.splGrey->GetInterpolationGridSize());
-    vector<double> xImageVal(m_Curve.splWhite->GetInterpolationGridSize()); 
+    unsigned int nPoints = m_Curve.gridWhite.size();
+    vector< SplineType::Point > xWhite(nPoints); 
+    vector< SplineType::Point > xGrey(nPoints);
+    vector<double> xImageVal(nPoints); 
 
-    for(unsigned int j=0;j<xWhite.size();j++)
+    for(unsigned int j=0;j<nPoints;j++)
       {
-      m_Curve.splWhite->InterpolateGrid(j,xWhite[j].data_block());
-      m_Curve.splGrey->InterpolateGrid(j,xGrey[j].data_block());
+      xWhite[j] = m_Curve.splWhite.EvaluateGridPoint(m_Curve.gridWhite,j,0);
+      xGrey[j] = m_Curve.splGrey.EvaluateGridPoint(m_Curve.gridGrey,j,0);
       
       // Compute the interpolation offsets
       double x = xWhite[j](0), y = xWhite[j](1), z = xWhite[j](2);
@@ -408,27 +412,6 @@ int main(int argc, char *argv[])
   // Images that we will be using
   CharImageType::Pointer imgWhite = NULL;
   ShortImageType::Pointer imgGrey = NULL;
-
-  SimpleBSplineCurve curve(5,2);
-  curve.SetControlPoint(0,0,1.0);
-  curve.SetControlPoint(0,1,1.0);
-  curve.SetControlPoint(1,0,2.0);
-  curve.SetControlPoint(1,1,3.0);
-  curve.SetControlPoint(2,0,4.0);
-  curve.SetControlPoint(2,1,5.0);
-  curve.SetControlPoint(3,0,6.0);
-  curve.SetControlPoint(3,1,7.0);
-  curve.SetControlPoint(4,0,8.0);
-  curve.SetControlPoint(4,1,9.0);
-  curve.SetUniformInterpolationGrid(20);
-  for(unsigned int i=0;i<10;i++)
-    {
-    float fuck[2];
-    curve.InterpolateGrid(i,fuck);
-    cout << fuck[0] << "\t" << fuck[1] << endl;
-    }
-
-
 
   // Check parameters
   if(argc != 4)
@@ -584,29 +567,27 @@ int main(int argc, char *argv[])
   for(iCurve=0;iCurve<vCurves.size();iCurve++)
     {
     CurveType &curve = vCurves[iCurve];
-
+    unsigned int nPoints = curve.points.size();
+    
     // Construct a matrix Q
-    BSpline1D::MatrixType Q1(curve.points.size(),3);
-    BSpline1D::MatrixType Q2(curve.points.size(),3);
+    SplineType::Point *Q1 = new SplineType::Point[nPoints];
+    SplineType::Point *Q2 = new SplineType::Point[nPoints];
 
-    for(iPoint=0;iPoint<curve.points.size();iPoint++)
+    // Fill the matrix    
+    for(iPoint=0;iPoint<nPoints;iPoint++)
       {
-      Q1(iPoint,0) = curve.points[iPoint].xGrey[0];
-      Q1(iPoint,1) = curve.points[iPoint].xGrey[1];
-      Q1(iPoint,2) = curve.points[iPoint].xGrey[2];
-      Q2(iPoint,0) = curve.points[iPoint].xWhite[0];
-      Q2(iPoint,1) = curve.points[iPoint].xWhite[1];
-      Q2(iPoint,2) = curve.points[iPoint].xWhite[2];
+      Q1[iPoint] = curve.points[iPoint].xGrey;
+      Q2[iPoint] = curve.points[iPoint].xWhite;      
       }
 
     // Create the b-splines
-    curve.splGrey = new SimpleBSplineCurve(20,3);
-    curve.splGrey->FitToPoints(Q1);
-    curve.splGrey->SetUniformInterpolationGrid(200);
+    curve.splGrey.SetNumberOfControlPoints(20);
+    curve.splGrey.FitToPoints(nPoints,Q1);
+    curve.splGrey.CreateUniformEvaluationGrid(200, curve.gridGrey);
     
-    curve.splWhite = new SimpleBSplineCurve(20,3);
-    curve.splWhite->FitToPoints(Q2);
-    curve.splWhite->SetUniformInterpolationGrid(200);
+    curve.splWhite.SetNumberOfControlPoints(20);
+    curve.splWhite.FitToPoints(nPoints,Q2);
+    curve.splWhite.CreateUniformEvaluationGrid(200, curve.gridWhite);
     }
   
   // This is the most interesting part of the program. We attempt to 
@@ -632,7 +613,7 @@ int main(int argc, char *argv[])
     // first and last points
     vector<unsigned int> vStarts;
     unsigned int nSpan = 4;
-    for(unsigned int iStart=1;iStart < curve.splWhite->GetNumberOfControlPoints() - nSpan;iStart++)
+    for(unsigned int iStart=1;iStart < curve.splWhite.GetNumberOfControlPoints() - nSpan;iStart++)
       {
       vStarts.push_back(iStart);
       }
@@ -640,10 +621,11 @@ int main(int argc, char *argv[])
     // Iteratevely optimize over ribbon segments
     for(unsigned int iIteration = 0;iIteration < 200;iIteration++)
       {
+      drawRibbons(vCurves,iCurve);
+       
       // State the iteration
       cout << "   Running iteration " << iIteration << flush;
-      // drawRibbons(vCurves,iCurve);
-      
+            
       // Perform a random permutation of the starting points
       random_shuffle(vStarts.begin(),vStarts.end());
 

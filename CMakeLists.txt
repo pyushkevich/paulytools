@@ -66,6 +66,7 @@ ENDIF(USE_VTK)
 SET(PAULY_INCLUDE_DIRS
   ${PAULY_SOURCE_DIR}/CoreLibraries/
   ${PAULY_SOURCE_DIR}/CoreLibraries/BasicImaging
+  ${PAULY_SOURCE_DIR}/CoreLibraries/BSpline
   ${PAULY_SOURCE_DIR}/CoreLibraries/FLTKViewers
   ${PAULY_SOURCE_DIR}/CoreLibraries/Matrix
   ${PAULY_SOURCE_DIR}/CoreLibraries/MReps2d

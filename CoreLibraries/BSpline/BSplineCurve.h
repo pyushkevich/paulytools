@@ -21,13 +21,19 @@ public:
   typedef vnl_vector<TReal> VectorType;
 
   /**
-   * Create a new vector of knots
-   * z: Number of zero-knots at each end, between 2 and VOrder+1 
+   * Create a new vector of knots of default size. Parameter m
+   * is the number of control points - 1
    */
-  BSplineKnotList(unsigned int m);
+  BSplineKnotList(unsigned int m) { this->SetUniformKnots(m); }
 
   /** Destructor */
   ~BSplineKnotList() {}
+
+  /**
+   * Create a uniformly spaced knot vector corresponding to m+1 control
+   * points 
+   */
+  void SetUniformKnots(unsigned int m);
 
   /**
    * This method evaluates the basis function and its derivatives
@@ -40,7 +46,7 @@ public:
    * When there are only two zero knots at ends, the 
    * function is matrix multiplication. 
    */
-  void ComputeBasisJet(unsigned int i,TReal u,BasisVectorType *W);
+  void ComputeBasisJet(unsigned int i,TReal u,BasisVectorType *W) const;
 
   /**
    * Return the u or v value for a given knot index
@@ -53,12 +59,12 @@ public:
   /**
    * Get knot value for a given t
    */
-  unsigned int GetKnotAtParameterValue(TReal u);
+  unsigned int GetKnotAtParameterValue(TReal u) const;
 
   /**
    * Create a knot index sequence for an ordered sequence of u values
    */
-  vnl_vector<unsigned int> GetKnotSequence(unsigned int nPoints, const TReal *points);
+  vnl_vector<unsigned int> GetKnotSequence(unsigned int nPoints, const TReal *points) const;
 
 private:
   // Number of knots
@@ -106,10 +112,7 @@ public:
     }
 
   /** Destructor */
-  ~BSplineCurve()
-    {
-    delete m_KnotList;
-    }
+  ~BSplineCurve() {}
 
   /** Set the number of control points for the curve. This method discards
    * previously set control points */
@@ -120,8 +123,7 @@ public:
     m_ControlGroups.resize(nPoints,ControlMatrix(0.0));
 
     // Reinitialize the knot vector
-    if(m_KnotList) delete m_KnotList;
-    m_KnotList = new KnotList(nPoints - 1);
+    m_KnotList.SetUniformKnots(nPoints - 1);
 
     // Store the number of contol points
     m_NumberOfControlPoints = nPoints;
@@ -144,27 +146,27 @@ public:
     }
 
   /** Get the N-th control point */
-  const Point &GetControlPoint(unsigned int iPoint)
+  const Point &GetControlPoint(unsigned int iPoint) const
     {
     return m_Controls[iPoint];
     }
 
   /** Get the number of control points */
-  unsigned int GetNumberOfControlPoints()
+  unsigned int GetNumberOfControlPoints() const
     {
     return m_Controls.size();
     }
 
   /** Interpolate the spline or its derivative at a parameter value u. This is a 
    * convenience method that is a bit too slow to use in practice */
-  Point Evaluate(TReal u, unsigned int order)
+  Point Evaluate(TReal u, unsigned int order) const 
     {
     // Get the knot index corresponding to u
-    unsigned int iKnot = m_KnotList->GetKnotAtParameterValue(u);
+    unsigned int iKnot = m_KnotList.GetKnotAtParameterValue(u);
 
     // Compute the basis for the knot
     BasisVector basis[VJetOrder + 1];
-    m_KnotList->ComputeBasisJet(iKnot,u,basis);
+    m_KnotList.ComputeBasisJet(iKnot,u,basis);
 
     // Evaluate the basis for the requested order
     return m_ControlGroups[iKnot - VOrder] * basis[order];
@@ -184,16 +186,16 @@ public:
   /** Create an 'interpolation grid' that can be used to quickly interpolate
    * the spline at a number of points. The interpolation grid becomes useless
    * if the number of control points changes after it's creation */
-  void CreateEvaluationGrid(unsigned int nPoints, const TReal *points, EvaluationGrid &grid);
+  void CreateEvaluationGrid(unsigned int nPoints, const TReal *points, EvaluationGrid &grid) const;
 
   /** Create a uniformely spaced evaluation grid */
-  void CreateUniformEvaluationGrid(unsigned int nPoints, EvaluationGrid &grid);
+  void CreateUniformEvaluationGrid(unsigned int nPoints, EvaluationGrid &grid) const;
 
   /** Fit the spline to a data matrix */
   void FitToPoints(unsigned int nPoints, const Point *xPoints);
     
   /** Evaluate the spline at a given order over the evaluation grid */
-  Point EvaluateGridPoint(const EvaluationGrid &grid, unsigned int iPoint, unsigned int iJetOrder)
+  Point EvaluateGridPoint(const EvaluationGrid &grid, unsigned int iPoint, unsigned int iJetOrder) const 
     {
     // Check the index
     assert(iPoint < grid.size());
@@ -210,7 +212,7 @@ private:
   unsigned int m_NumberOfControlPoints;
 
   // The knot list
-  KnotList *m_KnotList;
+  KnotList m_KnotList;
 
   // List of control points
   vector<Point> m_Controls;
