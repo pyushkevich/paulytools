@@ -38,3 +38,4 @@ void SplineGeoMan::eval(double *x,double *y,double *J,double *H) {
         H[SUBS3(2,2,r,1,1)] = M.Fvv[r];
     }
 }
+

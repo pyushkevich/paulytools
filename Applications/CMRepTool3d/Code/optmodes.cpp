@@ -138,13 +138,13 @@ void RigidMatchMode::onDraw() {
 	if(match && es) {		
 		float lkhd = match->getMatch();
 		float post = es->getBestEverValue();
-		int cost = srp->getEvaluationCost();
+		double cost = srp->getEvaluationCost();
 
 		glPushAttrib(GL_LIGHTING_BIT);
 		glDisable(GL_LIGHTING);
 		glColor3d(0.75,0.75,0.75);
 		glRasterPos2d(GLDisplayDriver::width-500,25);	
-		fntCourier18->printf("LKHD = %7lg  POST = %7lg  EVALS = %7lg",lkhd,post,cost);
+		fntCourier18->printf("LKHD = %7g  POST = %7g  EVALS = %7lg",lkhd,post,cost);
 		glPopAttrib ();
 	}
 }

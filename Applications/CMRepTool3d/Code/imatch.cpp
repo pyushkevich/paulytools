@@ -1,7 +1,7 @@
 #include "mspline.h"
 #include "imaging.h"
 #include "imatch.h"
-#include <fvec.h>
+//#include <fvec.h>
 
 using namespace std;
 
@@ -53,12 +53,11 @@ float SplineDistanceMatcher::computeDistanceAtPoint(const MedialPoint &mp,int si
     (1-x)*(  y)*(  z)*V011 + (  x)*(1-y)*(  z)*V101 +
     (  x)*(  y)*(1-z)*V110 + (  x)*(  y)*(  z)*V111;
  ************************************/
-float triLerp(float V000,float V001,float V010,float V100,
+void triLerp(float V000,float V001,float V010,float V100,
               float V011,float V101,float V110,float    V111,
-              float x,   float  y,  float z)    
+              float x,   float  y,  float z, float *out)    
 {
-    F32vec4 r0,r1,r2,r3,r4,r5,r6,r7,r8;
-    
+    __m128 r0,r1,r2,r3,r4,r5,r6,r7,r8;
                                                             //  3       2       1       0
 
     r0 = _mm_loadu_ps(&x);                                  //  ?       z       y       x
@@ -95,7 +94,7 @@ float triLerp(float V000,float V001,float V010,float V100,
     r1 = _mm_add_ps(r1,r2);
 
     // The result is in r1
-    return r1[0];
+    _mm_store_ss(out,r1);
 }
 
 float BoundaryImageMatcher::getMatch() {

@@ -17,7 +17,9 @@
 // Open GL includes
 #include "glengine.h"
 
+#ifndef M_PI
 extern const double M_PI;
+#endif
 
 // Extenal classes for less inclusion
 class BSplineRenderer;
@@ -860,3 +862,4 @@ void exitProcedure(int mode);
 void glVertex(const SMLVec3f &v);
 
 #endif
+

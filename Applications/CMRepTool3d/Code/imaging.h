@@ -2,14 +2,30 @@
 #define _IMAGING_CPP_
 
 #include <smlmath.h>
-#include "Array2D.h"
+#include "array2d.h"
+#include "align.h"
 
 #include <iostream>
 
 //#define FFTW_ENABLE_FLOAT 1
 //#include <fftw.h>
 
-class F32vec4;
+// class F32vec4;
+// typedef __m128 F32vec4;
+
+union F32vec4
+{
+  __m128 x;
+  float f[4];
+  
+  float operator[](unsigned int i) { return f[i]; }
+  __m128 operator=(const __m128 &x) { this->x = x; return x; }
+  operator __m128() { return x; }
+  
+  F32vec4(float a, float b, float c, float d) 
+    { f[0]=a; f[1]=b; f[2]=c; f[3]=d; }
+  F32vec4() {}
+};
 
 /**
  * Data cube.  An arrangement of data into slices, rows and elements
@@ -206,7 +222,7 @@ protected:
   void makeDefaultTransform(SMLVec3f vd);
 
   // A method to perform trilinear interpolation
-  float doInterpolation(const F32vec4 &r0,const F32vec4 &i0,const F32vec4 &i1);
+  void doInterpolation(const __m128 &r0,const __m128 &i0,const __m128 &i1, float *rtn);
 
   // Image dimensions (x,y,z)
   int dim[3];
@@ -305,7 +321,7 @@ protected:
   virtual void loadFromPaddedCube(const T *pixels, const int *size);
 
   // Internal method to get four voxels around an xyz triple
-  bool getEightVoxels(float x,float y,float z,F32vec4 &r0,F32vec4 &r1,F32vec4 &r2);
+  bool getEightVoxels(float x,float y,float z,__m128 &r0,__m128 &r1,__m128 &r2);
 
   // Method used to convert T to pixel for slice computation
   virtual unsigned char genSlicePixel(const T& pixel) {

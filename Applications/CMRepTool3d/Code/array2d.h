@@ -4,14 +4,13 @@
 #include <cassert>
 
 #include <xmmintrin.h>
+#include "align.h"
 
 #ifdef _DEBUG
 #define DEBUG_ASSERT(expression) assert(expression)
 #else
 #define DEBUG_ASSERT(expression) ;
 #endif
-
-
 
 /*****************************************************************
 A Fast 2D Array Implementation
@@ -301,3 +300,4 @@ public:
 
 
 #endif
+

@@ -6,4 +6,5 @@ int edt3ddan(char * input, int six, int siy, int siz, unsigned char metric,
 
 void edtSetVoxelSize(float vx,float vy,float vz);
 
-#endif _DANIELSON_H_
+#endif // _DANIELSON_H_
+

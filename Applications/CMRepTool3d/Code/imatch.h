@@ -7,7 +7,7 @@ class DistanceTransform;
 #include <iostream>
 
 #include "mspline.h"
-#include "Array2D.h"
+#include "array2d.h"
 
 /**
  * Generic spline/image matcher

@@ -1,8 +1,8 @@
 // #include <RAWImageFile.h>
 #include "Danielsson.h"
 #include <mmintrin.h>
-#include <ivec.h>
-#include <fvec.h>
+// #include <ivec.h>
+// #include <fvec.h>
 #include "imaging.h"
 #include "DrawTriangles.h"
 #include "DrawFillInside.h"
@@ -24,7 +24,11 @@ ImageCube<float> test1;
 ImageCube<unsigned short> test3;
 ImageCube<unsigned char> test2;
 
+#ifndef M_PI
 extern const double M_PI;
+#endif
+
+// If intel is not available, define the f32Vec4
 
 #pragma auto_inline(off)
 
@@ -178,17 +182,17 @@ void ImageCube<T>::gaussianBlur(float *sigma)
 {
   typedef itk::Image<T,3> ImageType;
   typedef itk::Image<float,3> FloatImageType;
-  typedef ImageType::RegionType RegionType;
+  typedef typename ImageType::RegionType RegionType;
   typedef itk::DiscreteGaussianImageFilter<FloatImageType,FloatImageType> FilterType;
   typedef itk::CastImageFilter<ImageType,FloatImageType> FloatCasterType;
   typedef itk::CastImageFilter<FloatImageType,ImageType> ReverseCasterType;
 
   // Initialize regions
-  ImageType::SizeType size = {{dim[0],dim[1],dim[2]}};
-  ImageType::RegionType region(size);
+  typename ImageType::SizeType size = {{dim[0],dim[1],dim[2]}};
+  typename ImageType::RegionType region(size);
   
   // Create a flat image
-  ImageType::Pointer image = ImageType::New();
+  typename ImageType::Pointer image = ImageType::New();
   image->SetRegions(region);
   image->Allocate();
 
@@ -200,14 +204,14 @@ void ImageCube<T>::gaussianBlur(float *sigma)
     sigma[0] * sigma[0], sigma[1] * sigma[1], sigma[2] * sigma[2]);
 
   // Construct and run a pipeline
-  FloatCasterType::Pointer floatCaster = FloatCasterType::New();
+  typename FloatCasterType::Pointer floatCaster = FloatCasterType::New();
   floatCaster->SetInput(image);
 
   FilterType::Pointer filter = FilterType::New();
   filter->SetInput(floatCaster->GetOutput());
   filter->SetVariance(variance.data_block());
   
-  ReverseCasterType::Pointer revCaster = ReverseCasterType::New();
+  typename ReverseCasterType::Pointer revCaster = ReverseCasterType::New();
   revCaster->SetInput(filter->GetOutput());
   revCaster->Update();
 
@@ -674,9 +678,10 @@ typedef struct {
 } __m128;
 */
 
-inline float AbstractImage3D::doInterpolation(const F32vec4 &r0,const F32vec4 &in0,const F32vec4 &in1) {
+inline void AbstractImage3D::doInterpolation(const __m128 &r0,const __m128 &in0,const __m128 &in1, float *rtn) 
+{
   // Registers we are going to use
-  F32vec4 r1,r2,r3,r4,r5,r6,r8,i0,i1;                         //      3       2       1       0
+  __m128 r1,r2,r3,r4,r5,r6,r8,i0,i1;                      //  3       2       1       0
 
   // Perform the interpolation
   r1 = _mm_shuffle_ps(r0,r0,0x19);                        //  x       y       z       y
@@ -711,7 +716,7 @@ inline float AbstractImage3D::doInterpolation(const F32vec4 &r0,const F32vec4 &i
   i0 = _mm_add_ps(i0,i1);
 
   // The result is in r1
-  return i0[0];
+  _mm_store_ss(rtn, i0);
 }
 
 /**
@@ -721,10 +726,11 @@ inline float AbstractImage3D::doInterpolation(const F32vec4 &r0,const F32vec4 &i
  * r2:  last 4 voxels
  */
 template <class T>
-bool ImageCube<T>::getEightVoxels(float x,float y,float z,F32vec4 &r0,F32vec4 &r1,F32vec4 &r2) {
-  F32vec4 r3;                                         //      3       2       1       0
-  Is16vec4 i0,i1,i2;
-  Is32vec2 j0,j1;
+bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &r0,__m128 &r1,__m128 &r2) 
+{
+  __m128 r3;                                          //      3       2       1       0
+  __m64 i0,i1,i2;
+  __m64 j0,j1;
 
   // Store the voxel  
   r2 = _mm_load_ps(mmData);
@@ -732,15 +738,17 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,F32vec4 &r0,F32vec4 &r
   r1 = _mm_load_ps(mmData+8);
 
   r0 = _mm_loadu_ps(&x);                              //      ?       z       y       x
-  r0 *= r2;                                           //      ?       z       y       x   
-  r0 += r3;                                           //      ?       z       y       x
+  r0 = _mm_mul_ps(r0,r2);                             //      ?       z       y       x   
+  r0 = _mm_add_ps(r0,r3);                             //      ?       z       y       x
 
   // Check whether the voxel falls inside the image cube  
-  r1 -= r0;
+  r1 = _mm_sub_ps(r1,r0);
 
   // These two integers reflect the sign.  They should both be 0 or we are outside of the image
-  int maskMin = move_mask(r0);
-  int maskMax = move_mask(r1);
+  int maskMin = _mm_movemask_ps(r0);
+  int maskMax = _mm_movemask_ps(r1);
+  // int maskMin = move_mask(r0);
+  // int maskMax = move_mask(r1);
 
   // If the voxel is outside, use special method
   if ((maskMin | maskMax) & 0x07)
@@ -750,42 +758,64 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,F32vec4 &r0,F32vec4 &r
 
   // Round down the values and cast back to floating point
   r1 = _mm_shuffle_ps(r0,r0,0x0E);                    //      x       x       ?       z   
-  j0 = F32vec4ToIs32vec2(r0);                         //      tr(y)   tr(x)
-  j1 = F32vec4ToIs32vec2(r1);                         //      ?       tr(z)
-  r1 = Is32vec2ToF32vec4(r1,j1);                      //      ?       ?       ?       tr(z)
-  r1 = _mm_shuffle_ps(r1,r1,0x00);                    //      tr(z)   tr(z)   tr(z)   tr(z)   
-  r1 = Is32vec2ToF32vec4(r1,j0);                      //      tr(z)   tr(z)   tr(y)   tr(x)   
+
+  j0 = _mm_cvtps_pi32(r0);                            //      tr(y)   tr(x)
+  j1 = _mm_cvtps_pi32(r1);                            //      ?       tr(z)
+  r1 = _mm_cvtpi32_ps(r1,j1);                         //      ?       ?       ?       tr(z)
+  r1 = _mm_shuffle_ps(r1,r1,0x00);                    //      tr(z)   tr(z)   tr(z)   tr(z)
+  r1 = _mm_cvtpi32_ps(r1,j0);                         //      tr(z)   tr(z)   tr(y)   tr(x)
+  
+  // j0 = F32vec4ToIs32vec2(r0);                         //      tr(y)   tr(x)
+  // j1 = F32vec4ToIs32vec2(r1);                         //      ?       tr(z)
+  // r1 = Is32vec2ToF32vec4(r1,j1);                      //      ?       ?       ?       tr(z)
+  // r1 = _mm_shuffle_ps(r1,r1,0x00);                    //      tr(z)   tr(z)   tr(z)   tr(z)   
+  // r1 = Is32vec2ToF32vec4(r1,j0);                      //      tr(z)   tr(z)   tr(y)   tr(x)   
 
   // Take integers to shorts
-  i0 = (Is16vec4)pack_sat(j0,j1);
+  i0 = _mm_packs_pi32(j0, j1);
+  //    i0 = pack_sat(j0,j1);
 
   // We still need the voxel index and cube index 
   // Shift right to find the cube index of the starting voxel
-  i1 = i0 >> ImageCube::LDCUBE;
+  i1 = _mm_srli_pi16(i0, ImageCube::LDCUBE);
+  //    i1 = i0 >> ImageCube::LDCUBE;
 
   // Prefetch the cube (is this really worth while?)
-  int xc = _MM_4W(0,i1);int yc = _MM_4W(1,i1);int zc = _MM_4W(2,i1);
+  int xc = (*((short*)&i1 + 0));
+  int yc = (*((short*)&i1 + 1));
+  int zc = (*((short*)&i1 + 2));
+    
+  // int xc = _MM_4W(0,i1);int yc = _MM_4W(1,i1);int zc = _MM_4W(2,i1);
   DataCube<T> &C = cube(xc,yc,zc);
   _mm_prefetch((const char *)C.root(),_MM_HINT_T0);
 
   // Shift back and subtract to get the in-cube index of the voxel
-  i2 = i1 << ImageCube::LDCUBE;
-  i0 -= i2;
+  i2 = _mm_slli_pi16(i1,ImageCube::LDCUBE);
+  i0 = _mm_sub_pi16(i0,i2);
 
   // Increment i0 by 1
-  i2 = (Is16vec4)_mm_set1_pi16(1);
-  i2 += i0;
+  i2 = _mm_set1_pi16(1);
+  i2 = _mm_add_pi16(i2,i0);
 
   // At this point, voxel cube i1 with offset i0 points to V000 and cube i2 with offset i4 points to V111
   // This is the slow point...    
-  int x0 = _MM_4W(0,i0);int y0 = _MM_4W(1,i0);int z0 = _MM_4W(2,i0);
-  int x1 = _MM_4W(0,i2);int y1 = _MM_4W(1,i2);int z1 = _MM_4W(2,i2);
+  int x0 = (*((short*)&i0 + 0));
+  int y0 = (*((short*)&i0 + 1));
+  int z0 = (*((short*)&i0 + 2));
+
+  int x1 = (*((short*)&i2 + 0));
+  int y1 = (*((short*)&i2 + 1));
+  int z1 = (*((short*)&i2 + 2));
+
+  // int x0 = _MM_4W(0,i0);int y0 = _MM_4W(1,i0);int z0 = _MM_4W(2,i0);
+  // int x1 = _MM_4W(0,i2);int y1 = _MM_4W(1,i2);int z1 = _MM_4W(2,i2);
 
   // Clear the MMX registers
-  empty();
+  _mm_empty();
 
   // This places the fractional part of the voxel computation into r0
-  r0 -= r1;
+  r0 = _mm_sub_ps(r0,r1);
+  // r0 -= r1;
 
   // Clear the MMX registers
   _mm_empty();
@@ -801,8 +831,10 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,F32vec4 &r0,F32vec4 &r
   float c111 = (float) C(x1,y1,z1);
 
   // Create the return values
-  r1 = F32vec4(c001,c010,c100,c000);
-  r2 = F32vec4(c111,c011,c101,c110);
+  // r1 = F32vec4(c001,c010,c100,c000);
+  // r2 = F32vec4(c111,c011,c101,c110);
+  r1 = _mm_set_ps(c001,c010,c100,c000); 
+  r2 = _mm_set_ps(c111,c011,c101,c110);
 
   // Clear the MMX registers
   _mm_empty();
@@ -812,18 +844,28 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,F32vec4 &r0,F32vec4 &r
 
 template <class T>
 float ImageCube<T>::interpolateVoxel(float x,float y,float z) {
-  F32vec4 r0,r1,r2;
+  __m128 r0,r1,r2;
+  float val;
 
   bool in = getEightVoxels(x,y,z,r0,r1,r2);
-  return(in) ? doInterpolation(r0,r1,r2) : handleOutsideVoxel(x,y,z);
+  if(in)
+    {
+    doInterpolation(r0,r1,r2,&val);
+    return val;
+    }
+  else
+    {
+    return handleOutsideVoxel(x,y,z);
+    }
 }
 
 template <class T>
-void ImageCube<T>::interpolateVoxelGradient(float xs,float ys,float zs, float *G) {
-  F32vec4 r0,r1,r2,r3;                                    //      3       2       1       0
-  F32vec4 r4,r5,r6,r7,r8;                                 //      3       2       1       0
-  Is16vec4 i0,i1,i2,i3,i4,i5,i6;
-  Is32vec2 j0,j1;
+void ImageCube<T>::interpolateVoxelGradient(float xs,float ys,float zs, float *G) 
+{
+  __m128 r0,r1,r2,r3;                                    //      3       2       1       0
+  __m128 r4,r5,r6,r7,r8;                                 //      3       2       1       0
+  __m64 i0,i1,i2,i3,i4,i5,i6;
+  __m64 j0,j1;
 
   if (!getEightVoxels(xs,ys,zs,r0,r4,r5))
     {
@@ -880,9 +922,14 @@ void ImageCube<T>::interpolateVoxelGradient(float xs,float ys,float zs, float *G
   // G[0] = ((V100-V000)*Y*Z + (V101-V001)*Y*z + (V110-V010)*y*Z + (V111-V011)*y*z) * mmData[0];
   // G[1] = ((V010-V000)*X*Z + (V011-V001)*X*z + (V110-V100)*x*Z + (V111-V101)*x*z) * mmData[0];
   // G[2] = ((V001-V000)*X*Y + (V011-V010)*X*y + (V101-V100)*x*Y + (V111-V110)*x*y) * mmData[0];
-  G[0] = r0[0];
-  G[1] = r0[1];
-  G[2] = r0[2];
+
+  // Store the gradient
+  float gtemp[4];
+  _mm_store_ps(gtemp,r0);
+  
+  G[0] = gtemp[0];
+  G[1] = gtemp[1];
+  G[2] = gtemp[2];
 }
 
 /*
@@ -1389,16 +1436,16 @@ template<class T>
 void ImageCube<T>::loadFromITKReadableFile(const char *giplFile, std::ostream &out) 
 {
   typedef itk::Image<T,3> ImageType;
-  typedef ImageType::RegionType RegionType;
+  typedef typename ImageType::RegionType RegionType;
   typedef itk::ImageFileReader<ImageType> ReaderType;
 
   // Load an image
-  ReaderType::Pointer reader = ReaderType::New();
+  typename ReaderType::Pointer reader = ReaderType::New();
   reader->SetFileName(giplFile);
   reader->Update();
 
   // Get the dimensions
-  ImageType::SizeType size = reader->GetOutput()->GetBufferedRegion().GetSize();
+  typename ImageType::SizeType size = reader->GetOutput()->GetBufferedRegion().GetSize();
   
   // Create a padded cube
   DataCube<T> imageCube;

@@ -4,7 +4,9 @@
 #include <string>
 #include <vnl/vnl_rotation_matrix.h>
 
+#ifndef M_PI
 #define M_PI 3.1415926535897932384626433832795
+#endif
 
 inline float SplinePrior::priorProbabilityFull(SplineDataCache *sdc) {
   return priorProbability(sdc,0,0,spline->dim(0),spline->dim(1)); 
@@ -252,38 +254,38 @@ float MarkovCurvaturePrior::priorProbabilityFull(SplineDataCache *sdc) {
       {
       if (ic > 0 && ic < m)
         {
-        SMLVec3f &X0 = spline->getControl(ic-1,jc);
-        SMLVec3f &X1 = spline->getControl(ic,jc);
-        SMLVec3f &X2 = spline->getControl(ic+1,jc);
+        const SMLVec3f &X0 = spline->getControl(ic-1,jc);
+        const SMLVec3f &X1 = spline->getControl(ic,jc);
+        const SMLVec3f &X2 = spline->getControl(ic+1,jc);
 
         SMLVec3f Xii = (X2+X0) - (X1+X1);
         prior += Xii.squared_magnitude();
         }
       if (jc > 0 && jc < n)
         {
-        SMLVec3f &X0 = spline->getControl(ic,jc-1);
-        SMLVec3f &X1 = spline->getControl(ic,jc);
-        SMLVec3f &X2 = spline->getControl(ic,jc+1);
+        const SMLVec3f &X0 = spline->getControl(ic,jc-1);
+        const SMLVec3f &X1 = spline->getControl(ic,jc);
+        const SMLVec3f &X2 = spline->getControl(ic,jc+1);
 
         SMLVec3f Xjj = (X2+X0) - (X1+X1);
         prior += Xjj.squared_magnitude();
         }
       if (ic > 0 && jc > 0)
         {
-        SMLVec3f &X00 = spline->getControl(ic,jc);
-        SMLVec3f &X01 = spline->getControl(ic,jc-1);
-        SMLVec3f &X10 = spline->getControl(ic-1,jc);
-        SMLVec3f &X11 = spline->getControl(ic-1,jc-1);
+        const SMLVec3f &X00 = spline->getControl(ic,jc);
+        const SMLVec3f &X01 = spline->getControl(ic,jc-1);
+        const SMLVec3f &X10 = spline->getControl(ic-1,jc);
+        const SMLVec3f &X11 = spline->getControl(ic-1,jc-1);
 
         SMLVec3f Xij = (X00+X11) - (X01+X10);
         prior += Xij.squared_magnitude();
         }
       if (ic < m && jc < n)
         {
-        SMLVec3f &X00 = spline->getControl(ic,jc);
-        SMLVec3f &X01 = spline->getControl(ic,jc+1);
-        SMLVec3f &X10 = spline->getControl(ic+1,jc);
-        SMLVec3f &X11 = spline->getControl(ic+1,jc+1);
+        const SMLVec3f &X00 = spline->getControl(ic,jc);
+        const SMLVec3f &X01 = spline->getControl(ic,jc+1);
+        const SMLVec3f &X10 = spline->getControl(ic+1,jc);
+        const SMLVec3f &X11 = spline->getControl(ic+1,jc+1);
 
         SMLVec3f Xij = (X00+X11) - (X01+X10);
         prior += Xij.squared_magnitude();

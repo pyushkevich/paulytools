@@ -6,12 +6,10 @@
 #include <smlmath.h>
 #include <vector>
 #include "array2d.h"
+#include "align.h"
 
 class DynamicBSpline2D;
 
-#ifdef WIN32
-#define ALIGN32 __declspec(align(32)) 
-#endif
 
 /**
  * A control point in the grid
@@ -145,7 +143,7 @@ struct SurfacePoint {
 /**
  * This structure represents a point sampled from the medial spline
  */
-ALIGN32 struct MedialPoint {
+ALIGN32_PRE struct MedialPoint {
     // The function (xyzr) and its partial derivatives
     SMLVec4f F,Fu,Fv,Fuu,Fuv,Fvv;
 
@@ -194,7 +192,7 @@ ALIGN32 struct MedialPoint {
 
     // This is needed for callback functions
     void *data;
-};
+} ALIGN32_POST;
 
 /** 
  * Two dimensional rectangular uniform B-spline

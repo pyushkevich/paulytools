@@ -1,7 +1,6 @@
-#define CRTDBG_MAP_ALLOC
+//#define CRTDBG_MAP_ALLOC
 #include <stdlib.h>
-#include <crtdbg.h>
-#include <direct.h>
+//#include <crtdbg.h>
 
 // My includes
 #include "glui.h"
@@ -22,7 +21,20 @@
   #include "windows.h"
 #endif
 
+#ifndef M_PI
 const double M_PI = acos(-1.0);
+#endif
+
+// Chdir support
+#ifdef WIN32
+  #include <direct.h>
+  #define CHDIR(a) _chdir(a)
+  #define GETCWD(a,b) _getcwd(a,b)
+#else
+  #include <unistd.h>
+  #define CHDIR(a) chdir(a)
+  #define GETCWD(a,b) getcwd(a,b)
+#endif
 
 #define RESLN 5
 
@@ -326,7 +338,7 @@ void HSVtoRGB( float *r, float *g, float *b, float h, float s, float v )
     return;
     }
   h /= 60;            // sector 0 to 5
-  i = floor( h );
+  i = (int) h;
   f = h - i;          // factorial part of h
   p = v * ( 1 - s );
   q = v * ( 1 - s * f );
@@ -719,7 +731,7 @@ void BSplineRenderer::setColorMapMode(ColorModes mode) {
 
 int round(float f) {
   float ff = floor(f);
-  return(f - ff < 0.5) ? ff : ff+1;
+  return(f - ff < 0.5) ? (int) ff : (int)(ff+1);
 }
 
 void BSplineRenderer::findSampleUV(int x,int y,int &u,int &v)
@@ -1567,7 +1579,7 @@ void MoveableWindow::onDraw() {
 
   // Translate more, to leave a corner
   glTranslated(3,szHat+3,0);
-  drawClient(size[0] - 6,size[1] - (szHat + 6));
+  drawClient((int)(size[0] - 6),(int)(size[1] - (szHat + 6)));
 
   // Pop matrix
   glPopMatrix();
@@ -4600,12 +4612,12 @@ void processCommand(const char *chrCommand, ostream &sout) {
         }
       }
 
-    else if (cmd == "chdir")
+    else if (cmd == "cd")
       {
       char buff[256];
-      sout << iss.str().substr(6).c_str() << endl;
-      sout << _chdir(iss.str().substr(6).c_str());
-      sout << " : Current directory" << endl << _getcwd(buff,256) << endl;
+      sout << iss.str().substr(3).c_str() << endl;
+      sout << CHDIR(iss.str().substr(6).c_str());
+      sout << " : Current directory" << endl << GETCWD(buff,256) << endl;
       }
 
     else if (cmd == "save")
@@ -5329,7 +5341,7 @@ void ScriptProcessor::loadScript(const char *fname) {
 
 // Processing commands from script files
 
-void main(int argc,char *argv[]) {
+int main(int argc,char *argv[]) {
 
   // Set memory debugging
   // _CrtSetDbgFlag(_CrtSetDbgFlag(_CRTDBG_REPORT_FLAG) | _CRTDBG_CHECK_ALWAYS_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -5419,6 +5431,8 @@ void main(int argc,char *argv[]) {
 
   // Start GLUT
   glutMainLoop();
+
+  return 0;
 }
 
 

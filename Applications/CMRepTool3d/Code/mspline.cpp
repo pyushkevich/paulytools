@@ -1,7 +1,6 @@
 #include "mspline.h"
 #include <iostream>
 #include <ctime>
-#include <fvec.h>
 #include <matrix.h>
 
 using namespace std;
@@ -164,6 +163,8 @@ void DynamicBSpline2D::basisJet(int dim,int i,float u,SMLVec4f *N) {
     {
     __m128 r0,r1,r2,r3,r4,r5,r6,r7;
     __m128 M0,M1,M2,M3;
+    
+    
     float *jm = (float *)jetMul[dim];
     float *ub = UB->data_block();
 
@@ -202,9 +203,14 @@ void DynamicBSpline2D::basisJet(int dim,int i,float u,SMLVec4f *N) {
     M3 = _mm_load_ps(ub+12);
 
     // That should be it because we will encorporate the BSpline matrix into the control point's matrix
-    _mm_storeu_ps(N[0].data_block(),mul_4x4_4x1(M0,M1,M2,M3,r4));
-    _mm_storeu_ps(N[1].data_block(),mul_4x4_4x1(M0,M1,M2,M3,r5));
-    _mm_storeu_ps(N[2].data_block(),mul_4x4_4x1(M0,M1,M2,M3,r6));
+    r1 = mul_4x4_4x1(M0,M1,M2,M3,r4);
+    r2 = mul_4x4_4x1(M0,M1,M2,M3,r5);
+    r3 = mul_4x4_4x1(M0,M1,M2,M3,r6);
+
+    // Store the results
+    _mm_store_ps(N[0].data_block(),r0);
+    _mm_store_ps(N[1].data_block(),r1);
+    _mm_store_ps(N[2].data_block(),r2);
     }
   else
     {
@@ -537,7 +543,7 @@ void DynamicBSpline2D::push(int uKnot,int vKnot,float u,float v,int iControlFirs
   int i;
 
   // Compute the basis function at the position
-  SMLVec4f NJu[4],NJv[4];
+  ALIGN32_PRE SMLVec4f ALIGN32_POST NJu[4],NJv[4];
   basisJet(0,uKnot,u,NJu);
   basisJet(1,vKnot,v,NJv);
 
@@ -677,8 +683,9 @@ inline __m128 crossProduct(__m128 A,__m128 B) {
 }
 
 // Perform the cross product 
-inline void triangleAreaVec(float *A,float *B,float *C, float *R) {
-  F32vec4 r0,r1,r2,r3,r4;
+inline void triangleAreaVec(float *A,float *B,float *C, float *outR) {
+  __m128 r0,r1,r2,r3,r4;
+  ALIGN32_PRE float N[4] ALIGN32_POST;
 
   // Load A, B and C
   r0 = _mm_loadu_ps(A);
@@ -692,14 +699,19 @@ inline void triangleAreaVec(float *A,float *B,float *C, float *R) {
   // Compute cross product
   r0 = crossProduct(r0,r1);
 
-  // We have the area vector for the triangle
-  R[0] = r0[0];
-  R[1] = r0[1];
-  R[2] = r0[2];
+  // Pull out the area vector
+  _mm_store_ps(N, r0);
+
+  // Copy into the actual N
+  outR[0] = N[0];
+  outR[1] = N[1];
+  outR[2] = N[2];
 }
 
-inline float triangleArea(float *A,float *B,float *C,float *outN) {
-  F32vec4 r0,r1,r2,r3,r4;
+inline void triangleArea(float *A,float *B,float *C,float *outN, float *outArea) 
+{
+  __m128 r0,r1,r2,r3,r4;
+  ALIGN32_PRE float N[4] ALIGN32_POST;
 
   // Load A, B and C
   r0 = _mm_loadu_ps(A);
@@ -713,10 +725,17 @@ inline float triangleArea(float *A,float *B,float *C,float *outN) {
   // Compute cross product
   r0 = crossProduct(r0,r1);
 
-  // Return the area vector
-  outN[0] = r0[0];
-  outN[1] = r0[1];
-  outN[2] = r0[2];
+  // Pull out the area vector
+  _mm_store_ps(N, r0);
+
+  // Copy into the actual N
+  outN[0] = N[0];
+  outN[1] = N[1];
+  outN[2] = N[2];
+  
+  // outN[0] = r0[0];
+  // outN[1] = r0[1];
+  // outN[2] = r0[2];
 
   // Square the elements
   r0 = _mm_mul_ps(r0,r0);
@@ -731,12 +750,12 @@ inline float triangleArea(float *A,float *B,float *C,float *outN) {
   r0 = _mm_sqrt_ss(r0);
 
   // We have the area vector for the triangle
-  return r0[0];
+  _mm_store_ss(outArea,r0);
 }
 
 // Normalize a vector
 inline __m128 normalize(__m128 A) {
-  F32vec4 B,C;
+  __m128 B,C;
 
   // Square the vector
   B = _mm_mul_ps(A,A);
@@ -2027,7 +2046,7 @@ SplineGridDefinition::~SplineGridDefinition() {
       int res = patchStart(d,iPatch+1) - patchStart(d,iPatch);
       for (int iRes=0;iRes<=res;iRes++)
         {
-        delete[] patchWeight[d][iPatch][iRes];
+        _aligned_free( patchWeight[d][iPatch][iRes] );
         }
       delete[] patchWeight[d][iPatch];
       }
@@ -2037,7 +2056,7 @@ SplineGridDefinition::~SplineGridDefinition() {
     delete[] knotValues[d];
     delete[] patchIndex[d];
     for (int i=0;i<size[d];i++)
-      delete[] W[d][i];
+      _aligned_free( W[d][i] );
 
     delete[] W[d];
     }
@@ -2087,7 +2106,8 @@ SplineGridDefinition *SplineGridDefinition::newSGDForCache(DynamicBSpline2D *spl
     sgd->W[d] = new SMLVec4f*[sgd->size[d]];
     for (iGrid=0;iGrid<sgd->size[d];iGrid++)
       {
-      sgd->W[d][iGrid] = new SMLVec4f[4];
+      sgd->W[d][iGrid] = 
+        (SMLVec4f *) _aligned_malloc(sizeof(SMLVec4f) * 4, 32);
       }
 
     // Initialize the patch weights
@@ -2097,7 +2117,8 @@ SplineGridDefinition *SplineGridDefinition::newSGDForCache(DynamicBSpline2D *spl
       sgd->patchWeight[d][iPatch] = new SMLVec4f*[res+1];
       for (int iRes=0;iRes<=res;iRes++)
         {
-        sgd->patchWeight[d][iPatch][iRes] = new SMLVec4f[4];
+        sgd->patchWeight[d][iPatch][iRes] = 
+          (SMLVec4f *) _aligned_malloc(sizeof(SMLVec4f) * 4, 32);
         }
       }
     }
@@ -2194,7 +2215,7 @@ PatchDataCache::PatchDataCache(MSpline *spline,SplineGridDefinition *grid,int iP
     {
     for (i=0;i<w-1;i++)
       {
-      float v00 = MP.offset(i,j);
+      int v00 = MP.offset(i,j);
       PT[nTriangles].v[0]   = v00;
       PT[nTriangles].v[1]   = v00+w;
       PT[nTriangles++].v[2] = v00+1;
@@ -2497,24 +2518,25 @@ void PatchDataCache::refreshMedialAreaWeights(int level) {
     int v0 = T.v[0],v1 = T.v[1],v2 = T.v[2];
 
     // Compute the area and area vector
-    float area = triangleArea(
-      MP(v0).F.data_block(),MP(v1).F.data_block(),MP(v2).F.data_block(),T.NMed.data_block());
-
-    // Store the area
-    T.areaMed = area;
+    triangleArea(
+      MP(v0).F.data_block(),
+      MP(v1).F.data_block(),
+      MP(v2).F.data_block(),
+      T.NMed.data_block(),
+      &T.areaMed );
 
     // Add areas to the accumulators
-    awMedTotal += area;
-    awMed[v0] += area;
-    awMed[v1] += area;
-    awMed[v2] += area;      
+    awMedTotal += T.areaMed;
+    awMed[v0] += T.areaMed;
+    awMed[v1] += T.areaMed;
+    awMed[v2] += T.areaMed;      
 
     if (T.in)
       {
-      awMedTrimmedTotal += area;
-      awMedTrimmed[v0] += area;
-      awMedTrimmed[v1] += area;
-      awMedTrimmed[v2] += area;
+      awMedTrimmedTotal += T.areaMed;
+      awMedTrimmed[v0] += T.areaMed;
+      awMedTrimmed[v1] += T.areaMed;
+      awMedTrimmed[v2] += T.areaMed;
       }
     }
 }
@@ -2678,9 +2700,13 @@ void PatchDataCache::refreshBoundaryAreaWeights(int level) {
       int v0 = T.v[0],v1 = T.v[1],v2 = T.v[2];
       for (int d=0;d<2;d++)
         {
-        float area = triangleArea(
-          MP(v0).bp[d].X.data_block(),MP(v1).bp[d].X.data_block(),
-          MP(v2).bp[d].X.data_block(),T.NBnd[d].data_block());
+        float area;
+        triangleArea(
+          MP(v0).bp[d].X.data_block(),
+          MP(v1).bp[d].X.data_block(),
+          MP(v2).bp[d].X.data_block(),
+          T.NBnd[d].data_block(),
+          &area);
 
         // Add areas to the accumulators
         awBndTotal += area;

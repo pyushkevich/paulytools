@@ -17,11 +17,11 @@ using namespace std;
 // but it is more precise and scientifically sound
 double getGaussianRnd(double mean,double sigma) {
   const double factor = 1.0 / RAND_MAX;
-  const double M_PI = acos(-1.0);
+  const double m_PI = acos(-1.0);
 
   double u1 = factor * ::rand();
   double u2 = factor * ::rand();
-  return mean + 2 * sigma * sqrt(-0.5*log(u1)) * cos(2*M_PI*u2);
+  return mean + 2 * sigma * sqrt(-0.5*log(u1)) * cos(2*m_PI*u2);
 }
 
 double rand(double max) {
@@ -490,6 +490,9 @@ struct tgaHeader
 
 
 unsigned int loadTransparentMipMap(const char *name,const GLColor &trans) {
+  // Error code
+  const unsigned int FAIL = (unsigned int) -1;
+  
   // Store tex info   
   glPushAttrib(GL_TEXTURE_BIT);
 
@@ -512,14 +515,14 @@ unsigned int loadTransparentMipMap(const char *name,const GLColor &trans) {
 
   FILE *f = fopen(name,"rb");
   if (f==NULL)
-    return -1;
+    return FAIL;
 
   fread(&header,18,1,f);
 
   if (header.width != header.height)
     {
     fclose(f);
-    return -1;
+    return FAIL;
     }
 
   int r = header.width;
@@ -530,9 +533,9 @@ unsigned int loadTransparentMipMap(const char *name,const GLColor &trans) {
   fread(array,1,r*r*3,f);
 
   int ind1=0,ind2=0;
-  int tR = (int)255 * trans.fv[0];
-  int tG = (int)255 * trans.fv[1];
-  int tB = (int)255 * trans.fv[2];
+  int tR = (int)(255 * trans.fv[0]);
+  int tG = (int)(255 * trans.fv[1]);
+  int tB = (int)(255 * trans.fv[2]);
 
   for (int i=0;i<r*r;i++)
     {
