@@ -53,6 +53,7 @@ SaveMRep(mp, id, "ctf01")
 
 # Compute add the rho component to the match
 mp.SetOptimizationToDeformable()
+mp.SetMatchToBoundaryGradient()
 mp.EnableMeshDump(dirMesh + "/step3",0.01)
 mp.RunOptimization(img, 800)
 SaveMRep(mp, id, "ctf02")
@@ -65,7 +66,6 @@ SaveMRep(mp, id, "ctf03")
 
 # Scale up to 6 by 10 optimization
 mp.SetNumberOfCoefficients(6, 8)
-mp.SetMatchToBoundaryGradient()
 mp.EnableMeshDump(dirMesh + "/step5",0.01)
 mp.RunOptimization(img, 400)
 SaveMRep(mp, id, "ctf04")
