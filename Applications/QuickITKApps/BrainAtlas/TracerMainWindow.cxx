@@ -67,10 +67,10 @@ TracerMainWindow
     float dist = m_Data->GetDistanceMapper()->GetVertexDistance(id);
 
     // Scale the distance by something
-    double val = atan(dist / 100.0) * 0.63661977;
+    double val = atan(dist / 10.0) * 0.63661977;
 
     // Apply the appropriate color
-    glColor3d(val, val, 1.0);
+    SetGLColorHSV(val, 1.0, 1.0);
     }
 }
 

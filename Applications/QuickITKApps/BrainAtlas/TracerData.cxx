@@ -1,5 +1,6 @@
 #include "TracerData.h"
 #include <fstream>
+#include <sstream>
 
 const int
 TracerData
@@ -263,6 +264,69 @@ void TracerData
 
   // Pass the curves to the vertex Voronoi distance mapper
   m_DistanceMapper->ComputeDistances(lSources);
+
+  // First we compute all the grad-r vectors
+  unsigned int iVtx, iNbr, nVertices = m_DistanceMapper->GetNumberOfVertices();
+  vector< Vec > xGradR(nVertices, Vec(0.0f));
+
+  // Detect vertices that are saddlepoints of the distance function
+  for(iVtx = 0; iVtx < nVertices; iVtx++)
+    {
+    unsigned int nNeighbors = m_DistanceMapper->GetVertexNumberOfEdges(iVtx);
+    for(int iNbr = 0; iNbr < nNeighbors; iNbr++)
+      {
+      // Compute the finite differences
+      unsigned int iNbVtx = m_DistanceMapper->GetVertexEdge(iVtx, iNbr);
+      Vec dx = Vec(m_Mesh->GetPoint(iNbVtx)) - Vec(m_Mesh->GetPoint(iVtx));
+      double dr = m_DistanceMapper->GetVertexDistance(iNbVtx) 
+        - m_DistanceMapper->GetVertexDistance(iVtx);
+
+      // Add the component to grad-r
+      xGradR[iVtx] += (dx * dr / dot_product(dx,dx));
+      }
+
+    // Scale the gradR
+    xGradR[iVtx] *= (1.0 / nNeighbors);
+    }
+
+  // Find vertices where magnitude of grad-R is minimal. These must include the saddles
+  list< vtkIdType> xLandmark;
+  for(iVtx = 0; iVtx < nVertices; iVtx++)
+    {
+    unsigned int nNeighbors = m_DistanceMapper->GetVertexNumberOfEdges(iVtx);
+    bool flagMin = true;
+    for(int iNbr = 0; iNbr < nNeighbors; iNbr++)
+      {
+      // Compute the finite differences
+      unsigned int iNbVtx = m_DistanceMapper->GetVertexEdge(iVtx, iNbr);
+
+      // Add the component to grad-r
+      if( xGradR[iNbVtx].squared_magnitude() <= xGradR[iVtx].squared_magnitude() )
+        {
+        flagMin = false;
+        break;
+        }
+      }
+
+    // Scale the gradR
+    if(flagMin && xGradR[iVtx].magnitude() < 0.05 && m_DistanceMapper->GetVertexDistance(iVtx) > 0)
+      {
+      cout << "Vertex " << iVtx << " with distance " 
+        << m_DistanceMapper->GetVertexDistance(iVtx) 
+        << " and m.g.r. " << xGradR[iVtx].magnitude() << " is a potential saddlepoint " << endl;
+      xLandmark.push_back(iVtx);
+      }
+    }
+
+  // Add some landmarks
+  for(list<vtkIdType>::iterator it = xLandmark.begin(); it != xLandmark.end(); ++it)
+    {
+    ostringstream oss;
+    oss << "Saddle Point " << (*it);
+    // AddNewCurve(oss.str().c_str());
+    // AddNewPoint(*it);
+    // AddNewPoint(*it);
+    }
 
   // Now we need a way to visualize the distance function
   TracerDataEvent evt(this);

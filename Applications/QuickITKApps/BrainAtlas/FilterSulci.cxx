@@ -1383,7 +1383,7 @@ ImplicitSurfaceExtractor
   //   cout << "   ... " << nFunctionCalls << " function calls " << endl;
 
   // Return the result
-  return -K->G0;
+  return K->G0;
 }
 
 
@@ -1557,7 +1557,7 @@ int ImplicitSurfaceExtractor
   // Track the number of callbacks
   if(++nFaceCalls % 1000 == 0)
     if(nFaceCalls % 70000 == 0) cout << endl << "  *";
-    else cout << "*";
+    else cout << "*" << flush;
 
   // Continue
   return 1;
@@ -1841,7 +1841,7 @@ private:
       // Print a star for every 10,000 evaluations
       if(++nEvals % 10000 == 0) 
         if(nEvals % 700000 == 0) cout << endl << "  *";
-        else cout << "*";
+        else cout << "*" << flush;
 
       return xGeometry.fRidge;
       }  
