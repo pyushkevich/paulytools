@@ -12,6 +12,7 @@ OPTION(USE_OPENGL "Use OpenGL Libraries" OFF)
 # Define the optional inclusion (BUILD) variables 
 OPTION(BUILD_APPLICATIONS "Should I build standalone applications?" OFF)
 OPTION(BUILD_EXTERNAL "Should I build external libraries?" ON)
+OPTION(BUILD_TESTING "Should I build the test code?" ON)
 
 # Define the inclusion path
 SUBDIRS(
