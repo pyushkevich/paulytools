@@ -4,12 +4,12 @@ header_name {.h}
 code_name {.cxx}
 class TracerUserInterface {open : {public TracerUserInterfaceBase}
 } {
-  Function {MakeWindow()} {open
+  Function {MakeWindow()} {open selected return_type {virtual void}
   } {
     Fl_Window m_WinMain {
       label {GeeLab Brain Tracer}
       callback {OnMenuQuit();} open
-      xywh {158 87 928 710} type Double resizable
+      xywh {54 182 925 710} type Double resizable
       code0 {\#include "TracerUserInterfaceBase.h"}
       code1 {\#include "TracerMainWindow.h"} visible
     } {
@@ -43,17 +43,17 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
             xywh {0 0 100 20} shortcut 0x4006d divider
           }
           menuitem m_MenuLoadCurves {
-            label {&Load Curves...}
+            label {&Load Trace Data...}
             callback {OnMenuLoadCurves()}
             xywh {10 10 100 20} shortcut 0x4006c deactivate
           }
           menuitem m_MenuSaveCurves {
-            label {&Save Curves}
+            label {&Save Trace Data}
             callback {this->OnMenuSaveCurves();}
             xywh {0 0 100 20} shortcut 0x40073 deactivate
           }
           menuitem m_MenuSaveCurvesAs {
-            label {Save Curves &As...}
+            label {Save Trace Data &As...}
             callback {this->OnMenuSaveCurvesAs();}
             xywh {10 10 100 20} shortcut 0x50073 deactivate divider
           }
@@ -64,7 +64,27 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           }
         }
         submenu {} {
-          label {&Edit} open
+          label {&Mode} open
+          xywh {0 0 100 20}
+        } {
+          menuitem m_MenuModeTrackball {
+            label Trackball
+            callback {OnButtonModeTrackball();}
+            xywh {5 5 100 20} type Radio shortcut 0xffbe value 1
+          }
+          menuitem m_MenuModeTracer {
+            label {Curve Tracer}
+            callback {OnButtonModeTracer();}
+            xywh {15 15 100 20} type Radio shortcut 0xffbf deactivate
+          }
+          menuitem m_MenuModeMarker {
+            label {Region Marker}
+            callback {OnButtonModeMarker();}
+            xywh {25 25 100 20} type Radio shortcut 0xffc0 deactivate
+          }
+        }
+        submenu {} {
+          label {&Curves} open
           xywh {5 5 100 20}
         } {
           menuitem m_MenuStartCurve {
@@ -89,107 +109,145 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           }
         }
         submenu {} {
-          label {&Mode} open
-          xywh {0 0 100 20}
+          label {Mar&kers} open
+          xywh {5 5 100 20}
         } {
-          menuitem m_MenuModeTrackball {
-            label Trackball
-            callback {OnButtonModeTrackball();}
-            xywh {5 5 100 20} type Radio shortcut 0x31 value 1
+          menuitem m_MenuRenameMarker {
+            label {Rename marker...}
+            callback {OnButtonRenameMarker();}
+            xywh {0 0 100 20} deactivate
           }
-          menuitem m_MenuModeTracer {
-            label Tracer
-            callback {OnButtonModeTracer();}
-            xywh {15 15 100 20} type Radio shortcut 0x32 deactivate
+          menuitem m_MenuRecolorMarker {
+            label {Recolor marker...}
+            callback {OnButtonRecolorMarker();}
+            xywh {10 10 100 20} deactivate
+          }
+          menuitem m_MenuDeleteMarker {
+            label {Delete marker}
+            callback {OnButtonDeleteMarker();}
+            xywh {20 20 100 20} deactivate divider
+          }
+          menuitem m_MenuComputeRegions {
+            label {Compute regions}
+            callback {OnButtonComputeRegions();}
+            xywh {30 30 100 20} shortcut 0xffc5 deactivate
           }
         }
       }
       Fl_Group {} {open
-        xywh {655 290 270 415} box PLASTIC_UP_BOX color 31
+        xywh {655 290 270 415} color 31
       } {
-        Fl_Group {} {
-          label {Curve editing:} open
-          xywh {665 315 245 150} box PLASTIC_DOWN_FRAME labelsize 12 align 5
-        } {
-          Fl_Choice m_ChcCurve {
-            label {Current curve:}
-            callback {OnSelectCurve();} open
-            xywh {675 340 225 25} down_box BORDER_BOX labelsize 12 align 5 textsize 12 deactivate
-          } {}
-          Fl_Button m_BtnStartCurve {
-            label {add curve}
-            callback {OnButtonStartCurve();}
-            xywh {675 370 70 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
-          }
-          Fl_Button m_BtnDeleteCurve {
-            label delete
-            callback {OnButtonDeleteCurve();}
-            xywh {825 370 70 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
-          }
-          Fl_Button m_BtnEditCurve {
-            label rename
-            callback {OnButtonEditCurve();}
-            xywh {750 370 70 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
-          }
-          Fl_Value_Input {} {
-            label {Sulcal support factor:}
-            callback {OnInputSulcalFactor(o->value());}
-            tooltip {The degree to which curvature affects the path traced on the surface.} xywh {855 430 50 20} labelsize 12 when 8 step 0.1 textsize 11
-          }
-          Fl_Button m_BtnDeleteLastPoint {
-            label {undo last point}
-            callback {OnButtonDeleteLastPoint();}
-            xywh {675 400 100 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
-          }
-        }
         Fl_Group {} {open
-          xywh {665 685 250 10} resizable
+          xywh {655 685 260 10} resizable
         } {}
-        Fl_Group {} {
-          label {Display options:} open
-          xywh {665 490 245 195} box PLASTIC_DOWN_FRAME labelsize 12 align 5
+        Fl_Tabs {} {open
+          xywh {655 295 265 410} box PLASTIC_THIN_UP_BOX
         } {
-          Fl_Check_Button {} {
-            label { Center mesh on current point}
-            callback {OnCheckCenterMesh(o->value());}
-            xywh {675 495 200 25} down_box DOWN_BOX labelsize 12
-          }
-          Fl_Check_Button {} {
-            label { Display neighborhood only}
-            callback {OnCheckDisplayNeighborhood(o->value());}
-            xywh {675 525 200 25} down_box DOWN_BOX labelsize 12
-          }
-          Fl_Button {} {
-            label {more options...}
-            callback {m_WinMeshOptions->show();}
-            xywh {795 650 105 25} box PLASTIC_UP_BOX color 170 labelfont 1 labelsize 12
-          }
-          Fl_Value_Input m_InNeighborhoodSize {
-            label {Neighborhood radius:}
-            callback {OnInputNeighborhoodRadius(o->value());}
-            tooltip {The size of the neighborhood (distance from the current point)} xywh {850 545 50 20} labelsize 11 when 8 minimum 1 maximum 100 step 1 value 20 textsize 11 deactivate
-          }
-          Fl_Check_Button m_ChkDisplayEdges {
-            label { Overlay edges on the mesh}
-            callback {OnCheckDisplayEdges(o->value());}
-            xywh {675 570 190 25} down_box DOWN_BOX labelsize 12
-          }
-          Fl_Choice m_ChcEdgeColoring {
-            label {Edge color based on:}
-            callback {OnSelectEdgeColoring(o->value());} open
-            xywh {730 605 165 20} down_box BORDER_BOX labelsize 11 align 5 textsize 11 deactivate
+          Fl_Group {} {
+            label Curves open
+            xywh {655 320 265 385} labelfont 1 labelsize 12
           } {
-            menuitem {} {
-              label {do not color edges} selected
-              xywh {35 35 100 20} value 1 labelsize 11
+            Fl_Choice m_ChcCurve {
+              label {Current curve:}
+              callback {OnSelectCurve();} open
+              xywh {665 350 245 25} down_box BORDER_BOX labelsize 12 align 5 textsize 12 deactivate
+            } {}
+            Fl_Button m_BtnStartCurve {
+              label {add curve}
+              callback {OnButtonStartCurve();}
+              xywh {665 390 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
             }
-            menuitem {} {
-              label {distance to current vertex}
-              xywh {15 15 100 20} labelsize 11
+            Fl_Button m_BtnDeleteCurve {
+              label delete
+              callback {OnButtonDeleteCurve();}
+              xywh {835 390 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
             }
-            menuitem {} {
-              label {edge weight}
-              xywh {25 25 100 20} labelsize 11
+            Fl_Button m_BtnEditCurve {
+              label rename
+              callback {OnButtonEditCurve();}
+              xywh {750 390 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
+            }
+            Fl_Value_Input {} {
+              label {Sulcal support factor:}
+              callback {OnInputSulcalFactor(o->value());}
+              tooltip {The degree to which curvature affects the path traced on the surface.} xywh {855 670 55 25} labelsize 12 when 8 step 0.1 textsize 11
+            }
+            Fl_Button m_BtnDeleteLastPoint {
+              label {undo last point}
+              callback {OnButtonDeleteLastPoint();}
+              xywh {665 425 100 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
+            }
+          }
+          Fl_Group {} {
+            label Markers open
+            xywh {655 320 265 385} labelfont 1 labelsize 12 hide
+          } {
+            Fl_Browser m_BrsMarkers {
+              label {Region markers:}
+              xywh {665 350 245 100} labelsize 12 align 5 textsize 12
+            }
+            Fl_Button m_BtnDeleteMarker {
+              label delete
+              callback {OnButtonDeleteMarker();}
+              xywh {830 460 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
+            }
+            Fl_Button m_BtnRenameMarker {
+              label rename
+              callback {OnButtonRenameMarker();}
+              xywh {670 460 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
+            }
+            Fl_Button m_BtnRecolorMarker {
+              label recolor
+              callback {OnButtonRecolorMarker();}
+              xywh {750 460 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
+            }
+            Fl_Button m_BtnComputeRegions {
+              label {compute regions}
+              callback {OnButtonComputeRegions();}
+              xywh {670 495 120 25} box PLASTIC_UP_BOX shortcut 0x80072 color 9 labelfont 1 labelsize 12 deactivate
+            }
+          }
+          Fl_Group {} {
+            label Display open
+            xywh {655 320 265 385} labelfont 1 labelsize 12 hide
+          } {
+            Fl_Check_Button {} {
+              label { Center mesh on current point}
+              callback {OnCheckCenterMesh(o->value());}
+              xywh {665 335 200 25} down_box DOWN_BOX labelsize 12
+            }
+            Fl_Check_Button {} {
+              label { Display neighborhood only}
+              callback {OnCheckDisplayNeighborhood(o->value());}
+              xywh {665 360 200 25} down_box DOWN_BOX labelsize 12
+            }
+            Fl_Value_Input m_InNeighborhoodSize {
+              label {Neighborhood radius:}
+              callback {OnInputNeighborhoodRadius(o->value());}
+              tooltip {The size of the neighborhood (distance from the current point)} xywh {860 385 50 20} labelsize 11 when 8 minimum 1 maximum 100 step 1 value 20 textsize 11 deactivate
+            }
+            Fl_Check_Button m_ChkDisplayEdges {
+              label { Overlay edges on the mesh}
+              callback {OnCheckDisplayEdges(o->value());}
+              xywh {665 420 190 25} down_box DOWN_BOX labelsize 12
+            }
+            Fl_Choice m_ChcEdgeColoring {
+              label {Color map:}
+              callback {OnSelectEdgeColoring(o->value());} open
+              xywh {740 455 170 20} down_box BORDER_BOX labelsize 11 textsize 11 deactivate
+            } {
+              menuitem {} {
+                label None
+                xywh {40 40 100 20} value 1 labelsize 11
+              }
+              menuitem {} {
+                label {Distance to current vertex}
+                xywh {20 20 100 20} labelsize 11
+              }
+              menuitem {} {
+                label {Edge weight}
+                xywh {30 30 100 20} labelsize 11
+              }
             }
           }
         }
@@ -198,14 +256,19 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
         xywh {5 675 645 35}
       } {
         Fl_Light_Button m_BtnModeTrackball {
-          label {1: t-ball}
+          label {F1: Trackball}
           callback {OnButtonModeTrackball();}
-          xywh {15 680 75 25} type Radio box PLASTIC_UP_BOX value 1 color 76 labelfont 1 labelsize 12
+          xywh {15 680 110 25} type Radio box PLASTIC_UP_BOX value 1 selection_color 94 labelfont 1 labelsize 12
         }
         Fl_Light_Button m_BtnModeTracer {
-          label {2: tracer}
+          label {F2: Tracer}
           callback {OnButtonModeTracer();}
-          xywh {95 680 75 25} type Radio box PLASTIC_UP_BOX color 76 labelfont 1 labelsize 12 deactivate
+          xywh {135 680 110 25} type Radio box PLASTIC_UP_BOX selection_color 94 labelfont 1 labelsize 12 deactivate
+        }
+        Fl_Light_Button m_BtnModeMarker {
+          label {F3: Marker}
+          callback {OnButtonModeMarker();}
+          xywh {255 680 110 25} type Radio box PLASTIC_UP_BOX selection_color 94 labelfont 1 labelsize 12 deactivate
         }
       }
     }

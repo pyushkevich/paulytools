@@ -148,7 +148,10 @@ public:
     { return m_WeightFunctionPtr->GetEdgeWeight(m_SourceMesh,x1,x2); }
   
   /** Given a ray, find a point closest to that ray */
-  bool PickPoint(Vec xStart, Vec xEnd, vtkIdType &point);
+  bool PickPoint(Vec xStart, Vec xEnd, vtkIdType &point) const;
+
+  /** Given a ray, find a cell clostest to that ray */
+  bool PickCell(Vec xStart, Vec xEnd, vtkIdType &cell) const;
 
   /** Get the number of vertices in the graph */
   unsigned int GetNumberOfVertices() const 

@@ -11,7 +11,7 @@ class TracerMainWindow
 {
 public:
   // Modes and button information
-  enum EditMode { TRACKBALL, TRACER };
+  enum EditMode { TRACKBALL, TRACER, MARKER };
   enum TrackballMode { NONE, ROTATE, ZOOM, PAN };
 
   // Edge display mode (for edges displayed over the surface of 
@@ -23,6 +23,9 @@ public:
   // Surface display mode
   enum SurfaceDisplayMode 
     { SURFACE_DISPLAY_ALL, SURFACE_DISPLAY_NEIGHBORHOOD };
+
+  // Vector type
+  typedef TracerData::Vec Vec;
 
   // Constructor
   TracerMainWindow(int x, int y, int w, int h, const char *label);
@@ -104,6 +107,8 @@ public:
   void OnFocusCurveDataChange(TracerDataEvent *evt);
   void OnCurveListChange(TracerDataEvent *evt);
   void OnEdgeWeightsUpdate(TracerDataEvent *evt);
+  void OnMarkerListChange(TracerDataEvent *evt);
+  void OnFocusMarkerChange(TracerDataEvent *evt);
 
 private:
 
@@ -139,6 +144,9 @@ private:
 
   // Point under the cursor
   vtkIdType m_CurrentPoint;
+ 
+  // Candidate cell for a marker
+  vtkIdType m_CurrentMarkerCell;
 
   // Whether the mesh should be centered on current point or not
   bool m_CenterMesh;
@@ -151,17 +159,28 @@ private:
   void SetUpModelMatrix();
 
   // Perform ray intersection to find point under cursor
+  void ComputeClickRay(Vec &xStart, Vec &xEnd);
   void FindPointUnderCursor();
+  void FindCellUnderCursor();
 
   // Do the actual job of computing the display list
   void ComputeFullMeshDisplayList();
   void ComputeNeighborhoodDisplayList();
   void ComputeEdgeDisplayList();
 
+  // Submethods in the draw() method, broken up for code clarity
+  void DrawMesh();
+  void DrawCurves();
+  void DrawMarkers();
+
   // Methods for choosing edge colors based on values
   void SetGLColorHSV(double xHue, double xSaturation, double xValue);
   void SetGLEdgeColorFromDistance(double xDistance);
   void SetGLEdgeColorFromWeight(double xWeight);
+
+  // Draw a sphere using open GL
+  void GLDrawSphere(double *x, double r);
+  void GLDrawMarker(vtkIdType iCell, const Vec &color);
 };
 
 

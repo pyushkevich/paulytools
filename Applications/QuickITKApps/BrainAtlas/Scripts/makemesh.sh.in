@@ -13,25 +13,25 @@ export INPDIR=@BATLAS_DATA_ROOT@/atlas02/input
 export MESHDIR=@BATLAS_DATA_ROOT@/atlas02/mesh
 export GEOMDIR=@BATLAS_DATA_ROOT@/atlas02/geometry/input
 
-export AID=11
-export LEFTLABEL=002
-export RIGHTLABEL=003
+export IMGNAME=grey_and_white_11
+export LEFTLABEL=003
+export RIGHTLABEL=002
 
 # Extract the left and right hemispheres from the hand segmented atlas
-$BINDIRX/lsplit $INPDIR/grey_and_white_"$AID".img $INPDIR/grey_and_white_"$AID"_split
+$BINDIRX/lsplit $INPDIR/$IMGNAME.hdr $INPDIR/"$IMGNAME"_split
 
 # Construct the mesh based on the left and right hemispheres
 echo "Building left hemisphere mesh"
 $BINDIR/binary2mesh \
-  -a 0.012 -ea $GEOMDIR/left_hemisphere_alias.mha \
-  $INPDIR/grey_and_white_"$AID"_split."$LEFTLABEL".img \
+  -a 0.024 -ea $GEOMDIR/left_hemisphere_alias.mha \
+  $INPDIR/"$IMGNAME"_split."$LEFTLABEL".hdr \
   $MESHDIR/left_hemisphere.vtk
 
 echo "Building right hemisphere mesh"
 $BINDIR/binary2mesh \
-  -a 0.012 -ea $GEOMDIR/right_hemisphere_alias.mha \
-  $INPDIR/grey_and_white_"$AID"_split."$RIGHTLABEL".img \
+  -a 0.024 -ea $GEOMDIR/right_hemisphere_alias.mha \
+  $INPDIR/"$IMGNAME"_split."$RIGHTLABEL".hdr \
   $MESHDIR/right_hemisphere.vtk
 
 # Remove the termporary files
-rm -rf $INPDIR/grey_and_white_"$AID"_split.*
+rm -rf $INPDIR/"$IMGNAME"_split.*

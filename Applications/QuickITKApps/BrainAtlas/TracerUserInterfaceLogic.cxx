@@ -1,6 +1,62 @@
 #include "TracerUserInterfaceLogic.h"
 #include "FL/Fl_File_Chooser.H"
 
+// Constructor
+TracerUserInterfaceLogic 
+::TracerUserInterfaceLogic() 
+: TracerUserInterface() 
+{
+  m_Data = NULL;
+  m_CurvesFile = "";
+  m_CurvesDirty = false;
+
+  // Set up the dependences between activation flags
+  m_Activation.SetFlagImplies(AF_TRACER_DATA, AF_MESH);
+  m_Activation.SetFlagImplies(AF_CURVES_EXIST, AF_TRACER_DATA);
+  m_Activation.SetFlagImplies(AF_MARKERS_EXIST, AF_TRACER_DATA);
+  m_Activation.SetFlagImplies(AF_ACTIVE_CURVE, AF_CURVES_EXIST);
+  m_Activation.SetFlagImplies(AF_ACTIVE_CONTROL, AF_ACTIVE_CURVE);
+  m_Activation.SetFlagImplies(AF_ACTIVE_MARKER, AF_MARKERS_EXIST);
+  m_Activation.SetFlagImplies(AF_TRACER_MODE, AF_ACTIVE_CURVE);
+  m_Activation.SetFlagImplies(AF_MARKER_MODE, AF_MESH);
+}
+
+void
+TracerUserInterfaceLogic
+::MakeWindow()
+{
+  // Call the parent method that creates all the controls
+  TracerUserInterface::MakeWindow();
+
+  // Set up the state-based control activation
+  m_Activation.AddMenuItem(m_MenuLoadCurves, AF_MESH); 
+  m_Activation.AddMenuItem(m_MenuSaveCurves, AF_TRACER_DATA);
+  m_Activation.AddMenuItem(m_MenuModeTracer, AF_ACTIVE_CURVE); 
+  m_Activation.AddMenuItem(m_MenuModeMarker, AF_MESH);
+  m_Activation.AddMenuItem(m_MenuSaveCurvesAs, AF_ACTIVE_CURVE ); 
+  m_Activation.AddMenuItem(m_MenuStartCurve, AF_MESH); 
+  m_Activation.AddMenuItem(m_MenuEditCurve, AF_ACTIVE_CURVE); 
+  m_Activation.AddMenuItem(m_MenuDeleteCurve,    AF_ACTIVE_CURVE); 
+  m_Activation.AddMenuItem(m_MenuDeleteLastPoint, AF_ACTIVE_CONTROL); 
+  m_Activation.AddMenuItem(m_MenuRenameMarker, AF_ACTIVE_MARKER);
+  m_Activation.AddMenuItem(m_MenuDeleteMarker, AF_ACTIVE_MARKER);
+  m_Activation.AddMenuItem(m_MenuRecolorMarker, AF_ACTIVE_MARKER);
+  m_Activation.AddMenuItem(m_MenuComputeRegions, AF_MARKERS_EXIST);
+  
+  m_Activation.AddWidget(m_ChcCurve, AF_TRACER_DATA); 
+  m_Activation.AddWidget(m_BtnStartCurve, AF_MESH); 
+  m_Activation.AddWidget(m_BtnDeleteCurve, AF_ACTIVE_CURVE); 
+  m_Activation.AddWidget(m_BtnEditCurve, AF_ACTIVE_CURVE); 
+  m_Activation.AddWidget(m_BtnDeleteLastPoint, AF_ACTIVE_CONTROL); 
+  m_Activation.AddWidget(m_BtnModeTracer, AF_ACTIVE_CURVE); 
+  m_Activation.AddWidget(m_BtnModeMarker, AF_MESH);
+  m_Activation.AddWidget(m_BtnRenameMarker, AF_ACTIVE_MARKER);
+  m_Activation.AddWidget(m_BtnDeleteMarker, AF_ACTIVE_MARKER);
+  m_Activation.AddWidget(m_BtnRecolorMarker, AF_ACTIVE_MARKER);
+  m_Activation.AddWidget(m_BrsMarkers, AF_MARKERS_EXIST);
+  m_Activation.AddWidget(m_BtnComputeRegions, AF_MARKERS_EXIST);
+}
+
 bool
 TracerUserInterfaceLogic
 ::PromptForSaveOrCancel(const char *message)
@@ -122,6 +178,7 @@ TracerUserInterfaceLogic
 {
   m_BtnModeTrackball->value(1);
   m_BtnModeTracer->value(0);
+  m_BtnModeMarker->value(0);
   m_MenuModeTrackball->setonly();
   
   m_WinTrace->SetMode(TracerMainWindow::TRACKBALL);
@@ -133,9 +190,22 @@ TracerUserInterfaceLogic
 {
   m_BtnModeTrackball->value(0);
   m_BtnModeTracer->value(1);
+  m_BtnModeMarker->value(0);
   m_MenuModeTracer->setonly();
   
   m_WinTrace->SetMode(TracerMainWindow::TRACER);
+}
+
+void
+TracerUserInterfaceLogic
+::OnButtonModeMarker()
+{
+  m_BtnModeTrackball->value(0);
+  m_BtnModeTracer->value(0);
+  m_BtnModeMarker->value(1);
+  m_MenuModeMarker->setonly();
+  
+  m_WinTrace->SetMode(TracerMainWindow::MARKER);
 }
 
 void
@@ -221,38 +291,6 @@ TracerUserInterfaceLogic
 {
   m_WinTrace->SetNeighborhoodSize(value);
 }
-  
-void
-TracerUserInterfaceLogic
-::ActivateCurveEditControls()
-{
-  // Enable curve editing
-  m_MenuSaveCurves->activate();
-  m_MenuSaveCurvesAs->activate();
-  m_MenuModeTracer->activate();
-  m_MenuDeleteCurve->activate();
-  m_MenuEditCurve->activate();
-  
-  m_BtnModeTracer->activate();
-  m_BtnDeleteCurve->activate();
-  m_BtnEditCurve->activate();
-}
-
-void
-TracerUserInterfaceLogic
-::DeactivateCurveEditControls()
-{
-  // Disable curve editing
-  m_BtnModeTracer->deactivate();
-  m_BtnDeleteCurve->deactivate();
-  m_BtnEditCurve->deactivate();
-  
-  m_MenuSaveCurves->deactivate();
-  m_MenuSaveCurvesAs->deactivate();
-  m_MenuModeTracer->deactivate();
-  m_MenuDeleteCurve->deactivate();
-  m_MenuEditCurve->deactivate();
-}
 
 void
 TracerUserInterfaceLogic
@@ -288,11 +326,6 @@ TracerUserInterfaceLogic
 
     // Set the current item
     m_ChcCurve->value(iCurrent);
-    m_ChcCurve->activate();
-    }
-  else
-    {
-    m_ChcCurve->deactivate();
     }
 }
 
@@ -364,39 +397,20 @@ void
 TracerUserInterfaceLogic
 ::OnMeshChange(TracerDataEvent *evt)
 {
-  // If the mesh exists, draw the mesh
-  if( m_Data->IsMeshLoaded() )
-    {
-    m_BtnStartCurve->activate();
-    m_MenuStartCurve->activate();
-    m_MenuLoadCurves->activate();
-    }
-  else
-    {
-    m_BtnStartCurve->deactivate();
-    m_MenuStartCurve->deactivate();
-    m_MenuLoadCurves->deactivate();
-    }
+  // Activate the controls that are tied to the mesh being present
+  m_Activation.UpdateFlag( AF_MESH, m_Data->IsMeshLoaded() );
 }
 
 void 
 TracerUserInterfaceLogic
 ::OnFocusCurveChange(TracerDataEvent *evt)
 {
+  // Update the flags based on current state
+  m_Activation.UpdateFlag( AF_ACTIVE_CURVE, m_Data->IsCurrentCurveValid());
+  
   // If there is no current curve, disable controls
   if(!m_Data->IsCurrentCurveValid())
-    {
-    // Enter trackball mode
     this->OnButtonModeTrackball();
-
-    // Adjust controls
-    DeactivateCurveEditControls();
-    }
-  else
-    {
-    // Activate the controls
-    ActivateCurveEditControls();
-    }
 
   // Change the current item in the drop-down
   RebuildCurveList();
@@ -407,16 +421,7 @@ TracerUserInterfaceLogic
 ::OnFocusPointChange(TracerDataEvent *evt)
 {
   // Check if the delete last point is valid
-  if(m_Data->IsPathSourceSet())
-    {
-    m_BtnDeleteLastPoint->activate();
-    m_MenuDeleteLastPoint->activate();
-    }
-  else
-    {
-    m_BtnDeleteLastPoint->deactivate();
-    m_MenuDeleteLastPoint->deactivate();
-    }
+  m_Activation.UpdateFlag(AF_ACTIVE_CONTROL, m_Data->IsPathSourceSet());
 }
 
 void 
@@ -430,24 +435,57 @@ void
 TracerUserInterfaceLogic
 ::OnCurveListChange(TracerDataEvent *evt)
 {
+  // Update the active and inactive controls
+  m_Activation.UpdateFlag( AF_CURVES_EXIST, 
+    m_Data->GetCurves()->GetNumberOfCurves() > 0);
+  
   // The list of curves has changed, so we need to rebuild
   // the curve drop down box. We don't worry about the buttons
   // because that's handled by the Focus and Data events
   RebuildCurveList();
 
-  // If there is more than one curve, enable the saving and loading
-  if(m_Data->GetCurves()->GetNumberOfCurves())
-    {
-    m_MenuSaveCurvesAs->activate();
-    m_MenuSaveCurves->activate();
-    }
-  else
-    {
-    m_MenuSaveCurvesAs->deactivate();
-    m_MenuSaveCurves->deactivate();
-    }
-
+  // Set the dirty flag
   m_CurvesDirty = true;
 }
 
+void
+TracerUserInterfaceLogic
+::OnButtonRenameMarker()
+{
+  
+}
 
+void
+TracerUserInterfaceLogic
+::OnButtonRecolorMarker()
+{
+
+}
+
+void
+TracerUserInterfaceLogic
+::OnButtonDeleteMarker()
+{
+
+}
+
+void
+TracerUserInterfaceLogic
+::OnButtonComputeRegions()
+{
+
+}
+
+void 
+TracerUserInterfaceLogic::
+OnMarkerListChange(TracerDataEvent *evt)
+{
+  
+}
+
+void 
+TracerUserInterfaceLogic::
+OnFocusMarkerChange(TracerDataEvent *evt)
+{
+  
+}

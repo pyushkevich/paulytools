@@ -155,10 +155,25 @@ VTKMeshShortestDistance
   fltCellLocator->Delete();
 }
 
+bool
+VTKMeshShortestDistance
+::PickCell(Vec xStart, Vec xEnd, vtkIdType &point) const
+{
+  Vec ptLine, pCoords;
+  vtkIdType subId;
+  double t; 
+
+  // Compute the intersection with the line
+  int rc = fltCellLocator->IntersectWithLine(
+    xStart.data_block(),xEnd.data_block(),
+    0.001, t, ptLine.data_block(), pCoords.data_block(), subId, point);
+
+  return subId == 0;
+}
 
 bool 
 VTKMeshShortestDistance
-::PickPoint(Vec xStart, Vec xEnd, vtkIdType &point)
+::PickPoint(Vec xStart, Vec xEnd, vtkIdType &point) const
 {
   Vec ptLine, pCoords;
   double t; 

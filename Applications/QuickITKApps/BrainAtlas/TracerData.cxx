@@ -1,6 +1,10 @@
 #include "TracerData.h"
 #include <fstream>
 
+const int
+TracerData
+::NO_FOCUS = -1;
+
 TracerData
 ::TracerData()
 {
@@ -18,8 +22,8 @@ TracerData
   m_CleanFilter = vtkCleanPolyData::New();
   
   m_DisplayMesh = m_Mesh = NULL;
-  m_FocusPoint = -1;
-  m_FocusCurve = -1;
+  m_FocusPoint = NO_FOCUS;
+  m_FocusCurve = NO_FOCUS;
 }
 
 TracerData
@@ -33,7 +37,6 @@ TracerData
   m_Triangulator->Delete();
   m_NormalsFilter->Delete();
   m_CleanFilter->Delete();
-  
 }
 
 void
@@ -81,7 +84,7 @@ TracerData
   m_Curves.RemoveAllData();
 
   // Unset current curve and current point
-  SetFocusPoint(-1); SetFocusCurve(-1);
+  SetFocusPoint(NO_FOCUS); SetFocusCurve(NO_FOCUS);
 
   // Notify listeners that the curves have changed
   TracerDataEvent evt(this);
@@ -111,8 +114,8 @@ TracerData
   if(rc)
     {
     // Reset the current point and curve
-    SetFocusPoint(-1);
-    SetFocusCurve(-1);
+    SetFocusPoint(NO_FOCUS);
+    SetFocusCurve(NO_FOCUS);
 
     // Notify listeners that the curves have changed
     TracerDataEvent evt(this);
@@ -163,7 +166,7 @@ TracerData
   if(inFocusPoint != m_FocusPoint)
     {
     // Compute distance to the new focus point
-    if(inFocusPoint != -1)
+    if(inFocusPoint != NO_FOCUS)
       ComputeDistances(inFocusPoint);
 
     // Set the new focus point
@@ -186,7 +189,7 @@ TracerData
   m_DistanceMapper->ComputeGraph();
       
   // If there is a focus point, compute distances to it
-  if(m_FocusPoint != -1)
+  if(m_FocusPoint != NO_FOCUS)
     ComputeDistances(m_FocusPoint);
 
   // Delete the old edge weight function

@@ -1,5 +1,6 @@
 #include "TracerMainWindow.h"
 #include <FL/gl.h>
+#include <FL/fl_ask.h>
 #include <GL/glu.h>
 #include <Fl/Fl.H>
 #include <Fl/fl_draw.H>
@@ -38,6 +39,7 @@ TracerMainWindow(int x, int y, int w, int h, const char *label)
   m_TrackballMode = NONE;
   m_GLStateDirty = true;
   m_CurrentPoint = -1;
+  m_CurrentMarkerCell = -1;
   m_EdgeDisplayMode = EDGE_DISPLAY_NONE;
   m_SurfaceDisplayMode = SURFACE_DISPLAY_ALL;
   m_CenterMesh = false;
@@ -154,6 +156,20 @@ TracerMainWindow
 
   // Clear the dirty flag
   m_NeighborhoodDisplayListDirty = false;
+}
+
+void 
+TracerMainWindow
+::GLDrawSphere(double *x, double r)
+{
+  glPushMatrix();
+  glTranslated(x[0],x[1],x[2]);
+
+  GLUquadricObj *sphere = gluNewQuadric();
+  gluSphere(sphere, r, 10, 10);
+  gluDeleteQuadric(sphere);
+
+  glPopMatrix();
 }
 
 void
@@ -351,6 +367,209 @@ TracerMainWindow
 
 void 
 TracerMainWindow
+::DrawMesh()
+{
+  // Draw the display list
+  glColor3d(0.4,0.5,0.3);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK,GL_AMBIENT_AND_DIFFUSE);
+
+  // If the mode is to display the entire surface, use the display mesh
+  if(m_SurfaceDisplayMode == SURFACE_DISPLAY_ALL || !m_Data->IsPathSourceSet())
+    {
+    // Create the display list if needed
+    if(m_FullMeshDisplayListDirty) ComputeFullMeshDisplayList();
+    else glCallList(m_FullMeshDisplayList);
+    }
+  else 
+    {
+    // Create the display list if needed
+    if(m_NeighborhoodDisplayListDirty) ComputeNeighborhoodDisplayList();
+    else glCallList(m_NeighborhoodDisplayList);
+    }
+
+  // Create the edge display list if needed
+  if(m_EdgeDisplayListDirty) ComputeEdgeDisplayList();
+  else glCallList(m_EdgeDisplayList);
+}
+
+void
+TracerMainWindow
+::DrawCurves()
+{
+  // Set the attributes for line drawing
+  glPushAttrib(GL_LIGHTING_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT);
+  glEnable(GL_BLEND);
+  glEnable(GL_LINE_SMOOTH);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);    
+  glLineWidth(3);
+
+  // Get a list of curve id's
+  typedef list<TracerCurves::IdType> IdList;
+  typedef TracerCurves::MeshCurve MeshCurve;
+  typedef const TracerCurves::MeshCurve ConstMeshCurve;
+
+  IdList lCurves;
+  m_Data->GetCurves()->GetCurveIdList(lCurves);
+
+  // Display each of the curves
+  for(IdList::iterator it = lCurves.begin(); it!=lCurves.end(); it++)
+    {
+    // Choose a color for the curve
+    if(*it == m_Data->GetCurrentCurve()) 
+      glColor3d(1,0.5,0.5);
+    else 
+      glColor3d(0.5,0,0);
+
+    // Get the curve as a list of vertex IDs
+    ConstMeshCurve &lPoints = m_Data->GetCurves()->GetCurveVertices(*it);
+
+    // Draw the curve
+    glBegin(GL_LINE_STRIP);
+
+    ConstMeshCurve::const_iterator pit = lPoints.begin(); 
+    while(pit != lPoints.end())
+      {
+      Vec xPoint, xNormal;
+      m_Data->GetPointCoordinateAndNormal(*pit, xPoint, xNormal);
+      glVertexNormal(xPoint.data_block(), xNormal.data_block());
+      ++pit;
+      }
+    glEnd();
+    }
+
+  // Display the path to the current point
+  if(m_EditMode == TRACER && m_Data->IsPathSourceSet() &&
+    m_CurrentPoint != -1 && m_CurrentPoint != m_Data->GetPathSource())
+    {
+    // Get the path between the source point and the current point
+    MeshCurve lPoints;
+    m_Data->GetPathToPoint(m_CurrentPoint, lPoints);
+
+    // Since the point list does not include the starting and 
+    // ending points, we must include them ourselves
+    lPoints.push_back(m_CurrentPoint);
+    lPoints.push_front(m_Data->GetPathSource());
+
+
+    glColor3d(0.8,0.6,0.2);
+    glBegin(GL_LINE_STRIP);
+
+    MeshCurve::const_iterator it = lPoints.begin();
+    while(it != lPoints.end())
+      {
+      Vec xPoint, xNormal;
+      m_Data->GetPointCoordinateAndNormal(*it, xPoint, xNormal);
+      glVertexNormal(xPoint.data_block(), xNormal.data_block());
+      it++;
+      }
+
+    glEnd();
+    }
+
+  // Restore the attributes
+  glPopAttrib();
+
+  // Draw control points (balls representing points)
+  for(IdList::iterator it = lCurves.begin(); it!=lCurves.end(); it++)
+    {
+    // Get the control points in the curve
+    const IdList &lControls = 
+      m_Data->GetCurves()->GetCurveControls(*it);
+
+    // Draw each of the control points
+    glColor3d(0.2,0.6,0.8);
+
+    IdList::const_iterator itControl = lControls.begin();
+    while(itControl != lControls.end())
+      {
+      // Get the coordinate of the control point
+      Vec xPoint;
+      m_Data->GetPointCoordinate(
+        m_Data->GetCurves()->GetControlPointVertex(*itControl++),xPoint);
+
+      // Display the point currently under the cursor as a little sphere
+      GLDrawSphere(xPoint.data_block(), 0.5);
+      }
+    }
+
+  if(m_CurrentPoint != -1 && m_EditMode == TRACER)
+    {
+    // Get the coordinate of the current point
+    Vec xPoint;
+    m_Data->GetPointCoordinate(m_CurrentPoint,xPoint);
+
+    // Display the point currently under the cursor as a little sphere
+    glColor3d(0.8,0.2,0.2);
+    GLDrawSphere(xPoint.data_block(), 0.5);
+    }
+}
+
+void
+TracerMainWindow
+::GLDrawMarker(vtkIdType iCell, const Vec &color)
+{
+  // Get the corners of the marker
+  Vec x, y, z, c, n, p;
+  m_Data->GetMarkerGeometry(iCell, x, y, z, n, c);
+
+  // Compute the lollipop position
+  p = c + 4.0 * n;
+
+  // Draw the marker's triagle
+  glColor3dv(color.data_block());
+  glBegin(GL_TRIANGLES);
+  glNormal3dv(n.data_block());
+  glVertex3dv(x.data_block());
+  glVertex3dv(y.data_block());
+  glVertex3dv(z.data_block());
+  glEnd();
+
+  // Draw the stick of the lollipop
+  glPushAttrib(GL_LIGHTING_BIT);
+  glDisable(GL_LIGHTING);
+  glBegin(GL_LINES);
+  glColor3d(1,1,1);
+  glVertex3dv(c.data_block());
+  glVertex3dv(p.data_block());
+  glEnd();
+  glPopAttrib();
+
+  // Draw the head of the lollipop
+  glColor3dv(color.data_block());
+  GLDrawSphere(p.data_block(), 
+    iCell == m_Data->GetCurrentMarker() ? 2.0 : 1.0);
+}
+
+void 
+TracerMainWindow
+::DrawMarkers()
+{
+  // Get the list of marker ID's
+  list<vtkIdType> lMarkers;
+  m_Data->GetMarkerIds(lMarkers);
+  
+  // Markers are displayed as little lolly-pops sticking out of the surface
+  list<vtkIdType>::iterator itMarker = lMarkers.begin();
+  while(itMarker != lMarkers.end())
+    {
+    // Get the color of the marker
+    Vec xColor = m_Data->GetMarkerColor(*itMarker);
+
+    // Draw the marker
+    GLDrawMarker(*itMarker++, xColor);
+    }
+
+  // Draw a white marker at the current position of the mouse
+  if(m_CurrentMarkerCell != -1 && m_EditMode == MARKER)
+    {
+    Vec xWhite(1.0, 1.0, 1.0);
+    GLDrawMarker(m_CurrentMarkerCell, xWhite);
+    }
+}
+
+void 
+TracerMainWindow
 ::draw()
 {
   if( !valid() )
@@ -396,150 +615,15 @@ TracerMainWindow
     glPushMatrix();
     SetUpModelMatrix();
 
-    // Draw the display list
-    glColor3d(0.4,0.5,0.3);
-    glEnable(GL_COLOR_MATERIAL);
-    glColorMaterial(GL_FRONT_AND_BACK,GL_AMBIENT_AND_DIFFUSE);
+    // Draw the mesh
+    DrawMesh();
+
+    // Draw markers on the surface
+    DrawMarkers();
+
+    // Draw the curves on the surface
+    DrawCurves();
     
-    // If the mode is to display the entire surface, use the display mesh
-    if(m_SurfaceDisplayMode == SURFACE_DISPLAY_ALL || !m_Data->IsPathSourceSet())
-      {
-      // Create the display list if needed
-      if(m_FullMeshDisplayListDirty) ComputeFullMeshDisplayList();
-      else glCallList(m_FullMeshDisplayList);
-      }
-    else 
-      {
-      // Create the display list if needed
-      if(m_NeighborhoodDisplayListDirty) ComputeNeighborhoodDisplayList();
-      else glCallList(m_NeighborhoodDisplayList);
-      }
-
-    // Create the edge display list if needed
-    if(m_EdgeDisplayListDirty) ComputeEdgeDisplayList();
-    else glCallList(m_EdgeDisplayList);
-    
-    // Set the attributes for line drawing
-    glPushAttrib(GL_LIGHTING_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT);
-    glEnable(GL_BLEND);
-    glEnable(GL_LINE_SMOOTH);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);    
-    glLineWidth(3);
-
-    // Get a list of curve id's
-    typedef list<TracerCurves::IdType> IdList;
-    typedef TracerCurves::MeshCurve MeshCurve;
-    typedef const TracerCurves::MeshCurve ConstMeshCurve;
-    
-    IdList lCurves;
-    m_Data->GetCurves()->GetCurveIdList(lCurves);
-    
-    // Display each of the curves
-    for(IdList::iterator it = lCurves.begin(); it!=lCurves.end(); it++)
-      {
-      // Choose a color for the curve
-      if(*it == m_Data->GetCurrentCurve()) 
-        glColor3d(1,0.5,0.5);
-      else 
-        glColor3d(0.5,0,0);
-
-      // Get the curve as a list of vertex IDs
-      ConstMeshCurve &lPoints = m_Data->GetCurves()->GetCurveVertices(*it);
-
-      // Draw the curve
-      glBegin(GL_LINE_STRIP);
-      
-      ConstMeshCurve::const_iterator pit = lPoints.begin(); 
-      while(pit != lPoints.end())
-        {
-        TracerData::Vec xPoint, xNormal;
-        m_Data->GetPointCoordinateAndNormal(*pit, xPoint, xNormal);
-        glVertexNormal(xPoint.data_block(), xNormal.data_block());
-        ++pit;
-        }
-      glEnd();
-      }
-
-    // Display the path to the current point
-    if(m_EditMode == TRACER && m_Data->IsPathSourceSet() &&
-      m_CurrentPoint != -1 && m_CurrentPoint != m_Data->GetPathSource())
-      {
-      // Get the path between the source point and the current point
-      MeshCurve lPoints;
-      m_Data->GetPathToPoint(m_CurrentPoint, lPoints);
-
-      // Since the point list does not include the starting and 
-      // ending points, we must include them ourselves
-      lPoints.push_back(m_CurrentPoint);
-      lPoints.push_front(m_Data->GetPathSource());
-
-
-      glColor3d(0.8,0.6,0.2);
-      glBegin(GL_LINE_STRIP);
-      
-      MeshCurve::const_iterator it = lPoints.begin();
-      while(it != lPoints.end())
-        {
-        TracerData::Vec xPoint, xNormal;
-        m_Data->GetPointCoordinateAndNormal(*it, xPoint, xNormal);
-        glVertexNormal(xPoint.data_block(), xNormal.data_block());
-        it++;
-        }
-
-      glEnd();
-      }
-
-    // Restore the attributes
-    glPopAttrib();
-
-    // Draw control points (balls representing points)
-    for(IdList::iterator it = lCurves.begin(); it!=lCurves.end(); it++)
-      {
-      // Get the control points in the curve
-      const IdList &lControls = 
-        m_Data->GetCurves()->GetCurveControls(*it);
-
-      // Draw each of the control points
-      IdList::const_iterator itControl = lControls.begin();
-      while(itControl != lControls.end())
-        {
-        TracerData::Vec xPoint;
-
-        // Display the point currently under the cursor as a little sphere
-        glColor3d(0.2,0.6,0.8);
-        
-        glPushMatrix();
-        m_Data->GetPointCoordinate(
-          m_Data->GetCurves()->GetControlPointVertex(*itControl),xPoint);
-        glTranslated(xPoint(0),xPoint(1),xPoint(2));
-        
-        GLUquadricObj *sphere = gluNewQuadric();
-        gluSphere(sphere, 0.5, 10, 10);
-        gluDeleteQuadric(sphere);
-
-        glPopMatrix();
-
-        ++itControl;
-        }
-      }
-    
-    if(m_CurrentPoint != -1 && m_EditMode == TRACER)
-      {
-      TracerData::Vec xPoint;
-      
-      // Display the point currently under the cursor as a little sphere
-      glColor3d(0.8,0.2,0.2);
-      glPushMatrix();
-      m_Data->GetPointCoordinate(m_CurrentPoint,xPoint);
-      
-      glTranslated(xPoint(0),xPoint(1),xPoint(2));
-      GLUquadricObj *sphere = gluNewQuadric();
-      gluSphere(sphere, 0.5, 10, 10);
-      gluDeleteQuadric(sphere);
-
-      glPopMatrix();
-      }
-
     // Pop the matrix
     glPopMatrix();
     }
@@ -564,7 +648,7 @@ TracerMainWindow
   glScaled(xScale,xScale,xScale);
 
   // Determine which point should be the center
-  TracerData::Vec xCenter;
+  Vec xCenter;
   if(m_CenterMesh && m_Data->IsPathSourceSet())
     m_Data->GetPointCoordinate(m_Data->GetPathSource(), xCenter);
   else
@@ -574,9 +658,9 @@ TracerMainWindow
   glTranslated(-xCenter[0],-xCenter[1],-xCenter[2]);
 }
 
-void 
+void
 TracerMainWindow
-::FindPointUnderCursor()
+::ComputeClickRay(Vec &xStart, Vec &xEnd)
 {
   // Find the point currently under the cursor
   make_current(); // update GL state
@@ -603,9 +687,6 @@ TracerMainWindow
   int x = Fl::event_x();
   int y = viewport[3] - Fl::event_y() - 1;
 
-  // Vectors for the starting and ending points
-  TracerData::Vec xStart, xEnd;
-
   // Perform the unprojection
   gluUnProject( (GLdouble) x, (GLdouble) y, -1.0,
     mvmatrix, projmatrix, viewport,
@@ -614,10 +695,45 @@ TracerMainWindow
   gluUnProject( (GLdouble) x, (GLdouble) y, 1.0,
     mvmatrix, projmatrix, viewport,
     &(xEnd[0]), &(xEnd[1]), &(xEnd[2]) );
+}
+
+void
+TracerMainWindow
+::FindCellUnderCursor()
+{
+  // Vectors for the starting and ending points
+  Vec xStart, xEnd;
+
+  // Get the ray corrensponding to the click
+  ComputeClickRay(xStart,xEnd);
+
+  // Find the corresponding cell
+  vtkIdType iCell;
+  if(m_Data->GetDistanceMapper()->PickCell(xStart, xEnd, iCell))
+    {
+    // A cell has been located
+    m_CurrentMarkerCell = iCell;
+    cout << "Cell " << iCell << endl;
+    }
+  else
+    {
+    m_CurrentMarkerCell = -1;
+    }
+}
+
+void 
+TracerMainWindow
+::FindPointUnderCursor()
+{
+  // Vectors for the starting and ending points
+  Vec xStart, xEnd;
+
+  // Get the ray corrensponding to the click
+  ComputeClickRay(xStart,xEnd);
 
   // Find the point corresponding to the intersection
   vtkIdType iPoint;
-  if(m_Data->PickPoint(xStart,xEnd,iPoint))
+  if(m_Data->GetDistanceMapper()->PickPoint(xStart,xEnd,iPoint))
     {
     // Point has been found
     m_CurrentPoint = iPoint;
@@ -741,6 +857,57 @@ TracerMainWindow
       }
     }
 
+  /** Tracer Mode */
+  else if(m_EditMode == MARKER)
+    {
+    if(event == FL_ENTER)
+      {
+      Fl::belowmouse(this);
+      fl_cursor(FL_CURSOR_CROSS,FL_BLACK,FL_WHITE);
+      return 1;
+      }
+    if(event == FL_LEAVE)
+      {
+      fl_cursor(FL_CURSOR_DEFAULT);
+      return 1;
+      }
+    if(event == FL_MOVE)
+      {
+      // Find the point under cursor
+      FindCellUnderCursor();
+      redraw();
+
+      // Handled
+      return 1;
+      }
+    else if(event == FL_RELEASE)
+      {
+      // Again, find the point under the cursor
+      FindCellUnderCursor();
+
+      if(m_CurrentMarkerCell != -1)
+        {
+        
+        // Prompt for the name of the marker
+        const char *sName = fl_input("Please enter the name of the marker");
+        if(sName) 
+          {
+          // Pick a color for the marker
+          double r, g, b;
+          double h = rand() * 6.0 / RAND_MAX, s = 0.5, v = 1.0;
+          Fl_Color_Chooser::hsv2rgb(h,s,v,r,g,b);
+          if(fl_color_chooser("Please select the color for the marker",r,g,b));
+            {
+            m_Data->AddMarker(m_CurrentMarkerCell, sName, r, g, b);
+            }
+          }
+
+        // Handled
+        return 1;
+        }
+      }
+    }
+
   return 0;
 }
   
@@ -752,6 +919,7 @@ TracerMainWindow
   m_FullMeshDisplayListDirty = true;
   m_EdgeDisplayListDirty = true;
   m_CurrentPoint = -1;
+  m_CurrentMarkerCell = -1;
   redraw();
 }
   
@@ -808,5 +976,21 @@ TracerMainWindow
 ::OnEdgeWeightsUpdate(TracerDataEvent *evt)
 {
   m_EdgeDisplayListDirty = true;
+  redraw();
+}
+
+void
+TracerMainWindow
+::OnMarkerListChange(TracerDataEvent *evt)
+{
+  m_CurrentMarkerCell = -1;
+  redraw();
+}
+
+void
+TracerMainWindow
+::OnFocusMarkerChange(TracerDataEvent *evt)
+{
+  m_CurrentMarkerCell = -1;
   redraw();
 }

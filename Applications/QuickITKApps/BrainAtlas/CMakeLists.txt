@@ -29,6 +29,7 @@ ADD_EXECUTABLE("viewmesh" MeshViewer.cxx)
 ADD_EXECUTABLE("binary2metis" ImageToMetis.cxx)
 ADD_EXECUTABLE("metis2mask" MetisToImage.cxx)
 ADD_EXECUTABLE("sulcusfilter" FilterSulci.cxx)
+ADD_EXECUTABLE("maskimage" MaskImage.cxx)
 ADD_EXECUTABLE(braintracer ${TRACER_SRCS})
 
 LINK_LIBRARIES(
@@ -72,6 +73,7 @@ FIND_PATH(METIS_BINARY_PATH "libmetis.a")
 
 SET(BATLAS_SCRIPTS
   makemesh.sh
+  makewhitemesh.sh
   metispartition.sh
 )
   

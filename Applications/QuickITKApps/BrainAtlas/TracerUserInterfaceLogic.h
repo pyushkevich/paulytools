@@ -1,6 +1,7 @@
 #ifndef __TracerUserInterfaceLogic_h_
 #define __TracerUserInterfaceLogic_h_
 
+#include "FLWidgetActivationManager.h"
 #include "TracerUserInterface.h"
 #include "TracerData.h"
 #include "TracerMainWindow.h"
@@ -11,16 +12,15 @@ class TracerUserInterfaceLogic
 {
 public:
   // Constructor
-  TracerUserInterfaceLogic() : TracerUserInterface() 
-    {
-    m_Data = NULL;
-    m_CurvesFile = "";
-    m_CurvesDirty = false;
-    }
+  TracerUserInterfaceLogic();
 
   // Destructor
   virtual ~TracerUserInterfaceLogic() 
     { if(m_Data) m_Data->RemoveTracerDataListener(this); }
+
+  /** The MakeWindow method, in order to perform actions after the 
+    * controls in the window have been initialized */
+  virtual void MakeWindow();
   
   // Callbacks from the user interface
   void OnMenuLoadMesh();
@@ -28,15 +28,24 @@ public:
   void OnMenuSaveCurves();
   void OnMenuSaveCurvesAs();
   void OnMenuQuit();
+
   void OnButtonModeTrackball();
   void OnButtonModeTracer();
+  void OnButtonModeMarker();
+
   void OnButtonDeleteCurve();
   void OnButtonDeleteLastPoint();
   void OnButtonEditCurve();
   void OnButtonStartCurve();
   void OnSelectCurve();
-  void OnSelectEdgeColoring(int value);
+
+  void OnButtonRenameMarker();
+  void OnButtonRecolorMarker();
+  void OnButtonDeleteMarker();
+  void OnButtonComputeRegions();
+ 
   void OnCheckDisplayEdges(int value);
+  void OnSelectEdgeColoring(int value);
   void OnCheckCenterMesh(int value);
   void OnCheckDisplayNeighborhood(int value);
   void OnInputNeighborhoodRadius(double value);
@@ -49,6 +58,8 @@ public:
   void OnFocusCurveDataChange(TracerDataEvent *evt);
   void OnCurveListChange(TracerDataEvent *evt);
   void OnEdgeWeightsUpdate(TracerDataEvent *evt) {};
+  void OnMarkerListChange(TracerDataEvent *evt);
+  void OnFocusMarkerChange(TracerDataEvent *evt);
 
   void ShowWindows() 
     {
@@ -83,8 +94,16 @@ private:
   string m_CurvesFile;
 
   void RebuildCurveList();
-  void DeactivateCurveEditControls();
-  void ActivateCurveEditControls();
+  
+  /** State flags used in conjunction with the activation manager */
+  enum ActivationFlag {
+    AF_NULL, AF_MESH, AF_TRACER_DATA, AF_CURVES_EXIST, AF_MARKERS_EXIST, 
+    AF_ACTIVE_CURVE, AF_ACTIVE_CONTROL, AF_ACTIVE_MARKER, 
+    AF_TRACER_MODE, AF_MARKER_MODE };
+
+  /** Control activation manager used to enable and disable groups
+    of controls based on a set of flags */
+  FLWidgetActivationManager<ActivationFlag> m_Activation;
 
   /** Check if it's ok to proceed with a destructive operation or
     * if the user wants to save the curves first */
