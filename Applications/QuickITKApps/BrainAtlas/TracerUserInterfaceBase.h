@@ -8,7 +8,6 @@ public:
   virtual void OnMenuLoadCurves() = 0;
   virtual void OnMenuSaveCurves() = 0;
   virtual void OnMenuSaveCurvesAs() = 0;
-  virtual void OnMenuExportCurves() = 0;
   virtual void OnMenuImportCurves() = 0;
   virtual void OnMenuQuit() = 0;
   

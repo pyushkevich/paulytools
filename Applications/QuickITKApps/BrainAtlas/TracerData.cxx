@@ -160,6 +160,25 @@ TracerData
 
   if(rc)
     {
+    // For old-version meshes / deformed meshes - compute the coordinates 
+    // of the control points
+    TracerCurves::IdList lCurveIds;
+    m_Curves.GetCurveIdList(lCurveIds);
+    TracerCurves::IdList::iterator itCurve = lCurveIds.begin();
+    while(itCurve != lCurveIds.end())
+      {
+      // Get all the control points in the curve
+      const TracerCurves::IdList &lControls = m_Curves.GetCurveControls(*itCurve++);
+      TracerCurves::IdList::const_iterator itControls = lControls.begin();
+      while(itControls != lControls.end())
+        {
+        // Get the coordinates of the control point
+        vtkIdType id = m_Curves.GetControlPointVertexId(*itControls);
+        Vec x(m_Mesh->GetPoint(id));
+        m_Curves.SetControlPointPosition(*itControls++, x);
+        }
+      }
+
     // Reset the current point and curve
     SetFocusPoint(NO_FOCUS);
     SetFocusCurve(NO_FOCUS);
@@ -192,7 +211,7 @@ TracerData
 ::ComputeDistances(int inFocusPoint)
 {
   // Get the associated mesh vertex
-  vtkIdType iVertex = m_Curves.GetControlPointVertex(inFocusPoint);
+  vtkIdType iVertex = m_Curves.GetControlPointVertexId(inFocusPoint);
 
   // Time the computation
   double tStart = (double) clock();
@@ -328,20 +347,71 @@ TracerData
 
 bool
 TracerData
-::ExportCurves(const char *file)
+::ImportCurves(const char *file)
 {
-  ofstream fout(file,iob_base::binary);
-
-  // Write the header
-  fout << "# GeeLab BrainTracer Mesh Independent Curve Export File" << endl;
-  fout << "# Version 1.0 " << endl;
-  fout << "# Please don't edit the above two lines!" << endl;
-  fout << "# " << endl;
-  fout << "# Format Specification: " << endl;
-  fout << "#    CONTROL id vertex-id x y z " << endl;
-  fout << "#    CURVE   id name num_ctls c1 ... cn" << endl;
-  fout << "#" << endl;
+  // Curve import works like a load, except that none of the id's into the
+  // mesh can be trusted. Therefore, they are reconstructed by finding closest
+  // vertices in the actual mesh, and finding shortest paths between the 
+  // consequently added points.
   
-    
+  // Load a new set of curves
+  TracerCurves xImportCurves;
+  ifstream fin(file,ios_base::in);
+  bool rc = xImportCurves.LoadAsText(fin);
+  fin.close();
 
+  // Return false if nothing happened
+  if(!rc) return false;
+
+  // Clear the current set of curves
+  m_Curves.RemoveAllData();
+
+  // Import each curve
+  TracerCurves::IdList lCurveIds;
+  xImportCurves.GetCurveIdList(lCurveIds);
+  TracerCurves::IdList::iterator itCurve = lCurveIds.begin();
+  while(itCurve != lCurveIds.end())
+    {
+    // Give the user some messages, since this takes a while
+    cout << "Importing curve " << *itCurve << ": \t"
+      << xImportCurves.GetCurveName(*itCurve) << endl;
+    
+    // Add the curve by name to the data
+    this->AddNewCurve(xImportCurves.GetCurveName(*itCurve));
+
+    // Get all the control points in the curve
+    const TracerCurves::IdList &lControls = xImportCurves.GetCurveControls(*itCurve);
+    TracerCurves::IdList::const_iterator itControls = lControls.begin();
+    while(itControls != lControls.end())
+      {
+      // Get the coordinates of the control point
+      Vec xPoint = xImportCurves.GetControlPointPosition(*itControls);
+
+      // Find the closest point to the coordinate
+      vtkIdType iFound = m_DistanceMapper->FindClosestVertexInSpace(xPoint);
+      Vec xFound(m_Mesh->GetPoint(iFound));
+
+      // Report the mapping
+      cout << "-- Vertex " << xPoint << " mapped to " << xFound << endl;
+
+      // Add the control point to the curve using this class, so that the 
+      // shortest distances will be computed
+      this->AddNewPoint(iFound);
+
+      ++itControls;
+      }
+
+    ++itCurve;
+    }
+  
+
+  // Reset the current point and curve
+  SetFocusPoint(NO_FOCUS);
+  SetFocusCurve(NO_FOCUS);
+
+  // Notify listeners that the curves have changed
+  TracerDataEvent evt(this);
+  BroadcastOnCurveListChange(&evt);
+  
+  return true;
 }

@@ -37,10 +37,10 @@ string StringDecode(const string &source)
 
 TracerCurves::IdType
 TracerCurves
-::AddControlPoint(IdType id, MeshVertex v)
+::AddControlPoint(IdType id, MeshVertex v, const Vec &x)
 {
   // Insert the control point with the new id
-  m_Controls[id] = ControlPoint(v);
+  m_Controls[id] = ControlPoint(v, x);
 
   // Return the id
   return id;
@@ -76,7 +76,7 @@ TracerCurves
   // first control point
   if(m_Curves[iCurve].points.size() == 0)
     {
-    m_Curves[iCurve].points.push_back(m_Controls[iStartCtl].vertex);
+    m_Curves[iCurve].points.push_back(m_Controls[iStartCtl].iVertex);
     m_Curves[iCurve].controls.push_back(iStartCtl);
     }
 
@@ -85,7 +85,7 @@ TracerCurves
     m_Curves[iCurve].points.end(),path.begin(),path.end());
     
   // Insert the end control point
-  m_Curves[iCurve].points.push_back(m_Controls[iEndCtl].vertex);
+  m_Curves[iCurve].points.push_back(m_Controls[iEndCtl].iVertex);
   m_Curves[iCurve].controls.push_back(iEndCtl);
 
   // Return the id
@@ -121,7 +121,7 @@ TracerCurves
   while(itCtl != xCurve.controls.end())
     {
     // Add the current control to the list
-    xCurve.points.push_back( m_Controls[*itCtl].vertex );
+    xCurve.points.push_back( m_Controls[*itCtl].iVertex );
 
     // If there is no link, stop
     if(itLink == xCurve.links.end()) break;
@@ -235,11 +235,11 @@ TracerCurves
 {
   // Write the header
   fout << "# GeeLab BrainTracer Curve File " << endl;
-  fout << "# Version 1.0 " << endl;
+  fout << "# Version 1.2 " << endl;
   fout << "# Please don't edit the above two lines!" << endl;
   fout << "# " << endl;
   fout << "# Format Specification: " << endl;
-  fout << "#    CONTROL id vertex-id " << endl;
+  fout << "#    CONTROL id vertex-id x y z" << endl;
   fout << "#    CURVE   id name" << endl;
   fout << "#    LINK    id start-ctl end-ctl curve num-vertices v1 .. vn" << endl;
   fout << "#" << endl;
@@ -249,7 +249,9 @@ TracerCurves
   while(itControl != m_Controls.end())
     {
     const ControlPoint &cp = itControl->second;
-    fout << "CONTROL\t" << itControl->first << "\t" << cp.vertex << endl;
+    fout << "CONTROL\t" << setw(12) << itControl->first << "\t" 
+      << cp.iVertex << "\t" << cp.xVertex[0] << "\t" 
+      << cp.xVertex[1] << "\t" << cp.xVertex[2] << endl;
     itControl++;
     }
 
@@ -258,8 +260,8 @@ TracerCurves
   while(itCurve != m_Curves.end())
     {
     const Curve &c = itCurve->second;
-    fout << "CURVE\t" << itCurve->first << " " << 
-      StringEncode(c.name) << endl;
+    fout << "CURVE\t" << setw(12) << itCurve->first << " " 
+      << StringEncode(c.name) << endl;
     itCurve++;
     }
 
@@ -268,7 +270,7 @@ TracerCurves
   while(itLink != m_Links.end())
     {
     const Link &l = itLink->second;
-    fout << "LINK\t" << itLink->first << "\t" << l.ctlStart << "\t"
+    fout << "LINK\t" << setw(12) << itLink->first << "\t" << l.ctlStart << "\t"
       << l.ctlEnd << "\t" << l.curve << "\t" << l.points.size();
    
     // Write out the connecting points
@@ -294,7 +296,7 @@ TracerCurves
   map<IdType, Link> oldLinks = m_Links;
 
   // Clear the data if necessary
-  if(!clear)
+  if(clear)
     {
     m_Controls.clear();
     m_Links.clear();
@@ -306,6 +308,25 @@ TracerCurves
     // String holding the current line in the file, and the starting key word
     string line, key;
 
+    // Read the first line, test against the required pattern
+    string lnHeader = "# GeeLab BrainTracer Curve File";
+    getline(fin,line);
+    if(line.substr(0,lnHeader.size()) != lnHeader)
+      throw string("The file does not have a correct GeeLab header!");
+
+    // Read the second line to get the version number
+    string lnVersion = "# Version";
+    getline(fin,line);
+    if(line.substr(0,lnVersion.size()) != lnVersion)
+      throw string("The file does not include the version number on line 2");
+
+    // Figure out the version number
+    istringstream iss(line.substr(lnVersion.size()));
+    double version = 0.0;
+    iss >> version;
+    if(version < 1.0 || version > 1.2)
+      throw string("Unrecogized version number ");
+    
     // Read each line of the file separately
     for(unsigned int iLine=0;!fin.eof();iLine++)
       {
@@ -327,9 +348,14 @@ TracerCurves
         // This is a control point
         IdType id; iss >> id;
         MeshVertex vtx; iss >> vtx;
+        
+        // Read the position of the vertex (only in later versions)
+        Vec x;
+        if(version > 1.0001)
+          { iss >> x[0]; iss >> x[1]; iss >> x[2]; }
 
         // Add the control point
-        AddControlPoint(id, vtx);
+        AddControlPoint(id, vtx, x);
         }
       else if(key == "CURVE")
         {
@@ -363,13 +389,19 @@ TracerCurves
 
     return true;
     }
+  catch(string &str)
+    {
+    cerr << "Exception " << str << endl;
+    }
   catch(...)
     {
-    // Restore the data
-    m_Curves = oldCurves;
-    m_Controls = oldControls;
-    m_Links = oldLinks;
-    return false;
+    cerr << "Unknown exception reading file " << endl;
     }
+
+  // Restore the data
+  m_Curves = oldCurves;
+  m_Controls = oldControls;
+  m_Links = oldLinks;
+  return false;
 }
 

@@ -522,9 +522,7 @@ TracerMainWindow
     while(itControl != lControls.end())
       {
       // Get the coordinate of the control point
-      Vec xPoint;
-      m_Data->GetPointCoordinate(
-        m_Data->GetCurves()->GetControlPointVertex(*itControl++),xPoint);
+      Vec xPoint = m_Data->GetCurves()->GetControlPointPosition(*itControl++);
 
       // Display the point currently under the cursor as a little sphere
       GLDrawSphere(xPoint.data_block(), 0.5);

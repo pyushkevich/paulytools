@@ -34,7 +34,6 @@ TracerUserInterfaceLogic
   m_Activation.AddMenuItem(m_MenuSaveCurves, AF_TRACER_DATA);
   m_Activation.AddMenuItem(m_MenuSaveCurvesAs, AF_TRACER_DATA ); 
   m_Activation.AddMenuItem(m_MenuImportCurves, AF_MESH); 
-  m_Activation.AddMenuItem(m_MenuExportCurves, AF_TRACER_DATA);
   m_Activation.AddMenuItem(m_MenuModeTracer, AF_ACTIVE_CURVE); 
   m_Activation.AddMenuItem(m_MenuModeMarker, AF_MESH);
   m_Activation.AddMenuItem(m_MenuStartCurve, AF_MESH); 
@@ -119,21 +118,6 @@ TracerUserInterfaceLogic
     OnMenuSaveCurvesAs();
     }
 }
-
-void
-TracerUserInterfaceLogic
-::OnMenuExportCurves()
-{
-  // Prompt for a file name using curves.txt as default
-  char *file = fl_file_chooser(
-    "Select a text file to export the curves","*.txt",
-    "curves_export.txt", 1);
-  
-  // Do the actual save
-  if(file) 
-    m_Data->ExportCurves(file);
-}
-
 
 void 
 TracerUserInterfaceLogic

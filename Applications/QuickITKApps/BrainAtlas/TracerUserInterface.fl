@@ -60,12 +60,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           menuitem m_MenuImportCurves {
             label {&Import Trace Data...}
             callback {OnMenuImportCurves()}
-            tooltip {Import curve data that was created with another mesh} xywh {20 20 100 20} shortcut 0x4006c deactivate
-          }
-          menuitem m_MenuExportCurves {
-            label {&Export Trace Data...}
-            callback {this->OnMenuExportCurves();} selected
-            tooltip {Export tracer data so that it can be used with another mesh} xywh {10 10 100 20} shortcut 0x40073 deactivate divider
+            tooltip {Import curve data that was created with another mesh} xywh {20 20 100 20} shortcut 0x4006c deactivate divider
           }
           menuitem {} {
             label Quit

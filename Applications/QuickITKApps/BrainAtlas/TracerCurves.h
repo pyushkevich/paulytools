@@ -12,6 +12,7 @@
 #include <set>
 
 #include <vtkSystemIncludes.h>
+#include <vnl/vnl_vector_fixed.h>
 
 using namespace std;
 
@@ -31,17 +32,27 @@ public:
   typedef unsigned int IdType;
   typedef list<IdType> IdList;
 
+  /** Representation of a 3D vector */
+  typedef vnl_vector_fixed<double, 3> Vec;
+
   /** Used to report curve names in sorted order */
   typedef pair<string, IdType> StringIdPair;
   
   /** Structure representing a control point */
-  struct ControlPoint {
-    MeshVertex vertex;
+  struct ControlPoint 
+    {
+    /** The index of the control point as a vertex in the mesh */
+    MeshVertex iVertex;
+
+    /** The actual position of the vertex in space */
+    Vec xVertex;
+
+    /** Set of links to which the control point belongs */
     set<IdType> links;
     
     ControlPoint() {}
-    ControlPoint(MeshVertex inVertex) 
-      : vertex(inVertex) {}
+    ControlPoint(MeshVertex inId, const Vec &inX) 
+      : iVertex(inId), xVertex(inX) {}
   };
 
   /** Structure representing a span between two control points */
@@ -67,8 +78,8 @@ public:
   };
 
   /** Add a control point to the list */
-  IdType AddControlPoint(MeshVertex v)
-    { return AddControlPoint( GenerateId(m_Controls), v); }
+  IdType AddControlPoint(MeshVertex id, const Vec &x)
+    { return AddControlPoint( GenerateId(m_Controls), id, x); }
 
   /** Add a link between two control points, appending it to a given curve */
   IdType AddLink( IdType iStartCtl, IdType iEndCtl, IdType iCurve, MeshCurve &path )
@@ -149,9 +160,17 @@ public:
     m_Links.clear();
     }
 
-  /** Get the vertex at a given control point */
-  MeshVertex GetControlPointVertex(IdType iControl) const
-    { return m_Controls.find(iControl)->second.vertex; }
+  /** Get the vertex id at a given control point */
+  MeshVertex GetControlPointVertexId(IdType iControl) const
+    { return m_Controls.find(iControl)->second.iVertex; }
+
+  /** Get the vertex position at a given control point */
+  const Vec &GetControlPointPosition(IdType iControl) const
+    { return m_Controls.find(iControl)->second.xVertex; }
+
+  /** Get the vertex position at a given control point */
+  void SetControlPointPosition(IdType iControl, const Vec &x)
+    { m_Controls.find(iControl)->second.xVertex = x; }
 
 private:
 
@@ -177,7 +196,7 @@ private:
     }
   
   /** Add a control point to the list */
-  IdType AddControlPoint(IdType id, MeshVertex v);
+  IdType AddControlPoint(IdType id, MeshVertex v, const Vec &x);
 
   /** Add a link between two control points, appending it to a given curve */
   IdType AddLink(IdType id, IdType iStartCtl, IdType iEndCtl, 

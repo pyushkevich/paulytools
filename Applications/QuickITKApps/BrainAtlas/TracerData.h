@@ -309,7 +309,7 @@ public:
     // Do we have a 'focus' point
     if(m_FocusPoint != NO_FOCUS && m_DistanceMapper->IsVertexConnected(iPoint))
       {
-      vtkIdType iLast = m_Curves.GetControlPointVertex(m_FocusPoint);
+      vtkIdType iLast = m_Curves.GetControlPointVertexId(m_FocusPoint);
       vtkIdType iCurrent = iPoint;
       while(iCurrent != iLast)
         {
@@ -338,15 +338,18 @@ public:
 
   // Get the vertex to which the path currently extends
   vtkIdType GetPathSource()
-    { return m_Curves.GetControlPointVertex(m_FocusPoint); }
+    { return m_Curves.GetControlPointVertexId(m_FocusPoint); }
 
   // Add a point to the current curve
   void AddNewPoint(vtkIdType iPoint)
     {
     assert(m_FocusCurve >= 0);
+
+    // Get the vector for the control point
+    Vec xControl(m_Mesh->GetPoint(iPoint));
     
     // Add the point to the curve info
-    IdType iNewControl = m_Curves.AddControlPoint(iPoint);
+    IdType iNewControl = m_Curves.AddControlPoint(iPoint,xControl);
 
     // If this is not the first point in the curve, add a link
     if(m_FocusPoint != NO_FOCUS)
@@ -546,9 +549,6 @@ public:
   // Get the marker assigned to a given cell by segmentation
   vtkIdType GetCellLabel(vtkIdType iCell) const
     { return m_VoronoiDiagram->GetVertexSource(iCell); }
-
-  // Export curves to a mesh-independent file
-  bool ExportCurves(const char *file);
 
   // Import curves from a mesh-independent file
   bool ImportCurves(const char *file);
