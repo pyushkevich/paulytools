@@ -726,9 +726,9 @@ inline void AbstractImage3D::doInterpolation(const __m128 &r0,const __m128 &in0,
  * r2:  last 4 voxels
  */
 template <class T>
-bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &r0,__m128 &r1,__m128 &r2) 
+bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &out0,__m128 &out1,__m128 &out2) 
 {
-  __m128 r3;                                          //      3       2       1       0
+  register __m128 r0,r1,r2,r3;                        //      3       2       1       0
   __m64 i0,i1,i2;
   __m64 j0,j1;
 
@@ -756,6 +756,15 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &r0,__m128 &r1,
     return false;
     }
 
+  // Set the rounding state to truncation
+  int flgRound = _mm_getcsr();
+  _mm_setcsr(flgRound | 0x00006000);
+  
+  // int mem32;
+  // __asm STMXCSR mem32;
+  // mem32 |= 0x00006000;
+  // __asm LDMXCSR mem32;
+
   // Round down the values and cast back to floating point
   r1 = _mm_shuffle_ps(r0,r0,0x0E);                    //      x       x       ?       z   
 
@@ -764,6 +773,7 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &r0,__m128 &r1,
   r1 = _mm_cvtpi32_ps(r1,j1);                         //      ?       ?       ?       tr(z)
   r1 = _mm_shuffle_ps(r1,r1,0x00);                    //      tr(z)   tr(z)   tr(z)   tr(z)
   r1 = _mm_cvtpi32_ps(r1,j0);                         //      tr(z)   tr(z)   tr(y)   tr(x)
+
   
   // j0 = F32vec4ToIs32vec2(r0);                         //      tr(y)   tr(x)
   // j1 = F32vec4ToIs32vec2(r1);                         //      ?       tr(z)
@@ -821,23 +831,30 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &r0,__m128 &r1,
   _mm_empty();
 
   // Get the data from the cube
-  float c000 = (float) C(x0,y0,z0);
-  float c001 = (float) C(x0,y0,z1);
-  float c010 = (float) C(x0,y1,z0);
-  float c011 = (float) C(x0,y1,z1);
-  float c100 = (float) C(x1,y0,z0);
-  float c101 = (float) C(x1,y0,z1);
-  float c110 = (float) C(x1,y1,z0);
-  float c111 = (float) C(x1,y1,z1);
+  ALIGN_PRE float voxels[8] ALIGN_POST;
+  voxels[0] = (float) C(x0,y0,z0);
+  voxels[1] = (float) C(x1,y0,z0);
+  voxels[2] = (float) C(x0,y1,z0);
+  voxels[3] = (float) C(x0,y0,z1);
+  voxels[4] = (float) C(x1,y1,z0);
+  voxels[5] = (float) C(x1,y0,z1);
+  voxels[6] = (float) C(x0,y1,z1);
+  voxels[7] = (float) C(x1,y1,z1);
+  
+  // Store the data 
+  r1 = _mm_load_ps(voxels);
+  r2 = _mm_load_ps(voxels + 4);
 
-  // Create the return values
-  // r1 = F32vec4(c001,c010,c100,c000);
-  // r2 = F32vec4(c111,c011,c101,c110);
-  r1 = _mm_set_ps(c001,c010,c100,c000); 
-  r2 = _mm_set_ps(c111,c011,c101,c110);
+  // Restore rounding flags
+  _mm_setcsr(flgRound | 0x00006000);
 
   // Clear the MMX registers
   _mm_empty();
+
+  // Return data
+  out0 = r0;
+  out1 = r1;
+  out2 = r2;
 
   return true;
 }
@@ -922,7 +939,7 @@ void ImageCube<T>::interpolateVoxelGradient(float xs,float ys,float zs, float *G
   // G[2] = ((V001-V000)*X*Y + (V011-V010)*X*y + (V101-V100)*x*Y + (V111-V110)*x*y) * mmData[0];
 
   // Store the gradient
-  float gtemp[4];
+  ALIGN_PRE float gtemp[4] ALIGN_POST;
   _mm_store_ps(gtemp,r0);
   
   G[0] = gtemp[0];

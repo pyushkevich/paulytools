@@ -161,7 +161,7 @@ float MedialPoint::Rvv() const {
 void DynamicBSpline2D::basisJet(int dim,int i,float u,SMLVec4f *N) {
   if (regKnots)
     {
-    __m128 r0,r1,r2,r3,r4,r5,r6,r7;
+    register __m128 r0,r1,r2,r3,r4,r5,r6,r7;
     __m128 M0,M1,M2,M3;
     
     
@@ -1059,16 +1059,16 @@ void MSpline::interpolateMedialPoint02(int iPatch,int jPatch,
   __m128 mN = normalize(mNRaw);
 
   // Access the medial point
-  _mm_store_ps(mp.F.data_block(),mX);
-  _mm_store_ps(mp.Fu.data_block(),mXu);
-  _mm_store_ps(mp.Fv.data_block(),mXv);
+  _mm_storeu_ps(mp.F.data_block(),mX);
+  _mm_storeu_ps(mp.Fu.data_block(),mXu);
+  _mm_storeu_ps(mp.Fv.data_block(),mXv);
 
-  _mm_store_ps(mp.Fuu.data_block(),mXuu);
-  _mm_store_ps(mp.Fuv.data_block(),mXuv);
-  _mm_store_ps(mp.Fvv.data_block(),mXvv);
+  _mm_storeu_ps(mp.Fuu.data_block(),mXuu);
+  _mm_storeu_ps(mp.Fuv.data_block(),mXuv);
+  _mm_storeu_ps(mp.Fvv.data_block(),mXvv);
 
-  _mm_store_ps(mp.F3raw.data_block(),mNRaw);
-  _mm_store_ps(mp.F3.data_block(),mN);         
+  _mm_storeu_ps(mp.F3raw.data_block(),mNRaw);
+  _mm_storeu_ps(mp.F3.data_block(),mN);         
 }
 
 void MSpline::interpolateMedialCrestD1(int iPatch,int jPatch,SMLVec4f *Wu,SMLVec4f *Wv,MedialPoint &mp) 
