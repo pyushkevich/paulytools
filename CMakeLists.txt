@@ -5,6 +5,7 @@ PROJECT(PAULY)
 
 # Define optional configuration (USE) variables
 OPTION(USE_ITK "Use ITK Libraries" OFF)
+OPTION(USE_VTK "Use VTK Libraries" OFF)
 OPTION(USE_FLTK "Use FLTK Libraries" OFF)
 OPTION(USE_OPENGL "Use OpenGL Libraries" OFF)
 
@@ -29,6 +30,7 @@ ENDIF(BUILD_APPLICATIONS)
 IF(USE_OPENGL)
   INCLUDE (${CMAKE_ROOT}/Modules/FindOpenGL.cmake)
   INCLUDE (${CMAKE_ROOT}/Modules/FindGLU.cmake)
+  LINK_LIBRARIES(${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY})
 ENDIF(USE_OPENGL)
 
 # Set up FLTK
@@ -44,9 +46,20 @@ IF(USE_ITK)
     INCLUDE(${ITK_USE_FILE})
   ELSE(ITK_FOUND)
     MESSAGE(FATAL_ERROR
-      "Cannot build CMReps without ITK.  Please set ITK_DIR.")
+      "Cannot build without ITK.  Please set ITK_DIR.")
   ENDIF(ITK_FOUND)
 ENDIF(USE_ITK)
+
+# Set up VTK
+IF(USE_VTK)
+  FIND_PACKAGE(VTK)
+  IF(VTK_FOUND)
+    INCLUDE(${VTK_USE_FILE})
+  ELSE(VTK_FOUND)
+    MESSAGE(FATAL_ERROR
+      "Cannot build without VTK.  Please set VTK_DIR.")
+  ENDIF(VTK_FOUND)
+ENDIF(USE_VTK)  
 
 # Set up the includes 
 SET(PAULY_INCLUDE_DIRS
