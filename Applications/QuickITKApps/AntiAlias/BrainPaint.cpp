@@ -492,7 +492,10 @@ public:
   itkStaticConstMacro(ImageDimension, unsigned int, TImage::ImageDimension);
 
   /** Get the result mesh */
-  vtkPolyData *GetMesh();
+  vtkPolyData *GetMesh()
+    {
+    return fltConnect->GetOutput();
+    }
 
   /** Whether to invert the binary image */
   itkSetMacro(InvertInput,bool);
@@ -504,11 +507,18 @@ public:
     this->SetNthInput(0,image);
     }
 
+  /** Update method (why?) */
+  void Update()
+    {
+    this->GenerateData();
+    }
+  
+
 protected:
   BinaryImageToMeshFilter() 
     {
     this->SetNumberOfInputs(1);
-    this->SetNumberOfOutputs(0);
+    this->SetNumberOfOutputs(1);
   
     // Create an anti-aliasing image filter
     fltAlias = AAFilter::New();
@@ -521,7 +531,7 @@ protected:
     ConnectITKToVTK(fltExport.GetPointer(),fltImport);
 
     // Compute marching cubes
-    vtkImageMarchingCubes *fltMarching = vtkImageMarchingCubes::New();
+    fltMarching = vtkImageMarchingCubes::New();
     fltMarching->SetInput(fltImport->GetOutput());
     fltMarching->ComputeScalarsOff();
     fltMarching->ComputeGradientsOff();
@@ -546,10 +556,10 @@ protected:
     }
 
   /** Generate Data */
-  void GenerateData( void )
+  virtual void GenerateData( void )
     {
     // Get the input and output pointers
-    const typename TImage::Pointer inputImage = 
+    typename TImage::ConstPointer inputImage = 
       reinterpret_cast<TImage *>(this->GetInput(0));
     fltAlias->SetInput(inputImage);
 
@@ -611,45 +621,6 @@ private:
   bool m_InvertInput;
 };
 
-/*
-vtkPolyData *CreateWhiteMatterMesh(CharImageType *imgWhite)
-{
-  // Compute the mesh
-  cout << "Computing white matter mesh" << endl;
-  
-  // Make a negative image
-  typedef itk::ImageRegionIterator<CharImageType> IteratorType;
-  IteratorType it(imgWhite, imgWhite->GetBufferedRegion());
-  while(!it.IsAtEnd())
-    {
-    it.Set(255-it.Get());
-    ++it;
-    }
-
-  // Create an anti-aliasing image filter
-  typedef itk::AntiAliasBinaryImageFilter<CharImageType,FloatImageType> AAFilter;
-  AAFilter::Pointer fltAlias = AAFilter::New();
-  fltAlias->SetInput(imgWhite);
-  fltAlias->SetMaximumRMSError(0.024);
-
-  cout << "   anti-aliasing the image " << endl;
-  fltAlias->Update();
-
-  cout << "   converting image to VTK" << endl;
-  fltImport->Update();
-
-  cout << "   running marching cubes algorithm" << endl;
-  fltMarching->Update();
-
-  cout << "      mesh has " << fltMarching->GetOutput()->GetNumberOfCells() << " cells." << endl;
-
-  cout << "   extracting the largest component" << endl;
-  fltConnect->Update();
-
-  cout << "      mesh has " << fltConnect->GetOutput()->GetNumberOfCells() << " cells." << endl;
-}
-*/
-
 #include <utility>
 #include <boost/config.hpp>
 #include <boost/graph/graph_traits.hpp>
@@ -661,83 +632,139 @@ using namespace boost;
 /***************************************************************************
  * Create a BOOST graph structure from the white matter mesh
  **************************************************************************/
-vtkPolyData *CreateWhiteMatterGraph(vector<CurveType> &curves)
+class VTKMeshShortestDistance 
 {
-  cout << "Creating a graph structure from the white matter mesh" << endl;
-  
-  // Load or create the white matter mesh
-  vtkPolyDataReader *reader = vtkPolyDataReader::New();
-  reader->SetFileName("white_surface.vtk");
-
-  cout << "   reading the white matter mesh" << endl;
-  reader->Update();
-
-  vtkPolyData *poly = reader->GetOutput();
-  cout << "      mesh loaded with " << poly->GetNumberOfCells() << " cells and " 
-      << poly->GetNumberOfPoints() << " vertices." << endl;
-
-  // Get the edges in the mesh
-  vtkExtractEdges *fltEdge = vtkExtractEdges::New();
-  fltEdge->SetInput(reader->GetOutput());
-
-  cout << "   extracting edges from the mesh" << endl;
-  fltEdge->Update();
-
-  vtkPolyData *pEdges = fltEdge->GetOutput();
-  pEdges->BuildCells();
-  
-  unsigned int nEdges = pEdges->GetNumberOfLines();
-  cout << "      number of edges (lines) : " << nEdges << endl;
-
-  // Create a point locator
-  vtkPointLocator *fltLocator = vtkPointLocator::New();
-  fltLocator->SetDataSet(pEdges);
-  fltLocator->BuildLocator();
-  
-  // Type definitions for the graph structure
-  typedef property<edge_weight_t, unsigned int> WeightType;
-  typedef adjacency_list<vecS, vecS, bidirectionalS, no_property, WeightType > Graph;
-  typedef std::pair<vtkIdType,vtkIdType> Edge;
-  typedef graph_traits<Graph>::vertex_descriptor VertexDescriptor;
-
-  // Create an edge list
-  Edge *edges = new Edge[nEdges];
-  unsigned int *weights = new unsigned int[nEdges];
-  vtkIdType nPoints = 0; vtkIdType *xPoints = NULL;
-  
-  for(unsigned int i=0;i<nEdges;i++)
+public:
+  /** Set the input mesh */
+  VTKMeshShortestDistance(vtkPolyData *mesh)
     {
-    // Get the next edge
-    pEdges->GetCellPoints(i, nPoints, xPoints);
+    // Store the input
+    m_SourcePolys = mesh;
+
+    // Compute the edge map
+    fltEdge = vtkExtractEdges::New();
+    fltEdge->SetInput(m_SourcePolys);
+
+    cout << "   extracting edges from the mesh" << endl;
+    fltEdge->Update();
+
+    // Got the new poly data
+    m_EdgePolys = fltEdge->GetOutput();
+    m_EdgePolys->BuildCells();
+    unsigned int nEdges = m_EdgePolys->GetNumberOfLines();
+    cout << "      number of edges (lines) : " << nEdges << endl;
+
+    // Construct a locator
+    fltLocator = vtkPointLocator::New();
+    fltLocator->SetDataSet(m_EdgePolys);
+    fltLocator->BuildLocator();
+
+    // Create an edge list
+    m_Edges.resize(nEdges);
+    m_EdgeWeights.resize(nEdges);
     
-    // Place the edge into the Edge structure
-    assert(nPoints == 2);
-    edges[i].first = xPoints[0];
-    edges[i].second = xPoints[1];
+    vtkIdType nPoints = 0; vtkIdType *xPoints = NULL;
+    for(unsigned int i=0;i<nEdges;i++)
+      {
+      // Get the next edge
+      m_EdgePolys->GetCellPoints(i, nPoints, xPoints);
 
-    // Compute the associated weight
-    vnl_vector_fixed<double,3> p1(pEdges->GetPoint(edges[i].first));
-    vnl_vector_fixed<double,3> p2(pEdges->GetPoint(edges[i].second));
-    weights[i] = (int) (1000 * (p1-p2).two_norm());
+      // Place the edge into the Edge structure
+      assert(nPoints == 2);
+      m_Edges[i].first = xPoints[0];
+      m_Edges[i].second = xPoints[1];
+
+      // Compute the associated weight
+      vnl_vector_fixed<double,3> p1(m_EdgePolys->GetPoint(m_Edges[i].first));
+      vnl_vector_fixed<double,3> p2(m_EdgePolys->GetPoint(m_Edges[i].second));
+      m_EdgeWeights[i] = (int) (1000 * (p1-p2).two_norm());
+      }
+
+    // Declare the graph object
+    cout << "   constructing the graph" << endl;
+    m_Graph = new GraphType(
+      m_Edges.begin(), m_Edges.end(), m_EdgeWeights.begin(), m_EdgePolys->GetNumberOfPoints());
     }
-  
-  // Declare the graph object
-  cout << "   constructing the graph" << endl;
-  Graph graph(edges, edges + nEdges, weights, pEdges->GetNumberOfPoints());
-  
-  // Compute Dijkstra's shortest path
-  vector<int> dist(num_vertices(graph));
-  vector<VertexDescriptor> path(num_vertices(graph));
-  VertexDescriptor start = vertex(123,graph);
 
-  cout << "   computing Dijkstra's shortest paths" << endl;
-  dijkstra_shortest_paths(graph,start,predecessor_map(&path[0]).distance_map(&dist[0]));
+  ~VTKMeshShortestDistance()
+    {
+    delete m_Graph;
+    fltLocator->Delete();
+    fltEdge->Delete();
+    }
 
-  // Print out the shortest path
-  cout << "distance to 332 is " << dist[332] << endl;
-  cout << "predecessor to 332 is " << path[332] << endl;
+  /** Compute shortest distances from a vertex on a mesh to other vertices */
+  void ComputeDistances(vtkIdType iStartNode)
+    {
+    m_Distance.resize(num_vertices(*m_Graph));
+    m_Predecessor.resize(num_vertices(*m_Graph));
+    VertexDescriptor start = vertex(iStartNode, *m_Graph);
 
-  
+    dijkstra_shortest_paths(
+      *m_Graph,start,predecessor_map(&m_Predecessor[0]).distance_map(&m_Distance[0]));
+    }
+
+  /** Get the distance between start node and given node */
+  unsigned int GetVertexDistance(vtkIdType iNode)
+    {
+    return m_Distance[iNode];
+    }
+
+  /** Use this to get the path between start node and given node */
+  vtkIdType GetVertexPredecessor(vtkIdType iNode)
+    {
+    return m_Predecessor[iNode];
+    }
+
+  /** This is a helper method: find vertex whose Euclidean distance to a
+    given point is minimal */
+  vtkIdType FindClosestVertexInSpace(Vec vec)
+    {
+    return fltLocator->FindClosestPoint(vec.data_block());
+    }
+
+  /** Get the edge mesh to which the indices map */
+  vtkPolyData *GetEdgeMesh() 
+    {
+    return m_EdgePolys;
+    }
+
+private:
+
+  // Graph-related typedefs (boost)
+  typedef property<edge_weight_t, unsigned int> WeightType;
+  typedef adjacency_list<vecS, vecS, bidirectionalS, no_property, WeightType > GraphType;
+  typedef std::pair<vtkIdType,vtkIdType> EdgeType;
+  typedef graph_traits<GraphType>::vertex_descriptor VertexDescriptor;
+
+  // Graph-related attributes: list of edges
+  vector<EdgeType> m_Edges;
+  vector<unsigned int> m_EdgeWeights;
+
+  // The graph based on the mesh
+  GraphType *m_Graph;
+
+  // The distance and predecessor maps
+  vector<int> m_Distance;
+  vector<VertexDescriptor> m_Predecessor;
+
+  // VTK filters
+  vtkExtractEdges *fltEdge;
+  vtkPointLocator *fltLocator;
+
+  // VTK edge poly-data
+  vtkPolyData *m_EdgePolys;
+
+  // VTK source poly-data
+  vtkPolyData *m_SourcePolys;
+};
+
+/** This method projects curves on the grey matter onto the white matter mesh*/
+void ProjectGreyCurvesOnWhiteMesh(vtkPolyData *mesh, vector<CurveType> &curves)
+{
+  // Create the white matter mesh graph
+  VTKMeshShortestDistance dijkstra(mesh);
+
   // For each curve, compute a path on the white matter surface
   vtkIdType iLastClosest = 0;
   for(unsigned int iCurve = 0; iCurve < curves.size(); iCurve++)
@@ -745,23 +772,24 @@ vtkPolyData *CreateWhiteMatterGraph(vector<CurveType> &curves)
     CurveType &curve = curves[iCurve];
     vector<vtkIdType> xVertexList;
     vector<unsigned int> xSourcePointList;
+    
+    // Iterate over points in the grey matter curve
     for(unsigned int iPoint = 0; iPoint < curve.points.size(); iPoint++)
       {
       // Find the point closest to the grey matter point
-      vtkIdType iClosest = fltLocator->FindClosestPoint(curve.points[iPoint].xGrey.data_block());
-      curve.points[iPoint].xWhite.set(pEdges->GetPoint(iClosest));
+      vtkIdType iClosest = dijkstra.FindClosestVertexInSpace(curve.points[iPoint].xGrey);
 
+      // Only compute distances for points 1..n that are non-adjacent
       if(iPoint != 0 && iClosest != iLastClosest)
         {
         // Compute Dijkstra's shortest path from the closest white point to the 
         // last closest white point
-        start = vertex(iClosest,graph);
-        dijkstra_shortest_paths(graph,start,predecessor_map(&path[0]).distance_map(&dist[0]));
+        dijkstra.ComputeDistances(iClosest);
 
         // Trace the shortest path from the last closest point
-        while(path[iLastClosest] != iClosest)
+        while(dijkstra.GetVertexPredecessor(iLastClosest) != iClosest)
           {
-          iLastClosest = path[iLastClosest];
+          iLastClosest = dijkstra.GetVertexPredecessor(iLastClosest);
           xVertexList.push_back(iLastClosest);
           xSourcePointList.push_back(iPoint);
           cout << ".";
@@ -788,7 +816,7 @@ vtkPolyData *CreateWhiteMatterGraph(vector<CurveType> &curves)
       {
       // Get a pair of points corresponding to the index j
       CurvePoint p;
-      p.xWhite.set(pEdges->GetPoint(xVertexList[j]));
+      p.xWhite.set(dijkstra.GetEdgeMesh()->GetPoint(xVertexList[j]));
       p.xGrey = curve.points[xSourcePointList[j]].xGrey;
 
       // Add the points to the curve
@@ -813,10 +841,8 @@ vtkPolyData *CreateWhiteMatterGraph(vector<CurveType> &curves)
     delete xFitGrey;
 
     // Copy in the new curve
-    curves[iCurve] = curve;
+    curves[iCurve] = cNew;
     }
-
-  return poly;
 }
 
 /*********************************************************************************
@@ -931,9 +957,6 @@ void drawRibbonsAndBrain(
   renWin->Delete();
   ren->Delete();
 }
-
-
-
 
 int main(int argc, char *argv[])
 {
@@ -1138,13 +1161,13 @@ int main(int argc, char *argv[])
   typedef BinaryImageToMeshFilter<CharImageType> WhiteMeshFilter;
   WhiteMeshFilter::Pointer fltWhiteMesh = WhiteMeshFilter::New();
   fltWhiteMesh->SetInput(imgWhite);
-  fltWhiteMesh->SetInvertInput(true);
+  fltWhiteMesh->SetInvertInput(false);
   fltWhiteMesh->Update();
 
-  
-  // CreateWhiteMatterMesh(imgWhite);
-  vtkPolyData *polyWhiteMesh = CreateWhiteMatterGraph(vCurves);
-/*  
+  // Compute ribbons that trace the white matter surface
+  ProjectGreyCurvesOnWhiteMesh(fltWhiteMesh->GetMesh(), vCurves);
+
+  /*  
   // This is the most interesting part of the program. We attempt to 
   // improve the ribbons by making their free side pass entirely through
   // the white matter
@@ -1273,7 +1296,7 @@ int main(int argc, char *argv[])
     }
 
   // Draw the results in VTK
-  drawRibbonsAndBrain(vCurves,polyWhiteMesh,imgGrey);
+  drawRibbonsAndBrain(vCurves,fltWhiteMesh->GetMesh(),imgGrey);
     
   // At this point we have hopefully optimized the ribbons, and we proceed to
   // embed them into the grey matter image to form segmentation boundaries
