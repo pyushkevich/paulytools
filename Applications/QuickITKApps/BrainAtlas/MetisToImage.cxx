@@ -329,10 +329,10 @@ int main(int argc, char *argv[])
     }
   
   // Compute weight arrays
-  GraphFilter::WeightType *xVertexWeight = 
-  	new GraphFilter::WeightType[nVertices];
-  GraphFilter::WeightType *xEdgeWeight = 	
-  	new GraphFilter::WeightType[fltGraph->GetNumberOfEdges()];
+  GraphFilter::VertexType *xVertexWeight = 
+  	new GraphFilter::VertexType [nVertices];
+  GraphFilter::VertexType  *xEdgeWeight = 	
+  	new GraphFilter::VertexType [fltGraph->GetNumberOfEdges()];
   	
   int iEdge = 0;
   for(iVertex = 0;iVertex < nVertices;iVertex++)
@@ -365,15 +365,8 @@ int main(int argc, char *argv[])
   		}
   	}
   	
-  // Compute edge weights
-  for(iEdge = 0;iEdge < nEdges; iEdge++)
-  	{
-  	if(iPlaneDim >= 0)
- 
-
   // Apply METIS to the graph
-  
-  int wgtflag = 0;
+  int wgtflag = 3;
   int numflag = 0;
   int options[] = {0,0,0,0,0};
   int edgecut = 0;
@@ -385,8 +378,8 @@ int main(int argc, char *argv[])
     &nVertices,
     (idxtype *) fltGraph->GetAdjacencyIndex(),
     (idxtype *) fltGraph->GetAdjacencyArray(),
-    NULL,
-    NULL,
+    xVertexWeight,
+    xEdgeWeight,
     &wgtflag,
     &numflag,
     &nParts,
