@@ -313,20 +313,25 @@ MetisPartitionProblem
 ::f(vnl_vector<double> const& x)
 {
   // Convert the vector to floating array
-  float *wgt = new float[x.size()];
+  vnl_vector<float> wgt(x.size() + 1);
+  float sum = 0;
   for(unsigned int i=0;i<x.size();i++)
+    {
     wgt[i] = (float) x[i];
+    sum += wgt[i];
+    }
+  wgt[x.size()] = 1.0f - sum;
 
   // Variables used to call METIS
   int nVertices = m_Graph->GetNumberOfVertices();
-  int nParts = x.size();
+  int nParts = x.size() + 1;
   int wgtflag = 1;
   int numflag = 0;
   int options[] = {0,0,0,0,0};
   int edgecut = 0;
 
   // Apply METIS to the graph
-  cout << "applying METIS with weights " << x << flush;
+  cout << "applying METIS with weights " << wgt << flush;
 
   METIS_WPartGraphRecursive(
     &nVertices,
@@ -337,7 +342,7 @@ MetisPartitionProblem
     &wgtflag,
     &numflag,
     &nParts,
-    wgt,
+    wgt.data_block(),
     options,
     &edgecut,
     m_Partition);
@@ -460,12 +465,13 @@ int main(int argc, char *argv[])
   	}
 
   // Create a METIS problem based on the graph and weights
-  MetisPartitionProblem mp(fltGraph,xEdgeWeight,nParts);
+  MetisPartitionProblem mp(fltGraph,xEdgeWeight,nParts - 1);
 
   vnl_powell optPowell(&mp);
   optPowell.set_max_function_evals(10);
   optPowell.set_verbose(true);
   optPowell.set_trace(true);
+  optPowell.set_initial_step(0.001);
   optPowell.minimize(xWeights);
 
   // Evaluate the problem
