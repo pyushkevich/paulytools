@@ -1802,7 +1802,7 @@ CommandShell::CommandShell() : outwin(fntCourier12,GLColor(0.3,0.8,0.9)) {
   size[1] = settingsUI->getIntValue("commandShell.size.y",360);
 
   // Compute the number of rows
-  rows = size[1] / 14;
+  rows = (int)(size[1] / 14);
   cols = 100;
 
   cursor = 0;
@@ -1865,8 +1865,8 @@ bool CommandShell::handleMotion(int x,int y) {
     pos[1] += dy;
 
     // Save position to settings
-    settingsUI->setIntValue("commandShell.position.x",pos[0]);
-    settingsUI->setIntValue("commandShell.position.y",pos[1]);
+    settingsUI->setDoubleValue("commandShell.position.x",pos[0]);
+    settingsUI->setDoubleValue("commandShell.position.y",pos[1]);
 
     // Need to redraw
     glutPostRedisplay();
@@ -5472,6 +5472,9 @@ int main(int argc,char *argv[]) {
   // Set memory debugging
   // _CrtSetDbgFlag(_CrtSetDbgFlag(_CRTDBG_REPORT_FLAG) | _CRTDBG_CHECK_ALWAYS_DF | _CRTDBG_LEAK_CHECK_DF);
   // _CrtDumpMemoryLeaks();
+  float *test = (float*)_aligned_malloc(sizeof(float) * 4, 256);
+  __m128 junk;
+  _mm_store_ps(test,junk);
 
   // Read the command line parameters
   string sInitFile("mspline.ini"), sScriptFile;
@@ -5589,3 +5592,4 @@ int main(int argc,char *argv[]) {
 
   return 0;
 }
+
