@@ -675,7 +675,7 @@ TracerMainWindow
 ::OnFocusPointChange(TracerDataEvent *evt)
 {
   // Get the currently selected point from the data
-  m_CurrentPoint = -1;
+  // m_CurrentPoint = -1;
 
   // The edge drawing is no longer clean if drawing accumulated distances
   if(m_EdgeDisplayMode == EDGE_DISPLAY_DISTANCE)

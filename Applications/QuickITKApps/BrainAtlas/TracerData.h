@@ -347,6 +347,9 @@ private:
 
   // Set the focus point, firing the associated event
   void SetFocusPoint(int inFocusPoint);
+
+  // Compute distances to a source point
+  void ComputeDistances(int inFocusPoint);
   
   /** Set the edge weight function to another mode */
   void UpdateEdgeWeightFunction(MeshEdgeWeightFunction *fnNew);

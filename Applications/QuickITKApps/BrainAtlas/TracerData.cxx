@@ -80,6 +80,9 @@ TracerData
   // Clean up the curves, because they are no longer valid
   m_Curves.RemoveAllData();
 
+  // Unset current curve and current point
+  SetFocusPoint(-1); SetFocusCurve(-1);
+
   // Notify listeners that the curves have changed
   TracerDataEvent evt(this);
   BroadcastOnCurveListChange(&evt);
@@ -136,27 +139,32 @@ TracerData
 
 void 
 TracerData
+::ComputeDistances(int inFocusPoint)
+{
+  // Get the associated mesh vertex
+  vtkIdType iVertex = m_Curves.GetControlPointVertex(inFocusPoint);
+
+  // Time the computation
+  double tStart = (double) clock();
+
+  // Compute shortest distances to that point
+  m_DistanceMapper->ComputeDistances(iVertex);
+
+  // Get the elapsed time
+  double tElapsed = (clock() - tStart) * 1000.0 / CLOCKS_PER_SEC;    
+  cout << "Shortest paths to source " << iVertex 
+    << " computed in " << tElapsed << " ms." << endl;
+}
+
+void 
+TracerData
 ::SetFocusPoint(int inFocusPoint)
 {
   if(inFocusPoint != m_FocusPoint)
     {
     // Compute distance to the new focus point
     if(inFocusPoint != -1)
-      {
-      // Get the associated mesh vertex
-      vtkIdType iVertex = m_Curves.GetControlPointVertex(inFocusPoint);
-
-      // Time the computation
-      double tStart = (double) clock();
-
-      // Compute shortest distances to that point
-      m_DistanceMapper->ComputeDistances(iVertex);
-
-      // Get the elapsed time
-      double tElapsed = (clock() - tStart) * 1000.0 / CLOCKS_PER_SEC;    
-      cout << "Shortest paths to source " << iVertex 
-        << " computed in " << tElapsed << " ms." << endl;
-      }
+      ComputeDistances(inFocusPoint);
 
     // Set the new focus point
     m_FocusPoint = inFocusPoint;
@@ -176,10 +184,10 @@ TracerData
 
   // Recompute the graph
   m_DistanceMapper->ComputeGraph();
-
+      
   // If there is a focus point, compute distances to it
   if(m_FocusPoint != -1)
-    m_DistanceMapper->ComputeDistances(m_FocusPoint);
+    ComputeDistances(m_FocusPoint);
 
   // Delete the old edge weight function
   delete m_EdgeWeightFunction;

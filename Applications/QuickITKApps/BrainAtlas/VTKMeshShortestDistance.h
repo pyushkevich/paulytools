@@ -75,7 +75,7 @@ public:
     double xDistance = (p2 - p1).two_norm();
 
     // Compute the associated weight of the edge
-    return (m_PitchFactor * xPitch + xDistance);
+    return (m_PitchFactor * xPitch + (1 - m_PitchFactor) * xDistance);
     }
 private:
   double m_PitchFactor;
