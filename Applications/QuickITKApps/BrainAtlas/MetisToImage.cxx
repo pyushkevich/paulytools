@@ -7,11 +7,13 @@
 // #include "metis.h"
 typedef int idxtype;
 extern "C" {
-  void METIS_WPartGraphKway(int *, idxtype *, idxtype *, idxtype *, idxtype *, int *, 
-                       int *, int *, float *, int *, int *, idxtype *);
+  void METIS_WPartGraphKway(
+  	int *, idxtype *, idxtype *, idxtype *, idxtype *, 
+  	int *, int *, int *, float *, int *, int *, idxtype *);
 
-  void METIS_WPartGraphRecursive(int *, idxtype *, idxtype *, idxtype *, idxtype *, int *, 
-                       int *, int *, float *, int *, int *, idxtype *);
+  void METIS_WPartGraphRecursive(
+  	int *, idxtype *, idxtype *, idxtype *, idxtype *, int *, 
+    int *, int *, float *, int *, int *, idxtype *);
 }
 
 using namespace std;
@@ -114,7 +116,8 @@ public:
     
     // Typedefs 
     typedef typename itk::ConstantBoundaryCondition<ImageType> ConditionType;
-    typedef typename itk::ConstNeighborhoodIterator<ImageType, ConditionType> IteratorType;
+    typedef typename itk::ConstNeighborhoodIterator<ImageType, ConditionType> 
+    	IteratorType;
 
     // Initialize the iterator
     itk::Size<ImageDimension> radius;
@@ -298,13 +301,18 @@ int main(int argc, char *argv[])
   GraphFilter::Pointer fltGraph = GraphFilter::New();
   fltGraph->SetInput(img);
   fltGraph->Update();
+  
+  // Get the number of vertices and edges
+  int nVertices = fltGraph->GetNumberOfVertices();
+  int nEdges = fltGraph->GetNumberOfEdges();
+  int iVertex;
 
-  cout << "   graph has " << fltGraph->GetNumberOfVertices() << " vertices and " 
-    << fltGraph->GetNumberOfEdges() << " edges" << endl;
+  cout << "   graph has " << nVertices << " vertices and " 
+    << nEdges << " edges" << endl;
 
   // Verify graph
   cout << "verifying graph" << endl;
-  for(unsigned int iVertex=0;iVertex<fltGraph->GetNumberOfVertices();iVertex++)
+  for(iVertex=0;iVertex<nVertices;iVertex++)
     {
     unsigned int nAdj = fltGraph->GetVertexNumberOfNeighbors(iVertex);
     GraphFilter::VertexType *adj = fltGraph->GetVertexNeighbors(iVertex);
@@ -321,10 +329,50 @@ int main(int argc, char *argv[])
     }
   
   // Compute weight arrays
-  
+  GraphFilter::WeightType *xVertexWeight = 
+  	new GraphFilter::WeightType[nVertices];
+  GraphFilter::WeightType *xEdgeWeight = 	
+  	new GraphFilter::WeightType[fltGraph->GetNumberOfEdges()];
+  	
+  int iEdge = 0;
+  for(iVertex = 0;iVertex < nVertices;iVertex++)
+  	{
+  	// Record the weight for the vertex
+  	xVertexWeight[iVertex] = 1;
+  	
+  	// Get the index of the vertex of interest
+  	GraphFilter::IndexType idx = fltGraph->GetVertexImageIndex(iVertex);
+  	
+  	// Look at all the edges for this vertex
+  	unsigned int nNbr = fltGraph->GetVertexNumberOfNeighbors(iVertex);
+  	for(unsigned int iNbr=0; iNbr < nNbr; iNbr++)
+  		{
+  		// Get the neighbor vertex
+  		GraphFilter::VertexType n = fltGraph->GetVertexNeighbors(iVertex)[iNbr];
+  		GraphFilter::IndexType nidx = fltGraph->GetVertexImageIndex(n);	
+  			
+  		// Check if the vertex is on the edge
+  		if(iPlaneDim >= 0 && (
+  			(idx[iPlaneDim] == iPlaneSlice && nidx[iPlaneDim] == iPlaneSlice+1) ||
+  			(nidx[iPlaneDim] == iPlaneSlice && idx[iPlaneDim] == iPlaneSlice+1)))
+  			{
+  			xEdgeWeight[iEdge++] = 1;  			  				
+  			}
+  		else
+  		  {
+  		  xEdgeWeight[iEdge++] = 10;  			  					
+  		  }	
+  		}
+  	}
+  	
+  // Compute edge weights
+  for(iEdge = 0;iEdge < nEdges; iEdge++)
+  	{
+  	if(iPlaneDim >= 0)
+ 
 
   // Apply METIS to the graph
-  int nVertices = fltGraph->GetNumberOfVertices();
+  
   int wgtflag = 0;
   int numflag = 0;
   int options[] = {0,0,0,0,0};
