@@ -1,0 +1,9 @@
+PROJECT(AntiAlias)
+
+SET(ANTI_ALIAS_SRCS
+  AntiAlias.cpp
+)
+
+ADD_EXECUTABLE(aalias ${ANTI_ALIAS_SRCS})
+TARGET_LINK_LIBRARIES(aalias ITKCommon ITKBasicFilters)
+
