@@ -200,8 +200,15 @@ TracerMainWindow
 
   // Asjust the mode based on the current state
   EdgeDisplayMode xActualMode = m_EdgeDisplayMode;
-  if(xActualMode == EDGE_DISPLAY_DISTANCE && !m_Data->IsPathSourceSet())
-    xActualMode = EDGE_DISPLAY_PLAIN;
+
+  // Special adjustments are needed when there is no source point
+  if(!m_Data->IsPathSourceSet())
+    {
+    if(m_SurfaceDisplayMode == SURFACE_DISPLAY_NEIGHBORHOOD)
+      xActualMode = EDGE_DISPLAY_NONE;
+    else if(xActualMode == EDGE_DISPLAY_DISTANCE) 
+      xActualMode = EDGE_DISPLAY_PLAIN;
+    }
 
   // A similar flag for neighborhood display
   SurfaceDisplayMode xActualSurfaceMode = m_SurfaceDisplayMode;
