@@ -9,11 +9,14 @@
 #include <vtkRenderWindow.h>
 #include <vtkRenderWindowInteractor.h>
 #include <vtkPolyDataMapper.h>
+#include <vtkPolyDataReader.h>
 #include <vtkBYUReader.h>
 #include <vtkSTLReader.h>
 #include <vtkTriangleFilter.h>
 
 #include <itkImageFileWriter.h>
+#include <itkImageRegionConstIterator.h>
+#include <itkSignedDanielssonDistanceMapImageFilter.h>
 #include <itkImage.h>
 
 #include "DrawTriangles.h"
@@ -38,12 +41,29 @@ vtkPolyData *ReadVTKData(string fn)
 {
   vtkPolyData *p1 = NULL;
 
-  // Read the model
-  vtkPolyDataReader *reader = vtkPolyDataReader::New();
-  reader->SetFileName(fn.c_str());
-  cout << "Reading the BYU file ..." << endl;
-  reader->Update();
-  p1 = reader->GetOutput();
+  // Choose the reader based on extension
+
+  if(fn.rfind(".byu") == fn.length() - 4)
+    {
+    vtkBYUReader *reader = vtkBYUReader::New();
+    reader->SetFileName(fn.c_str());
+    reader->Update();
+    p1 = reader->GetOutput();
+    }
+  else if(fn.rfind(".vtk") == fn.length() - 4)
+    {
+    vtkPolyDataReader *reader = vtkPolyDataReader::New();
+    reader->SetFileName(fn.c_str());
+    reader->Update();
+    p1 = reader->GetOutput();
+    }
+  else
+    {
+    cout << "Could not find a reader for " << fn << endl;
+    cout << fn.rfind(".byu") << endl;
+    cout << fn.rfind(".vtk") << endl;
+    return NULL;
+    }
 
   // Convert the model to triangles
   vtkTriangleFilter *tri = vtkTriangleFilter::New();
@@ -55,7 +75,46 @@ vtkPolyData *ReadVTKData(string fn)
   return pd;
 }
 
-void ScanConvertPolyData(vtkPolyData *pd, double **bb, int *res, ByteImageType *img)
+void ComputeDistanceTransform(ByteImageType *binary, FloatImageType::Pointer &dist)
+{
+  typedef SignedDanielssonDistanceMapImageFilter<
+    ByteImageType, FloatImageType> DistanceMapType;
+  DistanceMapType::Pointer fltDistance = DistanceMapType::New();
+  fltDistance->SetInput(binary);
+  fltDistance->SetSquaredDistance(float);
+  fltDistance->SetInputIsBinary(true);
+  fltDistance->SetUseImageSpacing(true);
+  dist = fltDistance->Update();
+}
+
+void IntegrateDistance(vtkPolyData *pd, FloatImageType *dist, 
+  double &xOneNorm, double &xTwoNorm, double &xInfNorm)
+{
+  // Set up an interpolator
+  typedef itk::LinearInterpolateImageFunction<FloatImageType, double> FuncType;
+  FuncType::Pointer fnInterp = FuncType::New();
+  fnInterp->SetInputImage(dist);
+
+  // Clear the norms
+  xOneNorm = xTwoNorm = xInfNorm = 0.0;
+  
+  // Go over all the points in the image
+  for(unsigned int i = 0; i < pd->GetNumberOfPoints(); i++)
+    {
+    // Get the point
+    FuncType::PointType P(pd->GetPoint(i));
+    double d = fabs(fnInterp->Evaluate(P));
+    
+    if(d > xInfNorm) xInfNorm = d;
+    xOneNorm += d;
+    xTwoNorm += d * d;
+    }
+
+  xOneNorm /= pd->GetNumberOfPoints();
+  xTwoNorm = sqrt( xTwoNorm / pd->GetNumberOfPoints() );
+}
+
+void ScanConvertPolyData(vtkPolyData *pd, double *b0, double *b1, int *res, ByteImageType *img)
 {
   // Create a vertex table from the polydata
   unsigned int nt = pd->GetNumberOfPolys(), it = 0;
@@ -72,15 +131,12 @@ void ScanConvertPolyData(vtkPolyData *pd, double **bb, int *res, ByteImageType *
       vtx[it] = (double *) malloc(3*sizeof(double));
       for(unsigned int j=0;j<3;j++)
         {
-        vtx[it][j] = res[j] * (x[j] - bb[0][j]) / bb[1][j];
+        vtx[it][j] = res[j] * (x[j] - b0[j]) / b1[j];
         }
 
       ++it;
       }      
     }
-
-  // Clean up
-  fltGenericReader->Delete();
 
   // Create a ITK image to store the results
   ByteImageType::RegionType region;
@@ -90,24 +146,15 @@ void ScanConvertPolyData(vtkPolyData *pd, double **bb, int *res, ByteImageType *
   img->FillBuffer(0);
 
   // Convert the polydata to an image
-  if(doFloodFill)
-    {
-    cout << "Scan converting triangles and filling the interior ..." << endl;
-    drawBinaryTrianglesFilled(img->GetBufferPointer(), res, vtx, nt);
-    }
-  else
-    {
-    cout << "Scan converting triangles ..." << endl;
-    drawBinaryTrianglesSheetFilled(img->GetBufferPointer(), res, vtx, nt);
-    }  
+  drawBinaryTrianglesFilled(img->GetBufferPointer(), res, vtx, nt);
 
   // Set the origin and spacing of the image
   ByteImageType::SpacingType xSpacing;
   ByteImageType::PointType xOrigin;
   for(unsigned int d = 0; d < 3; d++)
     {
-    xOrigin[d] = bb[0][d];
-    xSpacing[d] = bb[1][d] / res[d];
+    xOrigin[d] = b0[d];
+    xSpacing[d] = b1[d] / res[d];
     }
   img->SetOrigin(xOrigin);
   img->SetSpacing(xSpacing);
@@ -162,18 +209,50 @@ int main(int argc, char **argv)
   // Compute the bounding box
   for(size_t i = 0; i < 3; i++) 
     {
-    bb[i][0] = (b1[2*i] < b2[2*i] ? b1[2*i] : b2[2*i]) - 4;
-    bb[i][1] = (b1[2*i+1] < b2[2*i+1] ? b1[2*i+1] : b2[2*i+1]) + 4;
-    cout << "Bounds[" << i << "]: " << bb[i][0] << " to " << bb[i][1] << endl;
-    res[i] = ceil((bb[i][1] - bb[i][0]) / xVox);
+    bb[0][i] = (b1[2*i] < b2[2*i] ? b1[2*i] : b2[2*i]) - 4;
+    bb[1][i] = (b1[2*i+1] < b2[2*i+1] ? b1[2*i+1] : b2[2*i+1]) + 4;
+    cout << "Bounds[" << i << "]: " << bb[0][i] << " to " << bb[1][i] << endl;
+    res[i] = (int)(ceil((bb[1][i] - bb[0][i]) / xVox));
     }
 
-  // Save the image to disk
-  typedef ImageFileWriter<ByteImageType> WriterType;
-  WriterType::Pointer writer = WriterType::New();
-  writer->SetInput(img);
-  writer->SetFileName(fnOutput.c_str());
+  // Scan convert the mesh to images
+  ByteImageType::Pointer i1 = ByteImageType::New();
+  ByteImageType::Pointer i2 = ByteImageType::New();
+  ScanConvertPolyData(p1, bb[0], bb[1], res, i1);
+  ScanConvertPolyData(p2, bb[0], bb[1], res, i2);
 
-  cout << "Writing the output image ..." << endl;
-  writer->Update();
+  // Compute the volume overlap between images
+  unsigned long nUnion = 0, nIntersect = 0, nReference = 0, nModel = 0;
+  typedef ImageRegionConstIterator<ByteImageType> IterType;
+  IterType it1(i1, i1->GetBufferedRegion());
+  IterType it2(i2, i2->GetBufferedRegion());
+  for( ; !it1.IsAtEnd() ; ++it1, ++it2)
+    {
+    if(it1.Value() > 0 && it2.Value() > 0)
+      nIntersect++;
+    if(it1.Value() > 0 || it2.Value() > 0)
+      nUnion++;
+    if(it2.Value() > 0)
+      nReference++;
+    if(it1.Value() > 0)
+      nModel++;
+    }
+
+  // Compute the distance transform for each image
+  FloatImageType::Pointer d1 = FloatImageType::New();
+  FloatImageType::Pointer d2 = FloatImageType::New();
+  ComputeDistanceTransform(i1, d1);
+  ComputeDistanceTransform(i2, d2);
+
+  // Integrate the distance transform over each mesh
+  double xOneNorm[2], xTwoNorm[2], xInfNorm[2];
+  IntegrateDistance(p1, d2, xOneNorm[0], xTwoNorm[0], xInfNorm[0]);
+  IntegrateDistance(p2, d1, xOneNorm[1], xTwoNorm[1], xInfNorm[1]);
+
+  // Report our findings
+  cout << "Unbiased overlap between meshes is " << nIntersect * 1.0 / nUnion << endl;
+  cout << "Biased overlap between meshes is " << nIntersect * 1.0 / nReference << endl;
+  cout << "Reverse biased overlap between meshes is " << nIntersect * 1.0 / nModel << endl;
+  cout << "Distance from mesh 1 to mesh 2 is " << xOneNorm[0] << "; " << xTwoNorm[0] << "; " << xInfNorm[0] << endl;
+  cout << "Distance from mesh 2 to mesh 1 is " << xOneNorm[1] << "; " << xTwoNorm[1] << "; " << xInfNorm[1] << endl;
 }
