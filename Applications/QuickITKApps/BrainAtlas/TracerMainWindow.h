@@ -182,6 +182,7 @@ private:
   // Draw a sphere using open GL
   void GLDrawSphere(double *x, double r);
   void GLDrawMarker(vtkIdType iCell, const Vec &color);
+  void GLDrawStrippedPolyData(vtkPolyData *poly);
 };
 
 

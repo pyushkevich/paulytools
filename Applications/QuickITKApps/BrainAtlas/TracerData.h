@@ -1,6 +1,10 @@
 #ifndef __TracerData_h_
 #define __TracerData_h_
 
+#include "vtkIdTypeArray.h"
+#include "vtkCellArray.h"
+#include "vtkCellData.h"
+#include "vtkIdList.h"
 #include "vtkPolyData.h"
 #include "vtkPolyDataReader.h"
 #include "vtkStripper.h"
@@ -60,6 +64,84 @@ public:
   virtual void OnSegmentationChange(TracerDataEvent *evt) = 0;
 };
 
+class SegmentationMarkerData
+{
+public:
+  typedef vnl_vector_fixed<double,3> Vec;
+
+  SegmentationMarkerData()
+    {
+    m_Visible = true;
+    m_Color.fill(1.0);
+    m_Mesh = vtkPolyData::New();
+    m_Stripper = vtkStripper::New();
+    m_Stripper->SetInput(m_Mesh);
+    m_DisplayMesh = m_Stripper->GetOutput();
+    }
+
+  ~SegmentationMarkerData()
+    {
+    m_Stripper->Delete();
+    m_Mesh->Delete();
+    }
+
+  void UpdateMesh(vtkPolyData *source)
+    {
+    // Get the scalar array used to mark the vertices
+    vtkIdTypeArray *xArray = (vtkIdTypeArray *)
+      source->GetCellData()->GetArray("markers");
+
+    // Insert into the mesh the points and normals from the source mesh
+    m_Mesh->Initialize();
+    m_Mesh->Allocate();
+    m_Mesh->SetPoints(source->GetPoints());
+    m_Mesh->GetPointData()->SetNormals(source->GetPointData()->GetNormals());
+
+    // Create an array of id's for copying
+    for(vtkIdType iCell = 0; iCell < source->GetNumberOfCells(); iCell++)
+      {
+      if(xArray->GetValue(iCell) == m_PointId)
+        {
+        vtkIdType nCellPoints, *xCellPoints;
+        source->GetCellPoints(iCell,nCellPoints,xCellPoints);
+        m_Mesh->GetPolys()->InsertNextCell(nCellPoints,xCellPoints);
+        }
+      }
+    
+    // Compute the triangle strips
+    m_Stripper->Update();
+    }
+  
+private:
+  // The name of the marker
+  string m_Name;
+
+  // The color of the marker
+  Vec m_Color;
+
+  // The point ID associated with this marker
+  vtkIdType m_PointId;
+
+  // Number of cells assigned to this marker
+  vtkIdType m_NumberOfCells;
+
+  // The visibility of the marker
+  bool m_Visible;
+
+  // The internal triangle mesh
+  vtkPolyData *m_Mesh;
+
+  // The displayed mesh (triangle stripped, used for rendering)
+  vtkPolyData *m_DisplayMesh;
+
+  // Triangle strip filter
+  vtkStripper *m_Stripper;
+
+  friend class TracerData;
+};
+
+
+
 /**
  * An encapsulation of the data used by the curve tracer. This class provides
  * a listener interface for the GUI to be alerted when curve information or mesh
@@ -72,6 +154,9 @@ public:
   typedef vnl_vector_fixed<double, 3> Vec;
   typedef vector<Vec> VecArray;
   typedef TracerCurves::IdType IdType;
+
+  // Marker ID corresponding to no label assigned
+  const static vtkIdType NO_MARKER;
 
   // Tracer data constructors
   TracerData();
@@ -102,7 +187,10 @@ public:
 
   // Get the mesh used for display
   vtkPolyData *GetDisplayMesh() 
-    { return m_DisplayMesh; }
+    { 
+    return (m_Mesh == NULL) ? NULL
+      : m_Markers[NO_FOCUS]->m_DisplayMesh;
+    }
 
   /** Get the distance mapper */
   const VTKMeshShortestDistance *GetDistanceMapper() const 
@@ -304,9 +392,18 @@ public:
   void AddMarker(vtkIdType idCell, const char *name, 
     double r, double g, double b)
     { 
+    // Delete existing marker if one is there
+    DeleteMarker(idCell);
+
     // Add the marker
-    m_Markers[idCell].Name = name; 
-    m_Markers[idCell].Color = Vec(r, g, b);
+    m_Markers[idCell] = new SegmentationMarkerData();
+    m_Markers[idCell]->m_PointId = idCell;
+    m_Markers[idCell]->m_Name = name; 
+    m_Markers[idCell]->m_Color = Vec(r, g, b);
+    m_Markers[idCell]->m_NumberOfCells = 0;
+
+    // Update the mesh for the marker
+    m_Markers[idCell]->UpdateMesh(m_Mesh);
 
     // Update the active marker
     m_FocusMarker = idCell;
@@ -319,8 +416,16 @@ public:
   /** Delete the marker */
   void DeleteMarker(vtkIdType idCell)
     { 
-    // Remove the cell
-    m_Markers.erase(idCell);
+    // Find the cell
+    MarkerMap::iterator it = m_Markers.find(idCell);
+    if(it != m_Markers.end())
+      {
+      // Delete the data
+      delete it->second;
+      
+      // Remove the cell
+      m_Markers.erase(idCell);
+      }
 
     // Change the active marker
     m_FocusMarker = NO_FOCUS;
@@ -333,7 +438,7 @@ public:
   /** Rename the marker */
   void RenameMarker(vtkIdType idCell, const char *name)
     { 
-    m_Markers[idCell].Name = name;
+    m_Markers[idCell]->m_Name = name;
 
     // Nofity of the change in curve data
     TracerDataEvent evt(this);
@@ -343,7 +448,7 @@ public:
   /** Recolor the marker */
   void RecolorMarker(vtkIdType idCell, double r, double g, double b)
     { 
-    m_Markers[idCell].Color = Vec(r, g, b);
+    m_Markers[idCell]->m_Color = Vec(r, g, b);
 
     // Nofity of the change in curve data
     TracerDataEvent evt(this);
@@ -378,7 +483,11 @@ public:
     { 
     MarkerMap::const_iterator it = m_Markers.begin();
     while(it != m_Markers.end())
-      outList.push_back(it++->first);
+      {
+      if(it->first != NO_MARKER)
+        outList.push_back(it->first);
+      ++it;
+      }
     }
 
   /** Get the corners of a marker */
@@ -410,14 +519,21 @@ public:
   Vec GetMarkerColor(vtkIdType id) const
     { 
     assert(m_Markers.find(id) != m_Markers.end());
-    return m_Markers.find(id)->second.Color; 
+    return m_Markers.find(id)->second->m_Color; 
     }
   
   /** Get the name of a marker */
   const char * GetMarkerName(vtkIdType id) const
     { 
     assert(m_Markers.find(id) != m_Markers.end());
-    return m_Markers.find(id)->second.Name.c_str(); 
+    return m_Markers.find(id)->second->m_Name.c_str(); 
+    }
+
+  /** Get the VTK mesh for drawing the given marker */
+  vtkPolyData *GetMarkerMesh(vtkIdType id) const
+    { 
+    assert(m_Markers.find(id) != m_Markers.end());
+    return m_Markers.find(id)->second->m_DisplayMesh; 
     }
   
   // Compute Voronoi segmentation using markers
@@ -445,13 +561,13 @@ private:
   vtkPolyData *m_Mesh;
 
   // The displayed mesh (triangle stripped, used for rendering)
-  vtkPolyData *m_DisplayMesh;
+  // vtkPolyData *m_DisplayMesh;
 
   // The reader used to get the mesh
   vtkPolyDataReader *m_DataReader;
 
   // Triangle strip filter
-  vtkStripper *m_Stripper;
+  // vtkStripper *m_Stripper;
 
   // Convert to triangles filter
   vtkTriangleFilter *m_Triangulator;
@@ -484,7 +600,7 @@ private:
   };
 
   // List of markers (a marker is a cell in the mesh)
-  typedef map<vtkIdType, MarkerData> MarkerMap;
+  typedef map<vtkIdType, SegmentationMarkerData *> MarkerMap;
   typedef MarkerMap::iterator MarkerIterator;
   MarkerMap m_Markers;
 
@@ -513,6 +629,9 @@ private:
 
   /** Set the edge weight function to another mode */
   void UpdateEdgeWeightFunction(MeshEdgeWeightFunction *fnNew);
+
+  /** Clean up marker data */
+  void RemoveMarkerData();
 };
 
 #endif

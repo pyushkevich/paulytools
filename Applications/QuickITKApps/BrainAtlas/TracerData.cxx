@@ -5,6 +5,10 @@ const int
 TracerData
 ::NO_FOCUS = -1;
 
+const vtkIdType
+TracerData
+::NO_MARKER = -1;
+
 TracerData
 ::TracerData()
 {
@@ -19,12 +23,13 @@ TracerData
   
   // Create the necessary filters
   m_DataReader = vtkPolyDataReader::New();
-  m_Stripper = vtkStripper::New();
+  // m_Stripper = vtkStripper::New();
   m_Triangulator = vtkTriangleFilter::New();
   m_NormalsFilter = vtkPolyDataNormals::New();
   m_CleanFilter = vtkCleanPolyData::New();
   
-  m_DisplayMesh = m_Mesh = NULL;
+  // m_DisplayMesh = 
+  m_Mesh = NULL;
   m_FocusPoint = NO_FOCUS;
   m_FocusCurve = NO_FOCUS;
 }
@@ -37,10 +42,13 @@ TracerData
   delete m_VoronoiDiagram;
   
   m_DataReader->Delete();
-  m_Stripper->Delete();
+  // m_Stripper->Delete();
   m_Triangulator->Delete();
   m_NormalsFilter->Delete();
   m_CleanFilter->Delete();
+
+  // Clean up marker data
+  RemoveMarkerData();
 }
 
 void
@@ -75,10 +83,30 @@ TracerData
   m_Triangulator->Update();
   m_Mesh = m_Triangulator->GetOutput();
 
+  // Build the cells and links
+  m_Mesh->BuildCells();
+  m_Mesh->BuildLinks();
+
+  // Create a marker array and assign null marker to all cells
+  vtkIdTypeArray *xArray = vtkIdTypeArray::New();
+  xArray->SetNumberOfValues(m_Mesh->GetNumberOfCells());
+  for(vtkIdType iCell = 0; iCell < m_Mesh->GetNumberOfCells(); iCell++)
+    xArray->SetValue(iCell, NO_MARKER);
+  xArray->SetName("markers");
+  m_Mesh->GetCellData()->AddArray(xArray);
+
+  // Clean up the markers too
+  RemoveMarkerData();
+
+  // Create a clear label marker and update it's mesh
+  AddMarker(NO_MARKER, "no label", 0.5, 0.5, 0.5);
+  m_Markers[NO_MARKER]->m_NumberOfCells = m_Mesh->GetNumberOfCells();
+  m_Markers[NO_MARKER]->UpdateMesh(m_Mesh);
+
   // Set up the stripper
-  m_Stripper->SetInput(m_Mesh);
-  m_Stripper->Update();
-  m_DisplayMesh = m_Stripper->GetOutput();
+  // m_Stripper->SetInput(m_Mesh);
+  // m_Stripper->Update();
+  // m_DisplayMesh = m_Stripper->GetOutput();
 
   // Send the data to the distance mapper
   m_DistanceMapper->SetInputMesh(m_Mesh);
@@ -100,6 +128,17 @@ TracerData
 
   // Nofity of the change in the mesh
   BroadcastOnMeshChange(&evt);
+}
+
+void
+TracerData
+::RemoveMarkerData()
+{
+  list<vtkIdType> lMarkers;
+  this->GetMarkerIds(lMarkers);
+  list<vtkIdType>::iterator it = lMarkers.begin();
+  while(it != lMarkers.end())
+    DeleteMarker(*it++);
 }
 
 void
@@ -213,6 +252,30 @@ TracerData
   // Get the elapsed time
   double tElapsed = (clock() - tStart) * 1000.0 / CLOCKS_PER_SEC;    
   cout << "Voronoi segmentation computed in " << tElapsed << " ms." << endl;
+
+  // Clear the number-of-cells counters for each marker, including the NOMARKER one
+  MarkerMap::iterator itMarker = m_Markers.begin();
+  while(itMarker != m_Markers.end())
+    itMarker++->second->m_NumberOfCells = 0;
+
+  // Assign scalar values to the points in the mesh
+  vtkIdTypeArray *xArray = (vtkIdTypeArray *)
+    m_Mesh->GetCellData()->GetArray("markers");
+  for(vtkIdType iCell=0; iCell<m_Mesh->GetNumberOfCells(); iCell++)
+    {
+    // Get the marker for the given cell
+    vtkIdType iSource = m_VoronoiDiagram->GetVertexSource(iCell);
+    xArray->SetValue(iCell, iSource);
+    m_Markers[iSource]->m_NumberOfCells++;
+    }
+
+  // Update the individual meshes
+  itMarker = m_Markers.begin();
+  while(itMarker != m_Markers.end())
+    {
+    cout << "Marker " << itMarker->first << " has " << itMarker->second->m_NumberOfCells << " cells" << endl;
+    itMarker++->second->UpdateMesh(m_Mesh);
+    }
 
   // Fire event: segmentation changed
   TracerDataEvent evt(this);

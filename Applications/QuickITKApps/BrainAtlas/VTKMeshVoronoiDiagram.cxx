@@ -177,6 +177,7 @@ VTKMeshVoronoiDiagram
       {
       while(itMap != m_EdgeMap.upper_bound(*it))
         {
+        cout << " Barrier edge [" << it->first << "," << it->second << "]" << " maps to " << itMap->second << endl;
         m_FullEdgeWeights[itMap->second] = VoronoiDiagram::INFINITE_WEIGHT;
         ++itMap;
         }

@@ -53,6 +53,36 @@ TracerMainWindow
     m_Data->RemoveTracerDataListener(this);
 }
 
+void
+TracerMainWindow
+::GLDrawStrippedPolyData(vtkPolyData *polys)
+{
+  // Get the triangle strip information.
+  vtkCellArray *triStrips = polys->GetStrips();
+
+  // Get the vertex information.
+  vtkPoints *verts = polys->GetPoints();
+
+  // Get the normal information.
+  vtkDataArray *norms = polys->GetPointData()->GetNormals();
+
+  // Data for getting consecutive points
+  vtkIdType npts, *pts;
+  for ( triStrips->InitTraversal(); triStrips->GetNextCell(npts,pts); ) 
+    {
+    glBegin( GL_TRIANGLE_STRIP );
+    
+    for (vtkIdType j = 0; j < npts; j++) 
+      {
+      // Some ugly code to ensure VTK version compatibility
+      glNormal3dv(norms->GetTuple(pts[j]));
+      glVertex3dv(verts->GetPoint(pts[j]));
+      }
+    
+    glEnd();
+    }
+}
+
 void 
 TracerMainWindow
 ::ComputeFullMeshDisplayList()
@@ -64,41 +94,25 @@ TracerMainWindow
   // Build display list
   glNewList(m_FullMeshDisplayList,GL_COMPILE_AND_EXECUTE);
 
-  // Get the triangle strip information.
-  vtkCellArray *triStrips = m_Data->GetDisplayMesh()->GetStrips();
+  // Draw the base display list (non-markered)
+  glColor3d(0.4,0.4,0.4);
+  GLDrawStrippedPolyData(m_Data->GetDisplayMesh());
 
-  // Get the vertex information.
-  vtkPoints *verts = m_Data->GetDisplayMesh()->GetPoints();
-
-  // Get the normal information.
-  vtkDataArray *norms = m_Data->GetDisplayMesh()->GetPointData()->GetNormals();
-
-  // Data for getting consecutive points
-  vtkIdType ntris = 0;
-  vtkIdType npts;
-  vtkIdType *pts;
-  for ( triStrips->InitTraversal(); triStrips->GetNextCell(npts,pts); ) 
+  // Draw each of the segmented triangle strips
+  if(m_Data->GetNumberOfMarkers() > 0)
     {
-    ntris += npts-2;
-    glBegin( GL_TRIANGLE_STRIP );
-    for (vtkIdType j = 0; j < npts; j++) 
+    // Get the marker ids
+    list<vtkIdType> lMarkers;
+    m_Data->GetMarkerIds(lMarkers);
+
+    // Paint the corresponding meshes
+    list<vtkIdType>::iterator it = lMarkers.begin();
+    while(it != lMarkers.end())
       {
-      // Some ugly code to ensure VTK version compatibility
-      double vx = verts->GetPoint(pts[j])[0];
-      double vy = verts->GetPoint(pts[j])[1];
-      double vz = verts->GetPoint(pts[j])[2];
-      double nx = norms->GetTuple(pts[j])[0];
-      double ny = norms->GetTuple(pts[j])[1];
-      double nz = norms->GetTuple(pts[j])[2];
-      double l = 1.0 / sqrt(nx*nx+ny*ny+nz*nz);
-
-      // Specify normal.
-      glNormal3d(nx, ny, nz);
-
-      // Specify vertex.
-      glVertex3d(vx, vy, vz);
+      glColor3dv(m_Data->GetMarkerColor(*it).data_block());
+      GLDrawStrippedPolyData(m_Data->GetMarkerMesh(*it));
+      ++it;
       }
-    glEnd();
     }
 
   glEndList();
@@ -922,7 +936,7 @@ TracerMainWindow
           {
           // Pick a color for the marker
           double r, g, b;
-          double h = rand() * 6.0 / RAND_MAX, s = 0.5, v = 1.0;
+          double h = rand() * 6.0 / RAND_MAX, s = 0.25 + rand() * 0.5 / RAND_MAX, v = 0.75;
           Fl_Color_Chooser::hsv2rgb(h,s,v,r,g,b);
           if(fl_color_chooser("Please select the color for the marker",r,g,b))
             {
@@ -1027,6 +1041,7 @@ void
 TracerMainWindow
 ::OnSegmentationChange(TracerDataEvent *evt)
 {
+  m_FullMeshDisplayListDirty = true;
   m_NeighborhoodDisplayListDirty = true;
   redraw();
 }
