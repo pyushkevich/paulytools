@@ -1,3 +1,4 @@
+#include "MedialAtomGrid.h"
 #include "MedialPDESolver.h"
 #include "FourierSurface.h"
 #include <ctime>
@@ -11,53 +12,46 @@
 
 // #include "imaging.txx"
 #include "ImageCubeITK.h"
+#include "MedialPDERenderer.h"
 
 using namespace std;
 
 // Define an arbitrary surface to test the differential geometry
 // computation, and later to test the medial PDEs
-class MyProblem1 : virtual public IMedialPDEProblem {
+class MyProblem1 : virtual public IMedialPDEProblem 
+{
 public:
-  void ComputeJet2(MedialPoint *mp)
+  void Initialize(MedialAtom &xAtom)
     {
-    float u = mp->u;
-    float v = mp->v;
-    mp->F[0] = 0.3*u;
-    mp->F[1] = v;
-    mp->F[2] = 0.03*(-3 - 3*u + u*u + 4*v + 2*u*v - v*v);
-    mp->Fu[0] = 0.3;
-    mp->Fu[1] = 0;
-    mp->Fu[2] = 0.03*(-3 + 2*u + 2*v);
-    mp->Fv[0] = 0;
-    mp->Fv[1] = 1;
-    mp->Fv[2] = 0.03*(4 + 2*u - 2*v);
-    mp->Fuu[0] = 0;
-    mp->Fuu[1] = 0;
-    mp->Fuu[2] = 0.06;
-    mp->Fuv[0] = 0;
-    mp->Fuv[1] = 0;
-    mp->Fuv[2] = 0.06;
-    mp->Fvv[0] = 0;
-    mp->Fvv[1] = 0;
-    mp->Fvv[2] = -0.06;
+    float u = xAtom.u;
+    float v = xAtom.v;
+
+    // Compute the partial derivatives
+    xAtom.X[0] = 0.3*u;
+    xAtom.X[1] = v;
+    xAtom.X[2] = 0.03*(-3 - 3*u + u*u + 4*v + 2*u*v - v*v);
+    xAtom.Xu[0] = 0.3;
+    xAtom.Xu[1] = 0;
+    xAtom.Xu[2] = 0.03*(-3 + 2*u + 2*v);
+    xAtom.Xv[0] = 0;
+    xAtom.Xv[1] = 1;
+    xAtom.Xv[2] = 0.03*(4 + 2*u - 2*v);
+    xAtom.Xuu[0] = 0;
+    xAtom.Xuu[1] = 0;
+    xAtom.Xuu[2] = 0.06;
+    xAtom.Xuv[0] = 0;
+    xAtom.Xuv[1] = 0;
+    xAtom.Xuv[2] = 0.06;
+    xAtom.Xvv[0] = 0;
+    xAtom.Xvv[1] = 0;
+    xAtom.Xvv[2] = -0.06;
+
+    // Set the riemannian laplacian
+    xAtom.xLapR = -1.0;
 
     // Compute the normal vector
-    mp->F3raw[0] = mp->Fu[1] * mp->Fv[2] - mp->Fu[2] * mp->Fv[1];
-    mp->F3raw[1] = mp->Fu[2] * mp->Fv[0] - mp->Fu[0] * mp->Fv[2];
-    mp->F3raw[2] = mp->Fu[0] * mp->Fv[1] - mp->Fu[1] * mp->Fv[0];
-
-    double zNorm = sqrt(1.0 / 
-      (mp->F3raw[0]*mp->F3raw[0] + 
-       mp->F3raw[1]*mp->F3raw[1] + 
-       mp->F3raw[2]*mp->F3raw[2]));
-
-    mp->F3[0] = zNorm * mp->F3raw[0];
-    mp->F3[1] = zNorm * mp->F3raw[1];
-    mp->F3[2] = zNorm * mp->F3raw[2];
+    xAtom.ComputeNormalVector();
     }
-
-  double ComputeLaplacian(double u, double v)
-    { return -1.0; }
 };
 
 // Define an arbitrary surface to test the differential geometry
@@ -165,131 +159,6 @@ public:
   
 private:
   FourierSurface *xSurface;
-};
-
-void glDrawQuadStripElements(unsigned short width,unsigned short height) 
-{
-  // Allocate the index array
-  int size = width*2;
-  unsigned short *index = new unsigned short[size];
-
-  unsigned short iStart = 0,iStart2 = width;
-
-  for (int j=0;j<height-1;j++)
-    {
-    int iIndex = 0;
-    for (int i=0;i<width;i++)
-      {
-      index[iIndex++] = iStart++;
-      index[iIndex++] = iStart2++;
-      }
-    glDrawElements(GL_QUAD_STRIP,size,GL_UNSIGNED_SHORT,index);
-    }
-
-  delete index;
-}
-
-void glDrawWireframeElements(unsigned short width, unsigned short height)
-{
-  // Horizontal elements as lines
-  unsigned int size = height + width;
-  unsigned short *index = new unsigned short[size];
-
-  // Draw the vertical lines
-  unsigned short iStart = 0;
-  for(int i = 0; i < width; i++)
-    {
-    int iIndex = 0;
-    for(int j = 0; j < height; j++)
-      { index[iIndex++] = iStart++; }
-    glDrawElements(GL_LINE_STRIP, height, GL_UNSIGNED_SHORT, index);
-    }
-
-  // Draw the horizontal lines
-  for(int j = 0; j < height; j++)
-    {
-    iStart = j;
-    int iIndex = 0;
-    for(int i = 0; i < width; i++)
-      { index[iIndex++] = iStart; iStart+=height; }
-    glDrawElements(GL_LINE_STRIP, width, GL_UNSIGNED_SHORT, index);
-    }
-}
-
-class PDESplineRenderer : public GLDisplayListRenderer
-{
-public:
-  PDESplineRenderer(MedialPDESolver *solver)
-    {
-    this->solver = solver;
-    matMedial = new GLMaterial(GL_FRONT_AND_BACK, 
-      GLColor(0.1), GLColor(0.4, 0.4, 0.8), GLColor(0.15), 64); 
-      
-    matBoundary = new GLMaterial(GL_FRONT_AND_BACK, 
-      GLColor(0.1), GLColor(0.4));
-    }
-
-  virtual void build()
-    {
-    // Set the display attributes
-    glPushAttrib(GL_LIGHTING_BIT);
-    glEnable(GL_LIGHTING);
-
-    // Center the object
-    glPushMatrix();
-    glTranslated(-0.5, -0.5, -0.0);
-
-    // Enable vector arrays
-    glPushClientAttrib(GL_CLIENT_VERTEX_ARRAY_BIT); 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_NORMAL_ARRAY);
-
-    // Get the number of points
-    unsigned int m = solver->GetNumberOfUPoints();
-    unsigned int n = solver->GetNumberOfVPoints();
-
-    // Initialize the medial colors
-    matMedial->apply();
-
-    // Supply the vertex list (medial surface)
-    MedialPoint *mp = solver->GetAtom(0, 0);
-    glVertexPointer(3, GL_FLOAT, sizeof(MedialPoint), mp->F.data_block());
-    glNormalPointer(GL_FLOAT, sizeof(MedialPoint), mp->F3.data_block());
-
-    // Build the quad array
-    // glDrawQuadStripElements(m, n);
-    glDrawQuadStripElements(m, n);
-    
-    // Display the boundary
-    matBoundary->apply();
-
-    // Supply the first boundary array
-    glVertexPointer(3, GL_FLOAT, sizeof(MedialPoint), mp->bp[0].X.data_block());
-    glNormalPointer(GL_FLOAT, sizeof(MedialPoint), mp->bp[0].N.data_block());
-
-    // Draw the wireframe
-    glDrawWireframeElements(m, n);
-
-    // Supply the second boundary array
-    glVertexPointer(3, GL_FLOAT, sizeof(MedialPoint), mp->bp[1].X.data_block());
-    glNormalPointer(GL_FLOAT, sizeof(MedialPoint), mp->bp[1].N.data_block());
-
-    // Draw the wireframe
-    glDrawWireframeElements(m, n);
-
-    // Restore the client state
-    glPopClientAttrib();
-
-    // Restore the GL state
-    glPopMatrix();
-    glPopAttrib();
-    }
-
-  
-
-private:
-  MedialPDESolver *solver;
-  GLMaterial *matMedial, *matBoundary;
 };
 
 void testFourierFit(FourierSurface *xFourier)
@@ -533,6 +402,8 @@ ImageCubeITK<float> *TestImageIO(const char *fname)
 
 int main(int argc, char *argv[])
 {
+  TestCartesianGrid(); // Remove! 
+  
   // Command line parameter variables
   unsigned int xResolution = 8;
   char *fnImage = NULL, *fnModel = NULL;

@@ -2,14 +2,14 @@
 #define __FourierSurface_h_
 
 /**
- * \class FourierSurface
+ * \class FourierSurfaceOld
  * \brief Fourier basis representation for a surface 
  */
-class FourierSurface
+class FourierSurfaceOld
 {
 public:
   /** Construct the Fourier Surface */
-  FourierSurface(unsigned int nBasesU, unsigned int nBasesV, 
+  FourierSurfaceOld(unsigned int nBasesU, unsigned int nBasesV, 
     unsigned int nComponents = 3);
 
   /** Set the coefficients of the surface */
@@ -17,24 +17,36 @@ public:
     unsigned int iComponent, double xValue)
     { xCoeff[iOrderU][iOrderV][iComponent] = xValue; }
 
+  /** Get a coefficient */
+  double GetCoefficient(unsigned int iOrderU, unsigned int iOrderV, unsigned int iComponent)
+    { return xCoeff[iOrderU][iOrderV][iComponent]; }
+
+  /** Get the number of coefficients */
+  unsigned int GetNumberOfCoefficients(unsigned int dim)
+    { return dim == 0 ? nBasesU : nBasesV; }
+
+  /** Get the number of components */
+  unsigned int GetNumberOfComponents()
+    { return nComponents; }
+
   /** Evaluate the function at a position in space */
-  float Evaluate(float u, float v, 
+  double Evaluate(double u, double v, 
     unsigned int iDerivativeU, unsigned int iDerivativeV, 
     unsigned int iComponent);
 
   /** Fit the repsesentation to a set of points */
   void FitData(unsigned int iComponent, unsigned int nPoints, 
-    float *xPointU, unsigned int iStrideU, 
-    float *xPointV, unsigned int iStrideV,  
-    float *xValues, unsigned int iStrideX,
+    double *xPointU, unsigned int iStrideU, 
+    double *xPointV, unsigned int iStrideV,  
+    double *xValues, unsigned int iStrideX,
     unsigned int nBasesU = 0, unsigned int nBasesV = 0);
 
 protected:  
   /** The Fourier coefficients */
-  float ***xCoeff;
+  double ***xCoeff;
 
   /** Evaluate p-th order basis function at u or v */
-  float BasisFunction(unsigned int iOrder, unsigned int iDeriv, float uValue);
+  double BasisFunction(unsigned int iOrder, unsigned int iDeriv, double uValue);
 
   /** Order in dimensions u and v */
   unsigned int nBasesU, nBasesV;
@@ -43,7 +55,22 @@ protected:
   unsigned int nComponents;
 
   /** Temp storage arrays */
-  float *xBasisTempU, *xBasisTempV;
+  double *xBasisTempU, *xBasisTempV;
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #endif // __FourierSurface_h_

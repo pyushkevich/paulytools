@@ -8,12 +8,12 @@ using namespace std;
 
 // Lapack definitions
 extern "C" {
-  void sgetrf(int *m,int *n,float *a,int *lda,int *ipiv,int *info);
-  void sgetrs(char *trans,int *n,int *nrhs,float *a,int *lda,int *ipiv,float *b,int *ldb,int *info);
+  void dgetrf(int *m,int *n,double *a,int *lda,int *ipiv,int *info);
+  void dgetrs(char *trans,int *n,int *nrhs,double *a,int *lda,int *ipiv,double *b,int *ldb,int *info);
 }
 
-FourierSurface
-::FourierSurface(unsigned int nBasesU, unsigned int nBasesV, 
+FourierSurfaceOld
+::FourierSurfaceOld(unsigned int nBasesU, unsigned int nBasesV, 
   unsigned int nComponents)
 {
   // Store the parameters
@@ -22,24 +22,24 @@ FourierSurface
   this->nComponents = nComponents;
 
   // Initialize the coefficient array to zero
-  xCoeff = new float **[nBasesU];
+  xCoeff = new double **[nBasesU];
   for(unsigned int iu = 0; iu < nBasesU; iu++)
     {
-    xCoeff[iu] = new float *[nBasesV];
+    xCoeff[iu] = new double *[nBasesV];
     for(unsigned int iv = 0; iv < nBasesV; iv++)
       {
-      xCoeff[iu][iv] = new float[nComponents];
-      memset(xCoeff[iu][iv], 0, sizeof(float) * nComponents);
+      xCoeff[iu][iv] = new double[nComponents];
+      memset(xCoeff[iu][iv], 0, sizeof(double) * nComponents);
       }
     }
 
   // Allocate the temp arrays
-  xBasisTempU = new float[nBasesU];
-  xBasisTempV = new float[nBasesV];
+  xBasisTempU = new double[nBasesU];
+  xBasisTempV = new double[nBasesV];
 }
 
-float FourierSurface
-::Evaluate(float u, float v, 
+double FourierSurfaceOld
+::Evaluate(double u, double v, 
   unsigned int iDerivativeU, unsigned int iDerivativeV, 
   unsigned int iComponent)
 {
@@ -51,7 +51,7 @@ float FourierSurface
     xBasisTempV[j] = BasisFunction(j, iDerivativeV, v);
   
   /** Sum over the orders - time consuming! */
-  float xValue = 0.0;
+  double xValue = 0.0;
   for(unsigned int i = 0; i < nBasesU; i++) 
     for(unsigned int j = 0; j < nBasesV; j++) 
       xValue += xCoeff[i][j][iComponent] * xBasisTempU[i] * xBasisTempV[j];
@@ -59,8 +59,8 @@ float FourierSurface
   return xValue;      
 }
 
-float FourierSurface
-::BasisFunction(unsigned int iOrder, unsigned int iDerivative, float uValue)
+double FourierSurfaceOld
+::BasisFunction(unsigned int iOrder, unsigned int iDerivative, double uValue)
 {
   // Compute the basis at the point
   double uu = 0.8 * uValue + 0.1;
@@ -72,11 +72,11 @@ float FourierSurface
     return - 0.8 * 0.8 * M_PI * M_PI * iOrder * iOrder * cos(M_PI * iOrder * uu);
 }
 
-void FourierSurface
+void FourierSurfaceOld
 ::FitData(unsigned int iComponent, unsigned int nPoints, 
-  float *xPointU, unsigned int iStrideU, 
-  float *xPointV, unsigned int iStrideV,  
-  float *xValues, unsigned int iStrideX,
+  double *xPointU, unsigned int iStrideU, 
+  double *xPointV, unsigned int iStrideV,  
+  double *xValues, unsigned int iStrideX,
   unsigned int nu, unsigned int nv)
 {
   // Correct the number of bases
@@ -91,12 +91,12 @@ void FourierSurface
     << nPoints << " points." << endl;
 
   // Compute the basis for each point
-  float **Z = new float*[nUnkowns];
+  double **Z = new double*[nUnkowns];
   for(iu = 0, i = 0; iu < nu; iu++) for(iv = 0; iv < nv; iv++, i++)
     {
-    Z[i] = new float[nPoints];
+    Z[i] = new double[nPoints];
     
-    float *pu = xPointU, *pv = xPointV;
+    double *pu = xPointU, *pv = xPointV;
     for(k = 0; k < nPoints; k++, pu += iStrideU, pv += iStrideV) 
       // Z[i][k] = BasisFunction(iu, 0, *pu) * BasisFunction(iv, 0, *pv); 
       Z[i][k] = BasisFunction(iu, 0, xPointU[k]) 
@@ -104,8 +104,8 @@ void FourierSurface
     }
 
   // Allocate the matrix A and vector b
-  float *A = new float[nUnkowns * nUnkowns];
-  float *b = new float[nUnkowns];
+  double *A = new double[nUnkowns * nUnkowns];
+  double *b = new double[nUnkowns];
 
   // Set the elements of A and b
   unsigned int offset = 0;
@@ -114,7 +114,7 @@ void FourierSurface
     // Compute the b vector
     b[j] = 0;
 
-    float *px = xValues;
+    double *px = xValues;
     for(k = 0; k < nPoints; k++, px += iStrideX) 
       // b[j] += (*px) * Z[j][k];
       b[j] += xValues[k] * Z[j][k]; 
@@ -131,18 +131,18 @@ void FourierSurface
 
   // Solve the system Ax = b (LU decomposition)
   int *iPivot = new int[nUnkowns], iInfo, nRows = nUnkowns;
-  sgetrf( &nRows, &nRows, A, &nRows, iPivot, &iInfo);  
+  dgetrf( &nRows, &nRows, A, &nRows, iPivot, &iInfo);  
   if(iInfo < 0)
-    { cerr << "Error calling sgetrf" << endl; return; }
+    { cerr << "Error calling dgetrf" << endl; return; }
   else if(iInfo > 0)
-    { cerr << "sgetrf: Matrix is singular" << endl; return; }
+    { cerr << "dgetrf: Matrix is singular" << endl; return; }
 
   // Solve the system
   char cTrans = 'N';
   int nRhs = 1; 
-  sgetrs(&cTrans, &nRows, &nRhs, A, &nRows, iPivot, b, &nRows, &iInfo);
+  dgetrs(&cTrans, &nRows, &nRhs, A, &nRows, iPivot, b, &nRows, &iInfo);
   if(iInfo < 0)
-    { cerr << "Error calling sgetrs" << endl; return; }
+    { cerr << "Error calling dgetrs" << endl; return; }
 
   // Clear the coefficients
   for(iu = 0; iu < nBasesU; iu++) for(iv = 0; iv < nBasesV; iv++)

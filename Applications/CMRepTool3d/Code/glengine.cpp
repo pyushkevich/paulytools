@@ -43,6 +43,7 @@ int GLDisplayDriver::dragButton;
 clock_t GLDisplayDriver::tLastRefresh;
 
 SMLVec3f GLDisplayDriver::center(0.0,0,0);
+float GLDisplayDriver::scale = 1.0f;
 
 GLDisplayDriver::Modes GLDisplayDriver::displayMode = GLDisplayDriver::NORM;
 
@@ -112,17 +113,28 @@ void GLDisplayDriver::draw() {
   tLastRefresh = clock();
 
   // Set up the projection component: apply the agv transform
-  worldTransform();
-
-  // Push space matrix
+  glMatrixMode(GL_PROJECTION);
+  glPopMatrix();
   glPushMatrix();
-  glTranslated(-center[0],-center[1],-center[2]);
+  agvViewTransform();
+
+  // Enter model view matrix mode
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
 
   // Draw the preliminary mode
   drawMode(IPRE);
 
   // Clear the contents
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  // Draw the objects in the untransformed space
+  drawMode(IUNIT);
+
+  // Push space matrix
+  glPushMatrix();
+  glScaled(1.0f / scale, 1.0f / scale, 1.0f / scale);
+  glTranslated(-center[0],-center[1],-center[2]);
 
   // Draw all renderers
   drawMode(INORM);
@@ -366,7 +378,7 @@ void GLDisplayDriver::init(int argc,char *argv[]) {
 
   glLightfv(GL_LIGHT0, GL_AMBIENT, light_ambient);
   glLightfv(GL_LIGHT0, GL_DIFFUSE, light_diffuse);
-  glLightfv(GL_LIGHT0, GL_SPECULAR, light_specular);
+  // glLightfv(GL_LIGHT0, GL_SPECULAR, light_specular);
   glLightfv(GL_LIGHT0, GL_POSITION, light_position);
 /*
     glLightfv(GL_LIGHT1, GL_AMBIENT, light1_ambient);
@@ -837,16 +849,16 @@ void FrameRateCountRenderer::onDraw() {
 }
 
 void DefaultLightRenderer::onDraw() {
-
   // Transform the view into eye coordinates
   glPushMatrix();
 
+  glLoadIdentity();
   glRotatef(-EyeAz, 0, 1, 0);
   glRotatef(-EyeEl, 1, 0, 0);
   glTranslatef(0, 0, EyeDist);
 
   // Run GL initialization code - establish a scene
-  GLfloat light_position[] = { 0.0f, 0.0f, 1.0f, 0.0f};
+  GLfloat light_position[] = { 0.0f, 0.0f, 100.0f, 1.0f};
   glLightfv(GL_LIGHT0, GL_POSITION, light_position);
 
   glPopMatrix();

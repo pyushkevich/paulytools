@@ -118,7 +118,7 @@ void ConjugateGradientMethod::performIteration() {
 		}
 	}
 	else {
-		brent = new BrentLinearMethod(&p,current.x,xi);
+		brent = new BrentLinearMethod(&p,current.x,0.001 * xi);
 	}
 }
 

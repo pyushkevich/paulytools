@@ -201,7 +201,7 @@ int main(int argc, char **argv)
     drawPolyData(pd);
 
   // Get the extents of the data
-  double *bounds = pd->GetBounds();  
+  float *bounds = pd->GetBounds();  
 
   cout << "STL mesh bounds: " << endl;
   cout << "   X : " << bounds[0] << " to " << bounds[1] << endl;
@@ -227,7 +227,7 @@ int main(int argc, char **argv)
     {
     for(unsigned int i=0;i<3;i++)
       {
-      double *x = pd->GetPoints()->GetPoint(pts[i]);
+      float *x = pd->GetPoints()->GetPoint(pts[i]);
       vtx[it] = (double *) malloc(3*sizeof(double));
       for(unsigned int j=0;j<3;j++)
         {
@@ -261,6 +261,17 @@ int main(int argc, char **argv)
     cout << "Scan converting triangles ..." << endl;
     drawBinaryTrianglesSheetFilled(img->GetBufferPointer(), res, vtx, nt);
     }  
+
+  // Set the origin and spacing of the image
+  ImageType::SpacingType xSpacing;
+  ImageType::PointType xOrigin;
+  for(unsigned int d = 0; d < 3; d++)
+    {
+    xOrigin[d] = bb[0][d];
+    xSpacing[d] = bb[1][d] / res[d];
+    }
+  img->SetOrigin(xOrigin);
+  img->SetSpacing(xSpacing);
 
   // Save the image to disk
   typedef ImageFileWriter<ImageType> WriterType;

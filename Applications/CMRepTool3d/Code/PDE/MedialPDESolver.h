@@ -2,40 +2,106 @@
 #define _MedialPDESolver_h_
 
 #include <iostream>
-#include "mspline.h"
+#include <smlmath.h>
+#include "MedialAtomGrid.h"
+
+#include "BasisFunctions2D.h"
 
 using namespace std;
 
-template <typename TReal> class GeometryDescriptor
+struct GeometryDescriptor
 {
-public:
-  TReal xCovariantTensor[2][2];
-  TReal xContravariantTensor[2][2];
-  TReal xChristoffelFirst[2][2][2];
-  TReal xChristoffelSecond[2][2][2];
-  TReal xNormal;
+  double xCovariantTensor[2][2];
+  double xContravariantTensor[2][2];
+  double xChristoffelFirst[2][2][2];
+  double xChristoffelSecond[2][2][2];
+
+  // The determinant of the covariant tensor and its inverse
+  double g, gInv;
 
   // Initialize the descriptor using a Jet
-  void SetJet(TReal *X, TReal *Xu, TReal *Xv, TReal *Xuu, TReal *Xuv, TReal *Xvv);
-
-  // Initialize the jet using medial point
-  void SetJet(MedialPoint *mp);
+  void SetJet(double *X, double *Xu, double *Xv, double *Xuu, double *Xuv, double *Xvv);
 
   // Dump information out
   void PrintSelf(ostream &str);
-
-protected:
 };
+
+/** 
+ * A Boundary atom
+ */
+struct BoundaryAtom 
+{
+  SMLVec3d X, N;
+};
+
+/**
+ * The new medial atom representation
+ */
+struct MedialAtom
+{
+  // The coordinates of the atom in the domain
+  double u, v;
+  
+  // The position on the medial surface and corresponding partial derivatives
+  SMLVec3d X, Xu, Xv, Xuu, Xuv, Xvv;
+
+  // The differential geometry descriptor of the medial surface
+  GeometryDescriptor G;
+
+  // The radius function and its partial derivatives
+  double R, Ru, Rv, Ruu, Ruv, Rvv;
+
+  // The normal vector and the Riemannian gradient of R on the surface
+  SMLVec3d N, xGradR;
+
+  // The Riemannian laplacian of R
+  double xLapR;
+
+  // Whether this is a 'crest' atom, and whether it's valid at all
+  bool flagCrest, flagValid;
+
+  // The two associated boundary 'atoms'
+  BoundaryAtom xBnd[2];
+
+  /** Compute the differential geometric quantities from X and its 1st and 2nd
+   * derivatives. This does not compute the normal vector */
+  void ComputeDifferentialGeometry();
+
+  /** Compute the normal vector */
+  void ComputeNormalVector();
+
+  /** Given the differential geometry and the normal vector are computed,
+   * compute GradR and the boundary sites. */
+  bool ComputeBoundaryAtoms();
+};
+
+/** Helper function to access a boundary site in an atom array using a
+ * boundary point iterator */
+inline BoundaryAtom &
+GetBoundaryPoint(MedialBoundaryPointIterator *itBoundary, MedialAtom *xAtoms)
+{
+  return 
+    xAtoms[itBoundary->GetAtomIndex()].xBnd[itBoundary->GetBoundarySide()];
+}
+
+/** Helper function to access a boundary site in an atom array using a
+ * boundary point iterator */
+inline BoundaryAtom &
+GetBoundaryPoint(MedialBoundaryQuadIterator *itBQuad, MedialAtom *xAtoms, 
+  unsigned int i, unsigned int j)
+{
+  return 
+    xAtoms[itBQuad->GetAtomIndex(i,j)].xBnd[itBQuad->GetBoundarySide()];
+}
 
 class FDAbstractSite
 {
 public:
-  typedef GeometryDescriptor<float> GDescriptor;
   
   FDAbstractSite(unsigned int m, unsigned int n, unsigned int i, unsigned int j);
   virtual double ComputeEquation(double *Y) = 0;
   virtual void ComputeDerivative(double *Y, double *A, unsigned int iRow) = 0;
-  virtual void SetGeometry(GDescriptor *gd, double rho) = 0;
+  virtual void SetGeometry(GeometryDescriptor *gd, double rho) = 0;
 
   // Returns the number of boundaries that a site touches (0 - int, 1 - border, 2 - corner)
   virtual bool IsBorderSite() = 0;
@@ -50,6 +116,9 @@ public:
 
   // Return the i-th column number that is non-zero in this equation
   virtual unsigned int GetNewtonColumnAtIndex(unsigned int index) = 0;
+
+  // Compute a Jacobi iteration (this site's R as a function of the neighbors)
+  virtual double ComputeJacobiIteration(double *Y) = 0;
   
 protected:
   // Position in the grid and grid dimensions
@@ -65,12 +134,10 @@ protected:
 class FDInternalSite : public FDAbstractSite
 {
 public:
-  typedef FDAbstractSite::GDescriptor GDescriptor;
-  
   FDInternalSite(unsigned int m, unsigned int n, unsigned int i, unsigned int j, 
     unsigned int iNode, unsigned int stride_u, unsigned int stride_v);
 
-  void SetGeometry(GDescriptor *gd, double rho);
+  void SetGeometry(GeometryDescriptor *gd, double rho);
   double ComputeEquation(double *Y);
   void ComputeDerivative(double *Y, double *A, unsigned int iRow);
 
@@ -88,6 +155,9 @@ public:
   unsigned int GetNewtonColumnAtIndex(unsigned int index)
     { return xColumns[index]; }
 
+  // Compute a Jacobi iteration (this site's R as a function of the neighbors)
+  virtual double ComputeJacobiIteration(double *Y);
+  
 protected:
   /** Indices into the flat data array of all neighbors, indexed counterclockwise
    with the center at index 0 */
@@ -116,14 +186,12 @@ protected:
 class FDBorderSite : public FDAbstractSite
 {
 public:
-  typedef FDAbstractSite::GDescriptor GDescriptor;
-
   FDBorderSite(unsigned int m, unsigned int n, unsigned int i, unsigned int j, 
     unsigned int iNode, unsigned int stride_u, unsigned int stride_v);
   
   double ComputeEquation(double *Y);
   void ComputeDerivative(double *Y, double *A, unsigned int iRow);
-  void SetGeometry(GDescriptor *gd, double rho);
+  void SetGeometry(GeometryDescriptor *gd, double rho);
   
   // Compute the R, Ru and Rv given the solution - used to compute atoms
   void ComputeRJet(double *Y, double &R, double &Ru, double &Rv);
@@ -141,6 +209,9 @@ public:
   unsigned int GetNewtonColumnAtIndex(unsigned int index)
     { return xDistinctSites[index]; }
 
+  // Compute a Jacobi iteration (this site's R as a function of the neighbors)
+  double ComputeJacobiIteration(double *Y);
+  
 protected:
   /** Is this a corner site? */
   bool corner;
@@ -161,28 +232,15 @@ protected:
   double wu, wv;
 };
 
-/** Abstract problem to be fed to the solver */
-class IMedialPDEProblem 
-{
+// This is a measure that can be computed over a volume (just a R3 function)
+class EuclideanFunction {
 public:
-  // Compute the jet at a medial point
-  virtual void ComputeJet2(MedialPoint *mp) = 0;
-
-  // Compute the laplacian value
-  virtual double ComputeLaplacian(double u, double v) = 0;
+  virtual double Evaluate(const SMLVec3d &x) = 0;
+  virtual SMLVec3d ComputeGradient(const SMLVec3d &x)
+    { return SMLVec3d(0.0); }
 };
 
-/** Interface that represents an atom array */
-class IMedialSurfacePatch 
-{
-public:
-  virtual unsigned int GetNumberOfAtoms() = 0; 
-  virtual MedialPoint *GetAtom(unsigned int iAtom) = 0;
-  virtual float IntegrateBoundaryMeasure(BoundaryMeasure *m, float &area) = 0;
-  // virtual float IntegrateMedialMeasure(BoundaryMeasure *m, float &area) = 0;
-};
-
-class MedialPDESolver : public virtual IMedialSurfacePatch 
+class MedialPDESolver
 {
 public:
   /**
@@ -191,25 +249,42 @@ public:
    */
   MedialPDESolver(unsigned int m, unsigned int n);
 
+  /** 
+   * Store the current solution vector as the initialization vector
+   */
+  void SetSolutionAsInitialGuess();
+
+  /** 
+   * Generate the default initial guess
+   */
+  void SetDefaultInitialGuess(double xMagnitude = 0.01);
+
+  /** Specify the surface for which the problem should be solved */
+  void SetMedialSurface(IHyperSurface2D *xSurface);
+
   /**
    * Solve the PDE for a given surface and a given rho function up to the required 
    * level of accuracy.
    */
-  void Solve(IMedialPDEProblem *problem, double delta = 1e-8);
-  
-  /** Get one of the atoms from the solution */
-  MedialPoint *GetAtom(unsigned int i, unsigned int j)
-    { return xAtoms +  xSiteIndex[i][j]; }
+  void Solve(double delta = 1e-8);
 
-  /** Get the atom, enumerated by a single index */
-  MedialPoint *GetAtom(unsigned int iAtom)
-    { return xAtoms + iAtom; }
+  /** Alternative, very slow method to solve the equation */
+  void SolveByJacobiMethod(double delta = 1e-8);
+  
+  /** Get the array of atoms */
+  MedialAtom *GetAtomArray()
+    { return xAtoms; }
+
+  /** Get the atom grid on which the medial atoms are computed */
+  MedialAtomGrid *GetAtomGrid()
+    { return xGrid; }
 
   /** Integrate a boundary measure */
-  virtual float IntegrateBoundaryMeasure(BoundaryMeasure *m, float &area);
+  virtual double IntegrateBoundaryMeasure(EuclideanFunction *m, double &area);
 
-  /** Integrate medial measure */
-  // virtual float IntegrateMedialMeasure(BoundaryMeasure *m, float &area);
+  /** Integrate a volume measure */
+  virtual double IntegrateVolumeMeasure(
+    EuclideanFunction *m, unsigned int nSamples, double &volume);
 
   /** Get the number of atoms */
   unsigned int GetNumberOfAtoms()
@@ -233,6 +308,9 @@ private:
   /** Number of 'sites' */
   unsigned int nSites;
 
+  /** The hypersurface on which the PDE is solved */
+  IHyperSurface2D *xSurface;
+
   /** Array of sites */
   FDAbstractSite **xSites;
 
@@ -245,125 +323,50 @@ private:
   /** Representation for the sparse matrix */
   double *xSparseValues;
   unsigned int *xRowIndex, *xColIndex, nSparseEntries;
+
+  /** A grid representing the structure of the atoms */
+  CartesianMedialAtomGrid *xGrid;
   
   /** Array of medial atoms, final solution */
-  MedialPoint *xAtoms;
-
-  /** Array of associated geometry descriptors (stupid) */
-  typedef GeometryDescriptor<float> GDescriptor;
-  GDescriptor *xGeometryDescriptors;
+  MedialAtom *xAtoms;
 
   /** Three vectors used in the iteration */
   double *eps, *b, *y, *zTest;
+
+  /** The values of parameters u and v at grid points */
+  double *xGridU, *xGridV;
 
   /** Internal data for PARDISO */
   int PT[64], MTYPE, IPARM[64];
 
   /** Routine to compute medial atoms */
-  bool ComputeMedialAtom(MedialPoint *p, GDescriptor *gd);
+  void TestJacobi();
+  void ReconstructAtoms(double *ySolution);
+  void InitializeSiteGeometry();
 };
 
 /* *********************** Template Code ************************** */
-template<typename TReal>
-void
-GeometryDescriptor<TReal>
-::SetJet(TReal *X, TReal *Xu, TReal *Xv, TReal *Xuu, TReal *Xuv, TReal *Xvv)
+
+/**
+ * Compute an area of a triangle
+ */
+inline double TriangleArea(const SMLVec3d &A, const SMLVec3d &B, const SMLVec3d &C)
 {
-  // Compute the covariant tensor
-  xCovariantTensor[0][0] = Xu[0] * Xu[0] + Xu[1] * Xu[1] + Xu[2] * Xu[2];
-  xCovariantTensor[1][1] = Xv[0] * Xv[0] + Xv[1] * Xv[1] + Xv[2] * Xv[2];
-  xCovariantTensor[1][0] = Xu[0] * Xv[0] + Xu[1] * Xv[1] + Xu[2] * Xv[2];
-  xCovariantTensor[0][1] = xCovariantTensor[1][0];
-
-  // Compute the determinant of the covariant tensor
-  TReal g = xCovariantTensor[0][0] * xCovariantTensor[1][1] 
-    - xCovariantTensor[0][1] * xCovariantTensor[0][1];
-  TReal gInv = 1.0 / g;
-
-  // Compute the contravariant tensor
-  xContravariantTensor[0][0] = gInv * xCovariantTensor[1][1];
-  xContravariantTensor[1][1] = gInv * xCovariantTensor[0][0];
-  xContravariantTensor[0][1] = - gInv * xCovariantTensor[1][0];
-  xContravariantTensor[1][0] = xContravariantTensor[0][1];
-
-  // Compute the Christoffel symbols of the first kind
-  xChristoffelFirst[0][0][0] = Xuu[0] * Xu[0] + Xuu[1] * Xu[1] + Xuu[2] * Xu[2];
-  xChristoffelFirst[0][0][1] = Xuu[0] * Xv[0] + Xuu[1] * Xv[1] + Xuu[2] * Xv[2];
-  xChristoffelFirst[0][1][0] = Xuv[0] * Xu[0] + Xuv[1] * Xu[1] + Xuv[2] * Xu[2];
-  xChristoffelFirst[0][1][1] = Xuv[0] * Xv[0] + Xuv[1] * Xv[1] + Xuv[2] * Xv[2];
-  xChristoffelFirst[1][1][0] = Xvv[0] * Xu[0] + Xvv[1] * Xu[1] + Xvv[2] * Xu[2];
-  xChristoffelFirst[1][1][1] = Xvv[0] * Xv[0] + Xvv[1] * Xv[1] + Xvv[2] * Xv[2];
-  xChristoffelFirst[1][0][0] = xChristoffelFirst[0][1][0];
-  xChristoffelFirst[1][0][1] = xChristoffelFirst[0][1][1];
-
-  // Compute the Christoffel symbols of the second kind
-  xChristoffelSecond[0][0][0] = xContravariantTensor[0][0] * xChristoffelFirst[0][0][0] + 
-    xContravariantTensor[1][0] * xChristoffelFirst[0][0][1];
-  xChristoffelSecond[0][0][1] = xContravariantTensor[0][1] * xChristoffelFirst[0][0][0] + 
-    xContravariantTensor[1][1] * xChristoffelFirst[0][0][1];
-  
-  xChristoffelSecond[0][1][0] = xContravariantTensor[0][0] * xChristoffelFirst[0][1][0] + 
-    xContravariantTensor[1][0] * xChristoffelFirst[0][1][1];
-  xChristoffelSecond[0][1][1] = xContravariantTensor[0][1] * xChristoffelFirst[0][1][0] + 
-    xContravariantTensor[1][1] * xChristoffelFirst[0][1][1];
-
-  xChristoffelSecond[1][1][0] = xContravariantTensor[0][0] * xChristoffelFirst[1][1][0] + 
-    xContravariantTensor[1][0] * xChristoffelFirst[1][1][1];
-  xChristoffelSecond[1][1][1] = xContravariantTensor[0][1] * xChristoffelFirst[1][1][0] + 
-    xContravariantTensor[1][1] * xChristoffelFirst[1][1][1];
-
-  xChristoffelSecond[1][0][0] = xChristoffelSecond[0][1][0];
-  xChristoffelSecond[1][0][1] = xChristoffelSecond[0][1][1];
+  return cross_3d(B - A, C - A).magnitude();
 }
 
-template<typename TReal>
-void
-GeometryDescriptor<TReal>
-::SetJet(MedialPoint *mp)
+/**
+ * Compute the volume of a prism formed by two triangles
+ */
+inline double PrismVolume( SMLVec3d A1, SMLVec3d B1, SMLVec3d C1, 
+  SMLVec3d A2, SMLVec3d B2, SMLVec3d C2) 
 {
-  this->SetJet(
-    mp->F.data_block(), mp->Fu.data_block(), mp->Fv.data_block(), 
-    mp->Fuu.data_block(), mp->Fuv.data_block(), mp->Fvv.data_block()); 
+  // TODO: Get/derive the correct formula!!!
+  double xArea1 = TriangleArea(A1, B1, C1);
+  double xArea2 = TriangleArea(A2, B2, C2);
+  double d = ((A1 + B1 + C1) - (A2 + B2 + C2)).magnitude() / 3.0;
+  return d * 0.5 * (xArea1 + xArea2);
 }
-
-template<typename TReal>
-void 
-GeometryDescriptor<TReal>
-::PrintSelf(ostream &str)
-{
-  str << "CovariantTensor : {{" 
-    << xCovariantTensor[0][0] << "," 
-    << xCovariantTensor[0][1] << "}, {"
-    << xCovariantTensor[1][0] << "," 
-    << xCovariantTensor[1][1] << "}}" << endl;
-  
-  str << "ContravariantTensor : {{" 
-    << xContravariantTensor[0][0] << "," 
-    << xContravariantTensor[0][1] << "}, {"
-    << xContravariantTensor[1][0] << "," 
-    << xContravariantTensor[1][1] << "}}" << endl;
-
-  str << "ChristoffelFirst : {{{" 
-    << xChristoffelFirst[0][0][0] << ","
-    << xChristoffelFirst[0][0][1] << "}, {"
-    << xChristoffelFirst[0][1][0] << ","
-    << xChristoffelFirst[0][1][1] << "}}, {{"
-    << xChristoffelFirst[1][0][0] << ","
-    << xChristoffelFirst[1][0][1] << "}, {"
-    << xChristoffelFirst[1][1][0] << ","
-    << xChristoffelFirst[1][1][1] << "}}}" << endl;
-
-  str << "ChristoffelSecond : {{{" 
-    << xChristoffelSecond[0][0][0] << ","
-    << xChristoffelSecond[0][0][1] << "}, {"
-    << xChristoffelSecond[0][1][0] << ","
-    << xChristoffelSecond[0][1][1] << "}}, {{"
-    << xChristoffelSecond[1][0][0] << ","
-    << xChristoffelSecond[1][0][1] << "}, {"
-    << xChristoffelSecond[1][1][0] << ","
-    << xChristoffelSecond[1][1][1] << "}}}" << endl;
-}
-
 
 
 #endif // _MedialPDESolver_h_

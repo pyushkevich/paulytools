@@ -392,6 +392,14 @@ void EvolutionaryStrategy::selection()
 	}
 	*/
 
+  cout << "Solution Rank: ";
+  for(unsigned int q = 0; q < mu+lambda; q++)
+    cout << mlArray[q]->value << " * ";
+  cout << endl << "Sigma Max: ";
+  for(unsigned int q = 0; q < mu+lambda; q++)
+    cout << mlArray[q]->sigma.infinityNorm() << " * ";
+  cout << endl;
+
 	// Update the best ever solution if nessesary
 	setBestEver(mlArray[0]);
 }

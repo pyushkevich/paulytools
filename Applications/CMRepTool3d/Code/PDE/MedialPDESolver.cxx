@@ -1,8 +1,7 @@
 #include "MedialPDESolver.h"
 #include <cmath>
 #include <algorithm>
-#include "mspline.h"
-#include "fastmath.h"
+#include "smlmath.h"
 
 // BLAS/PARDISO references
 extern "C" {
@@ -17,6 +16,161 @@ extern "C" {
 }
 
 using namespace std;
+
+void
+GeometryDescriptor
+::SetJet(double *X, double *Xu, double *Xv, double *Xuu, double *Xuv, double *Xvv)
+{
+  // Compute the covariant tensor
+  xCovariantTensor[0][0] = Xu[0] * Xu[0] + Xu[1] * Xu[1] + Xu[2] * Xu[2];
+  xCovariantTensor[1][1] = Xv[0] * Xv[0] + Xv[1] * Xv[1] + Xv[2] * Xv[2];
+  xCovariantTensor[1][0] = Xu[0] * Xv[0] + Xu[1] * Xv[1] + Xu[2] * Xv[2];
+  xCovariantTensor[0][1] = xCovariantTensor[1][0];
+
+  // Compute the determinant of the covariant tensor
+  g = xCovariantTensor[0][0] * xCovariantTensor[1][1] 
+    - xCovariantTensor[0][1] * xCovariantTensor[0][1];
+  gInv = 1.0 / g;
+
+  // Compute the contravariant tensor
+  xContravariantTensor[0][0] = gInv * xCovariantTensor[1][1];
+  xContravariantTensor[1][1] = gInv * xCovariantTensor[0][0];
+  xContravariantTensor[0][1] = - gInv * xCovariantTensor[1][0];
+  xContravariantTensor[1][0] = xContravariantTensor[0][1];
+
+  // Compute the Christoffel symbols of the first kind
+  xChristoffelFirst[0][0][0] = Xuu[0] * Xu[0] + Xuu[1] * Xu[1] + Xuu[2] * Xu[2];
+  xChristoffelFirst[0][0][1] = Xuu[0] * Xv[0] + Xuu[1] * Xv[1] + Xuu[2] * Xv[2];
+  xChristoffelFirst[0][1][0] = Xuv[0] * Xu[0] + Xuv[1] * Xu[1] + Xuv[2] * Xu[2];
+  xChristoffelFirst[0][1][1] = Xuv[0] * Xv[0] + Xuv[1] * Xv[1] + Xuv[2] * Xv[2];
+  xChristoffelFirst[1][1][0] = Xvv[0] * Xu[0] + Xvv[1] * Xu[1] + Xvv[2] * Xu[2];
+  xChristoffelFirst[1][1][1] = Xvv[0] * Xv[0] + Xvv[1] * Xv[1] + Xvv[2] * Xv[2];
+  xChristoffelFirst[1][0][0] = xChristoffelFirst[0][1][0];
+  xChristoffelFirst[1][0][1] = xChristoffelFirst[0][1][1];
+
+  // Compute the Christoffel symbols of the second kind
+  xChristoffelSecond[0][0][0] = xContravariantTensor[0][0] * xChristoffelFirst[0][0][0] + 
+    xContravariantTensor[1][0] * xChristoffelFirst[0][0][1];
+  xChristoffelSecond[0][0][1] = xContravariantTensor[0][1] * xChristoffelFirst[0][0][0] + 
+    xContravariantTensor[1][1] * xChristoffelFirst[0][0][1];
+  
+  xChristoffelSecond[0][1][0] = xContravariantTensor[0][0] * xChristoffelFirst[0][1][0] + 
+    xContravariantTensor[1][0] * xChristoffelFirst[0][1][1];
+  xChristoffelSecond[0][1][1] = xContravariantTensor[0][1] * xChristoffelFirst[0][1][0] + 
+    xContravariantTensor[1][1] * xChristoffelFirst[0][1][1];
+
+  xChristoffelSecond[1][1][0] = xContravariantTensor[0][0] * xChristoffelFirst[1][1][0] + 
+    xContravariantTensor[1][0] * xChristoffelFirst[1][1][1];
+  xChristoffelSecond[1][1][1] = xContravariantTensor[0][1] * xChristoffelFirst[1][1][0] + 
+    xContravariantTensor[1][1] * xChristoffelFirst[1][1][1];
+
+  xChristoffelSecond[1][0][0] = xChristoffelSecond[0][1][0];
+  xChristoffelSecond[1][0][1] = xChristoffelSecond[0][1][1];
+}
+
+void 
+GeometryDescriptor
+::PrintSelf(ostream &str)
+{
+  str << "CovariantTensor : {{" 
+    << xCovariantTensor[0][0] << "," 
+    << xCovariantTensor[0][1] << "}, {"
+    << xCovariantTensor[1][0] << "," 
+    << xCovariantTensor[1][1] << "}}" << endl;
+  
+  str << "ContravariantTensor : {{" 
+    << xContravariantTensor[0][0] << "," 
+    << xContravariantTensor[0][1] << "}, {"
+    << xContravariantTensor[1][0] << "," 
+    << xContravariantTensor[1][1] << "}}" << endl;
+
+  str << "ChristoffelFirst : {{{" 
+    << xChristoffelFirst[0][0][0] << ","
+    << xChristoffelFirst[0][0][1] << "}, {"
+    << xChristoffelFirst[0][1][0] << ","
+    << xChristoffelFirst[0][1][1] << "}}, {{"
+    << xChristoffelFirst[1][0][0] << ","
+    << xChristoffelFirst[1][0][1] << "}, {"
+    << xChristoffelFirst[1][1][0] << ","
+    << xChristoffelFirst[1][1][1] << "}}}" << endl;
+
+  str << "ChristoffelSecond : {{{" 
+    << xChristoffelSecond[0][0][0] << ","
+    << xChristoffelSecond[0][0][1] << "}, {"
+    << xChristoffelSecond[0][1][0] << ","
+    << xChristoffelSecond[0][1][1] << "}}, {{"
+    << xChristoffelSecond[1][0][0] << ","
+    << xChristoffelSecond[1][0][1] << "}, {"
+    << xChristoffelSecond[1][1][0] << ","
+    << xChristoffelSecond[1][1][1] << "}}}" << endl;
+}
+
+void
+MedialAtom
+::ComputeDifferentialGeometry()
+{
+  G.SetJet( X.data_block(), Xu.data_block(), Xv.data_block(),
+    Xuu.data_block(), Xuv.data_block(), Xvv.data_block());
+}
+
+void MedialAtom ::ComputeNormalVector()
+{
+  N = cross_3d(Xu, Xv) * sqrt(G.gInv);
+}
+
+bool MedialAtom::ComputeBoundaryAtoms()
+{
+  // Terms going into gradR
+  double CXu = 
+    Ru * G.xContravariantTensor[0][0] + Rv * G.xContravariantTensor[0][1]; 
+  double CXv = 
+    Ru * G.xContravariantTensor[0][1] + Rv * G.xContravariantTensor[1][1];
+    
+  // Compute Grad R
+  xGradR[0] = Xv[0] * CXv + Xu[0] * CXu;
+  xGradR[1] = Xv[1] * CXv + Xu[1] * CXu;
+  xGradR[2] = Xv[2] * CXv + Xu[2] * CXu;
+
+  // Compute squared length of GradR
+  double xMagGradR2 = Ru * CXu + Rv * CXv;
+  double sinTheta2 = 1.0f - xMagGradR2;
+  
+  // Correct the floating point / solver error
+  if(fabs(sinTheta2) < 1e-8) sinTheta2 = 0.0;
+  
+  // Compute the boundary sites
+  if (sinTheta2 > 0.0)
+    {
+    // We are not at a crest, valid atom
+    flagCrest = false; flagValid = true;
+    
+    // Compute the normal and tangent components of the boundaries
+    SMLVec3d CN = N * sqrt(sinTheta2);
+
+    // Compute the position and normals of boundary points
+    xBnd[0].N = - xGradR - CN;
+    xBnd[1].N = - xGradR + CN;
+    xBnd[0].X = X + xBnd[0].N * R;
+    xBnd[1].X = X + xBnd[1].N * R;
+    }
+  else if (sinTheta2 < 0.0)
+    { 
+    flagValid = false; 
+    // cerr << "Bad atom ("<< R << ", " << sinTheta2 << ") at " << u << ", " << v << endl;
+    cout << "x" << flush;
+    }
+  else
+    { 
+    // We are at a crest, valid atom
+    flagValid = true; flagCrest = true;
+
+    // Simpler geometry, save a square root!
+    xBnd[0].N = xBnd[1].N = -xGradR;
+    xBnd[0].X = xBnd[1].X = X - xGradR * R;
+    }
+
+  return flagValid;
+}
 
 FDAbstractSite::FDAbstractSite(unsigned int m, unsigned int n, unsigned int i, unsigned int j)
 {
@@ -37,7 +191,7 @@ double FDAbstractSite::GetInitialValue()
 {
   double x = IsBorderSite(0) ? 0 : du;
   double y = IsBorderSite(1) ? 0 : dv;
-  return 0.1 * sqrt(x * x + y * y);
+  return sqrt(x * x + y * y);
 }
 
 /** Initialize the site with grid of size m and n */
@@ -160,6 +314,27 @@ double FDInternalSite::ComputeEquation(double *Y)
   return Cuu * Fuu + Cuv * Fuv + Cvv * Fvv + Cu * Fu + Cv * Fv - rho;
 }
 
+double FDInternalSite::ComputeJacobiIteration(double *Y)
+{
+   // Get the components
+  double 
+    F0 = Y[i0], F1 = Y[i1], F2 = Y[i2], 
+    F3 = Y[i3], F4 = Y[i4], F5 = Y[i5], 
+    F6 = Y[i6], F7 = Y[i7], F8 = Y[i8];
+  
+  // Compute the finite differences, without scaling factors
+  double Fu = F1 - F5;
+  double Fv = F3 - F7;
+  double Fuu = F1 + F5;
+  double Fvv = F3 + F7;
+  double Fuv = F2 + F6 - F4 - F8;
+
+  // Compute the generalized laplacian using precomputed coefficients
+  
+  return (Cuu * Fuu + Cuv * Fuv + Cvv * Fvv + Cu * Fu + Cv * Fv - rho) 
+    / (2.0 * (Cuu + Cvv));
+}
+
 double FDBorderSite::ComputeEquation(double *Y)
 {
   // Compute the finite differences, without scaling factors
@@ -168,6 +343,47 @@ double FDBorderSite::ComputeEquation(double *Y)
 
   // Compute the generalized gradient magnitude using precomputed values
   return CuCu * Fu * Fu + CuCv * Fu * Fv + CvCv * Fv * Fv - C0 * Y[ xNeighbor[0] ];
+}
+
+double FDBorderSite::ComputeJacobiIteration(double *Y)
+{
+  // An array of weights for all combinations of parameters
+  double A = CuCu, C = CvCv, B = 0.5 * CuCv;
+  double Z[4][4] = {
+    {  A,  B, -A, -B }, 
+    {  B,  C, -B, -C },
+    { -A, -B,  A,  B },
+    { -B, -C,  B,  C }}; 
+
+  // Create accumulators to hold coefficients of X0^2, X0 and const
+  double a = 0.0, b = -C0, c = 0.0;
+
+  // Loop over all the products
+  for(unsigned int i = 0; i < 4; i++)
+    for(unsigned int j = 0; j < 4; j++)
+      {
+      bool ti = (xNeighbor[i+1] == xNeighbor[0]);
+      bool tj = (xNeighbor[j+1] == xNeighbor[0]);
+      if(ti && tj)
+        a += Z[i][j];
+      else if(ti)
+        b += Z[i][j] * Y[xNeighbor[j+1]];
+      else if(tj)
+        b += Z[i][j] * Y[xNeighbor[i+1]];
+      else 
+        c += Z[i][j] * Y[xNeighbor[i+1]] * Y[xNeighbor[j+1]];
+      }
+
+  // Solve the quadratic equation ax^2 + bx + c = 0
+  double D = b * b - 4 * a * c;
+  if(D < 0)
+    return 0; // Solution does not exist
+
+  // Get the two roots of the quadratic equation
+  double x = ( - b - sqrt(D) ) * 0.5 / a; 
+
+  // Select the root that results in the outward gradient
+  return x;
 }
 
 /** Compute the derivatives for Newton's method */
@@ -236,7 +452,7 @@ void FDBorderSite::ComputeRJet(double *Y, double &R, double &Ru, double &Rv)
 
 
 /** Initialize internal site */
-void FDInternalSite::SetGeometry(GDescriptor *g, double rho)
+void FDInternalSite::SetGeometry(GeometryDescriptor *g, double rho)
 {
   // Store the rho
   this->rho = rho;
@@ -274,7 +490,7 @@ void FDInternalSite::SetGeometry(GDescriptor *g, double rho)
 }
 
 /** Initialize the border site */
-void FDBorderSite::SetGeometry(GDescriptor *g, double)
+void FDBorderSite::SetGeometry(GeometryDescriptor *g, double)
 {
   // Compute the finite difference premultipliers (they depend on the orientation)
   _du = wu * (m - 1);
@@ -407,63 +623,160 @@ MedialPDESolver
   // Initialize the sparse data
   xSparseValues = new double[nSparseEntries];
 
-  // Compute the initial solution
-  xInitSoln = new double[nSites];
-  for(iSite = 0; iSite < nSites; iSite++)
-    xInitSoln[iSite] = xSites[iSite]->GetInitialValue();
-
   // Initialize our three vectors
   b = new double[nSites];
   y = new double[nSites];
   eps = new double[nSites];
   zTest = new double[nSites];
   
+  // Construct the evaluation grids
+  double u = 0.0, v = 0.0;
+  xGridU = new double[m]; xGridV = new double[n];
+  for(size_t i = 0; i < m-1; i++, u+=du) xGridU[i] = u;
+  for(size_t j = 0; j < n-1; j++, v+=dv) xGridV[j] = v;
+  xGridU[m-1] = 1.0; xGridV[n-1] = 1.0;
+
   // Initialize the medial atom array
-  xAtoms = new MedialPoint[nSites];
-  xGeometryDescriptors = new GDescriptor[nSites];
+  xAtoms = new MedialAtom[nSites];
 
   // Initialize the PARDISO solver
   MTYPE = 11; // Nonsymmetric real
   memset(IPARM, 0, sizeof(int) * 64);
   pardisoinit_(PT,&MTYPE,IPARM);
   IPARM[2] = 1;
+
+  // Compute the initial solution
+  xInitSoln = new double[nSites];
+  SetDefaultInitialGuess(0.001);
+
+  // Initialize the atom grid to a Cartesian grid
+  xGrid = new CartesianMedialAtomGrid(m, n);
 }
 
 void
 MedialPDESolver
-::Solve(IMedialPDEProblem *problem, double delta)
+::SetDefaultInitialGuess(double xMagnitude)
 {
-  // The Jet of a surface
-  double X[3], Xu[3], Xv[3], Xuu[3], Xuv[3], Xvv[3];
-  double u = 0.0, v = 0.0;
-  unsigned int i, j, k;
+  // Compute the initial solution
+  for(unsigned int iSite = 0; iSite < nSites; iSite++)
+    xInitSoln[iSite] = xMagnitude * xSites[iSite]->GetInitialValue();
+}
 
-  // Initialize each site with the current surface properties
-  for(i = 0; i < m; i++, u+=du, v=0.0)
+void 
+MedialPDESolver
+::SetSolutionAsInitialGuess()
+{
+  for(unsigned int iSite = 0; iSite < nSites; iSite++)
+    xInitSoln[iSite] = y[iSite];
+}
+
+void MedialPDESolver
+::TestJacobi()
+{
+  // Compute the Jacobi iteration
+  for(unsigned int k = 0; k < nSites; k++)
     {
-    for(j = 0; j < n; j++, v+=dv)
+    b[k] = xSites[k]->ComputeJacobiIteration(y);
+    if(b[k] <= 0.0)
       {
-      // Get the index of the site
-      unsigned int iSite = xSiteIndex[i][j];
+      cout << "Bad Jacobi result at site " << k << endl;
+      }
+    b[k] -= y[k];
+    }
 
-      // Access the medial atom underneath
-      MedialPoint *mp = xAtoms + iSite;
-      mp->u = u; mp->v = v;
+  // Compute the max update value
+  double bMax = fabs(b[cblas_idamax(nSites, b, 1)]);
+  cout << "Jacobi Update: Max Differenece is " << bMax << endl;
+}
 
-      // Compute the surface jet and the laplacian
-      problem->ComputeJet2(mp);
-      // problem->ComputeJet2(u, v, X, Xu, Xv, Xuu, Xuv, Xvv);
+void 
+MedialPDESolver
+::SetMedialSurface(IHyperSurface2D *xSurface)
+{
+  // Remember the surface
+  this->xSurface = xSurface;
 
-      // Compute the geometrical properties
-      xGeometryDescriptors[iSite].SetJet(
-        mp->F.data_block(), mp->Fu.data_block(), mp->Fv.data_block(), 
-        mp->Fuu.data_block(), mp->Fuv.data_block(), mp->Fvv.data_block());
+  // Tell the surface where it will be evaluated
+  xSurface->SetEvaluationGrid(m, n, xGridU, xGridV);
+}
 
-      // Compute the solution at this point
-      xSites[iSite]->SetGeometry(
-        &xGeometryDescriptors[iSite], problem->ComputeLaplacian(u,v));
+void MedialPDESolver::InitializeSiteGeometry()
+{
+  // Initialize each site with the current surface properties
+  for(size_t i = 0; i < m; i++) for(size_t j = 0; j < n; j++)
+    {
+    // Get the index of the site
+    unsigned int iGrid = xGrid->GetAtomIndex(i, j);
+    unsigned int iSite = xSiteIndex[i][j];
+
+    // Access the medial atom underneath
+    MedialAtom &xAtom = xAtoms[iGrid];
+
+    // Set the atoms' domain coordinates
+    xAtom.u = xGridU[i]; xAtom.v = xGridV[j];
+
+    // Compute the surface jet and the laplacian
+    xSurface->EvaluateAtGridIndex(i, j, 0, 0, xAtom.X.data_block());
+    xSurface->EvaluateAtGridIndex(i, j, 1, 0, xAtom.Xu.data_block());
+    xSurface->EvaluateAtGridIndex(i, j, 0, 1, xAtom.Xv.data_block());
+    xSurface->EvaluateAtGridIndex(i, j, 2, 0, xAtom.Xuu.data_block());
+    xSurface->EvaluateAtGridIndex(i, j, 1, 1, xAtom.Xuv.data_block());
+    xSurface->EvaluateAtGridIndex(i, j, 0, 2, xAtom.Xvv.data_block());
+
+    // Compute the differential geometric tensors
+    xAtom.ComputeDifferentialGeometry();
+
+    // Compute the normal vector
+    xAtom.ComputeNormalVector();
+
+    // Compute the laplacian of R (TODO!)
+    xAtom.xLapR = -0.25;
+
+    // Compute the solution at this point
+    xSites[iSite]->SetGeometry( &xAtom.G, xAtom.xLapR);
+    }
+}
+
+void
+MedialPDESolver
+::ReconstructAtoms(double *ySolution)
+{
+  // Once the iterations are complete, reconstruct the atoms
+  for(unsigned int i = 0; i < m; i++) for(unsigned int j = 0; j < n; j++)
+    {
+    // Map to a grid index and to our own index
+    unsigned int iGrid = xGrid->GetAtomIndex(i, j);
+    unsigned int iLocal = xSiteIndex[i][j];
+    
+    // The medial atom to update
+    MedialAtom &xAtom = xAtoms[iGrid];
+
+    // The case where phi is negative is undefined
+    if(ySolution[iLocal] > 0)
+      {
+      // Compute the derivatives of R using finite differences
+      xSites[iLocal]->ComputeRJet(ySolution, xAtom.R, xAtom.Ru, xAtom.Rv);
+
+      // Compute the boundary properties of the medial point
+      xAtom.ComputeBoundaryAtoms();
+      }
+    else
+      {
+      // What are we supposed to do?
+      xAtom.R = xAtom.Ru = xAtom.Rv = 0.0;
+      xAtom.flagValid = false;
       }
     }
+}
+
+void
+MedialPDESolver
+::Solve(double delta)
+{
+  unsigned int i, j, k;
+
+  // Intialize the sites
+  InitializeSiteGeometry();
 
   // Copy the initial solution to the current solution
   cblas_dcopy(nSites, xInitSoln, 1, y, 1);
@@ -518,114 +831,92 @@ MedialPDESolver
     cblas_daxpy(nSites, 1.0, eps, 1, y, 1);
 
     // Print the statistics
-    cout << "-----------" << endl;
-    cout << "Step " << iIter << ": " << endl;
-    cout << "  Largest Epsilon: " << epsMax << endl;
-    cout << "  Largest Eqn Error: " << bMax << endl;
+    
+    // cout << "-----------" << endl;
+    // cout << "Step " << iIter << ": " << endl;
+    // cout << "  Largest Epsilon: " << epsMax << endl;
+    // cout << "  Largest Eqn Error: " << bMax << endl;
     // cout << "  Largest Solver Error: " << zMax << endl;
+   
 
     // Convergence is defined when epsilon is smaller than some threshold
     flagComplete = (epsMax < delta);
     }
 
-  // Once the iterations are complete, reconstruct the atoms
-  for(k = 0; k < nSites; k++)
+  // Check for problems
+  /* 
+  MedialAtom *xAtoms = GetAtomArray();
+  double gMin = 1.0e10;
+  for(size_t i = 0; i < GetNumberOfAtoms(); i++)
     {
-    MedialPoint *mp = xAtoms + k;
-
-    // The case where phi is negative is undefined
-    if(y[k] > 0)
-      {
-      // Compute the grad r vector using finite differences
-      double R, Ru, Rv;
-      xSites[k]->ComputeRJet(y, R, Ru, Rv);
-      mp->F[3] = R; mp->Fu[3] = Ru; mp->Fv[3] = Rv;
-
-      // Compute the boundary properties of the medial point
-      ComputeMedialAtom(mp, &xGeometryDescriptors[k]);
-      }
-    else
-      {
-      // What are we supposed to do?
-      mp->F[3] = mp->Fu[3] = mp->Fv[3] = 0.0;
-      }
+    if(xAtoms[i].G.g < gMin)
+      gMin = xAtoms[i].G.g; 
     }
+  cout << "Lowest g = " << gMin << endl;
+  */
+  
+  // Reconstruct the medial atoms
+  ReconstructAtoms(y);
 }
 
-bool 
+void 
 MedialPDESolver
-::ComputeMedialAtom(MedialPoint *p, GDescriptor *gd)
+::SolveByJacobiMethod(double delta)
 {
-  // The medial point should have the X 2-jet and the R 1-jet already set
-  // We have to compute grad R and the boundary sites
+  // Copy the initial solution to the current solution
+  cblas_dcopy(nSites, xInitSoln, 1, y, 1);
 
-  // Get a handle on the variables we will need
-  SMLVec3f &X   = p->X();
-  SMLVec3f &Xu  = p->Xu();
-  SMLVec3f &Xv  = p->Xv();
-  float &R   = p->R();
-  float &Ru  = p->Ru();
-  float &Rv  = p->Rv();
-
-  // Elements of the first fundamental form
-  float E = p->IE = gd->xCovariantTensor[0][0];
-  float F = p->IF = gd->xCovariantTensor[0][1];
-  float G = p->IG = gd->xCovariantTensor[1][1];
+  // Initialize the geometry
+  InitializeSiteGeometry();
   
-  // Terms going into gradR
-  float CXu = Ru * gd->xContravariantTensor[0][0] 
-    + Rv * gd->xContravariantTensor[0][1]; 
-  float CXv = Ru * gd->xContravariantTensor[0][1] 
-    + Rv * gd->xContravariantTensor[1][1];
-    
-  // Compute Grad R
-  p->GradR[0] = Xv[0] * CXv + Xu[0] * CXu;
-  p->GradR[1] = Xv[1] * CXv + Xu[1] * CXu;
-  p->GradR[2] = Xv[2] * CXv + Xu[2] * CXu;
-
-  // Compute squared length of GradR
-  double xMagGradR2 = Ru * CXu + Rv * CXv;
-  p->sinTheta2 = 1.0f - xMagGradR2;
-  
-  // Correct the floating point / solver error
-  if(fabs(p->sinTheta2) < 1e-5)
-    p->sinTheta2 = 0.0;
-  
-  // Compute the boundary sites
-  if (p->sinTheta2 >= 0.0)
+  // We are now ready to perform the Newton loop
+  bool flagComplete = false;
+  for(unsigned int iIter = 0; iIter < 30000 && !flagComplete; iIter++)
     {
-    // Compute the derivatives of sine theta
-    float sT = sqrtf(p->sinTheta2);
+    // Run the Jacobi iteration, put the result in b, difference in eps
+    for(unsigned int k = 0; k < nSites; k++)
+      {
+      b[k] = xSites[k]->ComputeJacobiIteration(y);
+      eps[k] = b[k] - y[k];
+      zTest[k] = xSites[k]->ComputeEquation(y);
+      if(b[k] <= 0) 
+        cout << "Bad result " << b[k] << " at site " << k << endl;
+      
+      // Optional: Gauss-Seidell
+      y[k] = b[k];
+      }
 
-    // Compute the normal and tangent components of the boundaries
-    SMLVec3f CN = p->N() * sT;
+    // Copy the result into y
+    cblas_dcopy(nSites, b, 1, y, 1);
 
-    // Compute the position and normals of boundary points
-    p->bp[0].N = - p->GradR - CN;
-    p->bp[1].N = - p->GradR + CN;
-    p->bp[0].X = X + p->bp[0].N * R;
-    p->bp[1].X = X + p->bp[1].N * R;
+    // Check the maximum update difference - should be 0 if we have the true solution
+    double epsMax = fabs(eps[cblas_idamax(nSites, eps, 1)]);
+    double zMax = fabs(eps[cblas_idamax(nSites, zTest, 1)]);
+    if(epsMax < delta)
+      flagComplete = true;
 
-    // Return success
-    return true;
+    // Report the iteration progress
+    cout << "-----------" << endl;
+    cout << "Step " << iIter << ": " << endl;
+    cout << "  Largest Epsilon: " << epsMax << endl;
+    cout << "  Largest Error:   " << zMax << endl;
     }
 
-  // The point is outside of the boundary
-  cout << "Boundary Failure: sin(theta)^2 = " << p->sinTheta2 << endl;
-  return false;
+  // Compute the atoms
+  ReconstructAtoms(y);
 }
 
-float MedialPDESolver
-::IntegrateBoundaryMeasure(BoundaryMeasure *bnd, float &area)
+double MedialPDESolver
+::IntegrateBoundaryMeasure(EuclideanFunction *fun, double &area)
 {
   // Integration over patches. First, compute the boundary measure at
   // each point on the medial surface.
-  float *bndValues[2], *xAreas;
-  bndValues[0]= new float[nSites];
-  bndValues[1]= new float[nSites];
+  double *bndValues[2], *xAreas;
+  bndValues[0]= new double[nSites];
+  bndValues[1]= new double[nSites];
 
   // This vector stores the area assigned to each boundary point
-  xAreas = new float[nSites];
+  xAreas = new double[nSites];
 
   // Compute the boundary measure at each point
   for(unsigned int iSite = 0; iSite < nSites; iSite++)
@@ -634,19 +925,19 @@ float MedialPDESolver
     if(xSites[iSite]->IsBorderSite())
       {
       // Compute the crest measure
-      bndValues[0][iSite] = bndValues[1][iSite] 
-        = bnd->computeCrestBoundaryMeasure(xAtoms[iSite]);
+      bndValues[0][iSite] = bndValues[1][iSite] = 
+        fun->Evaluate(xAtoms[iSite].xBnd[0].X);
       }
     else
       {
       // Compute the boundary measure
-      bndValues[0][iSite] = bnd->computeBoundaryMeasure(xAtoms[iSite], 0);
-      bndValues[1][iSite] = bnd->computeBoundaryMeasure(xAtoms[iSite], 1);
+      bndValues[0][iSite] = fun->Evaluate(xAtoms[iSite].xBnd[0].X);
+      bndValues[1][iSite] = fun->Evaluate(xAtoms[iSite].xBnd[1].X);
       }
     }
 
   // Integrate the surface area
-  float xArea = 0.0, xMeasure = 0.0;
+  double xArea = 0.0, xMeasure = 0.0;
   for(unsigned int i = 0; i < m - 1; i++)
     for(unsigned int j = 0; j < n - 1; j++)
       for(unsigned int d = 0; d < 2; d++)
@@ -658,11 +949,11 @@ float MedialPDESolver
         unsigned int i11 = xSiteIndex[i+1][j+1];
 
         // Compute the areas of the two triangles involved
-        float A1 = triangleArea( xAtoms[i00].F.data_block(), 
-          xAtoms[i01].F.data_block(), xAtoms[i11].F.data_block());
-        float A2 = triangleArea(xAtoms[i00].F.data_block(), 
-          xAtoms[i11].F.data_block(), xAtoms[i10].F.data_block());
-
+        double A1 = TriangleArea(
+          xAtoms[i00].xBnd[d].X, xAtoms[i01].xBnd[d].X, xAtoms[i11].xBnd[d].X); 
+        double A2 = TriangleArea(
+          xAtoms[i00].xBnd[d].X, xAtoms[i11].xBnd[d].X, xAtoms[i10].xBnd[d].X); 
+          
         // Integrate the measure
         xMeasure += A1 * (bndValues[d][i00] + bndValues[d][i01] + bndValues[d][i11]); 
         xMeasure += A2 * (bndValues[d][i00] + bndValues[d][i11] + bndValues[d][i10]); 
@@ -671,7 +962,7 @@ float MedialPDESolver
 
   // Scale the measure by three
   xMeasure /= 3.0;
-  cout << "Area: " << xArea << " Measure: " << xMeasure << endl;
+  // cout << "Area: " << xArea << " Measure: " << xMeasure << endl;
 
   // Clean up
   delete xAreas;
@@ -681,4 +972,116 @@ float MedialPDESolver
   // Return the result
   area = xArea;
   return xMeasure;
+}
+
+double MedialPDESolver
+::IntegrateVolumeMeasure(EuclideanFunction *xFunction, unsigned int nSamples, double &volume)
+{
+  // Integrate some measure over the volume enclosed by the structure. A
+  // triangle on the medial surface and a triangle on the boundary form a 
+  // prism; we have to calculate its volume.
+  unsigned int iSite, iSample, iSide, nSides, i, j;
+  
+  // First we sample the function along the profiles from the medial axis and
+  // store this for future integration
+  double **xSamples[2];
+  xSamples[0] = new double *[nSites];
+  xSamples[1] = new double *[nSites];
+
+  for(iSite = 0; iSite < nSites; iSite++)
+    {
+    // Allocate the along-the-profile samples
+    xSamples[0][iSite] = new double[nSamples];
+    xSamples[1][iSite] = xSites[iSite]->IsBorderSite() 
+      ? xSamples[0][iSite] : new double[nSamples];
+
+    // Simpler processing at border sites
+    nSides = xSites[iSite]->IsBorderSite() ? 1 : 2;
+    for(iSide = 0; iSide < nSides; iSide++)
+      {
+      // Compute the delta vector
+      SMLVec3d xSample = xAtoms[iSite].X;
+      SMLVec3d xDelta = 
+        (xAtoms[iSite].R / (nSamples - 1.0)) * xAtoms[iSite].xBnd[iSide].N;
+
+      // Compute the delta vector
+      for(iSample = 0; iSample < nSamples; iSample++, xSample += xDelta)
+        {
+        xSamples[iSide][iSite][iSample] = xFunction->Evaluate(xSample);
+        }
+      }
+    }
+
+  // Now, the more difficult part. For each section of the boundary / medial
+  // grid, we must compute the volume and assign a sixth of this volume to 
+  // each of the samples, thus generating a weight for every sample
+  double xMeasure = 0.0, xVolume = 0.0;
+  for(i = 0; i < m - 1; i++) for(j = 0; j < n - 1; j++)
+    {
+    // Access the four sites at this quad
+    unsigned int i00 = xSiteIndex[i][j];
+    unsigned int i01 = xSiteIndex[i][j+1];
+    unsigned int i10 = xSiteIndex[i+1][j];
+    unsigned int i11 = xSiteIndex[i+1][j+1];
+
+    // Access the four medial atoms
+    SMLVec3d X00 = xAtoms[i00].X;
+    SMLVec3d X01 = xAtoms[i01].X;
+    SMLVec3d X10 = xAtoms[i10].X;
+    SMLVec3d X11 = xAtoms[i11].X;
+
+    // Get the medial atom at this location
+    for(iSide = 0; iSide < 2; iSide++)
+      {
+      // Get the four deltas
+      SMLVec3d d00 = xAtoms[i00].xBnd[iSide].N;
+      SMLVec3d d01 = xAtoms[i01].xBnd[iSide].N;
+      SMLVec3d d10 = xAtoms[i10].xBnd[iSide].N;
+      SMLVec3d d11 = xAtoms[i11].xBnd[iSide].N;
+
+      // Compute the prism volumes
+      for(iSample = 0; iSample < nSamples - 1; iSample++)
+        {
+        // Compute the volume of the first prism
+        double t1 = iSample * 1.0f / (nSamples - 1); 
+        double t2 = (1 + iSample) * 1.0f / (nSamples - 1); 
+
+        double V1 = PrismVolume(
+          X00 + d00 * t1, X01 + d01 * t1, X11 + d11 * t1,
+          X00 + d00 * t2, X01 + d01 * t2, X11 + d11 * t2);
+          
+        // Compute the volume of the second prism
+        double V2 = PrismVolume(
+          X00 + d00 * t1, X11 + d11 * t1, X10 + d10 * t1,
+          X00 + d00 * t2, X11 + d11 * t2, X10 + d10 * t2);
+
+        // Integrate the measure
+        xMeasure += V1 * (
+          xSamples[iSide][i00][iSample] + xSamples[iSide][i00][iSample + 1] + 
+          xSamples[iSide][i01][iSample] + xSamples[iSide][i01][iSample + 1] + 
+          xSamples[iSide][i11][iSample] + xSamples[iSide][i11][iSample + 1] ); 
+
+        xMeasure += V2 * (
+          xSamples[iSide][i00][iSample] + xSamples[iSide][i00][iSample + 1] + 
+          xSamples[iSide][i11][iSample] + xSamples[iSide][i11][iSample + 1] + 
+          xSamples[iSide][i10][iSample] + xSamples[iSide][i10][iSample + 1] ); 
+
+        xVolume += (V1 + V2);
+        }
+      }
+    }
+
+  // Clean up the samples
+  for(iSite = 0; iSite < nSites; iSite++)
+    {
+    delete xSamples[0][iSite];
+    if(!xSites[iSite]->IsBorderSite())
+      delete xSamples[1][iSite];
+    }
+  delete xSamples[0];
+  delete xSamples[1];
+
+  // Finish
+  volume = xVolume; 
+  return xMeasure / 6.0;
 }

@@ -5,8 +5,10 @@ SET(FILLSTLMESH_SRCS
 )
 
 ADD_EXECUTABLE(mesh2img ${FILLSTLMESH_SRCS})
+ADD_EXECUTABLE(avgmesh AverageMeshes.cxx)
+ADD_EXECUTABLE(identimg IdentifyImage.cxx)
 
-TARGET_LINK_LIBRARIES(mesh2img 
+LINK_LIBRARIES(
   BasicImaging
   ITKCommon
   ITKIO

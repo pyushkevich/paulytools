@@ -107,25 +107,35 @@ IF(BUILD_PDE)
 
   # Sources for the PDE executable
   SET(PDE_COMMON_SRCS 
+    Code/PDE/BasisFunctions2D.cxx
     Code/PDE/MedialPDESolver.cxx 
     Code/PDE/FourierSurface.cxx
     Code/PDE/ScriptInterface.cxx
+    Code/PDE/ScriptImaging.cxx
+    Code/PDE/ITKImageWrapper.cxx
+    Code/PDE/MedialPDERenderer.cxx
+    Code/PDE/MedialAtomGrid.cxx
+    Code/PDE/OptimizationTerms.cxx
+    Code/PDE/Registry.cxx
     Code/Danielsson.cpp
     Code/DrawFillInside.cpp
     Code/DrawTriangles.cpp
     Code/glengine.cpp
-    Code/imaging.cpp
-    Code/ImageCubeITK.cxx
-    Code/mspline.cpp
     Code/fracviewer.cpp)
 
   # Apply SWIG to the .i file
-  SWIG_WRAP_PYTHON_SHADOW(
-    ${CMREPS_SOURCE_DIR}/Code/PDE/medialpde.i
-    ${CMREPS_BINARY_DIR}/Code/PDE/ScriptInterface_wrap.cxx
-    ${CMREPS_BINARY_DIR}
-    medialpde)
+  SET(SWIG_SOURCE ${CMREPS_SOURCE_DIR}/Code/PDE/medialpde.i)
+  SET(SWIG_DEPENDS ${SWIG_SOURCE}  ${CMREPS_SOURCE_DIR}/Code/PDE/ScriptInterface.h)
+  SET(SWIG_TARGET ${CMREPS_BINARY_DIR}/Code/PDE/ScriptInterface_wrap.cxx)
 
+  ADD_CUSTOM_COMMAND(
+    SOURCE ${SWIG_SOURCE} 
+    COMMAND ${SWIG_PROGRAM}
+    ARGS -python -shadow -c++ -o ${SWIG_TARGET} -outdir ${CMREPS_BINARY_DIR} ${SWIG_SOURCE}
+    DEPENDS ${SWIG_DEPENDS} 
+    OUTPUT ${SWIG_TARGET}
+    COMMENT "Python wrappers with SWIG")
+  
   # Add python to the includes
   INCLUDE_DIRECTORIES(${PYTHON_INCLUDE_PATH})
 
@@ -134,7 +144,7 @@ IF(BUILD_PDE)
     ${CMREPS_BINARY_DIR}/Code/PDE/ScriptInterface_wrap.cxx)
 
   # Create the executable
-  ADD_EXECUTABLE(testpde ${PDE_COMMON_SRCS} Code/PDE/MedialPDETest.cxx)
+  ADD_EXECUTABLE(testpde ${PDE_COMMON_SRCS} Code/PDE/ScriptTest.cxx)
 
   # Create the shared library
   ADD_LIBRARY("_medialpdemodule" SHARED ${PDE_LIB_SRCS})
@@ -149,6 +159,7 @@ IF(BUILD_PDE)
 
   # Set the library set
   SET(PDE_LIBS
+    ${PAULY_CORE_LIBS}
     ${PARDISO_LIBRARY} 
     mkl_lapack mkl_def 
     ${INTEL_FORTRAN_LIB} 
@@ -159,11 +170,12 @@ IF(BUILD_PDE)
     ${GLUT_LIBRARY})
 
   # Create the executable
-  TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS})
+  # TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS})
   TARGET_LINK_LIBRARIES("_medialpdemodule" ${PDE_LIBS})
+  TARGET_LINK_LIBRARIES("testpde" ${PDE_LIBS})
   
   # Copy the script files
-  SET(SCRIPT_FILES example.py)
+  SET(SCRIPT_FILES example.py example2.py)
   FOREACH(FILE ${SCRIPT_FILES})  
  	CONFIGURE_FILE(
  		${CMREPS_SOURCE_DIR}/Code/PDE/Python/${FILE}

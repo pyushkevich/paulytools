@@ -24,6 +24,9 @@
 
 // Include files
 #include <optima.h>
+#include <iostream>
+
+using namespace std;
 
 // Begin namespace
 NAMESPACE_PAULY_START
@@ -134,6 +137,7 @@ public:
 	*/
 	void computeSigmaFactorForConfidence(double alpha) {
 		sigmaFactor = -1.0 / norminv((1.0 - pow(alpha,1.0 / ss.getMean().size())) / 2.0);
+    cout << "Setting sigma factor to " << sigmaFactor << endl;
 	}	 
 
 	// Set Nth solution while the algorithm is running

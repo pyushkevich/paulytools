@@ -219,7 +219,7 @@ private:
     // static int dlAxes;
 
     // Internal versions of the enums
-    enum IModes {INORM = 0, ITRAN, IEYE, IPRE, INUMMODES};
+    enum IModes {INORM = 0, ITRAN, IEYE, IPRE, IUNIT, INUMMODES};
     enum IEvents {IBUTTON = 0, IKEYS, IMOTION, IPASSIVE, ISPECIAL, IIDLE, INUMEVENTS};
 
     // List of renderers that are rendered in world coordinates
@@ -272,9 +272,10 @@ public:
 
     // Center of the world
     static SMLVec3f center;
+    static float scale;
 
     // An enumeration of display modes
-    enum Modes {NORM = 1, TRAN = 2, EYE = 4, PRE = 8};
+    enum Modes {NORM = 1, TRAN = 2, EYE = 4, PRE = 8, UNIT = 16};
     static Modes displayMode;
 
     // Enumeration of event listener types
