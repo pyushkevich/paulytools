@@ -100,16 +100,12 @@ public:
 
     if(m_Curves[m_FocusCurve].points.size())
       {
-      cout << "tracing back points" << endl;
-      cout << "distance to point is " << m_DistanceMapper->GetVertexDistance(iPoint) << endl;
-
       vtkIdType iLast = m_Curves[m_FocusCurve].points.back().i;
       vtkIdType iCurrent = iPoint;
       while(iCurrent != iLast)
         {
         lPoints.push_front(iCurrent);
         iCurrent = m_DistanceMapper->GetVertexPredecessor(iCurrent);
-        cout << iCurrent << endl;
         }
       }
     else

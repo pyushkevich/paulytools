@@ -6,9 +6,60 @@ VTKMeshShortestDistance
   // Store the input
   m_SourcePolys = mesh;
 
+  cout << "  input mesh has " << mesh->GetNumberOfPoints() << " points" << endl;
+  cout << "  input mesh has " << mesh->GetNumberOfCells() << " cells" << endl;
+
+  // Construct simple triangles
+  fltTriangle = vtkTriangleFilter::New();
+  fltTriangle->SetInput(m_SourcePolys);
+
+  cout << "   converting mesh to triangles " << endl;
+  fltTriangle->Update();
+
+  cout << "  this mesh has " << fltTriangle->GetOutput()->GetNumberOfPoints() << " points" << endl;
+  cout << "  this mesh has " << fltTriangle->GetOutput()->GetNumberOfCells() << " cells" << endl;
+
+  // Clean the data
+  fltCleaner = vtkCleanPolyData::New();
+  fltCleaner->SetInput(fltTriangle->GetOutput());
+  fltCleaner->SetTolerance(0);
+  fltCleaner->ConvertPolysToLinesOn();
+  
+  cout << "   cleaning up triangle mesh " << endl;
+  fltCleaner->Update();
+
+  // Go through and delete the cells that are of the wrong type
+  vtkPolyData *p = fltCleaner->GetOutput();
+  for(vtkIdType i = p->GetNumberOfCells();i > 0;i--)
+    {
+    if(p->GetCellType(i-1) != VTK_TRIANGLE)
+      p->DeleteCell(i-1);
+    }
+  p->BuildCells();
+      
+  cout << "  this mesh has " << p->GetNumberOfPoints() << " points" << endl;
+  cout << "  this mesh has " << p->GetNumberOfCells() << " cells" << endl;
+  
+  // Compute the loop scheme
+  //fltLoop = vtkLoopSubdivisionFilter::New();
+  //fltLoop->SetInput(p);
+  //fltLoop->SetNumberOfSubdivisions(1);
+
+  //cout << "   subdividing the triangle mesh " << endl;
+  //fltLoop->Update();
+  //p = fltLoop->GetOutput();
+  
+  //cout << "  this mesh has " << p->GetNumberOfPoints() << " points" << endl;
+  //cout << "  this mesh has " << p->GetNumberOfCells() << " cells" << endl;
+
   // Compute the edge map
-  fltEdge = vtkExtractEdges::New();
-  fltEdge->SetInput(m_SourcePolys);
+  fltEdge = vtkFeatureEdges::New();
+  fltEdge->BoundaryEdgesOff();
+  fltEdge->FeatureEdgesOff();
+  fltEdge->NonManifoldEdgesOff();
+  fltEdge->ManifoldEdgesOn();
+  fltEdge->ColoringOff();
+  fltEdge->SetInput(p);
 
   cout << "   extracting edges from the mesh" << endl;
   fltEdge->Update();
@@ -18,6 +69,8 @@ VTKMeshShortestDistance
   m_EdgePolys->BuildCells();
   unsigned int nEdges = m_EdgePolys->GetNumberOfLines();
   cout << "      number of edges (lines) : " << nEdges << endl;
+  cout << "      number of cells : " << m_EdgePolys->GetNumberOfCells() << endl;
+  cout << "      number if points : " << m_EdgePolys->GetNumberOfPoints() << endl;
 
   // Construct a locator
   fltLocator = vtkPointLocator::New();
@@ -26,7 +79,7 @@ VTKMeshShortestDistance
 
   // Construct the cell locator
   fltCellLocator = vtkCellLocator::New();
-  fltCellLocator->SetDataSet(m_EdgePolys);
+  fltCellLocator->SetDataSet(p);
   fltCellLocator->BuildLocator();
 
   // Create an edge list
@@ -47,7 +100,9 @@ VTKMeshShortestDistance
     // Compute the associated weight
     vnl_vector_fixed<double,3> p1(m_EdgePolys->GetPoint(m_Edges[i].first));
     vnl_vector_fixed<double,3> p2(m_EdgePolys->GetPoint(m_Edges[i].second));
-    m_EdgeWeights[i] = (int) (1000 * (p1-p2).two_norm());
+    m_EdgeWeights[i] = (int) (10000000 * (p1-p2).two_norm());
+    if(m_EdgeWeights[i] == 0)
+      cout << "Bad length at " << i << " equal to " << (p1-p2).two_norm() << endl;
     }
 
   // Declare the graph object
@@ -65,6 +120,8 @@ VTKMeshShortestDistance
   fltLocator->Delete();
   fltCellLocator->Delete();
   fltEdge->Delete();
+  fltTriangle->Delete();
+  fltCleaner->Delete();
 }
 
 

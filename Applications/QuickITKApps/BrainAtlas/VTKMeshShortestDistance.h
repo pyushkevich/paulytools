@@ -4,7 +4,10 @@
 #include <vtkCellLocator.h>
 #include <vtkPolyData.h>
 #include <vtkPointLocator.h>
-#include <vtkExtractEdges.h>
+#include <vtkFeatureEdges.h>
+#include <vtkTriangleFilter.h>
+#include <vtkCleanPolyData.h>
+#include <vtkLoopSubdivisionFilter.h>
 
 #include <vnl/vnl_vector_fixed.h>
 
@@ -83,9 +86,12 @@ private:
   vector<VertexDescriptor> m_Predecessor;
 
   // VTK filters
-  vtkExtractEdges *fltEdge;
+  vtkFeatureEdges *fltEdge;
+  vtkTriangleFilter *fltTriangle;
   vtkPointLocator *fltLocator;
   vtkCellLocator *fltCellLocator;
+  vtkCleanPolyData *fltCleaner;
+  vtkLoopSubdivisionFilter *fltLoop;
 
   // VTK edge poly-data
   vtkPolyData *m_EdgePolys;

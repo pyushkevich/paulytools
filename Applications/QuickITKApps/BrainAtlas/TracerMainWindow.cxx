@@ -99,6 +99,9 @@ TracerMainWindow
 
   glEnable(GL_LIGHT0);
   glEnable(GL_LIGHTING);
+
+  // glShadeModel(GL_FLAT);
+  // glPolygonMode(GL_FRONT_AND_BACK,GL_LINE);
 }
 
 void 
@@ -123,7 +126,7 @@ TracerMainWindow
     glLoadIdentity();
     // float zoom = m_Trackball.GetZoom();
     // float x = 1.0 / zoom;
-    glOrtho( -1 , 1, -1, 1, -1, 1 ); 
+    glOrtho( -1 , 1, -1, 1, -100, 100 ); 
 
     // Set up the model view matrix
     glMatrixMode(GL_MODELVIEW);
@@ -158,8 +161,13 @@ TracerMainWindow
     else glCallList(m_DisplayList);
 
     // Set the attributes for line drawing
-    glPushAttrib(GL_LIGHTING_BIT);
+    glPushAttrib(GL_LIGHTING_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT);
     glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
+    glEnable(GL_LINE_SMOOTH);
+    glLineWidth(2.5);
 
     // Display the existing curves
     for(unsigned int iCurve = 0; iCurve<m_Data->GetNumberOfCurves();iCurve++)
@@ -169,7 +177,7 @@ TracerMainWindow
       else glColor3d(0.5,0,0);
 
       // Draw the curve
-      glBegin(GL_POINTS);
+      glBegin(GL_LINE_STRIP);
       for(unsigned int iPoint = 0;
         iPoint < m_Data->GetNumberOfCurvePoints(iCurve);iPoint++)
         {
@@ -179,16 +187,35 @@ TracerMainWindow
       glEnd();
       }
 
-    // Display the current point
-    if(m_CurrentPoint != -1)
+    // Display the path to the current point
+    if(m_CurrentPoint != -1 && m_EditMode == TRACER)
       {
-      // Get the coordinates of the point
-      TracerData::Vec x = m_Data->GetPointCoordinate(m_CurrentPoint);
-
       glColor3d(1,1,0);
       glPointSize(4.0);
-      glBegin(GL_POINTS);
-      glVertex3d(x[0],x[1],x[2]);
+
+      list<vtkIdType> lPoints = m_Data->GetPathToPoint(m_CurrentPoint);
+      list<vtkIdType>::const_iterator it = lPoints.begin();
+
+      if(lPoints.size() > 1) 
+        {
+        glBegin(GL_LINE_STRIP);
+        TracerData::Vec x = m_Data->GetCurvePoint(
+          m_Data->GetCurrentCurve(),
+          m_Data->GetNumberOfCurvePoints(m_Data->GetCurrentCurve())-1);
+        glVertex3d(x[0],x[1],x[2]);
+        }
+      else 
+        {
+        glBegin(GL_POINTS);
+        }
+      
+      while(it != lPoints.end())
+        {
+        TracerData::Vec x = m_Data->GetPointCoordinate(*it);
+        glVertex3d(x[0],x[1],x[2]);
+        ++it;
+        }
+      
       glEnd();
       }
 
@@ -256,11 +283,11 @@ TracerMainWindow
   TracerData::Vec xStart, xEnd;
 
   // Perform the unprojection
-  gluUnProject( (GLdouble) x, (GLdouble) y, 1.0,
+  gluUnProject( (GLdouble) x, (GLdouble) y, -1.0,
     mvmatrix, projmatrix, viewport,
     &(xStart[0]), &(xStart[1]), &(xStart[2]) );
 
-  gluUnProject( (GLdouble) x, (GLdouble) y, -1.0,
+  gluUnProject( (GLdouble) x, (GLdouble) y, 1.0,
     mvmatrix, projmatrix, viewport,
     &(xEnd[0]), &(xEnd[1]), &(xEnd[2]) );
 

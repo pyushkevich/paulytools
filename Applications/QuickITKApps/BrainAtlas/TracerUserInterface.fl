@@ -8,7 +8,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
   } {
     Fl_Window m_WinMain {
       label {GeeLab Brain Tracer} open
-      xywh {264 260 925 665} type Double
+      xywh {264 260 925 665} type Double resizable
       code0 {\#include "TracerUserInterfaceBase.h"}
       code1 {\#include "TracerMainWindow.h"} visible
     } {
@@ -17,7 +17,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
       } {
         Fl_Box m_WinTrace {
           label {Curve Drawing Area}
-          xywh {10 35 635 615} box FLAT_BOX color 0 labelcolor 7
+          xywh {10 35 635 615} box FLAT_BOX color 0 labelcolor 7 resizable
           class TracerMainWindow
         }
       }
@@ -72,7 +72,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
         } {
           Fl_Choice m_ChcCurve {
             label {Current curve:}
-            callback {OnSelectCurve();} open selected
+            callback {OnSelectCurve();} open
             xywh {675 415 225 25} down_box BORDER_BOX labelsize 12 align 5 textsize 12 deactivate
           } {}
           Fl_Button m_BtnStartCurve {
@@ -91,6 +91,9 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
             xywh {760 445 65 25} box PLASTIC_UP_BOX labelfont 1 labelsize 12 deactivate
           }
         }
+        Fl_Group {} {open selected
+          xywh {665 615 245 30} resizable
+        } {}
       }
     }
   }
