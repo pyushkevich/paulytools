@@ -42,3 +42,29 @@ TracerData
     delete m_DistanceMapper;
   m_DistanceMapper = new VTKMeshShortestDistance(m_Mesh);
 }
+
+void
+TracerData
+::SaveCurves(const char *file)
+{
+  FILE *fout = fopen(file,"wt");
+  
+  fprintf(fout,"# Mesh surface curve annotation file\n");
+  fprintf(fout,"# Commands: \n");
+  fprintf(fout,"# NUMCURVES number_of_curves\n");
+  fprintf(fout,"# CURVE number_of_points \"name\" \n");
+  fprintf(fout,"# POINT vertex_id x y z\n");
+  
+  fprintf(fout,"NUMCURVES %d\n",m_Curves.size()); 
+  for(unsigned int i=0;i<m_Curves.size();i++)
+    {
+    fprintf(fout,"CURVE %d \"%s\"\n",m_Curves[i].points.size(),m_Curves[i].name.c_str());
+    for(unsigned int j=0;j<m_Curves[i].points.size();j++)
+      {
+      fprintf(fout,"POINT %d %lg %lg %lg\n",
+        m_Curves[i].points[j].i,m_Curves[i].points[j].x[0],
+        m_Curves[i].points[j].x[1],m_Curves[i].points[j].x[2]);
+      }
+    }
+  fclose(fout);
+}

@@ -298,6 +298,10 @@ TracerMainWindow
     // Point has been found
     m_CurrentPoint = iPoint;
     }
+  else
+    {
+    m_CurrentPoint = -1;
+    }
 }
 
 int

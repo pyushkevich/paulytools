@@ -33,7 +33,7 @@ using namespace std;
 // Begin namespace
 NAMESPACE_PAULY_START
 
-const double PI = acos(-1);
+const double PI = acos(-1.0);
 
 const double randFactor = 1.0 / (1.0 + RAND_MAX);
 

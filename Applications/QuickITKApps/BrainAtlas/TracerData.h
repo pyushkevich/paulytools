@@ -33,6 +33,9 @@ public:
 
   // Load the mesh data from disk
   void LoadInputMesh(const char *file);
+  
+  // Save the curves to disk
+  void SaveCurves(const char *file);
 
   // Get the 'source' mesh
   vtkPolyData *GetSourceMesh() 
@@ -56,6 +59,16 @@ public:
     m_Curves.push_back(cnew);
     m_FocusCurve = m_Curves.size() - 1;
     }
+    
+  // Set the current curve
+  void SetCurrentCurve(unsigned int iCurve)
+    {
+    assert(iCurve < m_Curves.size());
+    m_FocusCurve = iCurve;
+    
+    // Compute the shortest distance to the last point in the curve
+    m_DistanceMapper->ComputeDistances(m_Curves[m_FocusCurve].points.back().i);
+    }
 
   unsigned int GetNumberOfCurves() 
     {
@@ -67,6 +80,22 @@ public:
     return m_Curves[iCurve].name.c_str();
     }
 
+  void SetCurveName(unsigned int iCurve, const char *name)
+    {
+    assert(iCurve <= m_Curves.size());
+    m_Curves[iCurve].name = name;
+    }
+    
+  void DeleteCurrentCurve() 
+    {
+    // Erase the current curve
+    m_Curves.erase(m_Curves.begin() + m_FocusCurve);
+    
+    // Update the curve index
+    m_FocusCurve = (m_Curves.size() > 0) ? 
+      (m_FocusCurve + 1) % m_Curves.size() : -1;
+    }
+   
   int GetCurrentCurve()
     {
     return m_FocusCurve;

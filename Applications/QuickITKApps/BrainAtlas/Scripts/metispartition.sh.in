@@ -1,0 +1,40 @@
+# -----------------------------------------------------------------
+# Binary Image Partitioning using METIS
+# -----------------------------------------------------------------
+
+export BINDIR=@PAULY_BINARY_DIR@/Applications/QuickITKApps/BrainAtlas@BINARY_SUBDIR@
+export INPDIR=@BATLAS_DATA_ROOT@/atlas02/input
+export MESHDIR=@BATLAS_DATA_ROOT@/atlas02/mesh
+export GRAPHDIR=@BATLAS_DATA_ROOT@/atlas02/metis
+export METIS=@METIS_BINARY_PATH@
+
+export IMAGE=grey_and_white
+
+# Convert the input binary image to a METIS graph
+$BINDIR/binary2metis \
+  $INPDIR/$IMAGE.img \ 
+  $GRAPHDIR/$IMAGE.metis_mesh.txt \ 
+  $GRAPHDIR/$IMAGE.metis_map.txt
+
+# Partition the image using metis tools into given sizes
+for i in 2 4 10 60
+do
+  echo "Partitioning image into " $i " parts..."
+
+  # Apply metis 
+  $METIS/pmetis $GRAPHDIR/$IMAGE.metis_mesh.txt $i
+
+  # Create an image from output
+  $BINDIR/metis2image \
+    $INPDIR/$IMAGE.img \ 
+    $GRAPHDIR/$IMAGE.metis_mesh.txt."$i" \ 
+    $GRAPHDIR/$IMAGE.metis_map.txt \
+    $GRAPHDIR/$IMAGE.metis."$i".img
+
+  # Remove temporary files
+  rm -rf $GRAPHDIR/$IMAGE.metis_mesh.txt."$i"
+
+done
+
+# Remove the temporary files
+rm -rf $GRAPHDIR/$IMAGE.metis_mesh.txt $GRAPHDIR/$IMAGE.metis_map.txt

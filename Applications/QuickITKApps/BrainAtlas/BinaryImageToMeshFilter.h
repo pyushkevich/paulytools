@@ -100,24 +100,23 @@ public:
 
     cout << "        mesh has " << mesh->GetNumberOfPoints() << " points." << endl;
     cout << "        mesh has " << mesh->GetNumberOfCells() << " cells. " << endl;
-    cout << "        mesh has " << cellHist[VTK_EMPTY_CELL] << "  " << endl;
-    cout << "        mesh has " << cellHist[VTK_EMPTY_CELL] << " vtk_empty_cell" << endl;
-    cout << "        mesh has " << cellHist[VTK_VERTEX] << "vtk_vertex" << endl;      
-    cout << "        mesh has " << cellHist[VTK_POLY_VERTEX] << "vtk_poly_vertex" << endl;      
-    cout << "        mesh has " << cellHist[VTK_LINE] << "vtk_line" << endl;      
-    cout << "        mesh has " << cellHist[VTK_POLY_LINE] << "vtk_poly_line" << endl;      
-    cout << "        mesh has " << cellHist[VTK_TRIANGLE] << "vtk_triangle" << endl;      
-    cout << "        mesh has " << cellHist[VTK_TRIANGLE_STRIP] << "vtk_triangle_strip" << endl;      
-    cout << "        mesh has " << cellHist[VTK_POLYGON] << "vtk_polygon" << endl;      
-    cout << "        mesh has " << cellHist[VTK_PIXEL] << "vtk_pixel" << endl;      
-    cout << "        mesh has " << cellHist[VTK_QUAD] << "vtk_quad" << endl;      
-    cout << "        mesh has " << cellHist[VTK_TETRA] << "vtk_tetra" << endl;      
-    cout << "        mesh has " << cellHist[VTK_VOXEL] << "vtk_voxel" << endl;      
-    cout << "        mesh has " << cellHist[VTK_HEXAHEDRON] << "vtk_hexahedron" << endl;      
-    cout << "        mesh has " << cellHist[VTK_WEDGE] << "vtk_wedge" << endl;      
-    cout << "        mesh has " << cellHist[VTK_PYRAMID] << "vtk_pyramid" << endl;      
-    cout << "        mesh has " << cellHist[VTK_PARAMETRIC_CURVE] << "vtk_parametric_curve" << endl;      
-    cout << "        mesh has " << cellHist[VTK_PARAMETRIC_SURFACE] << "vtk_parametric_surface" << endl;      
+    //cout << "        mesh has " << cellHist[VTK_EMPTY_CELL] << " vtk_empty_cell" << endl;
+    cout << "        mesh has " << cellHist[VTK_VERTEX] << " vtk_vertex" << endl;      
+    //cout << "        mesh has " << cellHist[VTK_POLY_VERTEX] << "vtk_poly_vertex" << endl;      
+    cout << "        mesh has " << cellHist[VTK_LINE] << " vtk_line" << endl;      
+    cout << "        mesh has " << cellHist[VTK_POLY_LINE] << " vtk_poly_line" << endl;      
+    cout << "        mesh has " << cellHist[VTK_TRIANGLE] << " vtk_triangle" << endl;      
+    cout << "        mesh has " << cellHist[VTK_TRIANGLE_STRIP] << " vtk_triangle_strip" << endl;      
+    //cout << "        mesh has " << cellHist[VTK_POLYGON] << "vtk_polygon" << endl;      
+    //cout << "        mesh has " << cellHist[VTK_PIXEL] << "vtk_pixel" << endl;      
+    //cout << "        mesh has " << cellHist[VTK_QUAD] << "vtk_quad" << endl;      
+    //cout << "        mesh has " << cellHist[VTK_TETRA] << "vtk_tetra" << endl;      
+    //cout << "        mesh has " << cellHist[VTK_VOXEL] << "vtk_voxel" << endl;      
+    //cout << "        mesh has " << cellHist[VTK_HEXAHEDRON] << "vtk_hexahedron" << endl;      
+    //cout << "        mesh has " << cellHist[VTK_WEDGE] << "vtk_wedge" << endl;      
+    //cout << "        mesh has " << cellHist[VTK_PYRAMID] << "vtk_pyramid" << endl;      
+    //cout << "        mesh has " << cellHist[VTK_PARAMETRIC_CURVE] << "vtk_parametric_curve" << endl;      
+    //cout << "        mesh has " << cellHist[VTK_PARAMETRIC_SURFACE] << "vtk_parametric_surface" << endl;      
     }
 
 protected:
@@ -215,13 +214,13 @@ protected:
     fltMarching->Update();
 
     // cout << "      mesh has " << fltMarching->GetOutput()->GetNumberOfCells() << " cells." << endl;
-    PrintMeshStatistics( fltMarching->GetOutput() );
+    // PrintMeshStatistics( fltMarching->GetOutput() );
 
     cout << "   extracting the largest component" << endl;
     fltConnect->Update();
 
     cout << "      mesh has " << fltConnect->GetOutput()->GetNumberOfCells() << " cells." << endl;
-    PrintMeshStatistics( fltConnect->GetOutput() );
+    // PrintMeshStatistics( fltConnect->GetOutput() );
 
     cout << "   converting mesh to triangle strips" << endl;
     fltStripper->Update();

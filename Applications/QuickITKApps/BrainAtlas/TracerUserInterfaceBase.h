@@ -5,6 +5,8 @@ class TracerUserInterfaceBase
 {
 public:
   virtual void OnMenuLoadMesh() = 0;
+  virtual void OnMenuLoadCurves() = 0;
+  virtual void OnMenuSaveCurves() = 0;
   virtual void OnMenuQuit() = 0;
   virtual void OnButtonModeTrackball() = 0;
   virtual void OnButtonModeTracer() = 0;

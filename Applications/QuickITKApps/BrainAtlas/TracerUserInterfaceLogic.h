@@ -8,6 +8,8 @@ class TracerUserInterfaceLogic : public TracerUserInterface
 {
 public:
   void OnMenuLoadMesh();
+  void OnMenuLoadCurves();
+  void OnMenuSaveCurves();
   void OnMenuQuit();
   void OnButtonModeTrackball();
   void OnButtonModeTracer();
@@ -34,6 +36,8 @@ private:
   TracerData *m_Data;
 
   void RebuildCurveList();
+  void DeactivateCurveEditControls();
+  void ActivateCurveEditControls();
 };
 
 #endif

@@ -33,7 +33,15 @@ public:
     {
     m_Data = data;
     m_DisplayListDirty = true;
+    m_CurrentPoint = -1;
     }
+    
+  // Update the currently displayed curve
+  void OnCurrentCurveChange()
+    {
+    m_CurrentPoint = -1;
+    redraw();
+    } 
 
   // Request an update of the display lists
   void OnMeshUpdate() 

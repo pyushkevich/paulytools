@@ -1,5 +1,5 @@
 # data file for the Fltk User Interface Designer (fluid)
-version 1.0104 
+version 1.0102 
 header_name {.h} 
 code_name {.cxx}
 class TracerUserInterface {open : {public TracerUserInterfaceBase}
@@ -8,7 +8,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
   } {
     Fl_Window m_WinMain {
       label {GeeLab Brain Tracer} open
-      xywh {264 260 925 665} type Double resizable
+      xywh {614 287 925 665} type Double resizable
       code0 {\#include "TracerUserInterfaceBase.h"}
       code1 {\#include "TracerMainWindow.h"} visible
     } {
@@ -40,6 +40,16 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
             label {Load Mesh...}
             callback {OnMenuLoadMesh()}
             xywh {0 0 100 20}
+          }
+          menuitem {} {
+            label {Load Curves...}
+            callback {OnMenuLoadCurves()} selected
+            xywh {10 10 100 20}
+          }
+          menuitem m_MenuSaveCurves {
+            label {Save Curves...}
+            callback {this->OnMenuSaveCurves();}
+            xywh {0 0 100 20} deactivate
           }
           menuitem {} {
             label Quit
@@ -91,7 +101,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
             xywh {760 445 65 25} box PLASTIC_UP_BOX labelfont 1 labelsize 12 deactivate
           }
         }
-        Fl_Group {} {open selected
+        Fl_Group {} {open
           xywh {665 615 245 30} resizable
         } {}
       }

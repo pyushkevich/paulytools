@@ -783,7 +783,7 @@ public:
       m_Edges[i].second = xPoints[1];
 
       // Compute the associated weight
-      vnl_vector_fixed<double,3> p1(m_EdgePolys->GetPoint(m_Edges[i].first));
+	  vnl_vector_fixed<double,3> p1(m_EdgePolys->GetPoint(m_Edges[i].first));
       vnl_vector_fixed<double,3> p2(m_EdgePolys->GetPoint(m_Edges[i].second));
       m_EdgeWeights[i] = (int) (1000 * (p1-p2).two_norm());
       }

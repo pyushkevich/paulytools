@@ -97,4 +97,10 @@ SET(PAULY_CORE_LIBS
 # Say which directories to include in this project
 INCLUDE_DIRECTORIES(${PAULY_INCLUDE_DIRS})
                                                                                 
+# This is necessary for scripting
+IF(WIN32)
+  SET(BINARY_SUBDIR "/Release")
+ELSE(WIN32)
+  SET(BINARY_SUBDIR "")
+ENDIF(WIN32)
 
