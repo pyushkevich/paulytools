@@ -1,3 +1,7 @@
+#ifdef _MSC_VER
+#pragma warning(disable:4274)
+#endif
+
 #include "matrix.h"
 #include "FeatureSelection.h"
 #include "SoPlexWrapper.h"
@@ -32,6 +36,7 @@ int handle = 0;
 
 void readMMAMatrix(Mat &M) {
 	long nRows,nCols;
+  unsigned int i,j;
 	double **m;
 
 	// Load the data into matrices
@@ -42,7 +47,7 @@ void readMMAMatrix(Mat &M) {
 	}
 
 	// Set the matrix values
-	M.setSize(nRows,nCols);
+	M.set_size(nRows,nCols);
 	for(int r=0;r<nRows;r++)
 		for(int c=0;c<nCols;c++)
 			M(r,c) = m[r][c];
@@ -60,7 +65,7 @@ void readMMAVector(Vec &v) {
 
 	// Read the vector
 	MLCheckFunction(stdlink,"List",&n);
-	v.setSize(n);
+	v.set_size(n);
 
 	// Set the matrix values
 	for(int r=0;r<n;r++) {
@@ -206,7 +211,7 @@ void lpRunFeatureSelection(int handle, double lambda, double eta, int nRuns) {
 	MLPutFunction(stdlink,"List",4);
 	MLPutReal(stdlink,wsr.obj);
 	MLPutReal(stdlink,wsr.gamma);
-	MLPutRealList(stdlink,wsr.v.getDataArray(),wsr.v.size());
+	MLPutRealList(stdlink,wsr.v.data_block(),wsr.v.size());
 	MLPutIntegerList(stdlink,idx,z.size());
 
 	delete idx;
@@ -237,7 +242,7 @@ void lpSeparation(void) {
 			MLPutFunction(stdlink,"List",3);
 			MLPutReal(stdlink,sp.getObjectiveValue());
 			MLPutReal(stdlink,g);
-			MLPutRealList(stdlink,w.getDataArray(),w.rows());
+			MLPutRealList(stdlink,w.data_block(),w.size());
 			return;
 		}
 	} catch(...) {

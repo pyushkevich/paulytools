@@ -2,6 +2,7 @@ INCLUDE_DIRECTORIES(
   ${PAULY_SOURCE_DIR}/Applications/QuickITKApps/BrainAtlas
 )
 
+OPTION(USE_ITK_FFTW "Set this option if ITK has FFTW support" OFF)
 
 # Tracer application GUI
 SET(TRACER_SRCS
@@ -29,9 +30,20 @@ SET(TRACER_SRCS
 ADD_EXECUTABLE("binary2mesh" BinaryToMesh.cxx)
 ADD_EXECUTABLE("viewmesh" MeshViewer.cxx)
 ADD_EXECUTABLE("binary2metis" ImageToMetis.cxx)
-ADD_EXECUTABLE("metis2mask" MetisToImage.cxx)
 ADD_EXECUTABLE("maskimage" MaskImage.cxx)
 ADD_EXECUTABLE(braintracer ${TRACER_SRCS})
+
+# Use FFTW from ITK if requested
+IF(USE_ITK_FFTW)
+  SET(USE_FFTW 1)
+  INCLUDE(${ITK_SOURCE_DIR}/CMake/FindFFTW.cmake)
+  
+  IF(FFTW_FOUND)
+	INCLUDE_DIRECTORIES(${FFTW_INCLUDE_PATH})
+	ADD_EXECUTABLE(maskair MaskAir.cxx)
+	TARGET_LINK_LIBRARIES(maskair ${FFTW_LIB})
+  ENDIF(FFTW_FOUND)
+ENDIF(USE_ITK_FFTW)
 
 LINK_LIBRARIES(
   ITKCommon 
@@ -55,41 +67,21 @@ SET(TRACER_FLUIDS TracerUserInterface.fl)
 
 FLTK_WRAP_UI(braintracer ${TRACER_FLUIDS})
 
-# Add the option to use Metis
-OPTION(USE_METIS "Use METIS graph partitioning library" OFF)
-IF(USE_METIS)
-  FIND_PATH(METIS_ROOT_DIR "Lib/metis.h")
-  IF(METIS_ROOT_DIR)
-    FIND_LIBRARY(METIS_LIBRARY "metis" ${METIS_ROOT_DIR} ${METIS_ROOT_DIR}/Release ${METIS_ROOT_DIR}/Debug)
-    FIND_PATH(METIS_INCLUDE_DIR "metis.h" ${METIS_ROOT_DIR}/Lib)
-
-    INCLUDE_DIRECTORIES(${METIS_INCLUDE_DIR})
-    LINK_LIBRARIES(${METIS_LIBRARY})
-  ENDIF(METIS_ROOT_DIR)
-ENDIF(USE_METIS)
-
-# Add the option to use the OpenMesh Library
-OPTION(USE_OPENMESH "Use OpenMesh library" OFF)
+# Add the option to use OpenMesh
+OPTION(USE_OPENMESH "Use OpenMesh meshing library" OFF)
 IF(USE_OPENMESH)
-  FIND_PATH(OPENMESH_ROOT_DIR "OpenMesh/Core/Mesh/BaseMesh.hh")
-  IF(OPENMESH_ROOT_DIR)
-	FIND_LIBRARY(OPENMESH_CORE_LIBRARY "Core" 
-      ${OPENMESH_ROOT_DIR}/OpenMesh/Core 
-	  ${OPENMESH_ROOT_DIR}/OpenMesh/Win/msvc7/Core/Release)
-	  
-	SET(OPENMESH_INCLUDE_DIR ${OPENMESH_ROOT_DIR})
-	INCLUDE_DIRECTORIES(${OPENMESH_INCLUDE_DIR})
-	LINK_LIBRARIES(${OPENMESH_CORE_LIBRARY})
-	
-	ADD_DEFINITIONS(-D_USE_MATH_DEFINES)
-  ENDIF(OPENMESH_ROOT_DIR)
-  ADD_EXECUTABLE("sulcusfilter" FilterSulci.cxx implicit.c)
+  INCLUDE(${PAULY_CMAKE_DIR}/FindOpenMesh.cmake)
 ENDIF(USE_OPENMESH)
 
+# Add the openmesh-dependent code
+IF(OPENMESH_FOUND)
+  INCLUDE_DIRECTORIES(${OPENMESH_INCLUDE_DIR})
+  ADD_EXECUTABLE(sulcusfilter FilterSulci.cxx implicit.c)
+  TARGET_LINK_LIBRARIES(sulcusfilter ${OPENMESH_LIBRARY})
+ENDIF(OPENMESH_FOUND)
 
 # Configure scripts
 FIND_PATH(BATLAS_DATA_ROOT "atlas02" "~/data2004" "c:/data2004")
-FIND_PATH(METIS_BINARY_PATH "libmetis.a")
 
 SET(BATLAS_SCRIPTS
   makemesh.sh

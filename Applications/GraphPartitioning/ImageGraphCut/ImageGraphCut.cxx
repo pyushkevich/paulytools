@@ -1,8 +1,7 @@
-/**
- * Read metis output, create an image
- */
-#include "ReadWriteImage.h"
 #include <iostream>
+#include "METISTools.h"
+#include "itkImageFileReader.h"
+#include "itkImageFileWriter.h"
 
 using namespace std;
 using namespace itk;
@@ -35,7 +34,7 @@ int usage()
   "\n   value. For the latter, use the notation 'U n1 n2' for the uniform dist."
   "\n   and 'N n1 n2' for the normal dist. with mean n1 and s.d. n2. The order in"
   "\n   which the rules are specified matters, as the later rules replace the"
-  "\n   earlier ones."
+  "\n   earlier ones.";
   
   cout << usage << endl;
   return -1;
@@ -46,8 +45,8 @@ int usage()
  * *************************************************************************** */
 typedef itk::Image< short, 3 > ImageType;
 typedef ImageToGraphFilter< ImageType > GraphFilter;
-typedef GraphFilter::WeightFunctor BaseWeightFunctor;
-typedef vnl_vector<double> Vec;
+typedef GraphFilter::WeightFunctorType BaseWeightFunctor;
+typedef vnl_vector<float> Vec;
 
 /* ***************************************************************************
  * WEIGHT TABLE CODE
@@ -123,7 +122,8 @@ Vec OptimizeMETISPartition(GraphFilter *fltGraph, const Vec &xWeights)
 
   // Get the starting solution
   MetisPartitionProblem::ParametersType x( xWeights.size() - 1 );
-  x.set(xWeights.data_block());
+  for(unsigned int j = 0; j < x.size(); j++)
+    x[j] = xWeights[j];
   
   typedef OnePlusOneEvolutionaryOptimizer Optimizer;
   Optimizer::Pointer opt = Optimizer::New();
@@ -143,7 +143,7 @@ Vec OptimizeMETISPartition(GraphFilter *fltGraph, const Vec &xWeights)
   for(unsigned int i = 0; i < xWeights.size() - 1; i++)
     {
     xResult[i] = x[i];
-    xResult[xWeights.size() - 1] -= x[i]
+    xResult[xWeights.size() - 1] -= x[i];
     }
   
   return xResult;
@@ -158,7 +158,7 @@ int main(int argc, char *argv[])
   // Variables to hold command line arguments
   string fnInput(argv[argc-3]), fnOutput(argv[argc-2]);
   int nParts = atoi(argv[argc-1]);
-  vnl_vector<double> xWeights(nParts,1.0 / nParts);
+  vnl_vector<float> xWeights(nParts,1.0 / nParts);
   int iPlaneDim = -1, iPlaneSlice = -1, iPlaneStrength = 10;
   bool flagOptimize = false;
   
@@ -216,9 +216,11 @@ int main(int argc, char *argv[])
   // Read the input image image
   cout << "reading input image" << endl;
 
-  typedef itk::Image<short,3> ImageType;
-  ImageType::Pointer img = ImageType::New();
-  ReadImage(img,fnInput.c_str());
+  typedef ImageFileReader<ImageType> ReaderType;
+  ReaderType::Pointer fltReader = ReaderType::New();
+  fltReader->SetFileName(fnInput.c_str());
+  fltReader->Update();
+  ImageType::Pointer img = fltReader->GetOutput();
 
   cout << "   image has dimensions " << img->GetBufferedRegion().GetSize() 
     << ", nPixels = " << img->GetBufferedRegion().GetNumberOfPixels() << endl;
@@ -230,7 +232,7 @@ int main(int argc, char *argv[])
   MyWeightFunctor fnWeight;
   
   // Create the graph filter
-  typedef MaskImageToGraphFilter<ImageType,idxtype> GraphFilter;
+  typedef ImageToGraphFilter<ImageType,idxtype> GraphFilter;
   GraphFilter::Pointer fltGraph = GraphFilter::New();
   fltGraph->SetInput(img);
   fltGraph->SetWeightFunctor(&fnWeight);
@@ -246,7 +248,7 @@ int main(int argc, char *argv[])
   // Run METIS once, using the specified weights
   cout << "Running METIS ... " << flush; 
   int *iPartition = new int[fltGraph->GetNumberOfVertices()];
-  int xCut = RunMETISPartition(
+  int xCut = RunMETISPartition<ImageType>(
     fltGraph, xWeights.size(), xWeights.data_block(), iPartition );
   cout << "done. Cut value = " << xCut << endl;
 
@@ -257,15 +259,24 @@ int main(int argc, char *argv[])
   imgOut->FillBuffer(0);
     
   // Apply partition to output image
-  for(unsigned int iVertex = 0; iVertex < nVertices; iVertex++)
+  for(unsigned int iVertex = 0; iVertex < fltGraph->GetNumberOfVertices(); iVertex++)
     {
     GraphFilter::IndexType idx = fltGraph->GetVertexImageIndex(iVertex);
-    imgOut->SetPixel(idx,xPartition[iVertex] + 1);
+    imgOut->SetPixel(idx, iPartition[iVertex] + 1);
     }
+
+  // Delete the partition
+  delete iPartition;
     
   // Write the image
   cout << "writing output image" << endl;
-  WriteImage(imgOut,fnOutput.c_str());
+  
+  typedef ImageFileWriter<ImageType> WriterType;
+  WriterType::Pointer fltWriter = WriterType::New();
+  fltWriter->SetInput(imgOut);
+  fltWriter->SetFileName(fnOutput.c_str());
+  fltWriter->Update();
 
+  // Done!
   return 0;
 }
