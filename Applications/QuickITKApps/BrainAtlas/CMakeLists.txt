@@ -1,5 +1,7 @@
 ADD_EXECUTABLE("binary2mesh" BinaryToMesh.cxx)
 ADD_EXECUTABLE("viewmesh" MeshViewer.cxx)
+ADD_EXECUTABLE("binary2metis" ImageToMetis.cxx)
+ADD_EXECUTABLE("metis2mask" MetisToImage.cxx)
 
 LINK_LIBRARIES(ITKCommon ITKBasicFilters ITKIO ${PAULY_CORE_LIBS}
   vtkCommon 
