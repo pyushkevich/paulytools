@@ -1,6 +1,7 @@
 #ifndef __VTKMeshShortestDistance_h_
 #define __VTKMeshShortestDistance_h_
 
+#include <vtkCellLocator.h>
 #include <vtkPolyData.h>
 #include <vtkPointLocator.h>
 #include <vtkExtractEdges.h>
@@ -50,6 +51,11 @@ public:
     fltLocator->SetDataSet(m_EdgePolys);
     fltLocator->BuildLocator();
 
+    // Construct the cell locator
+    fltCellLocator = vtkCellLocator::New();
+    fltCellLocator->SetDataSet(m_EdgePolys);
+    fltCellLocator->BuildLocator();
+
     // Create an edge list
     m_Edges.resize(nEdges);
     m_EdgeWeights.resize(nEdges);
@@ -81,6 +87,7 @@ public:
     {
     delete m_Graph;
     fltLocator->Delete();
+    fltCellLocator->Delete();
     fltEdge->Delete();
     }
 
@@ -119,6 +126,22 @@ public:
     {
     return m_EdgePolys;
     }
+  
+  /** Given a ray, find a point closest to that ray */
+  vtkIdType PickPoint(Vec xStart, Vec xEnd)
+    {
+    Vec ptLine, pCoords;
+    double t; 
+    vtkIdType subId;
+    
+    // Compute the intersection with the line
+    fltCellLocator->IntersectWithLine(
+      xStart.data_block(),xEnd.data_block(),
+      0.001, t, ptLine.data_block(), pCoords.data_block(), subId);
+
+    // Find the vertex closest to the intersection
+    return fltLocator->FindClosestPoint(ptLine.data_block());
+    }
 
 private:
 
@@ -142,6 +165,7 @@ private:
   // VTK filters
   vtkExtractEdges *fltEdge;
   vtkPointLocator *fltLocator;
+  vtkCellLocator *fltCellLocator;
 
   // VTK edge poly-data
   vtkPolyData *m_EdgePolys;

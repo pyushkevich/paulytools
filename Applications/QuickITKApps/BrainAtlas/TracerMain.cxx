@@ -21,6 +21,12 @@ int main(int argc, char *argv[])
 
   // Create the tracer data
   TracerData *data = new TracerData();
+  
+  // If the mesh specified as parameter, load it
+  if(argc > 1) 
+    {
+    data->LoadInputMesh(argv[1]);
+    }
 
   // Assign the data to the UI
   ui->SetTracerData(data);

@@ -8,6 +8,10 @@
 class TracerMainWindow : public Fl_Gl_Window
 {
 public:
+  // Modes and button information
+  enum EditMode { TRACKBALL, TRACER };
+  enum TrackballMode { NONE, ROTATE, ZOOM, PAN };
+
   // Constructor
   TracerMainWindow(int x, int y, int w, int h, const char *label) 
     : Fl_Gl_Window(x,y,w,h,label) 
@@ -15,6 +19,10 @@ public:
     m_Data = NULL;
     m_DisplayListDirty = false;
     m_DisplayList = -1;
+    m_EditMode = TRACKBALL;
+    m_TrackballMode = NONE;
+    m_GLStateDirty = true;
+    m_CurrentPoint = -1;
     } 
 
   // Destructor
@@ -34,6 +42,13 @@ public:
     if(shown()) redraw();
     }
 
+  // Set the tracing/tracking mode
+  void SetMode(EditMode mode) 
+    {
+    m_EditMode = mode;
+    redraw();
+    }
+
   // Draw method
   void draw();
 
@@ -51,11 +66,29 @@ private:
   // Whether the display lists requires recomputation
   bool m_DisplayListDirty;
 
+  // Whether GL state needs reinitialization
+  bool m_GLStateDirty;
+
   // Pointer to the tracer data
   TracerData *m_Data;
 
   // 3D trackball
   Trackball m_Trackball;
+
+  // Mode states
+  EditMode m_EditMode;
+  TrackballMode m_TrackballMode;
+
+  // Point under the cursor
+  vtkIdType m_CurrentPoint;
+
+  // Internal GL init method
+  void InitializeGL();
+  void SetUpModelMatrix();
+
+  // Perform ray intersection to find point under cursor
+  vtkIdType FindPointUnderCursor();
+
 };
 
 

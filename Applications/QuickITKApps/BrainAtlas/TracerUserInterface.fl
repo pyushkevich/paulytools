@@ -8,7 +8,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
   } {
     Fl_Window m_WinMain {
       label {GeeLab Brain Tracer} open
-      xywh {178 282 925 665} type Double
+      xywh {179 303 925 665} type Double
       code0 {\#include "TracerUserInterfaceBase.h"}
       code1 {\#include "TracerMainWindow.h"} visible
     } {
@@ -16,7 +16,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
         xywh {5 30 645 625} box PLASTIC_DOWN_FRAME
       } {
         Fl_Box m_WinTrace {
-          label {Curve Drawing Area} selected
+          label {Curve Drawing Area}
           xywh {10 35 635 615} box FLAT_BOX color 0 labelcolor 7
           class TracerMainWindow
         }
@@ -48,9 +48,45 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           }
         }
       }
-      Fl_Group {} {open
+      Fl_Group {} {open selected
         xywh {655 290 265 365} box PLASTIC_UP_BOX
-      } {}
+      } {
+        Fl_Group {} {
+          label {Interaction Mode:} open
+          xywh {665 320 245 45} box PLASTIC_DOWN_FRAME labelsize 12 align 5
+        } {
+          Fl_Light_Button m_BtnModeTrackball {
+            label trackball
+            callback {OnButtonModeTrackball();}
+            xywh {675 330 75 25} box PLASTIC_UP_BOX value 1 labelfont 1 labelsize 12
+          }
+          Fl_Light_Button m_BtnModeTracer {
+            label tracer
+            callback {OnButtonModeTracer();}
+            xywh {755 330 75 25} box PLASTIC_UP_BOX labelfont 1 labelsize 12
+          }
+        }
+        Fl_Group {} {
+          label {Curve Editing} open
+          xywh {665 390 245 220} box PLASTIC_DOWN_FRAME labelsize 12 align 5
+        } {
+          Fl_Choice m_ChcCurve {
+            label {Current curve:}
+            callback {OnSelectCurve();} open
+            xywh {675 415 225 25} down_box BORDER_BOX labelsize 12 align 5 textsize 12
+          } {}
+          Fl_Button m_BtnStartCurve {
+            label {start new curve}
+            callback {OnButtonStartCurve();}
+            xywh {675 445 115 25} box PLASTIC_UP_BOX labelfont 1 labelsize 12
+          }
+          Fl_Button m_BtnDeleteCurve {
+            label {delete curve}
+            callback {OnButtonDeleteCurve();}
+            xywh {795 445 105 25} box PLASTIC_UP_BOX labelfont 1 labelsize 12 deactivate
+          }
+        }
+      }
     }
   }
 } 

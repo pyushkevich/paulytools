@@ -9,6 +9,11 @@ class TracerUserInterfaceLogic : public TracerUserInterface
 public:
   void OnMenuLoadMesh();
   void OnMenuQuit();
+  void OnButtonModeTrackball();
+  void OnButtonModeTracer();
+  void OnButtonDeleteCurve();
+  void OnButtonStartCurve();
+  void OnSelectCurve();
 
   void ShowWindows() 
     {

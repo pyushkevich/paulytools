@@ -18,4 +18,41 @@ TracerUserInterfaceLogic
 ::OnMenuQuit()
 {
 
+
 }
+
+void 
+TracerUserInterfaceLogic
+::OnButtonModeTrackball()
+{
+  m_WinTrace->SetMode(TracerMainWindow::TRACKBALL);
+}
+
+void 
+TracerUserInterfaceLogic
+::OnButtonModeTracer()
+{
+  m_WinTrace->SetMode(TracerMainWindow::TRACER);
+}
+
+void 
+TracerUserInterfaceLogic
+::OnButtonDeleteCurve()
+{
+  
+}
+
+void 
+TracerUserInterfaceLogic
+::OnButtonStartCurve()
+{
+  
+}
+
+void 
+TracerUserInterfaceLogic
+::OnSelectCurve()
+{
+  
+}
+
