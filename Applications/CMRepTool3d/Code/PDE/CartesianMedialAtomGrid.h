@@ -27,6 +27,11 @@ public:
     return numAtoms + (iDepth - 1) * numBndPts + GetBoundaryPointIndex(iAtom, iSide);
     }
 
+  size_t GetProfileIntervalIndex(size_t iBoundary, size_t iDepth)
+    {
+    return iDepth * numBndPts + iBoundary;
+    }
+
   // Create various iterators
   MedialAtomIterator *NewAtomIterator();
   MedialQuadIterator *NewQuadIterator();
@@ -34,6 +39,7 @@ public:
   MedialBoundaryQuadIterator *NewBoundaryQuadIterator();
   MedialInternalCellIterator *NewInternalCellIterator(size_t nCuts);
   MedialInternalPointIterator *NewInternalPointIterator(size_t nCuts);
+  MedialProfileIntervalIterator *NewProfileIntervalIterator(size_t nCuts);
 
   // Get the number of iterated objects 
   size_t GetNumberOfAtoms()
@@ -53,6 +59,9 @@ public:
 
   size_t GetNumberOfInternalPoints(size_t nCuts)
     { return (nCuts + 1) * GetNumberOfBoundaryPoints() + GetNumberOfAtoms(); }
+
+  size_t GetNumberOfProfileIntervals(size_t nCuts)
+    { return (nCuts + 1) * GetNumberOfBoundaryPoints(); }
 
 private:
   // A way to map a pair of indices to a linear index

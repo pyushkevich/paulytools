@@ -180,7 +180,15 @@ IF(BUILD_PDE)
   TARGET_LINK_LIBRARIES("testpde" ${PDE_LIBS})
   
   # Copy the script files
-  SET(SCRIPT_FILES example.py example2.py example3.py common.py imageprep.py)
+  SET(SCRIPT_FILES 
+    example.py 
+    example2.py 
+    example3.py 
+    example4.py
+    example5.py
+    common.py 
+    imageprep.py)
+  
   FOREACH(FILE ${SCRIPT_FILES})  
  	CONFIGURE_FILE(
  		${CMREPS_SOURCE_DIR}/Code/PDE/Python/${FILE}

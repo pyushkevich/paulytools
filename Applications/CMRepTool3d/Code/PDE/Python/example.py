@@ -3,13 +3,13 @@ from common import *
 from medialpde import *
 
 # Create a medial PDE object
-mp = MedialPDE(4, 6, 8)
-mp.LoadFromDiscreteMRep("/tmp/surf01.txt", -0.5, 10)
+mp = MedialPDE(4, 8, 20, 40)
+mp.LoadFromDiscreteMRep("/tmp/surf01.txt", -0.5)
 mp.Solve()
 
 # Load the image and gradients
 img = FloatImage()
-img.LoadFromFile(dirWork + "avg/average_hippo_blurred_low.mha")
+img.LoadFromFile(dirWork + "avg/average_hippo_blurred_hi.mha")
 
 # Match the volume to the image
 mp.MatchImageByMoments(img, 5)

@@ -29,10 +29,14 @@ struct SolutionData
   SMLVec3d *xInternalPoints;
 
   // The array of boundary weights (area elements) and the total bnd. area
-  double *xBoundaryWeights, xBoundaryArea;
+  double  *xBoundaryWeights, xBoundaryArea;
 
   // The array of internal weights (volume elts) and the total m-rep volume
-  double *xInternalWeights, xInternalVolume;
+  double  *xInternalWeights, xInternalVolume;
+
+  // The array if weights assigned to the internal profile intervals
+  // (little chunks of the sail vectors)
+  double *xInternalProfileWeights;
 
   // Whether the atom pointer is our own copy or a pointer to shared data
   bool flagOwnAtoms;
@@ -41,7 +45,7 @@ struct SolutionData
   bool flagBoundaryWeights, flagInternalWeights;
 
   // Number of internal cuts at which the weights have been computed
-  size_t nInternalCuts, nInternalPoints;
+  size_t nInternalCuts, nInternalPoints, nProfileIntervals;
 
   /** This method makes sure that the boundary area information is computed.
    * If the information has already been computed, it will not be computed
@@ -60,7 +64,8 @@ public:
   virtual double ComputeEnergy(SolutionData *data) = 0;
 
   // Compute the gradient of the energy term given the medial atoms
-  virtual double ComputeGradient(SolutionData *S0, SolutionData **SGrad, 
+  virtual double ComputeGradient(SolutionData *S0, 
+  	SolutionData **SFwd, SolutionData **SBck,
     double xEpsilon, vnl_vector<double> &xOutGradient);
 
   // Print a verbose report
@@ -78,7 +83,8 @@ public:
   double ComputeEnergy(SolutionData *data);
 
   // Compute the directional derivative of the image match function
-  double ComputeGradient(SolutionData *S0, SolutionData **SGrad, 
+  double ComputeGradient(SolutionData *S0, 
+    SolutionData **SFwd, SolutionData **SBck,
     double xEpsilon, vnl_vector<double> &xOutGradient);
 
   // Print a verbose report
@@ -109,7 +115,8 @@ public:
   double ComputeEnergy(SolutionData *data);
 
   /** Compute the Gradient of the image match function */
-  double ComputeGradient(SolutionData *S0, SolutionData **SGrad, 
+  double ComputeGradient(SolutionData *S0, 
+    SolutionData **SFwd, SolutionData **SBck,
     double xEpsilon, vnl_vector<double> &xOutGradient);
 
   // Print a verbose report

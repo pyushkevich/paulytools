@@ -106,9 +106,6 @@ SolutionData::SolutionData(MedialPDESolver *xSolver, bool flagCopyAtoms)
   // Set the flags
   flagInternalWeights = false;
   flagBoundaryWeights = false;
-    
-  // Create and compute boundary weights
-  UpdateBoundaryWeights();
 }
 
 void SolutionData::UpdateBoundaryWeights()
@@ -132,17 +129,20 @@ void SolutionData::UpdateInternalWeights(size_t nCuts)
 
   // Delete the old data if necessary
   if(flagInternalWeights) 
-    { delete xInternalWeights; delete xInternalPoints; }
+    { delete xInternalWeights; delete xInternalPoints; delete xInternalProfileWeights; }
   
   // Allocate the internal points and weights
   nInternalPoints = xAtomGrid->GetNumberOfInternalPoints(nCuts);
+  nProfileIntervals = xAtomGrid->GetNumberOfProfileIntervals(nCuts);
+  
   xInternalPoints = new SMLVec3d[nInternalPoints];
   xInternalWeights = new double[nInternalPoints];
+  xInternalProfileWeights = new double[nProfileIntervals];
 
   // Interpolate the internal points
   ComputeMedialInternalPoints(xAtomGrid, xAtoms, nCuts, xInternalPoints);
   xInternalVolume = ComputeMedialInternalVolumeWeights(
-    xAtomGrid, xInternalPoints, nCuts, xInternalWeights);
+    xAtomGrid, xInternalPoints, nCuts, xInternalWeights, xInternalProfileWeights);
 
   // Set the flag and store the nCuts
   flagInternalWeights = true;
@@ -154,7 +154,7 @@ SolutionData::~SolutionData()
   if(flagBoundaryWeights)
     delete xBoundaryWeights;
   if(flagInternalWeights)
-    { delete xInternalWeights; delete xInternalPoints; }
+    { delete xInternalWeights; delete xInternalPoints; delete xInternalProfileWeights; }
   if(flagOwnAtoms)
     delete xAtoms;
 }
@@ -163,19 +163,22 @@ SolutionData::~SolutionData()
  * ENERGY TERM
  ********************************************************************************/
 double EnergyTerm::ComputeGradient(
-  SolutionData *S0, SolutionData **SGrad, 
+  SolutionData *S0, SolutionData **SF, SolutionData **SB,
   double xEpsilon, vnl_vector<double> &xOutGradient)
 {
-  // Compute the solution
-  double xSolution = ComputeEnergy(S0);
-  
   // Take the finite differences
   for(size_t i = 0; i < xOutGradient.size(); i++)
     {
-    double xDelta = ComputeEnergy(SGrad[i]) - xSolution;
-    xOutGradient[i] = xDelta / xEpsilon;
+    // Compute the central difference approximation
+    double xDelta = ComputeEnergy(SF[i]) - ComputeEnergy(SB[i]);
+
+    // Set the gradient
+    xOutGradient[i] = 0.5 * xDelta / xEpsilon;
     }
 
+  // Compute the solution
+  double xSolution = ComputeEnergy(S0);
+  
   return xSolution;
 }
 
@@ -188,6 +191,9 @@ BoundaryImageMatchTerm
 {
   // Create the image adapter for image / gradient interpolation
   FloatImageLevelSetFunctionAdapter fImage(xImage);
+
+  // Make sure the weights exist in the solution
+  S->UpdateBoundaryWeights();
 
   // Integrate the image match
   xImageMatch = IntegrateFunctionOverBoundary(
@@ -214,11 +220,14 @@ BoundaryImageMatchTerm
 
 double
 BoundaryImageMatchTerm::ComputeGradient(
-  SolutionData *S0, SolutionData **SGrad, 
+  SolutionData *S0, SolutionData **SF, SolutionData **SB, 
   double xEpsilon, vnl_vector<double> &xOutGradient)
 {
   // Create the image adapter for image / gradient interpolation
   FloatImageLevelSetFunctionAdapter fImage(xImage);
+
+  // Make sure weights are available
+  S0->UpdateBoundaryWeights();
 
   // Compute the image and image gradient at each point in the image
   SMLVec3d *xGradI = new SMLVec3d[S0->xAtomGrid->GetNumberOfBoundaryPoints()];
@@ -251,6 +260,10 @@ BoundaryImageMatchTerm::ComputeGradient(
     {
     // Accumulator for the partial derivative of the weighted match function
     double dMatchdC = 0.0;
+
+    // We need the weights for the derivative terms
+    SF[iCoeff]->UpdateBoundaryWeights();
+    SB[iCoeff]->UpdateBoundaryWeights();
     
     // Compute the partial derivative for this coefficient
     for(itBnd->GoToBegin(); !itBnd->IsAtEnd(); ++(*itBnd))
@@ -260,22 +273,26 @@ BoundaryImageMatchTerm::ComputeGradient(
       
       // Get the boundary point before and after small deformation
       SMLVec3d X0 = GetBoundaryPoint(itBnd, S0->xAtoms).X;
-      SMLVec3d X1 = GetBoundaryPoint(itBnd, SGrad[iCoeff]->xAtoms).X;
+      SMLVec3d X2 = GetBoundaryPoint(itBnd, SF[iCoeff]->xAtoms).X;
+      SMLVec3d X1 = GetBoundaryPoint(itBnd, SB[iCoeff]->xAtoms).X;
+      SMLVec3d dX = 0.5 * (X2 - X1);
 
       // Get the area weights for this point
       double w0 = S0->xBoundaryWeights[ iPoint ];
-      double w1 = SGrad[iCoeff]->xBoundaryWeights[ iPoint ];
+      double w1 = SB[iCoeff]->xBoundaryWeights[ iPoint ];
+      double w2 = SF[iCoeff]->xBoundaryWeights[ iPoint ];
+      double dw = 0.5 * (w2 - w1);
 
       // Compute the change in intensity per change in coefficient
-      double dIdC = dot_product( xGradI[iPoint] , X1 - X0 );
-      dMatchdC += dIdC * w0 + xImageVal[iPoint] * (w1 - w0);
+      double dIdC = dot_product( xGradI[iPoint] , dX);
+      dMatchdC += dIdC * w0 + xImageVal[iPoint] * dw;
       }
 
     // Scale by epsilon to get the derivative
     dMatchdC /= xEpsilon;
 
     // Compute the derivative of M / A
-    double dAdC = (SGrad[iCoeff]->xBoundaryArea - A0) / xEpsilon;
+    double dAdC = 0.5 * (SF[iCoeff]->xBoundaryArea - SB[iCoeff]->xBoundaryArea) / xEpsilon;
     xOutGradient[iCoeff] = (dMatchdC * A0 - dAdC * xMatch) / (A0 * A0);
     }
 
@@ -376,22 +393,59 @@ VolumeOverlapEnergyTerm::VolumeOverlapEnergyTerm( FloatImage *xImage, size_t nCu
 
 double VolumeOverlapEnergyTerm::ComputeEnergy(SolutionData *data)
 {
+  // Clear the intersection volume accumulator
+  xIntersect = 0;
+  
   // Make sure that the solution data has internal weights and points
   data->UpdateInternalWeights(nCuts);
 
-  // Compute the match with the image function
+  // Construct the 'match with the image' function
   FloatImageVolumeElementFunctionAdapter fImage(xImage);
-  
-  // Compute the intersection between the image and m-rep
-  xIntersect = IntegrateFunctionOverInterior(
-    data->xAtomGrid, data->xInternalPoints, 
-    data->xInternalWeights, nCuts, &fImage);
 
+  // Interpolate the image at each internal point
+  size_t nInternal = data->xAtomGrid->GetNumberOfInternalPoints(nCuts);
+  double *xImageValue = new double[nInternal];
+  for(size_t i = 0; i < nInternal; i++)
+    xImageValue[i] = fImage.Evaluate(data->xInternalPoints[i]);
+
+  // Iterate over all the profiles (intervals of the sail vectors)
+  MedialProfileIntervalIterator *itProfile = 
+    data->xAtomGrid->NewProfileIntervalIterator(nCuts);
+  for( ; !itProfile->IsAtEnd(); ++(*itProfile) )
+    {
+    // Get the two points on this profile stick
+    size_t i1 = itProfile->GetInnerPointIndex();
+    size_t i2 = itProfile->GetOuterPointIndex();
+    double m1 = xImageValue[i1], m2 = xImageValue[i2];
+    
+    // Compute the fraction of the profile that lies inside the positive
+    // range of the image. 
+    double xLocal;    
+    if(m1 > 0 && m2 > 0)
+      xLocal = 1.0;
+    else if(m1 < 0 && m2 < 0)
+      xLocal = 0.0;
+    else if(m1 > 0)
+      xLocal = m1 / (m1 - m2);
+    else
+      xLocal = m2 / (m2 - m1);
+
+    // Get the weight assigned to this profile
+    double w = data->xInternalProfileWeights[itProfile->GetIndex()];
+
+    // Add the weighted sum to the match
+    xIntersect += w * xLocal;
+    }
+  
   // Get (remember) the object volume 
   xObjectVolume = data->xInternalVolume;
 
   // Compute the volume overlap measure
   xOverlap = xIntersect / (xImageVolume + xObjectVolume - xIntersect); 
+
+  // Clean up
+  delete itProfile; 
+  delete xImageValue;
 
   // Return a value that can be minimized
   return 1.0 - xOverlap;
@@ -399,7 +453,7 @@ double VolumeOverlapEnergyTerm::ComputeEnergy(SolutionData *data)
 
 double
 VolumeOverlapEnergyTerm::ComputeGradient(
-  SolutionData *S0, SolutionData **SGrad, 
+  SolutionData *S0, SolutionData **SF, SolutionData **SB, 
   double xEpsilon, vnl_vector<double> &xOutGradient)
 {
   // Get info about the problem
@@ -411,6 +465,9 @@ VolumeOverlapEnergyTerm::ComputeGradient(
 
   // Create the image adapter for image interpolation at the boundary
   FloatImageVolumeElementFunctionAdapter fImage(xImage);
+
+  // We require the weights from the central solution
+  S0->UpdateBoundaryWeights();
 
   // Interpolate the image at each sample point on the surface
   double *xImageVal = new double[xGrid->GetNumberOfBoundaryPoints()];
@@ -440,13 +497,15 @@ VolumeOverlapEnergyTerm::ComputeGradient(
       
       // Get the boundary point before and after small deformation
       BoundaryAtom &B = GetBoundaryPoint(itBnd, S0->xAtoms);
-      SMLVec3d X1 = GetBoundaryPoint(itBnd, SGrad[iCoeff]->xAtoms).X;
+      SMLVec3d X1 = GetBoundaryPoint(itBnd, SB[iCoeff]->xAtoms).X;
+      SMLVec3d X2 = GetBoundaryPoint(itBnd, SF[iCoeff]->xAtoms).X;
+      SMLVec3d dX = 0.5 * (X2 - X1);
 
       // Get the area weights for this point
       double w = S0->xBoundaryWeights[ iPoint ];
 
       // Compute the common term between the two
-      double z = dot_product(X1 - B.X, B.N) * w;
+      double z = dot_product( dX, B.N ) * w;
 
       // Compute the two partials
       dOverlap += z * xImageVal[iPoint];
@@ -584,8 +643,9 @@ MedialOptimizationProblem
   // Create a solution data object representing current solution
   SolutionData *S0 = new SolutionData(xSolver, true);
 
-  // Create an array of solution data objects
-  SolutionData **SGrad = new SolutionData *[nCoeff];
+  // Create an array of solution data objects (forward and back differences)
+  SolutionData **SF = new SolutionData *[nCoeff];
+  SolutionData **SB = new SolutionData *[nCoeff];
 
   // Compute the time it takes to compute the derivative m-reps
   double tStart = clock();
@@ -595,14 +655,22 @@ MedialOptimizationProblem
     {
     // Increment the coefficient by epsilon
     double xOldValue = xCoeff->GetCoefficient(iCoeff);
-    xCoeff->SetCoefficient(iCoeff, xOldValue + xEpsilon);
 
-    // Solve the PDE for the new value and create a solution data object
-    xSolver->Solve(xPrecision); cout << "." << flush;
-    SGrad[iCoeff] = new SolutionData(xSolver, true);
+    // Compute the forward difference
+    xCoeff->SetCoefficient(iCoeff, xOldValue + xEpsilon);
+    xSolver->Solve(xPrecision); 
+    SF[iCoeff] = new SolutionData(xSolver, true);
+
+    // Compute the backward difference
+    xCoeff->SetCoefficient(iCoeff, xOldValue - xEpsilon);
+    xSolver->Solve(xPrecision); 
+    SB[iCoeff] = new SolutionData(xSolver, true);
 
     // Restore the old solution value
     xCoeff->SetCoefficient(iCoeff, xOldValue);
+
+    // Progress report
+    cout << "." << flush;   
     }
 
   // See how much time elapsed for the medial computation
@@ -618,7 +686,7 @@ MedialOptimizationProblem
   cout << endl;
   for(size_t iTerm = 0; iTerm < xTerms.size(); iTerm++)
     {
-    double xValue = xTerms[iTerm]->ComputeGradient(S0, SGrad, xEpsilon, xGradTerm);
+    double xValue = xTerms[iTerm]->ComputeGradient(S0, SF, SB, xEpsilon, xGradTerm);
     // cout << xGradTerm << endl;
     xSolution += xWeights[iTerm] * xValue;
     xGradTotal += xWeights[iTerm] * xGradTerm;
@@ -637,8 +705,8 @@ MedialOptimizationProblem
 
   // Clean up everything
   for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)
-    delete SGrad[iCoeff];
-  delete S0; delete SGrad;
+    { delete SF[iCoeff]; delete SB[iCoeff]; }
+  delete S0; delete SF; delete SB;
 
   // Return the solution value
   for(size_t j = 0; j < nCoeff; j++) XGradient[j] = xGradTotal[j];

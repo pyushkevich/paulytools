@@ -81,13 +81,10 @@ void TestAreaAndVolume(MedialPDESolver *xSolver)
 
 void Test01()
 {
-  // string fMrep = dirWork + "avg/average_mrepL_01.mpde";
-  
-  
-  MedialPDE *mp = new MedialPDE(3, 5, 24);
+  MedialPDE *mp = new MedialPDE(3, 5, 40, 80);
   //mp->LoadFromParameterFile(fMrep.c_str());
   
-  mp->LoadFromDiscreteMRep("/tmp/surf01.txt",-0.5,16);
+  mp->LoadFromDiscreteMRep("/tmp/surf01.txt",-0.5);
   mp->Solve();
   mp->SaveBYUMesh("temp.byu");
 
@@ -149,7 +146,7 @@ void Test02()
 void Test03()
 {
   // Create a medial PDE object
-  MedialPDE *mp = new MedialPDE(5, 5, 10);
+  MedialPDE *mp = new MedialPDE(5, 5, 50, 100);
   mp->LoadFromParameterFile((dirWork + "avg/average_mrepL_01.mpde").c_str());
   mp->Solve();
 

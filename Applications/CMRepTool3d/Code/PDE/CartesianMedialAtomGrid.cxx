@@ -123,6 +123,7 @@ public:
     else
       iSide = 1;
     iIndex++;
+    return *this;
     }
   
   bool IsAtEnd()
@@ -299,16 +300,22 @@ public:
     return grid->GetInternalPointIndex(
       itQuad.GetAtomIndex(i, j), itQuad.GetBoundarySide(), iDepth + k); 
     }
+
+  size_t GetProfileIntervalIndex(size_t i, size_t j)
+    {
+    return grid->GetProfileIntervalIndex(itQuad.GetBoundaryIndex(i, j), iDepth);
+    }
     
   /** Get the depth of the side k (0 inner, 1 outer) */
   size_t GetDepth(size_t k)
     { return iDepth + k; }
   
-  MedialBoundaryQuadIterator &operator++()
+  MedialInternalCellIterator &operator++()
     {
     ++itQuad;
     if(itQuad.IsAtEnd())
       { ++iDepth; itQuad.GoToBegin(); }
+    return *this;
     }
 
   bool IsAtEnd()
@@ -324,6 +331,62 @@ private:
   CartesianMedialAtomGrid *grid;
   CartesianMedialBoundaryQuadIterator itQuad;
   size_t iDepth, iMaxDepth;
+};
+
+class CartesianMedialProfileIntervalIterator : 
+  public MedialProfileIntervalIterator
+{
+public:
+  CartesianMedialProfileIntervalIterator(
+    CartesianMedialAtomGrid *grid, size_t nCuts) : itBnd(grid)
+    {
+    iMaxDepth = nCuts;
+    this->grid = grid;
+    GoToBegin();
+    }
+  
+  size_t GetInnerPointIndex()
+    { 
+    return grid->GetInternalPointIndex(
+      itBnd.GetAtomIndex(), itBnd.GetBoundarySide(), iDepth);
+    }
+  
+  size_t GetOuterPointIndex()
+    { 
+    return grid->GetInternalPointIndex(
+      itBnd.GetAtomIndex(), itBnd.GetBoundarySide(), iDepth + 1);
+    }
+  
+  size_t GetIndex()
+    { return iIndex; }
+
+  MedialProfileIntervalIterator &operator++()
+    {
+    ++itBnd;
+    if(itBnd.IsAtEnd())
+      {
+      iDepth++;
+      itBnd.GoToBegin();
+      }
+    iIndex++;
+    return *this;
+    }
+  
+  bool IsAtEnd()
+    { return iDepth > iMaxDepth; }
+
+  void GoToBegin()
+    {
+    iIndex = 0;
+    itBnd.GoToBegin();
+    iDepth = 0;
+    }
+
+private:
+  
+  CartesianMedialAtomGrid *grid;
+  size_t iMaxDepth, iDepth, iIndex;
+  CartesianMedialBoundaryPointIterator itBnd;
 };
 
 /**
@@ -392,6 +455,13 @@ CartesianMedialAtomGrid
 ::NewInternalPointIterator(size_t nCuts)
 {
   return new CartesianMedialInternalPointIterator(this, nCuts);
+}
+
+MedialProfileIntervalIterator *
+CartesianMedialAtomGrid
+::NewProfileIntervalIterator(size_t nCuts)
+{
+  return new CartesianMedialProfileIntervalIterator(this, nCuts);
 }
 
 void TestCartesianGrid()
@@ -463,8 +533,22 @@ void TestCartesianGrid()
     cout << "ITCell: ";
     for(size_t i=0; i<2; i++) for(size_t j=0; j<2; j++) for(size_t k=0; k<2; k++)
       cout << i << j << k << ": " << itCell.GetInternalPointIndex(i,j,k) << ";  ";
+    cout << "; Profiles: ";
+    for(size_t i=0; i<2; i++) for(size_t j=0; j<2; j++) 
+      cout << i << j << itCell.GetProfileIntervalIndex(i, j) << "; ";
     cout << endl;
     ++itCell;  
+    }
+
+  cout << "PROFILE INTERVAL ITERATOR: " << endl;
+  cout << "Number of profile intervals: " << grid.GetNumberOfProfileIntervals(2) << endl;
+  CartesianMedialProfileIntervalIterator itProfile(&grid, 2);
+  while(!itProfile.IsAtEnd())
+    {
+    cout << "Profile Interval: " << itProfile.GetIndex() << 
+      "; Inner: " << itProfile.GetInnerPointIndex() << 
+      "; Outer: " << itProfile.GetOuterPointIndex() << endl;
+    ++itProfile;  
     }
 }
 

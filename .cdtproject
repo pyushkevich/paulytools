@@ -88,5 +88,6 @@
 <entry pattern="vector" type="org.eclipse.cdt.core.fileType.cxx_header"/>
 </associations>
 </item>
+
 </data>
 </cdtproject>

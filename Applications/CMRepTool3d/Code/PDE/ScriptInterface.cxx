@@ -29,13 +29,16 @@ struct DiscreteAtom
  * ----------------
  *  This is the main application code
  **************************************************************************/
-MedialPDE::MedialPDE(unsigned int nBasesU, unsigned int nBasesV, unsigned int xResolution)
+MedialPDE::MedialPDE(unsigned int nBasesU, unsigned int nBasesV, 
+  unsigned int xResU, unsigned int xResV)
 {
   xSurface = new FourierSurface(nBasesU, nBasesV);
-  xSolver = new MedialPDESolver(xResolution * nBasesU + 1, xResolution * nBasesV + 1);
+  xSolver = new MedialPDESolver(xResU, xResV);
   xSolver->SetMedialSurface(xSurface);
 
-  eMask = FULL; eOptimizer = GRADIENT;
+  eMask = FULL; 
+  eOptimizer = GRADIENT;
+  
   xStepSize = 0.1;
   xCoarsenessRho = 1.0;
   xCoarsenessX = 1.0;
@@ -47,7 +50,7 @@ MedialPDE::~MedialPDE()
   delete xSurface;
 }
 
-void MedialPDE::LoadFromDiscreteMRep(const char *file, double xRhoInit, unsigned int xResolution)
+void MedialPDE::LoadFromDiscreteMRep(const char *file, double xRhoInit)
 {
   ifstream fin(file, ios_base::in);
   int iu, iv, iend;

@@ -6,6 +6,7 @@
 #include <itkGradientMagnitudeImageFilter.h>
 #include <itkUnaryFunctorImageFilter.h>
 #include <itkDerivativeImageFilter.h>
+#include <vnl/vnl_erf.h>
 
 #include <string>
 
@@ -129,8 +130,20 @@ public:
     { return (x == 0) ? -1.0f : 1.0f; } 
 };
 
+class ErrorFunctor
+{
+public:
+  ErrorFunctor(float alpha = 1.0f)
+    { this->alpha = alpha; }
+
+  float operator() (float x)
+    { return vnl_erf( alpha * x ); }
+private:
+  float alpha;
+};
+
 void FloatImage
-::SetToBlurredBinary(BinaryImage *imgSource, double xSigma)
+::SetToBlurredBinary(BinaryImage *imgSource, double xSigma, double xErrorScale)
 {
   // Blur the image with a Gaussian
   typedef itk::Image<unsigned char, 3> BinaryImageType;
@@ -151,8 +164,19 @@ void FloatImage
   fltGaussian->SetVariance(xSigma * xSigma);
   fltGaussian->Update();
 
-  // Set the internal image
-  xImage->SetInternalImage(fltGaussian->GetOutput());
+  // Optionally apply the error functor
+  if(xErrorScale > 0.0)
+    {
+    typedef itk::UnaryFunctorImageFilter<
+      FloatImageType, FloatImageType, ErrorFunctor> ErrorMapper;
+    ErrorMapper::Pointer fltError = ErrorMapper::New();
+    fltError->SetInput(fltGaussian->GetOutput());
+    fltError->SetFunctor( ErrorFunctor( xErrorScale ) );
+    fltError->Update();
+    xImage->SetInternalImage(fltError->GetOutput());
+    }
+  else
+    xImage->SetInternalImage(fltGaussian->GetOutput());
   
   // Now compute the gradient magnitude by convolution with a Gaussian directional
   // derivative filter in each cardinal direction

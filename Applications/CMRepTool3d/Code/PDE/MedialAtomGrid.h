@@ -97,15 +97,30 @@ class MedialInternalCellIterator
 public:
   virtual size_t GetAtomIndex(size_t i, size_t j) = 0;
   virtual size_t GetInternalPointIndex(size_t i, size_t j, size_t k) = 0;
+  virtual size_t GetProfileIntervalIndex(size_t i, size_t j) = 0;
 
   /** Get the depth of the side k (0 inner, 1 outer) */
   virtual size_t GetDepth(size_t k) = 0;
   
-  virtual MedialBoundaryQuadIterator &operator++() = 0;
+  virtual MedialInternalCellIterator &operator++() = 0;
   virtual bool IsAtEnd() = 0;
   virtual void GoToBegin() = 0;
 };
 
+/** An iterator that goes through point pairs on the profiles that connect the
+ * medial axis to the boundary. There are four such intervals for every
+ * internal cell */
+class MedialProfileIntervalIterator
+{
+public:
+  virtual size_t GetInnerPointIndex() = 0;
+  virtual size_t GetOuterPointIndex() = 0;
+  virtual size_t GetIndex() = 0;
+
+  virtual MedialProfileIntervalIterator &operator++() = 0;
+  virtual bool IsAtEnd() = 0;
+  virtual void GoToBegin() = 0;
+};
 
 /**
  * A generic grid of medial atoms with iterators. This class should be
@@ -121,8 +136,9 @@ public:
   virtual MedialQuadIterator *NewQuadIterator() = 0;
   virtual MedialBoundaryPointIterator *NewBoundaryPointIterator() = 0;
   virtual MedialBoundaryQuadIterator *NewBoundaryQuadIterator() = 0;
-  virtual MedialInternalCellIterator *NewInternalCellIterator(size_t depth) = 0;
-  virtual MedialInternalPointIterator *NewInternalPointIterator(size_t depth) = 0;
+  virtual MedialInternalCellIterator *NewInternalCellIterator(size_t nCuts) = 0;
+  virtual MedialInternalPointIterator *NewInternalPointIterator(size_t nCuts) = 0;
+  virtual MedialProfileIntervalIterator *NewProfileIntervalIterator(size_t nCuts) = 0;
 
   // Get the number of medial atoms in this grid
   virtual size_t GetNumberOfAtoms() = 0;
@@ -131,6 +147,7 @@ public:
   virtual size_t GetNumberOfBoundaryQuads() = 0;
   virtual size_t GetNumberOfCells(size_t nCuts) = 0;
   virtual size_t GetNumberOfInternalPoints(size_t nCuts) = 0;
+  virtual size_t GetNumberOfProfileIntervals(size_t nCuts) = 0;
 };
 
 #endif

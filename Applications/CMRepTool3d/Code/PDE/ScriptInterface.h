@@ -42,8 +42,11 @@ public:
   void SetToGradientMagnitude(BinaryImage *imgSource, double xSigma);
 
   // Compute the image by blurring a binary image. The surface is represented
-  // by the 0.0 level set, 1.0 is inside, -1.0 is outside of the object
-  void SetToBlurredBinary(BinaryImage *imgSource, double xSigma);
+  // by the 0.0 level set, 1.0 is inside, -1.0 is outside of the object. The
+  // optional error scale parameter applies the erf() function to the image,
+  // to bring the values nearer to -1.0 or 1.0. This is useful for volume
+  // overlap measures
+  void SetToBlurredBinary(BinaryImage *imgSource, double xSigma, double xErrorScale = 0.0);
 
   // Compute the volume of the interior of the image. The image must represent
   // an follows: internal points near 1.0, external near -1.0, interface 0.0
@@ -95,12 +98,15 @@ private:
 class MedialPDE
 {
 public:
-  MedialPDE(unsigned int nBasesU, unsigned int nBasesV, unsigned int xResolution);
+  /** Create a new instance of the medial PDE object with a given number of 
+   * surface coefficients and a given number of samples */
+  MedialPDE(unsigned int nBasesU, unsigned int nBasesV, 
+    unsigned int xResU, unsigned int xResV);
+
   ~MedialPDE();
   
   /** Initialize the surface using a discrete m-rep */
-  void LoadFromDiscreteMRep(
-    const char *file, double xInitRho, unsigned int xResolution);
+  void LoadFromDiscreteMRep(const char *file, double xInitRho);
 
   /** Save to a parameter file */
   void SaveToParameterFile(const char *file);

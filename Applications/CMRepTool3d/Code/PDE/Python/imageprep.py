@@ -10,16 +10,16 @@ bin.LoadFromFile(dirWork + "avg/average_hippoL.mha")
 img = FloatImage()
 
 # Apply different levels of blurring to the image
-img.SetToBlurredBinary(bin, 2.0)
+img.SetToBlurredBinary(bin, 2.0, 10.0)
 img.SetOutsideValue(-1.0)
 img.SaveToPath(dirWork + "avg/average_hippo_blurred_hi","mha")
 
 # Apply different levels of blurring to the image
-img.SetToBlurredBinary(bin, 1.0)
+img.SetToBlurredBinary(bin, 1.0, 10.0)
 img.SetOutsideValue(-1.0)
 img.SaveToPath(dirWork + "avg/average_hippo_blurred_med","mha")
 
 # Apply different levels of blurring to the image
-img.SetToBlurredBinary(bin, 0.5)
+img.SetToBlurredBinary(bin, 0.5, 10.0)
 img.SetOutsideValue(-1.0)
 img.SaveToPath(dirWork + "avg/average_hippo_blurred_low","mha")

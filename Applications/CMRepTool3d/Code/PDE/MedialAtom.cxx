@@ -197,7 +197,8 @@ void ComputeMedialInternalPoints(
  * is equal to the volume of the m-rep
  */
 double ComputeMedialInternalVolumeWeights(
-  MedialAtomGrid *xGrid, SMLVec3d *xPoints, size_t nCuts, double *xWeights)
+  MedialAtomGrid *xGrid, SMLVec3d *xPoints, size_t nCuts, 
+  double *xWeights, double *xInternalProfileWeights)
 {
   // Set all the weights to zero to begin with
   size_t nPoints = xGrid->GetNumberOfInternalPoints(nCuts);
@@ -238,6 +239,20 @@ double ComputeMedialInternalVolumeWeights(
     xWeights[i010] += V; xWeights[i100] += V;
     xWeights[i001] += V; xWeights[i111] += V;
     xWeights[i011] += V; xWeights[i101] += V;
+
+    // Also assign fractions of the weights to the profile intervals
+    if(xInternalProfileWeights)
+      {
+      size_t j00 = itCell->GetProfileIntervalIndex(0, 0);
+      size_t j01 = itCell->GetProfileIntervalIndex(0, 1);
+      size_t j10 = itCell->GetProfileIntervalIndex(1, 0);
+      size_t j11 = itCell->GetProfileIntervalIndex(1, 1);
+      V *= 2.0;
+      xInternalProfileWeights[j00] += V;
+      xInternalProfileWeights[j01] += V;
+      xInternalProfileWeights[j10] += V;
+      xInternalProfileWeights[j11] += V;
+      }
 
     // Go to the next boundary quad
     ++(*itCell);
