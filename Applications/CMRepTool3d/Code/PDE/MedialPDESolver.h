@@ -1,6 +1,14 @@
 #ifndef _MedialPDESolver_h_
 #define _MedialPDESolver_h_
 
+#include <iostream>
+extern "C" {  
+  #include <laspack/qmatrix.h> 
+  #include <laspack/vector.h> 
+}
+
+using namespace std;
+
 class GeometryDescriptor
 {
 public:
@@ -11,25 +19,53 @@ public:
   double xNormal;
 
   GeometryDescriptor(double *X, double *Xu, double *Xv, double *Xuu, double *Xuv, double *Xvv);
+
+  void PrintSelf(ostream &str);
+
+protected:
 };
 
 class FDAbstractSite
 {
 public:
-  virtual double ComputeEquation(double *X) = 0;
-  virtual void ComputeDerivative(double *X, double *A) = 0;
-  virtual double GetInitialValue() = 0;
+  FDAbstractSite(unsigned int m, unsigned int n, unsigned int i, unsigned int j);
+  virtual double ComputeEquation(Vector *Y) = 0;
+  virtual void ComputeDerivative(Vector *Y, QMatrix *A, unsigned int iRow) = 0;
+  virtual void SetGeometry(GeometryDescriptor *gd, double rho) = 0;
+
+  // Returns the number of boundaries that a site touches (0 - int, 1 - border, 2 - corner)
+  virtual bool IsBorderSite(unsigned int dim) = 0;
+  virtual double GetInitialValue();
+
+  // Return the number of columns in each row of the matrix A used in Newton's method
+  virtual unsigned int GetNumberOfNetwonColumns() = 0;
   
 protected:
+  // Position in the grid and grid dimensions
+  unsigned int i, j, m, n;
+
+  // Step size (finite difference)
+  double du, dv;
 };
 
+/**
+ * This site represents internal grid points where the Laplacial equation holds
+ */
 class FDInternalSite : public FDAbstractSite
 {
 public:
-  FDInternalSite(unsigned int m, unsigned int n, unsigned int i, unsigned int j);
-  double ComputeEquation(double *X);
-  void ComputeDerivative(double *X, double *A);
-  double GetInitialValue() { return 2.0; }
+  FDInternalSite(unsigned int m, unsigned int n, unsigned int i, unsigned int j, 
+    unsigned int iNode, unsigned int stride_u, unsigned int stride_v);
+
+  void SetGeometry(GeometryDescriptor *gd, double rho);
+  double ComputeEquation(Vector *Y);
+  void ComputeDerivative(Vector *Y, QMatrix *A, unsigned int iRow);
+
+  // This site touches no boundaries
+  bool IsBorderSite(unsigned int) { return false; }
+
+  // Number of non-zero columns in newton's matrix
+  unsigned int GetNumberOfNetwonColumns() { return 9; }
 
 protected:
   /** Indices into the flat data array of all neighbors */
@@ -45,29 +81,59 @@ protected:
   double rho;
 };
 
+/**
+ * This site represents border and corner grid points where the 
+ * boundary condition holds
+ */
 class FDBorderSite : public FDAbstractSite
 {
 public:
-  FDBorderSite(unsigned int m, unsigned int n, unsigned int i, unsigned int j);
-  double ComputeEquation(double *X) { return 0.0; }
-  void ComputeDerivative(double *X, double *A) { return; }
-  double GetInitialValue() { return 2.0; }
+  FDBorderSite(unsigned int m, unsigned int n, unsigned int i, unsigned int j, 
+    unsigned int iNode, unsigned int stride_u, unsigned int stride_v);
   
+  double ComputeEquation(Vector *Y);
+  void ComputeDerivative(Vector *Y, QMatrix *A, unsigned int iRow);
+  void SetGeometry(GeometryDescriptor *gd, double rho);
+  
+  // This site touches one or two boundaries
+  bool IsBorderSite(unsigned int dim) 
+    { return (dim == 0) ? (wu == 1) : (wv == 1); }
+
+  // Number of non-zero columns in newton's matrix
+  unsigned int GetNumberOfNetwonColumns() 
+    { return nDistinctSites; }
+
 protected:
+  /** Is this a corner site? */
+  bool corner;
+
+  /** Indices into the flat data array of all neighbors */
+  unsigned int i0, i1, i2, i3, i4;
+
+  /** List of distinct sites involved in this site's equation */
+  unsigned int nDistinctSites, xDistinctSites[4];
+
+  /** Index of each neighbor into xDistinctSites */
+  unsigned int xEntry[5];
+
+  /** Coefficients of the finite differences in the equation */
+  double CuCu, CuCv, CvCv, C0;
+
+  /** Weight scalings in X and Y */
+  double wu, wv;
 };
 
-class FDCornerSite : public FDAbstractSite
+/** Abstract problem to be fed to the solver */
+class IMedialPDEProblem 
 {
 public:
-  FDCornerSite(unsigned int m, unsigned int n, unsigned int i, unsigned int j);
-  double ComputeEquation(double *X) { return 0.0; }
-  void ComputeDerivative(double *X, double *A) { return; }
-  double GetInitialValue() { return 2.0; }
-  
-protected:
+  virtual void ComputeJet2(
+    double u, double v, double *X, double *Xu, double *Xv, 
+    double *Xuu, double *Xuv, double *Xvv) = 0;
+
+  virtual double ComputeLaplacian(double u, double v) = 0;
 };
 
-template <class TSurface, TLaplacian>
 class MedialPDESolver {
 public:
   /**
@@ -77,9 +143,10 @@ public:
   MedialPDESolver(unsigned int m, unsigned int n);
 
   /**
-   * Solve the PDE for a given surface and a given rho function 
+   * Solve the PDE for a given surface and a given rho function up to the required 
+   * level of accuracy.
    */
-  void Solve(TSurface &surface, TLaplacian &lap);
+  void Solve(IMedialPDEProblem *problem, double delta = 1e-8);
 
 private:
   /** Number of points in u and v */
@@ -99,7 +166,14 @@ private:
 
   /** The initial solution */
   double *xInitSoln;
+
+  /** The LasPack Matrix used in Newton's method */
+  QMatrix A;
+
+  /** The LasPack Vector used in the RHS of the Newton's method */
+  Vector b, y, eps;
 };
+
 
 
 #endif // _MedialPDESolver_h_

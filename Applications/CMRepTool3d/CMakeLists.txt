@@ -30,6 +30,9 @@ INCLUDE (${CMAKE_ROOT}/Modules/FindGLUT.cmake)
 INCLUDE (${CMAKE_ROOT}/Modules/FindGLU.cmake)
 INCLUDE (${CMAKE_ROOT}/Modules/FindOpenGL.cmake)
 
+# Include the PDE code
+SUBDIRS(Code/PDE)
+
 # Include the various directories
 INCLUDE_DIRECTORIES(
   ${CMREPS_SOURCE_DIR}/Code 
@@ -81,7 +84,7 @@ ADD_EXECUTABLE(cmreps ${CMREPS_SOURCES} ${CMREPS_HEADERS})
 ADD_EXECUTABLE(testglut Code/testglut.cpp)
 
 # Add the libraries
-LINK_LIBRARIES(cmreps
+TARGET_LINK_LIBRARIES(cmreps
   ${PAULY_CORE_LIBS}
   ${GLUT_LIBRARY}
   ITKIO

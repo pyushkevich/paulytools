@@ -1,0 +1,26 @@
+##################################################################################
+# This file should be included in your CMakeLists.txt file
+# 
+# It defines the following variables
+#
+# LASPACK_INCLUDE_DIR 		Include directories for the library
+# LASPACK_LIBRARY_DIR		Library directories
+# LASPACK_LIB		        The basic set of libraries to
+#				link your program with.  This includes
+#				optima, matrix and registry.
+#
+# It also defines a macro USE_LASPACK, which sets the include directories
+# and libraries
+#################################################################################
+
+# Export directory names
+SET(LASPACK_INCLUDE_DIR "@LASPACK_INCLUDE_DIR@")
+SET(LASPACK_LIBRARY_DIR "@LASPACK_LIBRARY_DIR@")
+SET(LASPACK_LIB laspack)
+
+# Define the USE macro
+MACRO(USE_LASPACK)
+  INCLUDE_DIRECTORIES(${LASPACK_INCLUDE_DIR})
+  LINK_DIRECTORIES(${LASPACK_LIBRARY_DIR})
+  LINK_LIBRARIES(${LASPACK_LIB})
+ENDMACRO(USE_LASPACK)
