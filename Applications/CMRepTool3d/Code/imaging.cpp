@@ -719,6 +719,20 @@ inline void AbstractImage3D::doInterpolation(const __m128 &r0,const __m128 &in0,
   _mm_store_ss(rtn, i0);
 }
 
+inline ostream &operator << (ostream &sout, __m128 r)
+{
+  ALIGN_PRE float f[4] ALIGN_POST;
+  _mm_storeu_ps(f, r);
+
+  sout << "[" 
+    << f[0] << "," 
+    << f[1] << "," 
+    << f[2] << "," 
+    << f[3] << "]";
+
+  return sout;
+} 
+
 /**
  * This method retrieves eight voxels around the position xyz in object space
  * r0:  xyz inside the voxel (between 0,1)
@@ -737,7 +751,9 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &out0,__m128 &o
   r3 = _mm_load_ps(mmData+4); 
   r1 = _mm_load_ps(mmData+8);
 
-  r0 = _mm_loadu_ps(&x);                              //      ?       z       y       x
+  r0 = _mm_set_ps(x,y,z,0);                           //      ?       z       y       x
+
+  // r0 = _mm_loadu_ps(&x);                              //      ?       z       y       x
   r0 = _mm_mul_ps(r0,r2);                             //      ?       z       y       x   
   r0 = _mm_add_ps(r0,r3);                             //      ?       z       y       x
 
@@ -750,9 +766,14 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &out0,__m128 &o
   // int maskMin = move_mask(r0);
   // int maskMax = move_mask(r1);
 
+  cout << "x = " << x << " y = " << y << " z = " << z << endl;
+  cout << "r0 = " << r0 << endl;
+  cout << "r0 = " << r1 << endl;
+
   // If the voxel is outside, use special method
   if ((maskMin | maskMax) & 0x07)
     {
+    cout << "bail " << maskMin << " " << maskMax << endl;
     return false;
     }
 
@@ -760,11 +781,6 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &out0,__m128 &o
   int flgRound = _mm_getcsr();
   _mm_setcsr(flgRound | 0x00006000);
   
-  // int mem32;
-  // __asm STMXCSR mem32;
-  // mem32 |= 0x00006000;
-  // __asm LDMXCSR mem32;
-
   // Round down the values and cast back to floating point
   r1 = _mm_shuffle_ps(r0,r0,0x0E);                    //      x       x       ?       z   
 
@@ -841,6 +857,12 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &out0,__m128 &o
   voxels[6] = (float) C(x0,y1,z1);
   voxels[7] = (float) C(x1,y1,z1);
   
+  cout << "Cube " << xc << "," << yc << "," << zc << endl;
+  cout << "Pair " << x0 << "," << y0 << "," << z0 << endl;
+  cout << "     " << x1 << "," << y1 << "," << z1 << endl;
+  cout << "Voxl " << voxels[0] << "," << voxels[1] << "," << voxels[2] << "," << voxels[3] << ","
+    << voxels[4] << "," << voxels[5] << "," << voxels[6] << "," << voxels[7] << endl;
+
   // Store the data 
   r1 = _mm_load_ps(voxels);
   r2 = _mm_load_ps(voxels + 4);

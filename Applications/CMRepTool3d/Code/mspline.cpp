@@ -10,7 +10,7 @@ inline SMLVec3f& cast3f(const SMLVec4f &in) {
 }
 
 // Perform simultaneous dot product of four vectors with another vector
-inline __m128 mul_4x4_4x1(const __m128 &R0,const __m128 &R1,const __m128 &R2,const __m128 &R3,const __m128 &RB) {
+__m128 mul_4x4_4x1(const __m128 &R0,const __m128 &R1,const __m128 &R2,const __m128 &R3,const __m128 &RB) {
   __m128 TM,A0,A1,A2,A3,B0,B1,B2,B3;
 
   // Perform the vector multiplication
@@ -167,6 +167,9 @@ void DynamicBSpline2D::basisJet(int dim,int i,float u,SMLVec4f *N) {
     
     SMLVec4f *jm = jetMul[dim];
     float *ub = UB->data_block();
+    float *n0 = N[0].data_block();
+    float *n1 = N[1].data_block();
+    float *n2 = N[2].data_block();
 
     // Load u                                                   //  3       2       1       0
     r0 = _mm_load_ss(&u);                                       //                          u
@@ -207,10 +210,12 @@ void DynamicBSpline2D::basisJet(int dim,int i,float u,SMLVec4f *N) {
     r1 = mul_4x4_4x1(M0,M1,M2,M3,r5);
     r2 = mul_4x4_4x1(M0,M1,M2,M3,r6);
 
+    _mm_empty();
+
     // Store the results
-    _mm_store_ps(N[0].data_block(),r0);
-    _mm_store_ps(N[1].data_block(),r1);
-    _mm_store_ps(N[2].data_block(),r2);
+    _mm_store_ps(n0,r0);
+    _mm_store_ps(n1,r1);
+    _mm_store_ps(n2,r2);
     }
   else
     {
