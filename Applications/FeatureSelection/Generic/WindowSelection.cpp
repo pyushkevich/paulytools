@@ -35,7 +35,7 @@ void WindowSelection::initialize(const Mat &A, const Mat &B, const Mat &Omega)
 	nw = Omega.columns();
 
 	// Construct the linear programming matrix
-	Mat M(m+k+n,m+k+n+nw+1);
+	Mat M(m+k+n,m+k+n+nw+1,0.0);
 
 	// Insert the data matrices and window matrix
 	M.update(A,0,0);
@@ -53,24 +53,24 @@ void WindowSelection::initialize(const Mat &A, const Mat &B, const Mat &Omega)
 	insertVertical(M,m,n+m+k+nw,k,1);
 
 	// Now, specify the vector B
-	Vec b(m+k+n);
+	Vec b(m+k+n,0.0);
 	fillRange(b,0,m+k,1);
 
 	// Construct the basic vector C
 	c.set_size(n+m+k+nw+1);
+  c.fill(0.0);
 	fillRange(c,n,m,1.0/m);
 	fillRange(c,n+m,k,1.0/k);
 
 	// Construct the upper and lower limits
-	Vec upper(n+m+k+nw+1), lower(n+m+k+nw+1);
-	upper.fill(1e100);
+	Vec upper(n+m+k+nw+1,1e100), lower(n+m+k+nw+1,0.0);
 	lower(n+m+k+nw) = -1e100;
 
 	// Create a soplex problem
 	m_provider->setProblem(c,M,b,lower,upper);
 
 	// Compute window lengths
-	wl.set_size(nw);
+	wl.set_size(nw); wl.fill(0.0);
 	for(int wc=0;wc<nw;wc++) {
 		wl(wc) = 0;
 		for(int wr=0;wr<n;wr++) {
@@ -79,8 +79,7 @@ void WindowSelection::initialize(const Mat &A, const Mat &B, const Mat &Omega)
 	}
 
 	// Set the weight vector
-	wgt.set_size(nw);
-	wgt.fill(0);
+	wgt.set_size(nw);	wgt.fill(0);
 
 	state = INIT;
 }
@@ -130,7 +129,7 @@ bool WindowSelection::run() {
 
 		// Perform the linear programming task!
 		m_provider->updateObjective(c);
-		r.push_back(Vec(n+m+k+nw+1));
+		r.push_back(Vec(n+m+k+nw+1,0.0));
 
 		// Get status
 		status = m_provider->solve(r.back());

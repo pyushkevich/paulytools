@@ -45,6 +45,7 @@ void LinearSeparation::initialize(const Mat &A, const Mat &B)
 
   // Construct the basic vector C
   c.set_size(n+m+k+1);
+  c.fill(0.0);
   fillRange(c,n,m,1.0/m);
   fillRange(c,n+m,k,1.0/k);
 
@@ -64,8 +65,7 @@ bool LinearSeparation::run()
   assert(state == INIT && m_provider);
 
   // Solve the problem
-  Vec result;
-  result.set_size(c.size());
+  Vec result(c.size(),0.0);
   bool status = m_provider->solve(result);
 
   // Now, send back some results

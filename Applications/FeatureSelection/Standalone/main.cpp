@@ -115,7 +115,7 @@ void findFeaturesFSV(const Mat &A, const Mat &B, const Vec &L,vector<WinSearchRe
 }
 
 void padVector(const Vec &v,Vec &p,int reps) {
-  p.set_size(v.size()*reps);
+  p.set_size(v.size()*reps); p.fill(0.0);
   for(int r=0;r<v.size();r++)
     for(int i=0;i<reps;i++)
       p(r*reps+i)=v(r);
@@ -274,7 +274,7 @@ void processParameterSet(Mat &A, Mat &B, Mat &O, Mat&p, double alpha, int nRuns,
 }
 
 void leaveRowOut(const Mat &A, Mat &B, int row) {
-	B.set_size(A.rows()-1,A.columns());
+	B.set_size(A.rows()-1,A.columns()); B.fill(0.0);
 
 	int ia = 0;
 	for(int j=0;j<A.rows();j++) {
@@ -384,6 +384,7 @@ int main(int argc, char *argv[]) {
 
 	// Randomize
 	srand(clock());
+  // srand(12);
 
 	// Rewrite the vectors to do multiple repetitions
 	// Vec lambdaPad,etaPad;
