@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
   // Save the output image
   typedef ImageFileWriter<ImageType> WriterType;
   WriterType::Pointer fltWriter = WriterType::New();
-  fltWriter->SetInput(fltRead->GetOutput());
+  fltWriter->SetInput(fltReader->GetOutput());
   fltWriter->SetFileName(argv[2]);
   fltWriter->Update();
 }
