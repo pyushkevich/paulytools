@@ -456,36 +456,6 @@ void drawPolyData(vtkPolyData *poly)
   mapper->Delete();
 }
 
-template <class TImage>
-void ConvertImageToVTK(TImage *src, vtkImageData **imgOut)
-{
-  // Cast the image to VTK 
-  typedef typename itk::VTKImageExport<TImage> ExportFilter;
-  typename ExportFilter::Pointer fltExport = ExportFilter::New();
-  vtkImageImport *fltImport = vtkImageImport::New();
-  fltExport->SetInput(src);
-  fltImport->SetUpdateInformationCallback( fltExport->GetUpdateInformationCallback());
-  fltImport->SetPipelineModifiedCallback( fltExport->GetPipelineModifiedCallback());
-  fltImport->SetWholeExtentCallback( fltExport->GetWholeExtentCallback());
-  fltImport->SetSpacingCallback( fltExport->GetSpacingCallback());
-  fltImport->SetOriginCallback( fltExport->GetOriginCallback());
-  fltImport->SetScalarTypeCallback( fltExport->GetScalarTypeCallback());
-  fltImport->SetNumberOfComponentsCallback( fltExport->GetNumberOfComponentsCallback());
-  fltImport->SetPropagateUpdateExtentCallback( fltExport->GetPropagateUpdateExtentCallback());
-  fltImport->SetUpdateDataCallback( fltExport->GetUpdateDataCallback());
-  fltImport->SetDataExtentCallback( fltExport->GetDataExtentCallback());
-  fltImport->SetBufferPointerCallback( fltExport->GetBufferPointerCallback());
-  fltImport->SetCallbackUserData( fltExport->GetCallbackUserData());
-
-  // Do it
-  cout << "   casting image to VTK " << endl;
-  fltImport->Update(); cout << " done " << endl;
-
-  *imgOut = fltImport->GetOutput();
-  fltImport -> Delete();
-}
-
-
 template<class TImage>
 void ConnectITKToVTK(itk::VTKImageExport<TImage> *fltExport,vtkImageImport *fltImport)
 {
@@ -506,6 +476,142 @@ void ConnectITKToVTK(itk::VTKImageExport<TImage> *fltExport,vtkImageImport *fltI
 /********************************************************************************
  * Create a VTK mesh from the white matter image
  *******************************************************************************/
+template<class TImage>
+class BinaryImageToMeshFilter : public itk::ProcessObject
+{
+public:
+  typedef BinaryImageToMeshFilter Self;
+  typedef itk::ProcessObject Superclass;
+  typedef itk::SmartPointer<Self> Pointer;
+  typedef itk::SmartPointer<const Self> ConstPointer;
+
+  /** Method for creation through the object factory. */
+  itkNewMacro(Self);
+
+  /** Image dimension. */
+  itkStaticConstMacro(ImageDimension, unsigned int, TImage::ImageDimension);
+
+  /** Get the result mesh */
+  vtkPolyData *GetMesh();
+
+  /** Whether to invert the binary image */
+  itkSetMacro(InvertInput,bool);
+  itkGetMacro(InvertInput,bool);
+
+  /** Set the input */
+  void SetInput(TImage *image)
+    {
+    this->SetNthInput(0,image);
+    }
+
+protected:
+  BinaryImageToMeshFilter() 
+    {
+    this->SetNumberOfInputs(1);
+    this->SetNumberOfOutputs(0);
+  
+    // Create an anti-aliasing image filter
+    fltAlias = AAFilter::New();
+    fltAlias->SetMaximumRMSError(0.024);
+
+    // Cast the image to VTK
+    fltExport = ExportFilter::New();
+    fltImport = vtkImageImport::New();
+    fltExport->SetInput(fltAlias->GetOutput());
+    ConnectITKToVTK(fltExport.GetPointer(),fltImport);
+
+    // Compute marching cubes
+    vtkImageMarchingCubes *fltMarching = vtkImageMarchingCubes::New();
+    fltMarching->SetInput(fltImport->GetOutput());
+    fltMarching->ComputeScalarsOff();
+    fltMarching->ComputeGradientsOff();
+    fltMarching->SetNumberOfContours(1);
+    fltMarching->SetValue(0,0.0f);
+
+    // Keep the largest connected component
+    fltConnect = vtkPolyDataConnectivityFilter::New();
+    fltConnect->SetInput(fltMarching->GetOutput());
+    fltConnect->SetExtractionModeToLargestRegion();
+
+    // Invert - NO
+    m_InvertInput = false;
+    }
+
+  ~BinaryImageToMeshFilter()
+    {
+    // CLean up
+    fltMarching->Delete();
+    fltConnect->Delete();
+    fltImport->Delete();
+    }
+
+  /** Generate Data */
+  void GenerateData( void )
+    {
+    // Get the input and output pointers
+    const typename TImage::Pointer inputImage = 
+      reinterpret_cast<TImage *>(this->GetInput(0));
+    fltAlias->SetInput(inputImage);
+
+    // Run the computation
+    cout << "Computing white matter mesh" << endl;
+
+    // Make a negative image
+    if(m_InvertInput)
+      {
+      typename TImage::Pointer imgInverse = TImage::New();
+      imgInverse->SetRegions(inputImage->GetBufferedRegion());
+      imgInverse->Allocate();
+
+      typename TImage::PixelType iMax = 
+        std::numeric_limits< typename TImage::PixelType >::max();
+      
+      ConstIteratorType itSrc(inputImage, inputImage->GetBufferedRegion());
+      IteratorType itTrg(imgInverse, imgInverse->GetBufferedRegion());
+      while(!itSrc.IsAtEnd())
+        {
+        itTrg.Set(iMax - itSrc.Get());
+        ++itTrg; ++itSrc;
+        }
+
+      inputImage = imgInverse;
+      }
+
+    // Run the filters
+    cout << "   anti-aliasing the image " << endl;
+    fltAlias->Update();
+
+    cout << "   converting image to VTK" << endl;
+    fltImport->Update();
+
+    cout << "   running marching cubes algorithm" << endl;
+    fltMarching->Update();
+
+    cout << "      mesh has " << fltMarching->GetOutput()->GetNumberOfCells() << " cells." << endl;
+
+    cout << "   extracting the largest component" << endl;
+    fltConnect->Update();
+
+    cout << "      mesh has " << fltConnect->GetOutput()->GetNumberOfCells() << " cells." << endl;
+    }
+
+private:
+  typedef itk::Image<float,3> FloatImageType;
+  typedef itk::ImageRegionIterator<TImage> IteratorType;
+  typedef itk::ImageRegionConstIterator<TImage> ConstIteratorType;
+  typedef itk::AntiAliasBinaryImageFilter<TImage,FloatImageType> AAFilter;
+  typedef itk::VTKImageExport<FloatImageType> ExportFilter;
+
+  typename AAFilter::Pointer fltAlias;
+  typename ExportFilter::Pointer fltExport;
+  vtkImageImport *fltImport;
+  vtkImageMarchingCubes *fltMarching;
+  vtkPolyDataConnectivityFilter *fltConnect;
+
+  bool m_InvertInput;
+};
+
+/*
 vtkPolyData *CreateWhiteMatterMesh(CharImageType *imgWhite)
 {
   // Compute the mesh
@@ -525,80 +631,25 @@ vtkPolyData *CreateWhiteMatterMesh(CharImageType *imgWhite)
   AAFilter::Pointer fltAlias = AAFilter::New();
   fltAlias->SetInput(imgWhite);
   fltAlias->SetMaximumRMSError(0.024);
-  
+
   cout << "   anti-aliasing the image " << endl;
   fltAlias->Update();
 
-  // Cast the image to VTK
-  typedef itk::VTKImageExport<FloatImageType> ExportFilter;
-  ExportFilter::Pointer fltExport = ExportFilter::New();
-  vtkImageImport *fltImport = vtkImageImport::New();
-  fltExport->SetInput(fltAlias->GetOutput());
-  ConnectITKToVTK(fltExport.GetPointer(),fltImport);
-                                                                                
-  cout << "   converting image to ITK" << endl;
+  cout << "   converting image to VTK" << endl;
   fltImport->Update();
-                                                                                
-  // Compute marching cubes
-  vtkImageMarchingCubes *fltMarching = vtkImageMarchingCubes::New();
-  fltMarching->SetInput(fltImport->GetOutput());
-  fltMarching->ComputeScalarsOff();
-  fltMarching->ComputeGradientsOff();
-  fltMarching->SetNumberOfContours(1);
-  fltMarching->SetValue(0,0.0f);
 
   cout << "   running marching cubes algorithm" << endl;
   fltMarching->Update();
 
   cout << "      mesh has " << fltMarching->GetOutput()->GetNumberOfCells() << " cells." << endl;
-/*  
-  // Decimate the triangles 
-  vtkDecimate *fltDecimate = vtkDecimate::New();
-  fltDecimate->SetInput(fltMarching->GetOutput());
-  fltDecimate->SetTargetReduction(0.95);
-  fltDecimate->SetAspectRatio(20);
-  fltDecimate->SetInitialError(0.005);
-  fltDecimate->SetErrorIncrement(0.01);
-  fltDecimate->SetMaximumIterations(6);
-  fltDecimate->SetInitialFeatureAngle(30);
 
-  cout << "   decimating the iso-surface" << endl;
-  fltDecimate->Update();
-  
-  cout << "      mesh has " << fltDecimate->GetOutput()->GetNumberOfCells() << " cells." << endl;
-*/
-  // Keep the largest connected component
-  vtkPolyDataConnectivityFilter *fltConnect = vtkPolyDataConnectivityFilter::New();
-  fltConnect->SetInput(fltMarching->GetOutput());
-  fltConnect->SetExtractionModeToLargestRegion();
-   
   cout << "   extracting the largest component" << endl;
   fltConnect->Update();
 
   cout << "      mesh has " << fltConnect->GetOutput()->GetNumberOfCells() << " cells." << endl;
-  
-  // This should be enough. Display the polydata
-  // drawPolyData(fltConnect->GetOutput());
-  vtkPolyData *poly = fltConnect->GetOutput();
-  
-  // Save the mesh
-  vtkPolyDataWriter *fltWriter = vtkPolyDataWriter::New();
-  fltWriter->SetInput(fltConnect->GetOutput());
-  fltWriter->SetFileName("white_surface.vtk");
-  fltWriter->SetFileTypeToBinary();
-  
-  cout << "   writing mesh to file white_surface.vtk" << endl;
-  fltWriter->Update();
-
-  // CLean up
-  fltMarching->Delete();
-  fltConnect->Delete();
-  // fltDecimate->Delete();
-  fltWriter->Delete();
-
-  // Return
-  return poly;
 }
+*/
+
 #include <utility>
 #include <boost/config.hpp>
 #include <boost/graph/graph_traits.hpp>
@@ -1084,8 +1135,14 @@ int main(int argc, char *argv[])
   
   // This is the part of the code where we "project" the grey edge of the ribbon 
   // onto the white matter
+  typedef BinaryImageToMeshFilter<CharImageType> WhiteMeshFilter;
+  WhiteMeshFilter::Pointer fltWhiteMesh = WhiteMeshFilter::New();
+  fltWhiteMesh->SetInput(imgWhite);
+  fltWhiteMesh->SetInvertInput(true);
+  fltWhiteMesh->Update();
+
   
-  CreateWhiteMatterMesh(imgWhite);
+  // CreateWhiteMatterMesh(imgWhite);
   vtkPolyData *polyWhiteMesh = CreateWhiteMatterGraph(vCurves);
 /*  
   // This is the most interesting part of the program. We attempt to 
