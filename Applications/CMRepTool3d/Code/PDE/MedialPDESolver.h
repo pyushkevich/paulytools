@@ -231,7 +231,7 @@ private:
   unsigned int **xSiteIndex;
 
   /** The initial solution */
-  double *xInitSoln;
+  vnl_vector<double> xInitSoln;
 
   /** Representation for the sparse matrix */
   double *xSparseValues;
@@ -244,13 +244,14 @@ private:
   MedialAtom *xAtoms;
 
   /** Three vectors used in the iteration */
-  double *eps, *b, *y, *zTest;
+  vnl_vector<double> eps, b, y, zTest;
 
   /** The values of parameters u and v at grid points */
   double *xGridU, *xGridV;
 
   /** Internal data for PARDISO */
-  int PT[64], MTYPE, IPARM[64];
+  size_t PT[64];
+  int MTYPE, IPARM[64];
 
   /** Routine to compute medial atoms */
   void TestJacobi();

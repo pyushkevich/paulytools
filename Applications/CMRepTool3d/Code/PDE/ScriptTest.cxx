@@ -1,5 +1,4 @@
 #include "ScriptInterface.h"
-#include "FourierSurface.h"
 #include "BasisFunctions2D.h"
 #include "MedialAtom.h"
 #include "MedialPDESolver.h"
@@ -113,6 +112,7 @@ void Test01()
   // RenderMedialPDE(mp);
 }
 
+/**
 void Test02()
 {
   // Decide how many points to interpolate
@@ -161,6 +161,7 @@ void Test02()
       }
   
 }
+*/
 
 void Test03()
 {

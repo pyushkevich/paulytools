@@ -115,7 +115,6 @@ IF(BUILD_PDE)
     Code/PDE/BasisFunctions2D.cxx
     Code/PDE/CartesianMedialAtomGrid.cxx
     Code/PDE/CoefficientMask.cxx
-    Code/PDE/FourierSurface.cxx
     Code/PDE/GeometryDescriptor.cxx
     Code/PDE/ITKImageWrapper.cxx
     Code/PDE/MedialAtom.cxx

@@ -10,6 +10,7 @@
 #include <sstream>
 
 #include "imaging.txx"
+#include <vnl/algo/vnl_matrix_inverse.h>
 
 using namespace std;
 

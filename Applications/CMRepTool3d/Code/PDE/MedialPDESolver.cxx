@@ -5,29 +5,12 @@
 
 // BLAS/PARDISO references
 extern "C" {
-  typedef unsigned int CBLAS_INDEX;
-  void dcopy_(const int *N, const double *X, const int *incX, double *Y, const int *incY);
-  void daxpy_(const int *N, const double *alpha, const double *X, 
-    const int *incX, double *Y, const int *incY);
-  CBLAS_INDEX idamax_(const int *N, const double *X, const int *incX);
-
-  void pardisoinit_(int *, int *, int *);
-  void pardiso_(int *, int *, int *, int *, int *, int *, double *, int *, int *, 
+  void pardisoinit_(size_t *, int *, int *);
+  void pardiso_(size_t *, int *, int *, int *, int *, int *, double *, int *, int *, 
     int *, int *, int *, int *, double *, double *, int*);
 }
 
-void mydcopy(const int N, const double *X, const int incX, double *Y, const int incY)
-  { dcopy_(&N, X, &incX, Y, &incY); }
-
-void mydaxpy(const int N, const double alpha, const double *X, 
-  const int incX, double *Y, const int incY)
-  { daxpy_(&N, &alpha, X, &incX, Y, &incY); }
-  
-CBLAS_INDEX myidamax(const int N, const double *X, const int incX)
-  { return idamax_(&N, X, &incX) - 1; }
-
 using namespace std;
-
 
 FDAbstractSite::FDAbstractSite(unsigned int m, unsigned int n, unsigned int i, unsigned int j)
 {
@@ -379,12 +362,14 @@ void SparseMultiply(unsigned int n, unsigned int *rowIndex, unsigned int *colInd
     	}	
 }
 
+/*
 void SparseLinearTest(unsigned int n, unsigned int *rowIndex, unsigned int *colIndex, 
 	double *values, double *x, double *y,double *b)
 {
-	SparseMultiply(n, rowIndex, colIndex, values, x, y);
-	mydaxpy(n, -1.0, b, 1, y, 1);
+  SparseMultiply(n, rowIndex, colIndex, values, x, y);
+  mydaxpy(n, -1.0, b, 1, y, 1);
 }
+*/
 
 void DumpSparseMatrix(unsigned int n, unsigned int *rowIndex, unsigned int *colIndex, double *values)
 {
@@ -481,10 +466,10 @@ MedialPDESolver
   xSparseValues = new double[nSparseEntries];
 
   // Initialize our three vectors
-  b = new double[nSites];
-  y = new double[nSites];
-  eps = new double[nSites];
-  zTest = new double[nSites];
+  b.set_size(nSites);
+  y.set_size(nSites);
+  eps.set_size(nSites);
+  zTest.set_size(nSites);
   
   // Construct the evaluation grids
   double u = 0.0, v = 0.0;
@@ -503,7 +488,7 @@ MedialPDESolver
   IPARM[2] = 1;
 
   // Compute the initial solution
-  xInitSoln = new double[nSites];
+  xInitSoln.set_size(nSites);
   SetDefaultInitialGuess(0.001);
 
   // Initialize the atom grid to a Cartesian grid
@@ -564,28 +549,8 @@ void
 MedialPDESolver
 ::SetSolutionAsInitialGuess()
 {
-  for(unsigned int iSite = 0; iSite < nSites; iSite++)
-    xInitSoln[iSite] = y[iSite];
+  xInitSoln = y;
   flagReuseLastSolution = true;
-}
-
-void MedialPDESolver
-::TestJacobi()
-{
-  // Compute the Jacobi iteration
-  for(unsigned int k = 0; k < nSites; k++)
-    {
-    b[k] = xSites[k]->ComputeJacobiIteration(y);
-    if(b[k] <= 0.0)
-      {
-      cout << "Bad Jacobi result at site " << k << endl;
-      }
-    b[k] -= y[k];
-    }
-
-  // Compute the max update value
-  double bMax = fabs(b[myidamax(nSites, b, 1)]);
-  cout << "Jacobi Update: Max Differenece is " << bMax << endl;
 }
 
 void 
@@ -676,10 +641,10 @@ double MedialPDESolver::SolveOnce(double delta)
   double epsMax, bMax;
   
   // Initialize epsilon to zero
-  memset(eps, 0, sizeof(double) * nSites);
+  eps.fill(0.0);
   
   // Copy the initial solution to the current solution
-  mydcopy(nSites, xInitSoln, 1, y, 1);
+  y = xInitSoln;
 
   // We are now ready to perform the Newton loop
   bool flagComplete = false;
@@ -689,10 +654,10 @@ double MedialPDESolver::SolveOnce(double delta)
     for(k = 0; k < nSites; k++)
       {
       // Compute the non-zero values of A for this row
-      xSites[k]->ComputeDerivative(y, xSparseValues + xRowIndex[k] - 1, k+1);
+      xSites[k]->ComputeDerivative(y.data_block(), xSparseValues + xRowIndex[k] - 1, k+1);
 
       // Compute the value of b
-      b[k] = -xSites[k]->ComputeEquation(y);
+      b[k] = -xSites[k]->ComputeEquation(y.data_block());
       }
 
     // Debug 
@@ -705,7 +670,7 @@ double MedialPDESolver::SolveOnce(double delta)
       pardiso_(PT, &MAXFCT, &MNUM, &MTYPE, &PHASE, &N, 
         xSparseValues, (int *) xRowIndex, (int *) xColIndex, 
         NULL, &NRHS, IPARM, &MSGLVL, 
-        b, eps, &ERROR);
+        b.data_block(), eps.data_block(), &ERROR);
       }
 
     // Only perform the solution step
@@ -713,14 +678,14 @@ double MedialPDESolver::SolveOnce(double delta)
     pardiso_(PT, &MAXFCT, &MNUM, &MTYPE, &PHASE, &N, 
       xSparseValues, (int *) xRowIndex, (int *) xColIndex, 
       NULL, &NRHS, IPARM, &MSGLVL, 
-      b, eps, &ERROR);
+      b.data_block(), eps.data_block(), &ERROR);
 
     // Get the largest error (eps)
-    epsMax = fabs(eps[myidamax(nSites, eps, 1)]);
-    bMax = fabs(b[myidamax(nSites, b, 1)]);
+    epsMax = eps.inf_norm();
+    bMax = b.inf_norm();
 
     // Append the epsilon vector to the result
-    mydaxpy(nSites, 1.0, eps, 1, y, 1);
+    y += eps;
 
     // Print the statistics
     /*
@@ -758,7 +723,7 @@ MedialPDESolver
   if(xBestGuess > delta)
     {
     // Save the initial solution for all that it's worth
-    xBestInit.copy_in(xInitSoln);
+    xBestInit = xInitSoln;
 
     // Try using the following scale factors to get a decent solution
     double xTest = 1.0e-6, xScale = 2.0, nGuesses = 20;
@@ -775,7 +740,7 @@ MedialPDESolver
       if(xGuess < xBestGuess)
         {
         xBestGuess = xGuess;
-        xBestInit.copy_in(xInitSoln);
+        xBestInit = xInitSoln;
         }
       
       if(xGuess < delta)
@@ -790,238 +755,9 @@ MedialPDESolver
   if(xBestGuess > delta)
     { 
     cerr << "Complete PDE Solver Failure!" << endl; 
-    xBestInit.copy_out(xInitSoln);
+    xInitSoln = xBestInit;
     }
 
   // Reconstruct the medial atoms
-  ReconstructAtoms(y);
+  ReconstructAtoms(y.data_block());
 }
-
-/**
-void 
-MedialPDESolver
-::SolveByJacobiMethod(double delta)
-{
-  // Copy the initial solution to the current solution
-  mydcopy(nSites, xInitSoln, 1, y, 1);
-
-  // Initialize the geometry
-  InitializeSiteGeometry();
-  
-  // We are now ready to perform the Newton loop
-  bool flagComplete = false;
-  for(unsigned int iIter = 0; iIter < 30000 && !flagComplete; iIter++)
-    {
-    // Run the Jacobi iteration, put the result in b, difference in eps
-    for(unsigned int k = 0; k < nSites; k++)
-      {
-      b[k] = xSites[k]->ComputeJacobiIteration(y);
-      eps[k] = b[k] - y[k];
-      zTest[k] = xSites[k]->ComputeEquation(y);
-      if(b[k] <= 0) 
-        cout << "Bad result " << b[k] << " at site " << k << endl;
-      
-      // Optional: Gauss-Seidell
-      y[k] = b[k];
-      }
-
-    // Copy the result into y
-    mydcopy(nSites, b, 1, y, 1);
-
-    // Check the maximum update difference - should be 0 if we have the true solution
-    double epsMax = fabs(eps[myidamax(nSites, eps, 1)]);
-    double zMax = fabs(eps[myidamax(nSites, zTest, 1)]);
-    if(epsMax < delta)
-      flagComplete = true;
-
-    // Report the iteration progress
-    cout << "-----------" << endl;
-    cout << "Step " << iIter << ": " << endl;
-    cout << "  Largest Epsilon: " << epsMax << endl;
-    cout << "  Largest Error:   " << zMax << endl;
-    }
-
-  // Compute the atoms
-  ReconstructAtoms(y);
-}
-
-double MedialPDESolver
-::IntegrateBoundaryMeasure(EuclideanFunction *fun, double &area)
-{
-  // Integration over patches. First, compute the boundary measure at
-  // each point on the medial surface.
-  double *bndValues[2], *xAreas;
-  bndValues[0]= new double[nSites];
-  bndValues[1]= new double[nSites];
-
-  // This vector stores the area assigned to each boundary point
-  xAreas = new double[nSites];
-
-  // Compute the boundary measure at each point
-  for(unsigned int iSite = 0; iSite < nSites; iSite++)
-    {
-    // For boundary sites, only one side is used
-    if(xSites[iSite]->IsBorderSite())
-      {
-      // Compute the crest measure
-      bndValues[0][iSite] = bndValues[1][iSite] = 
-        fun->Evaluate(xAtoms[iSite].xBnd[0].X);
-      }
-    else
-      {
-      // Compute the boundary measure
-      bndValues[0][iSite] = fun->Evaluate(xAtoms[iSite].xBnd[0].X);
-      bndValues[1][iSite] = fun->Evaluate(xAtoms[iSite].xBnd[1].X);
-      }
-    }
-
-  // Integrate the surface area
-  double xArea = 0.0, xMeasure = 0.0;
-  for(unsigned int i = 0; i < m - 1; i++)
-    for(unsigned int j = 0; j < n - 1; j++)
-      for(unsigned int d = 0; d < 2; d++)
-        {
-        // Access the four medial points
-        unsigned int i00 = xSiteIndex[i][j];
-        unsigned int i01 = xSiteIndex[i][j+1];
-        unsigned int i10 = xSiteIndex[i+1][j];
-        unsigned int i11 = xSiteIndex[i+1][j+1];
-
-        // Compute the areas of the two triangles involved
-        double A1 = TriangleArea(
-          xAtoms[i00].xBnd[d].X, xAtoms[i01].xBnd[d].X, xAtoms[i11].xBnd[d].X); 
-        double A2 = TriangleArea(
-          xAtoms[i00].xBnd[d].X, xAtoms[i11].xBnd[d].X, xAtoms[i10].xBnd[d].X); 
-          
-        // Integrate the measure
-        xMeasure += A1 * (bndValues[d][i00] + bndValues[d][i01] + bndValues[d][i11]); 
-        xMeasure += A2 * (bndValues[d][i00] + bndValues[d][i11] + bndValues[d][i10]); 
-        xArea += (A1 + A2);
-        }
-
-  // Scale the measure by three
-  xMeasure /= 3.0;
-  // cout << "Area: " << xArea << " Measure: " << xMeasure << endl;
-
-  // Clean up
-  delete xAreas;
-  delete bndValues[0];
-  delete bndValues[1];
-
-  // Return the result
-  area = xArea;
-  return xMeasure;
-}
-
-double MedialPDESolver
-::IntegrateVolumeMeasure(EuclideanFunction *xFunction, unsigned int nSamples, double &volume)
-{
-  // Integrate some measure over the volume enclosed by the structure. A
-  // triangle on the medial surface and a triangle on the boundary form a 
-  // prism; we have to calculate its volume.
-  unsigned int iSite, iSample, iSide, nSides, i, j;
-  
-  // First we sample the function along the profiles from the medial axis and
-  // store this for future integration
-  double **xSamples[2];
-  xSamples[0] = new double *[nSites];
-  xSamples[1] = new double *[nSites];
-
-  for(iSite = 0; iSite < nSites; iSite++)
-    {
-    // Allocate the along-the-profile samples
-    xSamples[0][iSite] = new double[nSamples];
-    xSamples[1][iSite] = xSites[iSite]->IsBorderSite() 
-      ? xSamples[0][iSite] : new double[nSamples];
-
-    // Simpler processing at border sites
-    nSides = xSites[iSite]->IsBorderSite() ? 1 : 2;
-    for(iSide = 0; iSide < nSides; iSide++)
-      {
-      // Compute the delta vector
-      SMLVec3d xSample = xAtoms[iSite].X;
-      SMLVec3d xDelta = 
-        (xAtoms[iSite].R / (nSamples - 1.0)) * xAtoms[iSite].xBnd[iSide].N;
-
-      // Compute the delta vector
-      for(iSample = 0; iSample < nSamples; iSample++, xSample += xDelta)
-        {
-        xSamples[iSide][iSite][iSample] = xFunction->Evaluate(xSample);
-        }
-      }
-    }
-
-  // Now, the more difficult part. For each section of the boundary / medial
-  // grid, we must compute the volume and assign a sixth of this volume to 
-  // each of the samples, thus generating a weight for every sample
-  double xMeasure = 0.0, xVolume = 0.0;
-  for(i = 0; i < m - 1; i++) for(j = 0; j < n - 1; j++)
-    {
-    // Access the four sites at this quad
-    unsigned int i00 = xSiteIndex[i][j];
-    unsigned int i01 = xSiteIndex[i][j+1];
-    unsigned int i10 = xSiteIndex[i+1][j];
-    unsigned int i11 = xSiteIndex[i+1][j+1];
-
-    // Access the four medial atoms
-    SMLVec3d X00 = xAtoms[i00].X;
-    SMLVec3d X01 = xAtoms[i01].X;
-    SMLVec3d X10 = xAtoms[i10].X;
-    SMLVec3d X11 = xAtoms[i11].X;
-
-    // Get the medial atom at this location
-    for(iSide = 0; iSide < 2; iSide++)
-      {
-      // Get the four deltas
-      SMLVec3d d00 = xAtoms[i00].xBnd[iSide].N;
-      SMLVec3d d01 = xAtoms[i01].xBnd[iSide].N;
-      SMLVec3d d10 = xAtoms[i10].xBnd[iSide].N;
-      SMLVec3d d11 = xAtoms[i11].xBnd[iSide].N;
-
-      // Compute the prism volumes
-      for(iSample = 0; iSample < nSamples - 1; iSample++)
-        {
-        // Compute the volume of the first prism
-        double t1 = iSample * 1.0f / (nSamples - 1); 
-        double t2 = (1 + iSample) * 1.0f / (nSamples - 1); 
-
-        double V1 = PrismVolume(
-          X00 + d00 * t1, X01 + d01 * t1, X11 + d11 * t1,
-          X00 + d00 * t2, X01 + d01 * t2, X11 + d11 * t2);
-          
-        // Compute the volume of the second prism
-        double V2 = PrismVolume(
-          X00 + d00 * t1, X11 + d11 * t1, X10 + d10 * t1,
-          X00 + d00 * t2, X11 + d11 * t2, X10 + d10 * t2);
-
-        // Integrate the measure
-        xMeasure += V1 * (
-          xSamples[iSide][i00][iSample] + xSamples[iSide][i00][iSample + 1] + 
-          xSamples[iSide][i01][iSample] + xSamples[iSide][i01][iSample + 1] + 
-          xSamples[iSide][i11][iSample] + xSamples[iSide][i11][iSample + 1] ); 
-
-        xMeasure += V2 * (
-          xSamples[iSide][i00][iSample] + xSamples[iSide][i00][iSample + 1] + 
-          xSamples[iSide][i11][iSample] + xSamples[iSide][i11][iSample + 1] + 
-          xSamples[iSide][i10][iSample] + xSamples[iSide][i10][iSample + 1] ); 
-
-        xVolume += (V1 + V2);
-        }
-      }
-    }
-
-  // Clean up the samples
-  for(iSite = 0; iSite < nSites; iSite++)
-    {
-    delete xSamples[0][iSite];
-    if(!xSites[iSite]->IsBorderSite())
-      delete xSamples[1][iSite];
-    }
-  delete xSamples[0];
-  delete xSamples[1];
-
-  // Finish
-  volume = xVolume; 
-  return xMeasure / 6.0;
-}
-*/

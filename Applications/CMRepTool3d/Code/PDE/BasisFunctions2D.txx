@@ -1,8 +1,6 @@
-// Lapack definitions
-extern "C" {
-  void dgetrf_(int *m,int *n,double *a,int *lda,int *ipiv,int *info);
-  void dgetrs_(char *trans,int *n,int *nrhs,double *a,int *lda,int *ipiv,double *b,int *ldb,int *info);
-}
+#include <vnl/vnl_matrix.h>
+#include <vnl/vnl_vector.h>
+#include <vnl/algo/vnl_qr.h>
 
 template< size_t NComponents, size_t NOrder, typename BasisFunctionU, typename BasisFunctionV >
 GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV>
@@ -158,18 +156,15 @@ GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV
   cout << "Fitting data with " << nUnkowns << " unknowns to " << n << " points." << endl;
 
   // Compute the basis for each point
-  double **Z = new double*[nUnkowns];
+	vnl_matrix<double> Z(nUnkowns, n);
   for(iu = 0, i = 0; iu < nu; iu++) for(iv = 0; iv < nv; iv++, i++)
-    {
-    Z[i] = new double[n];
     for(k = 0; k < n; k++) 
       Z[i][k] = fu.Evaluate(uu[k], iu, 0) * fv.Evaluate(vv[k], iv, 0); 
-    }
 
   // Allocate the matrix A and vector b
-  double *A = new double[nUnkowns * nUnkowns];
-  double *b = new double[nUnkowns];
-
+	vnl_matrix<double> A(nUnkowns, nUnkowns);
+	vnl_vector<double> b(nUnkowns);
+  
   // Set the elements of A and b
   unsigned int offset = 0;
   for(j = 0; j < nUnkowns; j++)
@@ -182,38 +177,21 @@ GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV
     // Compute the elements of the A matrix
     for(i = 0; i < nUnkowns; i++)
       {
-      A[offset] = 0;
+      A[j][i] = 0.0;
       for(k = 0; k < n; k++) 
-        A[offset] += Z[i][k] * Z[j][k];
+        A[j][i] += Z[i][k] * Z[j][k];
       ++offset;
       }
     }
 
   // Solve the system Ax = b (LU decomposition)
-  int *iPivot = new int[nUnkowns], iInfo, nRows = nUnkowns;
-  dgetrf_( &nRows, &nRows, A, &nRows, iPivot, &iInfo);  
-  if(iInfo < 0)
-    { cerr << "Error calling dgetrf_" << endl; return; }
-  else if(iInfo > 0)
-    { cerr << "dgetrf_: Matrix is singular" << endl; return; }
-
-  // Solve the system
-  char cTrans = 'N';
-  int nRhs = 1; 
-  dgetrs_(&cTrans, &nRows, &nRhs, A, &nRows, iPivot, b, &nRows, &iInfo);
-  if(iInfo < 0)
-    { cerr << "Error calling dgetrs_" << endl; return; }
+	vnl_qr<double> qr(A);
+	vnl_vector<double> y = qr.solve(b);
 
   // Solution has been placed into B. Map it to the coefficients
   i = 0;
   for(iu = 0; iu < nu; iu++) for(iv = 0; iv < nv; iv++)
-    C(iComponent, iu, iv) = b[i++];
-
-  // Clean up the resources
-  delete b;
-  delete A;
-  for(i = 0; i < nUnkowns; i++)
-    { delete Z[i]; }
+    C(iComponent, iu, iv) = y[i++];
 }
 
 
