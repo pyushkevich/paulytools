@@ -148,6 +148,7 @@ TracerMainWindow
   vtkIdType npts;
   vtkIdType *pts;
     
+  glColor3d(0.4, 0.4, 0.4);
   glBegin(GL_TRIANGLES);
   
   vtkIdType iLastMarker = (vtkIdType) -2;
@@ -177,7 +178,7 @@ TracerMainWindow
         if(idMarker != TracerData::NO_MARKER)
           glColor3dv(m_Data->GetCurves()->GetMarkerColor(idMarker).data_block());
         else
-          glColor3d(0.0, 0.0, 0.0);
+          glColor3d(0.4, 0.4, 0.4);
 
         iLastMarker = idMarker;
         }
@@ -286,7 +287,7 @@ TracerMainWindow
     glPushAttrib(GL_LIGHTING_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT);
 
     // Set the default drawing color
-    glColor3f(0.1f, 0.6f, 0.4f);
+    glColor3f(0.6f, 0.6f, 0.6f);
     
     // Start line drawing
     glBegin(GL_LINES);

@@ -181,14 +181,14 @@ VTKMeshShortestDistance
 
   do
     {
-    cout << "Searching ray " << xStart << "  to  " << xEnd << endl;
+    // cout << "Searching ray " << xStart << "  to  " << xEnd << endl;
     
     // Compute the intersection with the line
     int rc = fltCellLocator->IntersectWithLine(
       xStart.data_block(),xEnd.data_block(),
       0.001, t, ptLine.data_block(), pCoords.data_block(), subId, iCell);
 
-    cout << "   RC: " << rc << " \t T = " << t << " \t iCell " << iCell << endl;
+    // cout << "   RC: " << rc << " \t T = " << t << " \t iCell " << iCell << endl;
 
     // If no intersection found, return false
     if(!rc) return false;

@@ -575,6 +575,9 @@ OnMarkerListChange(TracerDataEvent *evt)
 
   // Select the active item (use method below)
   OnFocusMarkerChange(evt);
+  
+  // The curves have dirtied
+  m_CurvesDirty = true;
 }
 
 void 
