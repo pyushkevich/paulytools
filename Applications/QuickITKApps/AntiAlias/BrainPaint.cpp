@@ -197,10 +197,10 @@ public:
   // Generate a vector corresponding to the current ribbon state
   OptVec GetVectorRepresentation() 
     {
-    OptVec v(m_Length);
+    OptVec v(m_Length * 3);
     
     unsigned int j = 0;
-    for(unsigned int i = 0;i < v.size(); i++)
+    for(unsigned int i = 0;i < m_Length; i++)
       {
       SplineType::Point point = m_Curve.splWhite.GetControlPoint(i + m_Start);
       v(j++) = point(0); v(j++) = point(1); v(j++) = point(2);
@@ -238,8 +238,17 @@ public:
     return m_Curve;
     }
 
+  // Different objectives computed in the optimization
+  struct Objectives {
+    double xArea;
+    double xWidth;
+    double xWhiteDistance;
+    double xWhiteLength;
+    double xWhiteIrregularity;
+  };
+
   // Computes three separate objectives based for the range m_Start to m_End
-  void ComputeObjectives(double &area, double &distance, double &length)
+  Objectives ComputeObjectives()
     {
     // Get a raw pointer to the data as well as the buffer access steps
     float *rawimg = m_Image->GetBufferPointer();
@@ -247,10 +256,12 @@ public:
     unsigned int nSlice = m_Image->GetBufferedRegion().GetSize(1) * nLine;
     
     // Measure the costs associated with the ribbon
-    double xArea = 0.0;
-    double xWidth = 0.0;
-    double xLenWhite = 0.0;
-    double xGreyCount = 0.0;
+    Objectives obj;
+    obj.xArea = 0.0;
+    obj.xWidth = 0.0;
+    obj.xWhiteLength = 0.0;
+    obj.xWhiteDistance = 0.0;
+    obj.xWhiteIrregularity = 0.0;
 
     // Integrate the function over the ribbon
     unsigned int nPoints = m_Curve.gridWhite.size();
@@ -310,6 +321,9 @@ public:
         }
       }
 
+    // Keep track of the sum of distances and the sum of squares for variance computation
+    double xWhiteLenSqr = 0.0;
+    
     // Compute the shape and white matter membership over the ribbon
     for(unsigned int i=0; i < xWhite.size() - 1 ; i++)
       {
@@ -321,21 +335,21 @@ public:
       double lw = (xWhite[i] - xWhite[i+1]).two_norm();
         
       // Width, Length integration 
-      xWidth += 0.5 * (w2 + w1); 
-      xLenWhite += lw;
-      xGreyCount += 0.5 * (xImageVal[i] + xImageVal[i+1]) * lw;
+      obj.xWidth += 0.5 * (w2 + w1); 
+      obj.xWhiteLength += lw;
+      xWhiteLenSqr += lw * lw;
+      obj.xWhiteDistance += 0.5 * (xImageVal[i] + xImageVal[i+1]) * lw;
 
       // Area integration
       double h = (xWhite[i+1]-xGrey[i]).two_norm(); 
-      xArea += AreaOfTriangle(w1,lw,h);
-      xArea += AreaOfTriangle(w2,lg,h);
-
+      obj.xArea += AreaOfTriangle(w1,lw,h);
+      obj.xArea += AreaOfTriangle(w2,lg,h);
       }
 
-    // area = xWidth * xLenWhite; //xArea;
-    area = xArea;
-    distance = xGreyCount;
-    length = xLenWhite;
+    // Compute the variance in the white length
+    obj.xWhiteIrregularity = (xWhiteLenSqr - (obj.xWhiteLength * obj.xWhiteLength) / nPoints) / (nPoints - 1);
+    
+    return obj;
     }
   
   double evaluate(const OptVec &x)
@@ -344,17 +358,17 @@ public:
     UpdateRibbon(x);
 
     // Compute the components of the objective
-    double xArea, xWhiteDistance, xWhiteLength;
-    ComputeObjectives(xArea,xWhiteDistance,xWhiteLength);
+    Objectives obj = ComputeObjectives();
 
     // Compute overall objective value based on the two components
-    double obj = m_Factor * (xWhiteDistance / xWhiteLength) + xArea;
+    double result = m_Factor * (obj.xWhiteDistance / obj.xWhiteLength) 
+       + obj.xArea + 100000 * obj.xWhiteIrregularity;
 
     // Increase the iterations counter
     setEvaluationCost(getEvaluationCost() + 1);
 
     // Return the objective
-    return obj;
+    return result;
     }
 
   // Generate the initial search space given the current state
@@ -521,6 +535,7 @@ int main(int argc, char *argv[])
     }
 
   // Blur the distance image
+  /*
   cout << "Blurring the distance transform..." << endl;
   typedef itk::DiscreteGaussianImageFilter<FloatImageType,FloatImageType> BlurFilter;
   BlurFilter::Pointer fltBlur = BlurFilter::New();
@@ -529,6 +544,7 @@ int main(int argc, char *argv[])
   fltBlur->SetVariance(var);
   fltBlur->Update();
   imgDistance = fltBlur->GetOutput();
+  */
 
   // Create the distance transform images
   typedef Image<short,3> OffsetImageType;
@@ -581,11 +597,11 @@ int main(int argc, char *argv[])
       }
 
     // Create the b-splines
-    curve.splGrey.SetNumberOfControlPoints(20);
+    curve.splGrey.SetNumberOfControlPoints(16);
     curve.splGrey.FitToPoints(nPoints,Q1);
     curve.splGrey.CreateUniformEvaluationGrid(200, curve.gridGrey);
     
-    curve.splWhite.SetNumberOfControlPoints(20);
+    curve.splWhite.SetNumberOfControlPoints(16);
     curve.splWhite.FitToPoints(nPoints,Q2);
     curve.splWhite.CreateUniformEvaluationGrid(200, curve.gridWhite);
     }
@@ -593,21 +609,21 @@ int main(int argc, char *argv[])
   // This is the most interesting part of the program. We attempt to 
   // improve the ribbons by making their free side pass entirely through
   // the white matter
-  for(iCurve=0;iCurve<vCurves.size();iCurve++)
+  for(iCurve=0;iCurve< 3 /*vCurves.size()*/;iCurve++)
     {
     // Create a curve
     CurveType &curve = vCurves[iCurve];
 
     // Create an overall problem
-    double factor = 10000;
-    RibbonProblem pbTotal(curve,imgDistance,0,curve.points.size(),factor);
+    double factor = 20000;
+    unsigned int nControls = curve.splWhite.GetNumberOfControlPoints();
+    RibbonProblem pbTotal(curve,imgDistance,0,nControls,factor);
 
     // Compute the objective values
-    double xArea, xWhiteLength, xWhiteDistance;
-    pbTotal.ComputeObjectives(xArea,xWhiteDistance,xWhiteLength);
-    cout << "Ribbon " << iCurve << " of length " << curve.points.size() << " has area " << xArea 
-      << " and WM distance " << (xWhiteDistance / xWhiteLength) << endl;
-
+    RibbonProblem::Objectives obj = pbTotal.ComputeObjectives();
+    cout << "Ribbon " << iCurve << " of length " << curve.points.size() << " has area " << obj.xArea 
+       << " irreg " << obj.xWhiteIrregularity  
+      << " and WM distance " << (obj.xWhiteDistance / obj.xWhiteLength) << endl;
 
     // Create a list of starting points. We are not allowed to optimize the 
     // first and last points
@@ -619,9 +635,9 @@ int main(int argc, char *argv[])
       }
     
     // Iteratevely optimize over ribbon segments
-    for(unsigned int iIteration = 0;iIteration < 200;iIteration++)
+    for(unsigned int iIteration = 0;iIteration < 40;iIteration++)
       {
-      drawRibbons(vCurves,iCurve);
+      // drawRibbons(vCurves,iCurve);
        
       // State the iteration
       cout << "   Running iteration " << iIteration << flush;
@@ -684,14 +700,17 @@ int main(int argc, char *argv[])
         }
 
       // Create an overall problem
-      RibbonProblem pbFinal(curve,imgDistance,0,curve.points.size(),factor);
+      RibbonProblem pbFinal(curve,imgDistance,0,nControls,factor);
 
       // Compute the objective values
-      pbFinal.ComputeObjectives(xArea,xWhiteDistance,xWhiteLength);
-      cout << "\t area: " << xArea 
-        << "\t WM distance: " << (xWhiteDistance / xWhiteLength) 
+      RibbonProblem::Objectives obj = pbFinal.ComputeObjectives();
+      cout << "\t area: " << obj.xArea 
+        << "\t WM distance: " << (obj.xWhiteDistance / obj.xWhiteLength) 
+        << "\t irreg: " << obj.xWhiteIrregularity 
         << "\t obj : " << pbFinal.evaluate(pbFinal.GetVectorRepresentation()) << endl;
       }
+
+      drawRibbons(vCurves,iCurve);
 
     }
     
@@ -702,7 +721,8 @@ int main(int argc, char *argv[])
   unsigned int nTriangles = 0, iTriangle = 0;
   for(iCurve=0;iCurve<vCurves.size();iCurve++)
     {
-    nTriangles += vCurves[iCurve].points.size() * 2 - 2;
+    unsigned int nPoints = vCurves[iCurve].gridWhite.size();
+    nTriangles += nPoints * 2 - 2;
     }
 
   // Allocate the ribbon array
@@ -712,16 +732,20 @@ int main(int argc, char *argv[])
   for(iCurve=0;iCurve<vCurves.size();iCurve++)
     {
     CurveType &curve = vCurves[iCurve];
-    for(iPoint=0;iPoint<curve.points.size() - 1;iPoint++)
+    unsigned int nPoints = curve.gridWhite.size();
+    for(iPoint=0;iPoint<nPoints - 1;iPoint++)
       {
-      CurvePoint &p1 = curve.points[iPoint];
-      CurvePoint &p2 = curve.points[iPoint + 1];
-      xTriangles[iTriangle++] = (double *)(p1.xGrey.data_block());
-      xTriangles[iTriangle++] = (double *)(p1.xWhite.data_block());
-      xTriangles[iTriangle++] = (double *)(p2.xGrey.data_block());
-      xTriangles[iTriangle++] = (double *)(p1.xWhite.data_block());
-      xTriangles[iTriangle++] = (double *)(p2.xWhite.data_block());
-      xTriangles[iTriangle++] = (double *)(p2.xGrey.data_block());
+      SplineType::Point g1 = curve.splGrey.EvaluateGridPoint(curve.gridGrey,iPoint,0);
+      SplineType::Point w1 = curve.splWhite.EvaluateGridPoint(curve.gridWhite,iPoint,0);
+      SplineType::Point g2 = curve.splGrey.EvaluateGridPoint(curve.gridGrey,iPoint+1,0);
+      SplineType::Point w2 = curve.splWhite.EvaluateGridPoint(curve.gridWhite,iPoint+1,0);
+
+      xTriangles[iTriangle++] = (double *)(g1.data_block());
+      xTriangles[iTriangle++] = (double *)(w1.data_block());
+      xTriangles[iTriangle++] = (double *)(g2.data_block());
+      xTriangles[iTriangle++] = (double *)(w1.data_block());
+      xTriangles[iTriangle++] = (double *)(w2.data_block());
+      xTriangles[iTriangle++] = (double *)(g2.data_block());
       }
     }
 
