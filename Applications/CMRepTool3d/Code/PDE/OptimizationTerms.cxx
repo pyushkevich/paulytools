@@ -214,7 +214,7 @@ BoundaryImageMatchTerm
   sout << "    boundary area : " << xBoundaryArea << endl;
   sout << "    ratio         : " << xFinalMatch << endl;
 }
-
+/*
 double
 BoundaryImageMatchTerm::BeginGradientComputation(SolutionData *S)
 {
@@ -311,7 +311,7 @@ void BoundaryImageMatchTerm::EndGradientComputation()
   delete xGradI;
   delete xImageVal;
 }
-
+*/
 /*********************************************************************************
  * BOUNDARY JACOBIAN TERM
  ********************************************************************************/
@@ -416,6 +416,7 @@ double VolumeOverlapEnergyTerm::ComputeEnergy(SolutionData *data)
     xImageValue[i] = fImage.Evaluate(data->xInternalPoints[i]);
 
   // Iterate over all the profiles (intervals of the sail vectors)
+  /* 
   MedialProfileIntervalIterator *itProfile = 
     data->xAtomGrid->NewProfileIntervalIterator(nCuts);
   
@@ -446,8 +447,8 @@ double VolumeOverlapEnergyTerm::ComputeEnergy(SolutionData *data)
     }
   
   delete itProfile; 
-
-  /*
+  */
+  
   MedialInternalPointIterator *it = data->xAtomGrid->NewInternalPointIterator(nCuts);
   for(; !it->IsAtEnd(); ++(*it))
     {
@@ -455,7 +456,7 @@ double VolumeOverlapEnergyTerm::ComputeEnergy(SolutionData *data)
     double w = data->xInternalWeights[it->GetIndex()];
     xIntersect += xLocal * w;
     }
-  */
+  delete it;
   
   // Get (remember) the object volume 
   xObjectVolume = data->xInternalVolume;
@@ -619,6 +620,53 @@ void CrestLaplacianEnergyTerm::PrintReport(ostream &sout)
   sout << "    total penalty            : " << xTotalPenalty << endl;
 }
 
+/*********************************************************************************
+ * Atom Badness Penalty term
+ ********************************************************************************/
+double AtomBadnessTerm::ComputeEnergy(SolutionData *data)
+{
+  // Initialize the accumulators
+  xMaxBadness = 0;
+  xTotalPenalty = xAvgBadness = 0.0;
+  nBadAtoms = nAtoms = 0;
+  
+  // Iterate over all crest atoms
+  MedialAtomIterator *itAtom = data->xAtomGrid->NewAtomIterator();
+  for( ; !itAtom->IsAtEnd(); ++(*itAtom) )
+    {
+    double x = data->xAtoms[itAtom->GetIndex()].xBadness;
+
+    // Update the minimum value
+    if(x > xMaxBadness) xMaxBadness = x;
+
+    // Update the bad atom counter 
+    if(x > 0) nBadAtoms++;
+    nAtoms++;
+
+    // Update the average
+    xAvgBadness += x;
+
+    // Update the total penalty
+    xTotalPenalty += 100 * x;
+    }
+  delete itAtom;
+
+  // Finish up
+  xAvgBadness /= nBadAtoms;
+
+  return xTotalPenalty;
+}  
+
+void AtomBadnessTerm::PrintReport(ostream &sout)
+{
+  sout << "  Atom Penalty Term:           " << endl;
+  sout << "    number of atoms          : " << nAtoms << endl; 
+  sout << "    number of bad atoms      : " << nBadAtoms << endl; 
+  sout << "    largest badness value    : " << xMaxBadness << endl; 
+  sout << "    average badness value    : " << xAvgBadness << endl; 
+  sout << "    total penalty            : " << xTotalPenalty << endl;
+}
+
 
 /*********************************************************************************
  * MEDIAL OPTIMIZATION PROBLEM
@@ -650,7 +698,8 @@ double MedialOptimizationProblem::Evaluate(double *X)
   for(size_t iTerm = 0; iTerm < xTerms.size(); iTerm++)
     { xSolution += xTerms[iTerm]->ComputeEnergy(&S0) * xWeights[iTerm]; }
 
-  // cout << "RESULT:" << xValue << endl;
+  cout << "RESULT:" << xSolution << endl;
+  PrintReport(cout);
 
   // Return the result
   return xSolution;
@@ -666,8 +715,11 @@ MedialOptimizationProblem
   size_t nCoeff = xCoeff->GetNumberOfCoefficients();
   xCoeff->SetCoefficientArray(X);
 
-  // Use current solution as the guess
+  // Solve using default initial guess
+  // xSolver->SetDefaultInitialGuess();
   xSolver->Solve(xPrecision);
+
+  // Use current solution as the guess
   xSolver->SetSolutionAsInitialGuess();
 
   // Create a solution data object representing current solution
@@ -705,13 +757,15 @@ MedialOptimizationProblem
         xTerms[iTerm]->ComputePartialDerivative(SCenter, SFwd, SBck, xEpsilon);
 
     // Dump the gradient
-    cout << iCoeff << "; " << XGradient[iCoeff] << endl;
+    // cout << iCoeff << "; " << XGradient[iCoeff] << endl;
+    cout << "." << flush;
 
     // Delete the solutions
     delete SFwd; delete SBck;
     }
 
   // Increment the evaluation counter
+  cout << endl;
   evaluationCost += nCoeff;
 
   // Clean up everything

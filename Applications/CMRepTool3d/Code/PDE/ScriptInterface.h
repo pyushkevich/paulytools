@@ -117,6 +117,9 @@ public:
   /** Load from a parameter file */
   void LoadFromParameterFile(const char *file);
 
+  /** Set the number of fourier coefficients */
+  void SetNumberOfCoefficients(unsigned int m, unsigned int n);
+
   /** Some default initialization */
   void GenerateSampleModel();
 

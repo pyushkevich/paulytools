@@ -129,6 +129,7 @@ public:
     std::ostringstream oss;
 
     // Put the new value into the stream
+    oss.precision(16);
     oss << newValue;
 
     // Set the string

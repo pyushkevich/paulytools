@@ -25,13 +25,12 @@ else:
 MakeImages(dirWork, id)
 
 # Create a medial PDE object
-mp = MedialPDE(2, 4, 20, 40)
-mp.LoadFromDiscreteMRep(dirWork + "init/surf01.txt", -0.5)
-mp.Solve()
+mp = MedialPDE(2, 4, 32, 80)
+mp.LoadFromParameterFile(dirWork + "init/init.mpde")
 
 # Load the coarsest image
 img = FloatImage()
-img.LoadFromFile(dirWork + "img/st1006L_med.mha")
+img.LoadFromFile(dirWork + "img/" + id + "_med.mha")
 img.SetOutsideValue(-1.0);
 
 # Match the m-rep by moments
@@ -53,54 +52,32 @@ mp.RunOptimization(img, 800)
 SaveMRep(mp, id, "ctf01")
 
 # Compute add the rho component to the match
-mp.SetOptimizationToDeformable(1.0, 1.0);
+mp.SetOptimizationToDeformable()
 mp.EnableMeshDump(dirMesh + "/step3",0.01)
 mp.RunOptimization(img, 800)
 SaveMRep(mp, id, "ctf02")
 
-# Scale up to 4 by 8 optimization
-mp = MedialPDE(4, 6, 20, 40)
-mp.LoadFromParameterFile(dirWork + "mreps/" + id + ".ctf02.mpde")
-mp.SetOptimizerToConjugateGradientDescent(0.1)
-mp.SetMatchToVolumeOverlap()
-
 # Compute match with rho
-mp.SetOptimizationToDeformable(1.0, 1.0);
+mp.SetNumberOfCoefficients(4, 6)
 mp.EnableMeshDump(dirMesh + "/step4",0.01)
 mp.RunOptimization(img, 400)
 SaveMRep(mp, id, "ctf03")
 
 # Scale up to 6 by 10 optimization
-mp = MedialPDE(6, 8, 20, 40)
-mp.LoadFromParameterFile(dirWork + "mreps/" + id + ".ctf03.mpde")
-mp.SetOptimizerToConjugateGradientDescent(0.1)
-mp.SetMatchToVolumeOverlap()
-
-# Compute match with rho
-mp.SetOptimizationToDeformable(1.0, 1.0);
+mp.SetNumberOfCoefficients(6, 8)
+mp.SetMatchToBoundaryGradient()
 mp.EnableMeshDump(dirMesh + "/step5",0.01)
 mp.RunOptimization(img, 400)
 SaveMRep(mp, id, "ctf04")
 
 # Scale up to 6 by 10 optimization
-mp = MedialPDE(6, 10, 20, 40)
-mp.LoadFromParameterFile(dirWork + "mreps/" + id + ".ctf04.mpde")
-mp.SetOptimizerToConjugateGradientDescent(0.1)
-mp.SetMatchToVolumeOverlap()
-
-# Compute match with rho
-mp.SetOptimizationToDeformable(1.0, 1.0);
+mp.SetNumberOfCoefficients(6, 10)
 mp.EnableMeshDump(dirMesh + "/step6",0.01)
 mp.RunOptimization(img, 400)
 SaveMRep(mp, id, "ctf05")
 
-
-
-
-
-
-
-
-
-
-
+# Scale up to 6 by 10 optimization
+mp.SetNumberOfCoefficients(8, 12)
+mp.EnableMeshDump(dirMesh + "/step7",0.01)
+mp.RunOptimization(img, 400)
+SaveMRep(mp, id, "ctf06")

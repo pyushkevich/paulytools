@@ -83,6 +83,15 @@ public:
     : valarray<double> (nx * ny * nz)
     { stride_y = nx; stride_z = nx * ny; }
 
+  void resize(size_t nx, size_t ny, size_t nz)
+    {
+    stride_y = nx; 
+    stride_z = nx * ny; 
+    valarray<double>::resize(nx * ny * nz);
+    (*this) *= 0.0; 
+    }
+    
+
   double &operator() (size_t ix, size_t iy, size_t iz)
     { return (*this)[iz * stride_z + iy * stride_y + ix]; }
 
@@ -108,6 +117,8 @@ public:
   /** Construct the representation with a specific number of coefficients in u
    * and v components */
   GenericBasisRepresentation2D(size_t ncu, size_t ncv);
+
+  void SetNumberOfCoefficients(size_t ncu, size_t ncv);
   
   /** Evaluate the function at a particular u, v coordinate. The return value
    * is a vector of doubles */

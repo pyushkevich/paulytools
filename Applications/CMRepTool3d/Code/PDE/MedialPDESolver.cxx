@@ -24,7 +24,7 @@ void mydaxpy(const int N, const double alpha, const double *X,
   { daxpy_(&N, &alpha, X, &incX, Y, &incY); }
   
 CBLAS_INDEX myidamax(const int N, const double *X, const int incX)
-  { return idamax_(&N, X, &incX); }
+  { return idamax_(&N, X, &incX) - 1; }
 
 using namespace std;
 
@@ -718,21 +718,23 @@ double MedialPDESolver::SolveOnce(double delta)
     // Get the largest error (eps)
     epsMax = fabs(eps[myidamax(nSites, eps, 1)]);
     bMax = fabs(b[myidamax(nSites, b, 1)]);
-    // double zMax = fabs(zTest[myidamax(nSites, zTest, 1)]);
 
     // Append the epsilon vector to the result
     mydaxpy(nSites, 1.0, eps, 1, y, 1);
 
     // Print the statistics
-    /* cout << "-----------" << endl;
+    /*
+    cout << "-----------" << endl;
     cout << "Step " << iIter << ": " << endl;
     cout << "  Largest Epsilon: " << epsMax << endl;
-    cout << "  Largest Eqn Error: " << bMax << endl; */
+    cout << "  Largest Eqn Error: " << bMax << endl; 
     
     // Test the matrix result
-    // SparseLinearTest(nSites, xRowIndex, xColIndex, xSparseValues, eps, zTest, b);
-    // cout << "  Largest Solver Error: " << zMax << endl;
-   
+    SparseLinearTest(nSites, xRowIndex, xColIndex, xSparseValues, eps, zTest, b);
+    double zMax = fabs(zTest[myidamax(nSites, zTest, 1)]);
+    cout << "  Largest Solver Error: " << zMax << endl;
+    */
+
     // Convergence is defined when epsilon is smaller than some threshold
     if(bMax < delta) 
       break;

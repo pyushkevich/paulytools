@@ -160,8 +160,8 @@ void MedialPDE::LoadFromParameterFile(const char *file)
       // Read the surface from the parameters
       xSurface->ReadFromRegistry(R.Folder("Fourier"));
 
-      // Create a new solver and solve the PDE
-      // delete xSolver; xSolver = new MedialPDESolver(m, n);
+      // Solve the PDE
+      xSolver->Solve();
       }
     else
       { cerr << "Invalid surface model in file" << endl; }
@@ -173,6 +173,12 @@ void MedialPDE::LoadFromParameterFile(const char *file)
 void MedialPDE::Solve()
 {
   xSolver->Solve();
+}
+
+void MedialPDE::SetNumberOfCoefficients(unsigned int m, unsigned int n)
+{
+  xSurface->SetNumberOfCoefficients(m, n);
+  xSolver->SetMedialSurface(xSurface);
 }
 
 void MedialPDE::GenerateSampleModel()
@@ -382,7 +388,10 @@ void MedialPDE::ConjugateGradientOptimization(
   for(size_t p = 0; p < nSteps; p++)
     {
     if(xMethod.isFinished())
+      {
+      cout << "CONJGRAD finished on its own!" << endl;
       break;
+      }
     xMethod.performIteration();
 
     // fdump << "STEP " << p << endl;
@@ -398,12 +407,14 @@ void MedialPDE::ConjugateGradientOptimization(
         xProblem->evaluate(xMethod.getBestEverX());
         ExportIterationToVTK(p);
         xLastMeshDumpValue = xMethod.getBestEverValue(); 
+
+        xProblem->PrintReport(cout);
         }
 
     // Save the file 
-    // ostringstream oss;
-    // oss << "iter_" << p;
-    // SaveToParameterFile(oss.str().c_str());
+    //ostringstream oss;
+    //oss << "iter_" << p;
+    //SaveToParameterFile(oss.str().c_str());
     }
 
   // fdump.close();
@@ -491,11 +502,13 @@ void MedialPDE
   // Create the other terms
   BoundaryJacobianEnergyTerm xTermJacobian;
   CrestLaplacianEnergyTerm xTermCrest;
+  AtomBadnessTerm xTermBadness;
 
   // Add the terms to the problem
   xProblem.AddEnergyTerm(xTermImage, 1.0);
   xProblem.AddEnergyTerm(&xTermJacobian, 0.005);
   xProblem.AddEnergyTerm(&xTermCrest, 0.005);
+  xProblem.AddEnergyTerm(&xTermBadness, 1.0);
 
   // Create the initial solution
   size_t nCoeff = xMask->GetNumberOfCoefficients();

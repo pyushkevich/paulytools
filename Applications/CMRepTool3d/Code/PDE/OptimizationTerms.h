@@ -89,7 +89,7 @@ public:
 
   // Compute the image match
   double ComputeEnergy(SolutionData *data);
-
+/*
   // Initialize gradient computation and return the value of the solution
   // at the current state
   double BeginGradientComputation(SolutionData *SCenter);
@@ -102,7 +102,7 @@ public:
 
   // Finish gradient computation, remove all temporary data
   void EndGradientComputation();
-
+*/
   // Print a verbose report
   void PrintReport(ostream &sout);
 
@@ -191,6 +191,16 @@ private:
   size_t nCrestAtoms, nBadSites;
   double PenaltyFunction(double x, double a, double b)
     { return exp( a * x - b ); }
+};
+
+class AtomBadnessTerm : public EnergyTerm
+{
+public:
+  double ComputeEnergy(SolutionData *data);
+  void PrintReport(ostream &sout);
+private:
+  double xMaxBadness, xAvgBadness, xTotalPenalty;
+  size_t nBadAtoms, nAtoms;
 };
 
 class MedialOptimizationProblem : public DifferentiableFunction

@@ -34,6 +34,7 @@ bool MedialAtom::ComputeBoundaryAtoms()
   if(fabs(sinTheta2) < 1e-8) sinTheta2 = 0.0;
   
   // Compute the boundary sites
+  xBadness = 0.0;
   if (sinTheta2 > 0.0)
     {
     // We are not at a crest, valid atom
@@ -51,6 +52,7 @@ bool MedialAtom::ComputeBoundaryAtoms()
   else if (sinTheta2 < 0.0)
     { 
     flagValid = false; 
+    xBadness = -sinTheta2;
     // cerr << "Bad atom ("<< R << ", " << sinTheta2 << ") at " << u << ", " << v << endl;
     cout << "x" << flush;
     }

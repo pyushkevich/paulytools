@@ -37,6 +37,9 @@ struct MedialAtom
   // The Riemannian laplacian of R
   double xLapR;
 
+  // The badness of the atom
+  double xBadness;
+
   // Whether this is a 'crest' atom, and whether it's valid at all
   bool flagCrest, flagValid;
 

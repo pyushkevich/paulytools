@@ -26,6 +26,29 @@ GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV
   uEval.resize(ncu); vEval.resize(ncv);
 }
 
+template< size_t NComponents, size_t NOrder, typename BasisFunctionU, typename BasisFunctionV >
+void
+GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV>
+::SetNumberOfCoefficients(size_t ncu, size_t ncv)
+{
+  // Make a copy of the coefficients
+  Index3D C1(NComponents, ncu, ncv);
+  for(size_t i=0; i < ncu; i++) for(size_t j=0; j < ncv; j++)
+    if(i < this->ncu && j < this->ncv)
+      for(size_t k=0; k < NComponents; k++)
+        C1(k,i,j) = C(k,i,j);
+
+  C.resize(NComponents, ncu, ncv);
+  C = C1;
+
+  // initialize the coefficient array
+  this->ncu = ncu; this->ncv = ncv;
+  nc = ncu * ncv;
+  ncRaw= nc * NComponents;
+
+  // initialize the evaluation arrays
+  uEval.resize(ncu); vEval.resize(ncv);
+}
 
 template< size_t NComponents, size_t NOrder, typename BasisFunctionU, typename BasisFunctionV >
 void

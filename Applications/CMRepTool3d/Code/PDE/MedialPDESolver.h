@@ -179,7 +179,7 @@ public:
    * Solve the PDE for a given surface and a given rho function up to the required 
    * level of accuracy.
    */
-  void Solve(double delta = 1e-8);
+  void Solve(double delta = 1e-12);
 
   /** Alternative, very slow method to solve the equation */
   void SolveByJacobiMethod(double delta = 1e-8);
