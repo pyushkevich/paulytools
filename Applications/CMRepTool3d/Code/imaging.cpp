@@ -751,9 +751,7 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &out0,__m128 &o
   r3 = _mm_load_ps(mmData+4); 
   r1 = _mm_load_ps(mmData+8);
 
-  r0 = _mm_set_ps(x,y,z,0);                           //      ?       z       y       x
-
-  // r0 = _mm_loadu_ps(&x);                              //      ?       z       y       x
+  r0 = _mm_set_ps(0, z, y, x);                        //      ?       z       y       x
   r0 = _mm_mul_ps(r0,r2);                             //      ?       z       y       x   
   r0 = _mm_add_ps(r0,r3);                             //      ?       z       y       x
 
@@ -763,19 +761,9 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &out0,__m128 &o
   // These two integers reflect the sign.  They should both be 0 or we are outside of the image
   int maskMin = _mm_movemask_ps(r0);
   int maskMax = _mm_movemask_ps(r1);
-  // int maskMin = move_mask(r0);
-  // int maskMax = move_mask(r1);
-
-  cout << "x = " << x << " y = " << y << " z = " << z << endl;
-  cout << "r0 = " << r0 << endl;
-  cout << "r0 = " << r1 << endl;
 
   // If the voxel is outside, use special method
-  if ((maskMin | maskMax) & 0x07)
-    {
-    cout << "bail " << maskMin << " " << maskMax << endl;
-    return false;
-    }
+  if ((maskMin | maskMax) & 0x07) return false;
 
   // Set the rounding state to truncation
   int flgRound = _mm_getcsr();
@@ -783,89 +771,32 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &out0,__m128 &o
   
   // Round down the values and cast back to floating point
   r1 = _mm_shuffle_ps(r0,r0,0x0E);                    //      x       x       ?       z   
-
   j0 = _mm_cvtps_pi32(r0);                            //      tr(y)   tr(x)
   j1 = _mm_cvtps_pi32(r1);                            //      ?       tr(z)
   r1 = _mm_cvtpi32_ps(r1,j1);                         //      ?       ?       ?       tr(z)
   r1 = _mm_shuffle_ps(r1,r1,0x00);                    //      tr(z)   tr(z)   tr(z)   tr(z)
   r1 = _mm_cvtpi32_ps(r1,j0);                         //      tr(z)   tr(z)   tr(y)   tr(x)
 
-  
-  // j0 = F32vec4ToIs32vec2(r0);                         //      tr(y)   tr(x)
-  // j1 = F32vec4ToIs32vec2(r1);                         //      ?       tr(z)
-  // r1 = Is32vec2ToF32vec4(r1,j1);                      //      ?       ?       ?       tr(z)
-  // r1 = _mm_shuffle_ps(r1,r1,0x00);                    //      tr(z)   tr(z)   tr(z)   tr(z)   
-  // r1 = Is32vec2ToF32vec4(r1,j0);                      //      tr(z)   tr(z)   tr(y)   tr(x)   
-
   // Take integers to shorts
   i0 = _mm_packs_pi32(j0, j1);
-  //    i0 = pack_sat(j0,j1);
 
   // We still need the voxel index and cube index 
   // Shift right to find the cube index of the starting voxel
   i1 = _mm_srli_pi16(i0, ImageCube::LDCUBE);
-  //    i1 = i0 >> ImageCube::LDCUBE;
+
+  // This places the fractional part of the voxel computation into r0
+  out0 = _mm_sub_ps(r0,r1);                           //      fr(z)   fr(z)   fr(y)   fr(x)
+
+  // Clear the MMX registers
+  _mm_empty();
 
   // Prefetch the cube (is this really worth while?)
-  int xc = (*((short*)&i1 + 0));
-  int yc = (*((short*)&i1 + 1));
-  int zc = (*((short*)&i1 + 2));
-    
-  // int xc = _MM_4W(0,i1);int yc = _MM_4W(1,i1);int zc = _MM_4W(2,i1);
-  DataCube<T> &C = cube(xc,yc,zc);
-  _mm_prefetch((const char *)C.root(),_MM_HINT_T0);
+  DataCube<T> *C = cube.voxel(*((short*)&i1 + 0),*((short*)&i1 + 1),*((short*)&i1 + 2));
+  _mm_prefetch((const char *)C->root(),_MM_HINT_T0);
 
   // Shift back and subtract to get the in-cube index of the voxel
   i2 = _mm_slli_pi16(i1,ImageCube::LDCUBE);
   i0 = _mm_sub_pi16(i0,i2);
-
-  // Increment i0 by 1
-  i2 = _mm_set1_pi16(1);
-  i2 = _mm_add_pi16(i2,i0);
-
-  // At this point, voxel cube i1 with offset i0 points to V000 and cube i2 with offset i4 points to V111
-  // This is the slow point...    
-  int x0 = (*((short*)&i0 + 0));
-  int y0 = (*((short*)&i0 + 1));
-  int z0 = (*((short*)&i0 + 2));
-
-  int x1 = (*((short*)&i2 + 0));
-  int y1 = (*((short*)&i2 + 1));
-  int z1 = (*((short*)&i2 + 2));
-
-  // int x0 = _MM_4W(0,i0);int y0 = _MM_4W(1,i0);int z0 = _MM_4W(2,i0);
-  // int x1 = _MM_4W(0,i2);int y1 = _MM_4W(1,i2);int z1 = _MM_4W(2,i2);
-
-  // Clear the MMX registers
-  _mm_empty();
-
-  // This places the fractional part of the voxel computation into r0
-  r0 = _mm_sub_ps(r0,r1);
-  // r0 -= r1;
-
-  // Clear the MMX registers
-  _mm_empty();
-
-  // Get the data from the cube
-  ALIGN_PRE float voxels[8] ALIGN_POST;
-  voxels[0] = (float) C(x0,y0,z0);
-  voxels[1] = (float) C(x1,y0,z0);
-  voxels[2] = (float) C(x0,y1,z0);
-  voxels[3] = (float) C(x0,y0,z1);
-  voxels[4] = (float) C(x1,y1,z0);
-  voxels[5] = (float) C(x1,y0,z1);
-  voxels[6] = (float) C(x0,y1,z1);
-  voxels[7] = (float) C(x1,y1,z1);
-  
-  cout << "Cube " << xc << "," << yc << "," << zc << endl;
-  cout << "Pair " << x0 << "," << y0 << "," << z0 << endl;
-  cout << "     " << x1 << "," << y1 << "," << z1 << endl;
-  cout << "Voxl " << voxels[0] << "," << voxels[1] << "," << voxels[2] << "," << voxels[3] << ","
-    << voxels[4] << "," << voxels[5] << "," << voxels[6] << "," << voxels[7] << endl;
-
-  // Store the data 
-  r1 = _mm_load_ps(voxels);
-  r2 = _mm_load_ps(voxels + 4);
 
   // Restore rounding flags
   _mm_setcsr(flgRound | 0x00006000);
@@ -873,10 +804,13 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &out0,__m128 &o
   // Clear the MMX registers
   _mm_empty();
 
-  // Return data
-  out0 = r0;
-  out1 = r1;
-  out2 = r2;
+  // Get the data from the cube
+  ALIGN_PRE float voxels[8] ALIGN_POST;
+  C->getEightVoxelCube(*((short*)&i0 + 0),*((short*)&i0 + 1),*((short*)&i0 + 2),voxels);
+  
+  // Store the data 
+  out1 = _mm_load_ps(voxels);
+  out2 = _mm_load_ps(voxels + 4);
 
   return true;
 }
@@ -890,6 +824,36 @@ float ImageCube<T>::interpolateVoxel(float x,float y,float z) {
   if(in)
     {
     doInterpolation(r0,r1,r2,&val);
+/*
+    // Transform the coordinates
+    SMLVec4f X(x,y,z,1.0f);
+    vnl_vector_fixed<float,4> Y = SI * X;
+    float xx = Y[0]; float yy = Y[1]; float zz = Y[2];
+
+    // Perform a test
+    float c000 = this->getVoxelNBCFloat(   (int) xx,    (int) yy,    (int) zz);
+    float c100 = this->getVoxelNBCFloat( 1+(int) xx,    (int) yy,    (int) zz);
+    float c010 = this->getVoxelNBCFloat(   (int) xx,  1+(int) yy,    (int) zz);
+    float c001 = this->getVoxelNBCFloat(   (int) xx,    (int) yy,  1+(int) zz);
+    float c110 = this->getVoxelNBCFloat( 1+(int) xx,  1+(int) yy,    (int) zz);
+    float c101 = this->getVoxelNBCFloat( 1+(int) xx,    (int) yy,  1+(int) zz);
+    float c011 = this->getVoxelNBCFloat(   (int) xx,  1+(int) yy,  1+(int) zz);
+    float c111 = this->getVoxelNBCFloat( 1+(int) xx,  1+(int) yy,  1+(int) zz);
+
+    float txx = xx - ((int) xx); 
+    float tyy = yy - ((int) yy); 
+    float tzz = zz - ((int) zz); 
+
+    float val2 = 
+      (1-txx) * (1-tyy) * (1-tzz) * c000 + 
+      (  txx) * (1-tyy) * (1-tzz) * c100 + 
+      (1-txx) * (  tyy) * (1-tzz) * c010 + 
+      (1-txx) * (1-tyy) * (  tzz) * c001 + 
+      (  txx) * (  tyy) * (1-tzz) * c110 + 
+      (  txx) * (1-tyy) * (  tzz) * c101 + 
+      (1-txx) * (  tyy) * (  tzz) * c011 + 
+      (  txx) * (  tyy) * (  tzz) * c111;
+*/
     return val;
     }
   else
@@ -1286,7 +1250,41 @@ void DistanceTransform::maskOutside(float addVal,float scaleVal) {
     }
 }
 
-SMLVec3f convertDistanceToRGB(float pixel) {
+void convertTScoreToRGB(float pixel, float &r, float &g, float &b)
+{
+  // Define the color map 
+  const int nColors = 7;
+  const float cmap[nColors][3] = {
+    {0.0f,1.0f,0.0f},
+    {0.0f,1.0f,1.0f},
+    {0.0f,0.0f,1.0f},
+    {0.0f,0.0f,0.0f},
+    {1.0f,0.0f,0.0f},
+    {1.0f,1.0f,0.0f},
+    {1.0f,1.0f,1.0f}};
+
+  // Scale the value
+  float val = 3.0f + 0.5f * pixel;
+
+  // Find the range for scaling
+  int i0 = (int) val; 
+  int i1 = i0 + 1; 
+  
+  if(i0 < 0) 
+    i1 = i0 = 0;
+  if(i1 >= nColors) 
+    i0 = i1 = nColors-1;
+
+  // Interpolate
+  float rem = val - i0;
+  r = rem * cmap[i1][0] + (1 - rem) * cmap[i0][0];
+  g = rem * cmap[i1][1] + (1 - rem) * cmap[i0][1];
+  b = rem * cmap[i1][2] + (1 - rem) * cmap[i0][2];
+}
+
+
+SMLVec3f convertDistanceToRGB(float pixel) 
+{
   // This returns the pixel color index
   const float scale1 = 1.0f / 3.1416f;
   const float scale2 = 1.0f / 12.0f;

@@ -10,23 +10,6 @@
 //#define FFTW_ENABLE_FLOAT 1
 //#include <fftw.h>
 
-// class F32vec4;
-// typedef __m128 F32vec4;
-
-union F32vec4
-{
-  __m128 x;
-  float f[4];
-  
-  float operator[](unsigned int i) { return f[i]; }
-  __m128 operator=(const __m128 &x) { this->x = x; return x; }
-  operator __m128() { return x; }
-  
-  F32vec4(float a, float b, float c, float d) 
-    { f[0]=a; f[1]=b; f[2]=c; f[3]=d; }
-  F32vec4() {}
-};
-
 /**
  * Data cube.  An arrangement of data into slices, rows and elements
  */ 
@@ -110,6 +93,25 @@ public:
   T& operator()(int offset) {
     return voxels[offset];
   }
+
+  /** This method rapidly loads eight adjacent voxels at indices
+   x,y,z,x+1,y+1,z+1 */
+  void getEightVoxelCube(int x, int y, int z, float *voxels)
+    {
+    // Traverse the voxels in a pattern that minimizes the number of 
+    // pointer addition operations
+    T* root = voxel(x,y,z);                           // x:0  y:0  z:0
+    voxels[0] = (float) *root; root += 1;             // x:1  y:0  z:0
+    voxels[3] = (float) *root; root += szRow;         // x:1  y:1  z:0
+    voxels[6] = (float) *root; root -= 1;             // x:0  y:1  z:0
+    voxels[2] = (float) *root; root += szSlice;       // x:0  y:1  z:1
+
+    voxels[4] = (float) *root; root += 1;             // x:1  y:1  z:1
+    voxels[7] = (float) *root; root -= szRow;         // x:1  y:0  z:1
+    voxels[5] = (float) *root; root -= 1;             // x:0  y:0  z:1
+    voxels[1] = (float) *root;   
+    }
+
 
   int size(int d) {
     return dim[d];
@@ -414,7 +416,8 @@ private:
 // Convert a distance map value to an RGB color
 SMLVec3f convertDistanceToRGB(float pixel);
 
-
+// Convert a t-score to RGB color 
+void convertTScoreToRGB(float pixel, float &r, float &g, float &b);
 
 
 

@@ -13,7 +13,7 @@ const double clrTrimCurve[] = {1.0,1.0,1.0};
 
 const double clrBack[] = {0,0,0.15};
 const double clrControlPoly[] = {0.6,0.6,0.6};
-const double clrTrimCurve[] = {1,0,0};
+const double clrTrimCurve[] = {0,1,1};
 
 #endif
 

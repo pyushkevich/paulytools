@@ -545,16 +545,37 @@ void BSplineRenderer::makeBoundaryColorPatch(PatchDataCache *pdc, int d, int iPa
       SMLVec3f rgb;
 
       // Go through all the trimmed points
-      for (int i=0;i<pdc->idxTrimmed.size();i++)
+      int mode = settings->getIntValue("colormap.distanceToRGB.mode",0);
+      
+      if(mode == 0)
         {
+        for (int i=0;i<pdc->idxTrimmed.size();i++)
+          {
 
-        // Get to the boundary point in question                
-        int idx = pdc->idxTrimmed[i];
-        BoundaryPoint &bp = pdc->MP(idx).bp[d];
+          // Get to the boundary point in question                
+          int idx = pdc->idxTrimmed[i];
+          BoundaryPoint &bp = pdc->MP(idx).bp[d];
 
-        // Interpolate the image match at the point
-        float dist = img->interpolateVoxel(bp.X[0],bp.X[1],bp.X[2]);               
-        cmBoundary[d](iPatch,jPatch)(idx) = convertDistanceToRGB(dist);
+          // Interpolate the image match at the point
+          float dist = img->interpolateVoxel(bp.X[0],bp.X[1],bp.X[2]);               
+          cmBoundary[d](iPatch,jPatch)(idx) = convertDistanceToRGB(dist);
+          }
+        }
+      else
+        {
+        for (int i=0;i<pdc->idxTrimmed.size();i++)
+          {
+
+          // Get to the boundary point in question                
+          int idx = pdc->idxTrimmed[i];
+          BoundaryPoint &bp = pdc->MP(idx).bp[d];
+
+          // Interpolate the image match at the point
+          float dist = img->interpolateVoxel(bp.X[0],bp.X[1],bp.X[2]);               
+          SMLVec3f &clr = cmBoundary[d](iPatch,jPatch)(idx);
+          
+          convertTScoreToRGB(dist, clr[0], clr[1], clr[2]);
+          }
         }
       }
     else if (imaging.getType() == ImagingSystem::GRAYSCALE || imaging.getType() == ImagingSystem::BINARY)
@@ -1292,17 +1313,67 @@ void UVImageRnd::onDraw() {
 }
 
 void UVImageRnd::build() {
-  glPushMatrix();
-  glScaled(256,256,1);
+  int i,j;
 
-  glPushAttrib(GL_LIGHTING_BIT);
+  glPushMatrix();
+  glScaled(320,320,1);
+
+  glPushAttrib(GL_LIGHTING_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT);
+  glEnable(GL_BLEND);
+  glEnable(GL_LINE_SMOOTH);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);    
+  glLineWidth(3);
 
   glDisable(GL_LIGHTING);
+
+  if(imaging.getType() == ImagingSystem::DISTANCE)
+    {
+    for (i=0;i<splineData->patch.width();i++)
+      {
+      for (j=0;j<splineData->patch.height();j++)
+        {
+        PatchDataCache *pdc = splineData->patch(i,j);
+
+        glBegin(GL_POINTS);
+        for(int k = 0; k < pdc->MP.size(); k++)
+          {
+          MedialPoint &mp = pdc->MP(k);
+          if(mp.sinTheta2 > 0)
+            {
+            float tavg = 0.0f, t;
+            for(t = -1; t < 0.0; t+=0.1)
+              {
+              SMLVec3f xt = mp.X() - (t * mp.R())* mp.bp[0].N;
+              float dist = 
+                imaging.getImage()->interpolateVoxel(xt[0],xt[1],xt[2]);
+              tavg += dist;
+              }
+            for(t = 0; t <= 1.0; t+=0.1)
+              {
+              SMLVec3f xt = mp.X() + (t * mp.R()) * mp.bp[1].N;
+              float dist = 
+                imaging.getImage()->interpolateVoxel(xt[0],xt[1],xt[2]);
+              tavg += dist;
+              }
+
+            tavg /= 20;
+            
+            float r, g, b;
+            convertTScoreToRGB(tavg, r, g, b);
+            glColor3d(r, g, b);
+            glVertex2d(mp.u,mp.v);
+            }
+          }
+        glEnd();
+        }
+      }
+    }
+
   glColor3dv(clrTrimCurve);
 
-  for (int i=0;i<splineData->patch.width();i++)
+  for (i=0;i<splineData->patch.width();i++)
     {
-    for (int j=0;j<splineData->patch.height();j++)
+    for (j=0;j<splineData->patch.height();j++)
       {
       PatchDataCache *pdc = splineData->patch(i,j);
 
@@ -1320,6 +1391,7 @@ void UVImageRnd::build() {
         }
       }
     }
+  
 
   ts = spline->getControlTimeStamp();
 
@@ -2941,23 +3013,27 @@ void ImagingSystem::loadDistance(const char *fname,IFiles ftype,ostream &out) {
     if (strstr(fname,".dt") || strstr(fname,".cube"))
       loadDistance(fname,CUBE);
     else
-      throw "Unknown distance transform extension";
+      loadDistance(fname,GIPL);
     }
   else
     {
+    discard();
+    type = DISTANCE;
+    dt = new DistanceTransform();
+  
     switch (ftype)
       {
+
       case CUBE :
-        discard();
-        type = DISTANCE;
-        dt = new DistanceTransform();
         dt->loadFromFile(fname);
-        mDistance = new SplineDistanceMatcher(dt);
         break;
 
-      default : 
-        throw "I can only load distance transforms from 'cube' files.";
+      default:
+        dt->loadFromITKReadableFile(fname,out);
+        break;
       }
+
+    mDistance = new SplineDistanceMatcher(dt);
     }
 }
 

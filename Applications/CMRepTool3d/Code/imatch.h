@@ -144,7 +144,7 @@ public:
           G.data_block());
 
         // Dot the image gradient with the m-rep boundary normal
-        return dot_product(mp.bp[side].N,G);
+        return -dot_product(mp.bp[side].N,G);
       }
 
     float computeCrestBoundaryMeasure(const MedialPoint &mp)
@@ -158,7 +158,7 @@ public:
           G.data_block());
 
         // Dot the image gradient with the m-rep boundary normal
-        return dot_product(mp.bp[0].N,G);
+        return -dot_product(mp.bp[0].N,G);
       }
 
     // Print out match information
