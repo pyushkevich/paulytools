@@ -29,6 +29,7 @@ public:
   typedef vtkIdType MeshVertex;
   typedef list<MeshVertex> MeshCurve;
   typedef unsigned int IdType;
+  typedef list<IdType> IdList;
 
   /** Used to report curve names in sorted order */
   typedef pair<string, IdType> StringIdPair;
@@ -127,6 +128,12 @@ public:
     for(it = m_Curves.begin(); it!=m_Curves.end(); it++)
       target.push_back(it->first);
     }
+
+  /** Delete a curve */
+  void DeleteCurve(IdType iCurve);
+
+  /** Delete the lasp point on a curve */
+  void DeleteLastControlPointInCurve(IdType iCurve);
   
   /** Save the data structure to a file */
   void SaveAsText(std::ostream &sout);
@@ -134,17 +141,19 @@ public:
   /** Read the structure from a file (optionally append existing curves) */
   bool LoadAsText(std::istream &sin, bool clear = true);
 
+  /** Clean the data by removing all curves, points, and links */
+  void RemoveAllData()
+    {
+    m_Curves.clear();
+    m_Controls.clear();
+    m_Links.clear();
+    }
+
   /** Get the vertex at a given control point */
   MeshVertex GetControlPointVertex(IdType iControl) const
     { return m_Controls.find(iControl)->second.vertex; }
 
 private:
-
-  /** Currently selected control point */
-  unsigned int m_CurrentPoint;
-
-  /** Currently selected curve */
-  unsigned int m_CurrentCurve;
 
   /** A list of curves */
   typedef map<IdType, Curve> CurveMap;
@@ -177,6 +186,11 @@ private:
   /** Add an empty curve to the collection */
   IdType AddCurve(IdType id, const char * name );
 
+  /** Clean up links and controls that do not belong to any curves */
+  void CleanUpDeadLinksAndControls();
+
+  /** Rebuild the point list in a curve */
+  void RebuildCurvePoints(IdType iCurve);
 };
 
 

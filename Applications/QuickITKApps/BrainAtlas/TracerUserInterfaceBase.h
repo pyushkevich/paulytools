@@ -7,10 +7,12 @@ public:
   virtual void OnMenuLoadMesh() = 0;
   virtual void OnMenuLoadCurves() = 0;
   virtual void OnMenuSaveCurves() = 0;
+  virtual void OnMenuSaveCurvesAs() = 0;
   virtual void OnMenuQuit() = 0;
   virtual void OnButtonModeTrackball() = 0;
   virtual void OnButtonModeTracer() = 0;
   virtual void OnButtonDeleteCurve() = 0;
+  virtual void OnButtonDeleteLastPoint() = 0;
   virtual void OnButtonEditCurve() = 0;
   virtual void OnButtonStartCurve() = 0;
   virtual void OnInputSulcalFactor(double value) = 0;

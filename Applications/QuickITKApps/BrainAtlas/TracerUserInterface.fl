@@ -8,9 +8,10 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
   } {
     Fl_Window m_WinMain {
       label {GeeLab Brain Tracer}
-      xywh {47 75 925 665} type Double hide resizable
+      callback {OnMenuQuit();} open
+      xywh {14 123 925 665} type Double resizable
       code0 {\#include "TracerUserInterfaceBase.h"}
-      code1 {\#include "TracerMainWindow.h"}
+      code1 {\#include "TracerMainWindow.h"} visible
     } {
       Fl_Group {} {open
         xywh {5 30 645 625} box PLASTIC_DOWN_FRAME
@@ -33,28 +34,73 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
         xywh {0 0 930 25}
       } {
         submenu {} {
-          label File open
+          label {&File} open
           xywh {0 0 100 20}
         } {
           menuitem {} {
-            label {Load Mesh...}
+            label {Load &Mesh...}
             callback {OnMenuLoadMesh()}
-            xywh {0 0 100 20}
+            xywh {0 0 100 20} shortcut 0x4006d divider
           }
-          menuitem {} {
-            label {Load Curves...}
+          menuitem m_MenuLoadCurves {
+            label {&Load Curves...}
             callback {OnMenuLoadCurves()}
-            xywh {10 10 100 20}
+            xywh {10 10 100 20} shortcut 0x4006c deactivate
           }
           menuitem m_MenuSaveCurves {
-            label {Save Curves...}
+            label {&Save Curves}
             callback {this->OnMenuSaveCurves();}
-            xywh {0 0 100 20} deactivate
+            xywh {0 0 100 20} shortcut 0x40073 deactivate
+          }
+          menuitem m_MenuSaveCurvesAs {
+            label {Save Curves &As...}
+            callback {this->OnMenuSaveCurvesAs();}
+            xywh {10 10 100 20} shortcut 0x50073 deactivate divider
           }
           menuitem {} {
             label Quit
             callback {OnMenuQuit()}
-            xywh {5 5 100 20}
+            xywh {5 5 100 20} shortcut 0xff1b
+          }
+        }
+        submenu {} {
+          label {&Edit} open
+          xywh {5 5 100 20}
+        } {
+          menuitem m_MenuStartCurve {
+            label {&Add new curve...}
+            callback {OnButtonStartCurve();}
+            xywh {0 0 100 20} shortcut 0x40061 deactivate
+          }
+          menuitem m_MenuEditCurve {
+            label {&Rename curve...}
+            callback {OnButtonEditCurve();}
+            xywh {10 10 100 20} deactivate
+          }
+          menuitem m_MenuDeleteCurve {
+            label {&Delete curve}
+            callback {OnButtonDeleteCurve();}
+            xywh {20 20 100 20} shortcut 0x50064 deactivate divider
+          }
+          menuitem m_MenuDeleteLastPoint {
+            label {Delete last &point}
+            callback {OnButtonDeleteLastPoint();} selected
+            xywh {30 30 100 20} shortcut 0x4007a deactivate
+          }
+        }
+        submenu {} {
+          label {&Mode} open
+          xywh {0 0 100 20}
+        } {
+          menuitem m_MenuModeTrackball {
+            label Trackball
+            callback {OnButtonModeTrackball();}
+            xywh {5 5 100 20} type Radio shortcut 0x31 value 1
+          }
+          menuitem m_MenuModeTracer {
+            label Tracer
+            callback {OnButtonModeTracer();}
+            xywh {15 15 100 20} type Radio shortcut 0x32 deactivate
           }
         }
       }
@@ -66,12 +112,12 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           xywh {665 320 245 45} box PLASTIC_DOWN_FRAME labelsize 12 align 5
         } {
           Fl_Light_Button m_BtnModeTrackball {
-            label trackball
+            label {1: t-ball}
             callback {OnButtonModeTrackball();}
             xywh {675 330 75 25} type Radio box PLASTIC_UP_BOX value 1 color 76 labelfont 1 labelsize 12
           }
           Fl_Light_Button m_BtnModeTracer {
-            label tracer
+            label {2: tracer}
             callback {OnButtonModeTracer();}
             xywh {755 330 75 25} type Radio box PLASTIC_UP_BOX color 76 labelfont 1 labelsize 12 deactivate
           }
@@ -86,24 +132,29 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
             xywh {675 415 225 25} down_box BORDER_BOX labelsize 12 align 5 textsize 12 deactivate
           } {}
           Fl_Button m_BtnStartCurve {
-            label {add curve}
+            label {add new curve}
             callback {OnButtonStartCurve();}
-            xywh {675 445 80 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12
+            xywh {675 445 110 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12
           }
           Fl_Button m_BtnDeleteCurve {
-            label delete
+            label {delete curve}
             callback {OnButtonDeleteCurve();}
-            xywh {830 445 70 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
+            xywh {675 475 110 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
           }
           Fl_Button m_BtnEditCurve {
-            label edit
+            label {rename curve}
             callback {OnButtonEditCurve();}
-            xywh {760 445 65 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
+            xywh {790 445 110 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
           }
           Fl_Value_Input {} {
             label {Sulcal support factor:}
             callback {OnInputSulcalFactor(o->value());}
-            tooltip {The degree to which curvature affects the path traced on the surface.} xywh {840 495 60 25} labelsize 12 when 8 step 0.1 textsize 12
+            tooltip {The degree to which curvature affects the path traced on the surface.} xywh {840 515 60 25} labelsize 12 when 8 step 0.1 textsize 12
+          }
+          Fl_Button m_BtnDeleteLastPoint {
+            label {delete last point}
+            callback {OnButtonDeleteLastPoint();}
+            xywh {790 475 110 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
           }
         }
         Fl_Group {} {open
@@ -121,8 +172,8 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
       }
     }
     Fl_Window m_WinMeshOptions {
-      label {Mesh Display Options} open selected
-      xywh {228 472 303 415} type Double box ENGRAVED_BOX visible
+      label {Mesh Display Options} open
+      xywh {836 388 300 415} type Double box ENGRAVED_BOX modal visible
     } {
       Fl_Group {} {
         label {Displaying mesh edges:} open

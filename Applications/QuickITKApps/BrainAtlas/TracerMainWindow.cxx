@@ -339,11 +339,14 @@ TracerMainWindow
 
       // Draw the curve
       glBegin(GL_LINE_STRIP);
-      for(ConstMeshCurve::const_iterator pit = lPoints.begin(); pit != lPoints.end(); pit++)
+      
+      ConstMeshCurve::const_iterator pit = lPoints.begin(); 
+      while(pit != lPoints.end())
         {
         TracerData::Vec xPoint;
         m_Data->GetPointCoordinate(*pit, xPoint);
         glVertex3dv(xPoint.data_block());
+        ++pit;
         }
       glEnd();
       }
@@ -356,8 +359,8 @@ TracerMainWindow
       MeshCurve lPoints;
       m_Data->GetPathToPoint(m_CurrentPoint, lPoints);
 
-      // Since the point list does not include the starting and ending points, we must include
-      // them ourselves
+      // Since the point list does not include the starting and 
+      // ending points, we must include them ourselves
       lPoints.push_back(m_CurrentPoint);
       lPoints.push_front(m_Data->GetPathSource());
 
@@ -475,7 +478,7 @@ void
 TracerMainWindow
 ::FindPointUnderCursor()
 {
-  // Find the point currently under the cursoro
+  // Find the point currently under the cursor
   make_current(); // update GL state
 
   // Set up the modelview matrix
@@ -594,6 +597,8 @@ TracerMainWindow
       return 1;
       }
     }
+
+  /** Tracer Mode */
   else if(m_EditMode == TRACER)
     {
     if(event == FL_ENTER)
@@ -621,12 +626,18 @@ TracerMainWindow
       // Again, find the point under the cursor
       FindPointUnderCursor();
 
-      // Add the point as to the list
-      m_Data->AddNewPoint(m_CurrentPoint);
+      if(m_CurrentPoint != -1)
+        {
+        // Add the point as to the list
+        m_Data->AddNewPoint(m_CurrentPoint);
 
-      // The edge drawing is no longer clean if drawing accumulated distances
-      if(m_EdgeDisplayMode == EDGE_DISPLAY_DISTANCE)
-        m_EdgeDisplayListDirty = true;
+        // The edge drawing is no longer clean if drawing accumulated distances
+        if(m_EdgeDisplayMode == EDGE_DISPLAY_DISTANCE)
+          m_EdgeDisplayListDirty = true;
+
+        // Handled
+        return 1;
+        }
       }
     }
 

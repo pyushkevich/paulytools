@@ -72,6 +72,132 @@ TracerCurves
 
 void 
 TracerCurves
+::RebuildCurvePoints(IdType iCurve)
+{
+  // Go through and rebuild the points in the given curve
+  Curve &xCurve = m_Curves[iCurve];
+
+  // Clear the list of points
+  xCurve.points.clear();
+
+  // Create iterators for links and control points
+  IdList::const_iterator itCtl = xCurve.controls.begin();
+  IdList::const_iterator itLink = xCurve.links.begin();
+
+  // Alternate between control points and links
+  while(itCtl != xCurve.controls.end())
+    {
+    // Add the current control to the list
+    xCurve.points.push_back( m_Controls[*itCtl].vertex );
+
+    // If there is no link, stop
+    if(itLink == xCurve.links.end()) break;
+
+    // Add the contents of the current link to the control
+    MeshCurve &xLinkPoints = m_Links[*itLink].points;
+    xCurve.points.insert(xCurve.points.end(), 
+      xLinkPoints.begin(), xLinkPoints.end());
+
+    // Increment the iterators
+    ++itLink; ++itCtl;
+    }
+}
+
+void 
+TracerCurves
+::DeleteCurve(IdType iCurve)
+{
+  // Delete the curve
+  m_Curves.erase(iCurve);
+  
+  // Clean up links and control points
+  CleanUpDeadLinksAndControls();
+}
+
+void 
+TracerCurves
+::DeleteLastControlPointInCurve(IdType iCurve)
+{
+  // Check input validity
+  assert(m_Curves.find(iCurve) != m_Curves.end());
+  assert(m_Curves[iCurve].controls.size() > 0);
+ 
+  // Delete the last control point
+  m_Curves[iCurve].controls.pop_back();
+
+  // Delete the last link if there is one
+  if(m_Curves[iCurve].links.size())
+    m_Curves[iCurve].links.pop_back();
+
+  // Clean up dead controls and links
+  CleanUpDeadLinksAndControls();
+
+  // Rebuild the points in the curve
+  RebuildCurvePoints(iCurve);
+}
+
+void 
+TracerCurves
+::CleanUpDeadLinksAndControls()
+{
+  // Create tables in order to remove links and control points that 
+  // belong to zero curves
+  typedef set< IdType > CountSet;
+  CountSet xLiveLinks, xLiveControls;
+  
+  // Populate the tables
+  CurveMap::const_iterator itCurve = m_Curves.begin();
+  while(itCurve != m_Curves.end())
+    {
+    // Get a curve reference
+    const Curve &xCurve = itCurve->second;
+    
+    // Add the links in that curve to list of live links
+    xLiveLinks.insert( xCurve.links.begin(), xCurve.links.end() );
+    
+    // Add the controls in that curve to list of live controls
+    xLiveControls.insert( xCurve.controls.begin(), xCurve.controls.end() );
+    
+    // On to the next curve
+    ++itCurve;
+    }
+  
+  // Delete all links that don't belong to any curve
+  LinkMap::iterator itLink = m_Links.begin();
+  while(itLink != m_Links.end())
+    {
+    // Check if link is live
+    if(xLiveLinks.find(itLink->first) == xLiveLinks.end())
+      {
+      // Remove references to this link in control points
+      m_Controls[itLink->second.ctlStart].links.erase(itLink->first);
+      m_Controls[itLink->second.ctlEnd].links.erase(itLink->first);
+
+      // Erase the link from the link map
+      m_Links.erase(itLink);
+      }
+    
+    // Go to the next element  
+    ++itLink;
+    }
+
+  // Delete all the controls that don't belong to any curve
+  ControlMap::iterator itControl = m_Controls.begin();
+  while(itControl != m_Controls.end())
+    {
+    // Check if control is live
+    if(xLiveControls.find(itControl->first) == xLiveControls.end())
+      {
+      m_Controls.erase(itControl);
+      }
+    
+    // Go to the next element
+    ++itControl;
+    }
+}
+
+void 
+TracerCurves
 ::SaveAsText(ostream &fout)
 {
   // Write the header

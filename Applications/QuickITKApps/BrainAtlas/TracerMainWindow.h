@@ -30,17 +30,20 @@ public:
     m_DisplayListDirty = true;
     m_CurrentPoint = -1;
     }
-    
-  // Update the currently displayed curve
-  void OnCurrentCurveChange()
+
+  // Call this method in response to a change in the actively selected
+  // control point
+  void OnPathSourceChange()
     {
+    // Get the currently selected point from the data
     m_CurrentPoint = -1;
-    redraw();
 
     // The edge drawing is no longer clean if drawing accumulated distances
     if(m_EdgeDisplayMode == EDGE_DISPLAY_DISTANCE)
       m_EdgeDisplayListDirty = true;
 
+    // Redraw the window
+    redraw();
     } 
 
   // Request an update of the display lists

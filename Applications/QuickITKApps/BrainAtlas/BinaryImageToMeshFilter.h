@@ -105,6 +105,13 @@ public:
   /** Get the 'distance image' based on anti-aliasing the binary image */
   FloatImageType *GetDistanceImage() { return fltAlias->GetOutput(); }
 
+  /** Get the floating point 'resampled' image, if resampling was enabled */
+  FloatImageType *GetResampledImage()
+    {
+    if(m_ResampleScaleFactor != 1.0f) return fltResample->GetOutput();
+    else return fltToFloat->GetOutput();
+    }
+
   void PrintMeshStatistics(vtkPolyData *mesh)
     {
     vector<unsigned int> cellHist(100,0);

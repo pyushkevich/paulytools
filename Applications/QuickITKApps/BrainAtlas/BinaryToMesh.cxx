@@ -24,9 +24,10 @@ int usage()
   cout << "usage: " << endl;
   cout << "   binary2mesh [options] input.img output.vtk" << endl;
   cout << "options: " << endl;
+  cout << "   -a X.XX     Anti-aliasing parameter (default 0.024, lower->better" << endl;
   cout << "   -s X.XX     Scale the image by factor X.XX before mesh extraction" << endl;
-  cout << "   -r X.XX     Anti-aliasing parameter (default 0.024, lower->better" << endl;
-  cout << "   -a FILE     Export the anti-aliased image as an image file FILE" << endl;
+  cout << "   -ea FILE    Export the anti-aliased image as an image file FILE" << endl;
+  cout << "   -es FILE    Export the scaled image as an image file FILE" << endl;
   return -1;
 }
 
@@ -35,7 +36,7 @@ int main(int argc, char *argv[])
   // Command line options
   double aaParm = 0.024;
   double xScale = 1.0;
-  const char *fnOutAA = NULL;
+  const char *fnOutAA = NULL, *fnOutResample = NULL;
 
   // Check parameters
   if(argc < 2) return usage();
@@ -43,12 +44,12 @@ int main(int argc, char *argv[])
   // Read in the command line parameters
   for(unsigned int i=1;i<argc-2;i++)
     {
-    if(0 == strcmp(argv[i],"-r")) 
+    if(0 == strcmp(argv[i],"-a")) 
       {
       aaParm = atof(argv[++i]);
       cout << "using mean RMS error of " << aaParm << endl;
       }
-    else if(0 == strcmp(argv[i],"-a"))
+    else if(0 == strcmp(argv[i],"-ea"))
       {
       fnOutAA = argv[++i];
       cout << "will export anti-alias image to " << fnOutAA << endl;
@@ -57,6 +58,16 @@ int main(int argc, char *argv[])
       {
       xScale = atof(argv[++i]);
       cout << "scaling the image by " << xScale << ", gonna be slow!" << endl;
+      }
+    else if(0 == strcmp(argv[i],"-es"))
+      {
+      fnOutResample = argv[++i];
+      cout << "will export resampled image to " << fnOutResample << endl;
+      }
+    else
+      {
+      cerr << "Bad option " << argv[i] << endl;
+      return usage();
       }
     }
   
@@ -73,15 +84,25 @@ int main(int argc, char *argv[])
   fltMesh->SetInput(imgInput);
   fltMesh->SetResampleScaleFactor(xScale);
   fltMesh->SetAntiAliasMaxRMSError(aaParm);
+
+  cout << "==========================================================" << endl;
   fltMesh->Update();
+  cout << "==========================================================" << endl;
+  
+  // If needed save the resampled image
+  if(fnOutResample)
+    {
+    FilterType::FloatImageType::Pointer imgResample = fltMesh->GetResampledImage();
+    WriteImage(imgResample, fnOutResample);
+    }
 
   // If needed, save the anti-alias image
   if(fnOutAA)
     {
     FilterType::FloatImageType::Pointer imgAlias = fltMesh->GetAntiAliasImage();
-    cout << "Writing " << fnOutAA << endl;
     WriteImage(imgAlias, fnOutAA);
     }
+
 
   // Save the mesh
   vtkPolyDataWriter *writer = vtkPolyDataWriter::New();

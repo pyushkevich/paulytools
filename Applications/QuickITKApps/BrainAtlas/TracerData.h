@@ -10,7 +10,47 @@
 #include <ctime>
 
 #include "TracerCurves.h"
+#include "EventListenerModel.h"
 
+class TracerData;
+
+/** Event used to communicate changes in the tracer data to the 
+  user interface model code */
+class TracerDataEvent : public EventObject<TracerData>
+{
+public:
+  typedef EventObject<TracerData> Superclass;
+
+  TracerDataEvent(TracerData *source) : Superclass(source) {}
+  virtual ~TracerDataEvent() {}
+};
+
+/** Listener for tracer data events */
+class ITracerDataListener
+{
+public:
+  /** Fired when the mesh is changed (reloaded) */
+  virtual void OnMeshChange(TracerDataEvent *evt) = 0;
+
+  /** Fired when the point (path source) is changed */
+  virtual void OnFocusCurveChange(TracerDataEvent *evt) = 0;
+
+  /** Fired when the curve under focus is changed */
+  virtual void OnFocusPointChange(TracerDataEvent *evt) = 0;
+
+  /** Fired when a change is made to the curve under focus */
+  virtual void OnFocusCurveDataChange(TracerDataEvent *evt) = 0;
+
+  /** Fired when the list of curves is changed, including number of
+    * curves and the names of the curves */
+  virtual void OnCurveListChange(TracerDataEvent *evt) = 0; 
+};
+
+/**
+ * An encapsulation of the data used by the curve tracer. This class provides
+ * a listener interface for the GUI to be alerted when curve information or mesh
+ * information changes 
+ */
 class TracerData
 {
 public:
@@ -23,6 +63,12 @@ public:
   TracerData();
   ~TracerData();
 
+  // Add listener method (call AddTracerDataListener)
+  pyAddListenerMacro(TracerDataListener, ITracerDataListener);
+  
+  // Remove listener method (call AddTracerDataListener)
+  pyRemoveListenerMacro(TracerDataListener, ITracerDataListener);
+
   // Load the mesh data from disk
   void LoadInputMesh(const char *file);
   
@@ -31,6 +77,10 @@ public:
 
   // Load curves from disk
   bool LoadCurves(const char *file);
+
+  // Check if the mesh is loaded
+  bool IsMeshLoaded() 
+    { return m_Mesh != NULL; }
 
   // Get the 'source' mesh
   vtkPolyData *GetInternalMesh() 
@@ -51,8 +101,8 @@ public:
   // Create a new curve (given a name)
   void AddNewCurve(const char *name)
     {
-    m_FocusCurve = m_Curves.AddCurve(name);
-    m_FocusPoint = -1;
+    SetFocusPoint(-1);
+    SetFocusCurve(m_Curves.AddCurve(name));
     }
     
   // Set the current curve
@@ -60,22 +110,13 @@ public:
     {
     // Check that the curve exists
     assert(m_Curves.IsCurvePresent(iCurve));
-    m_FocusCurve = iCurve;
 
     // Set the focus point
-    if(m_Curves.GetCurveControls(iCurve).size())
-      {
-      // Get the point of focus
-      m_FocusPoint = m_Curves.GetCurveControls(iCurve).back();
+    SetFocusPoint( m_Curves.GetCurveControls(iCurve).size()
+      ? (int) m_Curves.GetCurveControls(iCurve).back() : -1 );
 
-      // Compute shortest distances to that point
-      m_DistanceMapper->ComputeDistances(
-        m_Curves.GetControlPointVertex(m_FocusPoint));
-      }
-    else
-      {
-      m_FocusPoint = -1;
-      }
+    // Set the focus curve and notify listeners
+    SetFocusCurve(iCurve);
     }
 
   const TracerCurves *GetCurves()
@@ -83,21 +124,57 @@ public:
 
   void SetCurveName(IdType iCurve, const char *name)
     {
+    // Curve must exist
     assert(m_Curves.IsCurvePresent(iCurve));
+
+    // Update the curve's name
     m_Curves.SetCurveName(iCurve, name);
+
+    // Fire appropriate event
+    TracerDataEvent evt(this);
+    BroadcastOnCurveListChange(&evt);
+    }
+
+  /** Delete the last point on the current curve */
+  void DeleteCurrentPoint()
+    {
+    // The current point must be the last point in a curve
+    assert(m_FocusPoint != -1 && m_FocusCurve != -1);
+    assert(m_FocusPoint == 
+      m_Curves.GetCurveControls(m_FocusCurve).back());
+
+    // Delete the last point in the curve
+    m_Curves.DeleteLastControlPointInCurve(m_FocusCurve);
+
+    // Set the focus point if the curve isn't empty
+    SetFocusPoint( m_Curves.GetCurveControls(m_FocusCurve).size()
+      ? (int) m_Curves.GetCurveControls(m_FocusCurve).back() : -1 );
+
+    // Nofity listeners that the current curve's data has changed
+    TracerDataEvent evt(this);
+    BroadcastOnFocusCurveDataChange(&evt);
     }
     
   void DeleteCurrentCurve() 
     {
-/*
-    // Erase the current curve
-    m_Curves.erase(m_Curves.begin() + m_FocusCurve);
-    
-    // Update the curve index
-    m_FocusCurve = (m_Curves.size() > 0) ? 
-      (m_FocusCurve + 1) % m_Curves.size() : -1;
-*/
+    // We need to have a current curve
+    assert(m_FocusCurve != -1);
+
+    // Delete the current curve
+    m_Curves.DeleteCurve(m_FocusCurve);
+
+    // Don't focus on any other curve
+    SetFocusPoint(-1);
+    SetFocusCurve(-1);
+
+    // Notify listeners that the list of curves has changed
+    TracerDataEvent evt(this);
+    BroadcastOnCurveListChange(&evt);
     }
+
+  /** Is a curve currently selected, or is there no current curve? */
+  bool IsCurrentCurveValid()
+    { return m_FocusCurve != -1; }
    
   IdType GetCurrentCurve()
     { return m_FocusCurve; }
@@ -107,19 +184,6 @@ public:
     assert(m_Curves.IsCurvePresent(iCurve));
     return m_Curves.GetCurveVertices(iCurve).size();
     }
-
-  /* 
-  Vec GetCurvePoint(unsigned int iCurve, unsigned int iPoint)
-    {
-    assert(m_Curves.IsCurvePresent(iCurve));
-
-    const TracerCurves::MeshCurve &points = m_Curves.GetCurveVertices(iCurve);
-    
-    assert(iPoint < points.size());
-
-    return GetPointCoordinate(points[iPoint]);
-    }
-  */
 
   // Given a ray, find a point closest to that ray
   bool PickPoint(Vec xStart, Vec xRay, vtkIdType &iPoint)
@@ -189,20 +253,12 @@ public:
       m_Curves.AddLink(m_FocusPoint, iNewControl, m_FocusCurve, lPoints);
       }
 
-    
-    // Time the computation
-    double tStart = (double) clock();
-
-    // Compute the distances
-    m_DistanceMapper->ComputeDistances(iPoint);
-
-    // Get the elapsed time
-    double tElapsed = (clock() - tStart) * 1000.0 / CLOCKS_PER_SEC;    
-    cout << "Shortest paths to source " << iPoint 
-      << " computed in " << tElapsed << " ms." << endl;
-
     // Save the added point as the focus point
-    m_FocusPoint = iNewControl;
+    SetFocusPoint(iNewControl);
+
+    // Nofity of the change in curve data
+    TracerDataEvent evt(this);
+    BroadcastOnFocusCurveDataChange(&evt);
     }
 
   /** Use the Euclidean edge weight function */
@@ -260,6 +316,31 @@ private:
 
   // Point under focus
   int m_FocusPoint;
+
+  // Listener list (m_TracerDataListener)
+  pyListenerArrayMacro(TracerDataListener,ITracerDataListener);
+
+  // Broadcast methods
+  pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
+    OnFocusCurveDataChange, TracerDataEvent);
+  
+  pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
+    OnFocusPointChange, TracerDataEvent);
+
+  pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
+    OnFocusCurveChange, TracerDataEvent);
+
+  pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
+    OnCurveListChange, TracerDataEvent);
+
+  pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
+    OnMeshChange, TracerDataEvent);
+
+  // Set the focus curve, firing the associated event
+  void SetFocusCurve(int inFocusCurve);
+
+  // Set the focus point, firing the associated event
+  void SetFocusPoint(int inFocusPoint);
   
   /** Set the edge weight function to another mode */
   void UpdateEdgeWeightFunction(MeshEdgeWeightFunction *fnNew)
@@ -280,7 +361,6 @@ private:
     // Assign the edge weight function 
     m_EdgeWeightFunction = fnNew;
     }
-
 };
 
 #endif

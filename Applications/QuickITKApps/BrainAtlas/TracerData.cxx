@@ -76,6 +76,16 @@ TracerData
   // Send the data to the distance mapper
   m_DistanceMapper->SetInputMesh(m_Mesh);
   m_DistanceMapper->ComputeGraph();
+  
+  // Clean up the curves, because they are no longer valid
+  m_Curves.RemoveAllData();
+
+  // Notify listeners that the curves have changed
+  TracerDataEvent evt(this);
+  BroadcastOnCurveListChange(&evt);
+
+  // Nofity of the change in the mesh
+  BroadcastOnMeshChange(&evt);
 }
 
 void
@@ -97,9 +107,62 @@ TracerData
 
   if(rc)
     {
-    m_FocusCurve = -1;
-    m_FocusPoint = -1;
+    // Reset the current point and curve
+    SetFocusPoint(-1);
+    SetFocusCurve(-1);
+
+    // Notify listeners that the curves have changed
+    TracerDataEvent evt(this);
+    BroadcastOnCurveListChange(&evt);
     }
 
   return rc;
+}
+
+void
+TracerData
+::SetFocusCurve(int inFocusCurve)
+{
+  if(inFocusCurve != m_FocusCurve)
+    {
+    // Set the new focus curve
+    m_FocusCurve = inFocusCurve;
+
+    // Fire the update event
+    TracerDataEvent evt(this);
+    BroadcastOnFocusCurveChange(&evt);
+    }
+}
+
+void 
+TracerData
+::SetFocusPoint(int inFocusPoint)
+{
+  if(inFocusPoint != m_FocusPoint)
+    {
+    // Compute distance to the new focus point
+    if(inFocusPoint != -1)
+      {
+      // Get the associated mesh vertex
+      vtkIdType iVertex = m_Curves.GetControlPointVertex(inFocusPoint);
+
+      // Time the computation
+      double tStart = (double) clock();
+
+      // Compute shortest distances to that point
+      m_DistanceMapper->ComputeDistances(iVertex);
+
+      // Get the elapsed time
+      double tElapsed = (clock() - tStart) * 1000.0 / CLOCKS_PER_SEC;    
+      cout << "Shortest paths to source " << iVertex 
+        << " computed in " << tElapsed << " ms." << endl;
+      }
+
+    // Set the new focus point
+    m_FocusPoint = inFocusPoint;
+
+    // Fire the update event
+    TracerDataEvent evt(this);
+    BroadcastOnFocusPointChange(&evt);
+    }
 }
