@@ -29,7 +29,7 @@ TracerData
   m_NormalsFilter = vtkPolyDataNormals::New();
   m_CleanFilter = vtkCleanPolyData::New();
   
-  // m_DisplayMesh = 
+  m_Half = NULL;
   m_Mesh = NULL;
   m_FocusPoint = NO_FOCUS;
   m_FocusCurve = NO_FOCUS;
@@ -41,9 +41,9 @@ TracerData
   delete m_EdgeWeightFunction;
   delete m_DistanceMapper;
   delete m_VoronoiDiagram;
+  delete m_Half;
   
   m_DataReader->Delete();
-  // m_Stripper->Delete();
   m_Triangulator->Delete();
   m_NormalsFilter->Delete();
   m_CleanFilter->Delete();
@@ -84,9 +84,8 @@ TracerData
   m_Triangulator->Update();
   m_Mesh = m_Triangulator->GetOutput();
 
-  // Build the cells and links
-  m_Mesh->BuildCells();
-  m_Mesh->BuildLinks();
+  // Wrap the mesh with half-edges
+  m_Half = new VTKMeshHalfEdgeWrapper(m_Mesh);
 
   // Create a marker array and assign null marker to all cells
   vtkIdTypeArray *xArray = vtkIdTypeArray::New();
@@ -103,11 +102,11 @@ TracerData
   // m_DisplayMesh = m_Stripper->GetOutput();
 
   // Send the data to the distance mapper
-  m_DistanceMapper->SetInputMesh(m_Mesh);
+  m_DistanceMapper->SetInputMesh(m_Half);
   m_DistanceMapper->ComputeGraph();
 
   // Send the data to the Voronoi diagram
-  m_VoronoiDiagram->SetInputMesh(m_Mesh);
+  m_VoronoiDiagram->SetInputMesh(m_Half);
   m_VoronoiDiagram->ComputeGraph();
   
   // Clean up the curves, because they are no longer valid
@@ -239,11 +238,27 @@ TracerData
     << " computed in " << tElapsed << " ms." << endl;
 }
 
+unsigned int 
+TracerData
+::RecursiveAssignCurveLabel(vector<unsigned int> &labels, unsigned int iPos)
+{
+  if(labels[iPos] == 0)
+    {
+    labels[iPos] = RecursiveAssignCurveLabel(labels, 
+      m_DistanceMapper->GetVertexPredecessor(iPos));
+    }
+  return labels[iPos];
+}
+
 void TracerData
 ::ComputeMedialSegmentation()
 {
   // Create a list of source vertices
   list< vtkIdType > lSources;
+  
+  // Create a mapping from vertices to curve indices
+  unsigned int iVtx, iNbr, iCurve = 1, nVertices = m_Half->GetNumberOfVertices();
+  vector<unsigned int> xCurveIndex(nVertices,0);
 
   // Pass the separating edges as boundaries for the segmentation
   TracerCurves::IdList lCurves;
@@ -257,74 +272,124 @@ void TracerData
     while(it != curve.end())
       {
       lSources.push_back(*it);
+      xCurveIndex[*it] = iCurve;
       ++it;
       }   
-    ++itCurve;
+    ++itCurve;++iCurve;
     }
 
   // Pass the curves to the vertex Voronoi distance mapper
   m_DistanceMapper->ComputeDistances(lSources);
 
-  // First we compute all the grad-r vectors
-  unsigned int iVtx, iNbr, nVertices = m_DistanceMapper->GetNumberOfVertices();
-  vector< Vec > xGradR(nVertices, Vec(0.0f));
-
-  // Detect vertices that are saddlepoints of the distance function
-  for(iVtx = 0; iVtx < nVertices; iVtx++)
+  // Create a structure to hold all the medial edges (refine later)
+  map<unsigned int, double> xMedialEdges;
+  map<unsigned int, Vec> xMedialCenters;
+  
+  // Find all edges that can be considered medial (have different labels)
+  for(unsigned int iEdge=0;iEdge<m_Half->GetNumberOfHalfEdges();iEdge++)
     {
-    unsigned int nNeighbors = m_DistanceMapper->GetVertexNumberOfEdges(iVtx);
-    for(int iNbr = 0; iNbr < nNeighbors; iNbr++)
+    // In this loop there is no need to double up the edges
+    if(iEdge > m_Half->GetHalfEdgeOpposite(iEdge)) continue;
+    
+    // Get the labels on the two sides of the half-edge
+    vtkIdType iHead = m_Half->GetHalfEdgeVertex(iEdge);
+    vtkIdType iTail = m_Half->GetHalfEdgeTailVertex(iEdge);
+    
+    // Check if the edge crosses the medial axis
+    if(RecursiveAssignCurveLabel(xCurveIndex, iHead) != 
+      RecursiveAssignCurveLabel(xCurveIndex, iTail))
       {
-      // Compute the finite differences
-      unsigned int iNbVtx = m_DistanceMapper->GetVertexEdge(iVtx, iNbr);
-      Vec dx = Vec(m_Mesh->GetPoint(iNbVtx)) - Vec(m_Mesh->GetPoint(iVtx));
-      double dr = m_DistanceMapper->GetVertexDistance(iNbVtx) 
-        - m_DistanceMapper->GetVertexDistance(iVtx);
+      // Interpolate the distance from the middle of the edge to the boundary
+      double a = m_DistanceMapper->GetVertexDistance(iTail);
+      double b = m_DistanceMapper->GetVertexDistance(iHead);
+      double c = m_DistanceMapper->GetEdgeWeight(iEdge);
+      double rEdge = 0.5 * (a + b + c);
 
-      // Add the component to grad-r
-      xGradR[iVtx] += (dx * dr / dot_product(dx,dx));
+      // Also compute the center of the edge
+      Vec X(m_Mesh->GetPoint(iTail)), Y(m_Mesh->GetPoint(iHead));
+      Vec Z = 0.5 * (X + Y + ((b - a) / c) * (Y - X));
+      
+      // Add the edge and its opposite to the list of medial edges
+      xMedialEdges[iEdge] = xMedialEdges[m_Half->GetHalfEdgeOpposite(iEdge)] = rEdge;
+      xMedialCenters[iEdge] = xMedialCenters[m_Half->GetHalfEdgeOpposite(iEdge)] = Z;
       }
-
-    // Scale the gradR
-    xGradR[iVtx] *= (1.0 / nNeighbors);
     }
 
-  // Find vertices where magnitude of grad-R is minimal. These must include the saddles
-  list< vtkIdType> xLandmark;
-  for(iVtx = 0; iVtx < nVertices; iVtx++)
+  // Clear the list of landmarks
+  m_Landmarks.clear();
+
+  // For each medial edge, check its adjacent medial edges to see if it's 
+  // radius is a local minimum
+  map<unsigned int, double>::iterator itFind, itMedial = xMedialEdges.begin();
+  list<vtkIdType> xLandmark;
+  while(itMedial != xMedialEdges.end())
     {
-    unsigned int nNeighbors = m_DistanceMapper->GetVertexNumberOfEdges(iVtx);
-    bool flagMin = true;
-    for(int iNbr = 0; iNbr < nNeighbors; iNbr++)
-      {
-      // Compute the finite differences
-      unsigned int iNbVtx = m_DistanceMapper->GetVertexEdge(iVtx, iNbr);
+    bool isLocalMin = true;
 
-      // Add the component to grad-r
-      if( xGradR[iNbVtx].squared_magnitude() <= xGradR[iVtx].squared_magnitude() )
+    // Only consider the medial edges in one direction
+    unsigned int iEdge = itMedial->first; 
+    if(iEdge > m_Half->GetHalfEdgeOpposite(iEdge))
+      {
+      // Check around the left-side face
+      unsigned int iTest = m_Half->GetHalfEdgeNext(iEdge); 
+      cout << "checking edge " << iEdge << " with radius " << itMedial->second << endl;
+      while(iTest != iEdge)
         {
-        flagMin = false;
-        break;
+        itFind = xMedialEdges.find(iTest);
+        if(itFind != xMedialEdges.end())
+          {
+          cout << "  neighbor " << iTest << " has radius " << itFind->second << endl;
+          if(itFind->second < itMedial->second)
+            {
+            isLocalMin = false;
+            }
+          }
+        iTest = m_Half->GetHalfEdgeNext(iTest);
         }
+
+      // Check around the right-side face
+      iEdge = m_Half->GetHalfEdgeOpposite(iEdge);
+      iTest = m_Half->GetHalfEdgeNext(iEdge); 
+      while(iTest != iEdge)
+        {
+        itFind = xMedialEdges.find(iTest);
+        if(itFind != xMedialEdges.end())
+          {
+          cout << "  neighbor " << iTest << " has radius " << itFind->second << endl;
+          if(itFind->second < itMedial->second)
+            {
+            isLocalMin = false;
+            }
+          }
+        iTest = m_Half->GetHalfEdgeNext(iTest);
+        }
+
+      // Create a landmark
+      TracerLandmark xLan(xMedialCenters[iEdge]);
+      xLan.Size = 0.5;
+      xLan.Color = Vec(1.0,0.0,0.0);
+
+      // If we found a local minimum, report that!
+      if(isLocalMin)
+        {
+        cout << "Local minimum found at edge " << iEdge << endl;
+        xLan.Color = Vec(0.0,0.0,1.0);
+        }
+
+      // Add the landmark
+      m_Landmarks.push_back(xLan);
       }
 
-    // Scale the gradR
-    if(flagMin && xGradR[iVtx].magnitude() < 0.05 && m_DistanceMapper->GetVertexDistance(iVtx) > 0)
-      {
-      cout << "Vertex " << iVtx << " with distance " 
-        << m_DistanceMapper->GetVertexDistance(iVtx) 
-        << " and m.g.r. " << xGradR[iVtx].magnitude() << " is a potential saddlepoint " << endl;
-      xLandmark.push_back(iVtx);
-      }
+    ++itMedial;
     }
 
   // Add some landmarks
   for(list<vtkIdType>::iterator it = xLandmark.begin(); it != xLandmark.end(); ++it)
     {
     ostringstream oss;
-    oss << "Saddle Point " << (*it);
+    // oss << "Saddle Point " << (*it);
     // AddNewCurve(oss.str().c_str());
-    // AddNewPoint(*it);
+    // AddNewPoint(*it++);
     // AddNewPoint(*it);
     }
 
@@ -338,7 +403,7 @@ TracerData
 ::ComputeMarkerSegmentation()
 {
   // Create a list of edges
-  list<pair<vtkIdType, vtkIdType> > lEdges;
+  list<unsigned int> lEdges;
 
   // Pass the separating edges as boundaries for the segmentation
   TracerCurves::IdList lCurves;
@@ -354,10 +419,12 @@ TracerData
       TracerCurves::MeshCurve::const_iterator it2 = it1; ++it2;
       while(it2 != curve.end())
         {
-        if(*it1 < *it2)
-          lEdges.push_back(make_pair(*it1, *it2));
-        else
-          lEdges.push_back(make_pair(*it2, *it1));
+        // Get the edge between the points
+        unsigned int iEdge;
+        if(m_Half->GetHalfEdgeBetweenVertices(*it1, *it2, iEdge))
+          lEdges.push_back(iEdge);
+
+        // On to the next pair
         ++it1; ++it2;
         }
       }

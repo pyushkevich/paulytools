@@ -193,6 +193,7 @@ private:
   void DrawMesh();
   void DrawCurves();
   void DrawMarkers();
+  void DrawLandmarks();
 
   // Method for applying vertex color
   void ApplyMeshVertexColor(vtkIdType id);

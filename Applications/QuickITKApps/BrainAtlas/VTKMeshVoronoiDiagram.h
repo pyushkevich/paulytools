@@ -3,6 +3,7 @@
 
 #include <vnl/vnl_vector_fixed.h>
 #include "vtkPolyData.h"
+#include "VTKMeshHalfEdgeWrapper.h"
 #include "ShortestPath.h"
 
 #include <list>
@@ -20,15 +21,15 @@ class VTKMeshVoronoiDiagram
 public:
   typedef vnl_vector_fixed<double, 3> Vec;
   typedef GraphVoronoiDiagram<float> VoronoiDiagram;
-  typedef pair<vtkIdType, vtkIdType> Edge;
-  
+  // typedef pair<vtkIdType, vtkIdType> Edge;
+  typedef unsigned int Edge;
   
   /** Constructor */
   VTKMeshVoronoiDiagram();
   ~VTKMeshVoronoiDiagram();
 
   /** Set the input mesh (must be triangular, clean, etc) */
-  void SetInputMesh(vtkPolyData *mesh);
+  void SetInputMesh(VTKMeshHalfEdgeWrapper *halfEdge);
 
   /** Compute the graph structure */
   void ComputeGraph();
@@ -51,10 +52,12 @@ public:
   bool IsDiagramValid() const
     { return m_IsDiagramValid; }
     
-
 private:
   // The VTK mesh
   vtkPolyData *m_Mesh;
+
+  // The half-edge wrapper
+  VTKMeshHalfEdgeWrapper *m_HalfEdge;
 
   // Clean up graph structures
   void DeleteGraphData();
@@ -78,13 +81,8 @@ private:
   // Whether the diagram has been computed and is valid
   bool m_IsDiagramValid;
 
-  // These typedefs are used to define a mapping from vertex pairs in the
-  // mesh to inter-face edges. This is needed to allow edge weights to be
-  // changed
-  typedef pair<vtkIdType, vtkIdType> Edge;
-  typedef multimap<Edge, unsigned int> EdgeMap;
-
-  EdgeMap m_EdgeMap;
+  // A mapping from edges in dual graph to the edges in the primal graph
+  unsigned int *m_DualEdgeMap;
 };
 
 

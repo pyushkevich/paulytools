@@ -283,6 +283,7 @@ TracerMainWindow
     m_EdgeDisplayList = glGenLists(1);
 
   // Get the data needed to draw the edges
+  const VTKMeshHalfEdgeWrapper *he = m_Data->GetHalfEdge();
   const VTKMeshShortestDistance *dm = m_Data->GetDistanceMapper();
 
   // Build display list
@@ -318,63 +319,52 @@ TracerMainWindow
     glBegin(GL_LINES);
 
     // Go through all the edges
-    for(vtkIdType p = 0; p < dm->GetNumberOfVertices(); p++)
+    for(unsigned int iEdge = 0; iEdge < he->GetNumberOfHalfEdges(); iEdge++)
       {
+      // Ignore opposite edges
+      if(he->GetHalfEdgeOpposite(iEdge) < iEdge) continue;
+
+      // Get the two endpoints of the edge
+      vtkIdType p = he->GetHalfEdgeVertex(iEdge);
+      vtkIdType q = he->GetHalfEdgeTailVertex(iEdge);
+      
       // If we are in neighborhood surface display mode and this point
       // is too far away, reject it
       if(xActualSurfaceMode == SURFACE_DISPLAY_NEIGHBORHOOD &&
-        m_Data->GetDistanceMapper()->GetVertexDistance(p) > m_NeighborhoodSize)
+        ( m_Data->GetDistanceMapper()->GetVertexDistance(p) > m_NeighborhoodSize ||
+          m_Data->GetDistanceMapper()->GetVertexDistance(q) > m_NeighborhoodSize) )
         continue;
 
-      // Get the number of edges
-      unsigned int nEdges = dm->GetVertexNumberOfEdges(p);
+      // Draw this edge
+      vnl_vector_fixed<double,3> x1, x2, n1, n2;
+      m_Data->GetPointCoordinateAndNormal(p, x1, n1);
+      m_Data->GetPointCoordinateAndNormal(q, x2, n2);
 
-      // Draw each edge
-      for(unsigned int j = 0; j < nEdges; j++)
+      // If in plain mode, don't set any color
+      if(xActualMode == EDGE_DISPLAY_PLAIN)
         {
-        // Get the adjacent point
-        vtkIdType q = dm->GetVertexEdge(p, j);
-        
-        // Only process each edge once
-        if( p < q )
-          {
-          // If we are in neighborhood surface display mode and this point
-          // is too far away, reject it
-          if(xActualSurfaceMode == SURFACE_DISPLAY_NEIGHBORHOOD &&
-            m_Data->GetDistanceMapper()->GetVertexDistance(q) > m_NeighborhoodSize)
-            continue;
-
-          vnl_vector_fixed<double,3> x1, x2, n1, n2;
-          m_Data->GetPointCoordinateAndNormal(p, x1, n1);
-          m_Data->GetPointCoordinateAndNormal(q, x2, n2);
-
-          // If in plain mode, don't set any color
-          if(xActualMode == EDGE_DISPLAY_PLAIN)
-            {
-            glVertexNormal(x1.data_block(), n1.data_block());
-            glVertexNormal(x2.data_block(), n2.data_block());
-            }
-          else if(m_EdgeDisplayMode == EDGE_DISPLAY_LENGTH)
-            {
-            // Get the weight of the edge
-            float xWeight = dm->GetVertexEdgeWeight(p, j);
+        glVertexNormal(x1.data_block(), n1.data_block());
+        glVertexNormal(x2.data_block(), n2.data_block());
+        }
+      else if(m_EdgeDisplayMode == EDGE_DISPLAY_LENGTH)
+        {
+        // Get the weight of the edge
+        float xWeight = dm->GetEdgeWeight(iEdge);
             
-            // Compute and set the color based on length
-            SetGLEdgeColorFromWeight(xWeight);
+        // Compute and set the color based on length
+        SetGLEdgeColorFromWeight(xWeight);
 
-            // Draw the vertices
-            glVertexNormal(x1.data_block(), n1.data_block());
-            glVertexNormal(x2.data_block(), n2.data_block());
-            }
-          else if(m_EdgeDisplayMode == EDGE_DISPLAY_DISTANCE)
-            {
-            SetGLEdgeColorFromDistance(dm->GetVertexDistance(p));
-            glVertexNormal(x1.data_block(), n1.data_block());
-            
-            SetGLEdgeColorFromDistance(dm->GetVertexDistance(q));
-            glVertexNormal(x2.data_block(), n2.data_block());
-            }
-          }
+        // Draw the vertices
+        glVertexNormal(x1.data_block(), n1.data_block());
+        glVertexNormal(x2.data_block(), n2.data_block());
+        }
+      else if(m_EdgeDisplayMode == EDGE_DISPLAY_DISTANCE)
+        {
+        SetGLEdgeColorFromDistance(dm->GetVertexDistance(p));
+        glVertexNormal(x1.data_block(), n1.data_block());
+
+        SetGLEdgeColorFromDistance(dm->GetVertexDistance(q));
+        glVertexNormal(x2.data_block(), n2.data_block());
         }
       }
 
@@ -458,6 +448,18 @@ TracerMainWindow
   // Create the edge display list if needed
   if(m_EdgeDisplayListDirty) ComputeEdgeDisplayList();
   else glCallList(m_EdgeDisplayList);
+}
+
+void 
+TracerMainWindow
+::DrawLandmarks()
+{
+  list<TracerLandmark> &xLan = m_Data->GetLandmarks();
+  for(list<TracerLandmark>::iterator it = xLan.begin(); it != xLan.end(); ++it)
+    {
+    glColor3dv(it->Color.data_block());
+    GLDrawSphere(it->Position.data_block(), it->Size);
+    }
 }
 
 void
@@ -746,6 +748,9 @@ TracerMainWindow
 
     // Draw the curves on the surface
     DrawCurves();
+
+    // Draw the landmarks and miscelaneous junk
+    DrawLandmarks();
     
     // Pop the matrix
     glPopMatrix();

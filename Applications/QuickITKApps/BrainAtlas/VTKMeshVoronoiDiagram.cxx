@@ -12,6 +12,7 @@ VTKMeshVoronoiDiagram
   // Initialize the graph to NULL
   m_Diagram = NULL;
   m_Adjacency = m_AdjacencyIndex = NULL;
+  m_DualEdgeMap = NULL;
   m_RawEdgeWeights = m_FullEdgeWeights = NULL;
   m_IsDiagramValid = false;
 }
@@ -24,15 +25,12 @@ VTKMeshVoronoiDiagram
 
 void
 VTKMeshVoronoiDiagram
-::SetInputMesh(vtkPolyData *mesh)
+::SetInputMesh(VTKMeshHalfEdgeWrapper *halfedge)
 {
   // Store the input mesh
-  m_Mesh = mesh;
+  m_HalfEdge = halfedge;
+  m_Mesh = m_HalfEdge->GetPolyData();
 
-  // Make sure that the links and the cells are built
-  m_Mesh->BuildCells();
-  m_Mesh->BuildLinks();
-  
   // Set the number of vertices to the number of cells in the mesh
   m_NumberOfVertices = m_Mesh->GetNumberOfCells();
   
@@ -44,118 +42,78 @@ void
 VTKMeshVoronoiDiagram
 ::ComputeGraph()
 {
-  vtkIdType iCell, iEdge;
-  
   // Clean up the old graph info
   DeleteGraphData();
 
   // Allocate the graph adjacency index info
   m_AdjacencyIndex = new unsigned int[m_NumberOfVertices + 1];
+  m_AdjacencyIndex[0] = 0;
+  
+  // Allocate the edge arrays
+  m_Adjacency = new unsigned int[m_HalfEdge->GetNumberOfHalfEdges()];
+  m_DualEdgeMap = new unsigned int[m_HalfEdge->GetNumberOfHalfEdges()];
 
   // Create an array to hold cell center points
   Vec *xCenter = new Vec[m_NumberOfVertices];
 
-  // Create a vector to collect adjacencies
-  vector<vtkIdType> lAdjacency;
-
   // Iterate over all cells in the mesh
-  for(iCell = 0; iCell < m_Mesh->GetNumberOfCells(); iCell++)
+  unsigned int iDualEdge = 0;
+  for(unsigned int iCell = 0; iCell < m_Mesh->GetNumberOfCells(); iCell++)
     {
-    // Record the next adjacency index
-    m_AdjacencyIndex[iCell] = lAdjacency.size();
-
-    // Get the points belonging to the cell
-    vtkIdType nPoints, *lPoints;
-    m_Mesh->GetCellPoints(iCell,nPoints,lPoints);
-
-    // For each point, look at the cells that the point belongs to and 
-    // add them to a counter.
-    typedef set<vtkIdType> IdList;
-    typedef map<vtkIdType, IdList> CellMap;
-    CellMap xCellCount;
-
-    // Compute the center of the cell and add adjacencies
+    // Initialize the center
     xCenter[iCell].fill(0.0);
-    for(unsigned int iNbr = 0; iNbr < nPoints; iNbr++)
+
+    // Find all faces adjacent to this one
+    unsigned int iEdge = m_HalfEdge->GetFaceHalfEdge(iCell);
+    unsigned int iTest = iEdge;
+    do 
       {
-      // Get the point's ID in the mesh
-      vtkIdType iPoint = lPoints[iNbr];
+      // Find the adjacent face to this one
+      m_Adjacency[iDualEdge] = m_HalfEdge->GetHalfEdgeFace(
+        m_HalfEdge->GetHalfEdgeOpposite(iTest));
+
+      // Record the dual edge
+      m_DualEdgeMap[iTest] = iDualEdge;
 
       // Add point coordinate to center
-      double *xPoint = m_Mesh->GetPoint(iPoint);
+      double *xPoint = m_Mesh->GetPoint(m_HalfEdge->GetHalfEdgeVertex(iTest));
       xCenter[iCell][0] += xPoint[0];
       xCenter[iCell][1] += xPoint[1];
       xCenter[iCell][2] += xPoint[2];
 
-      // Find cells around the current point
-      unsigned short nCells;
-      vtkIdType *lCells;
-      m_Mesh->GetPointCells(iPoint, nCells, lCells);
+      // Go to the next edge
+      iTest = m_HalfEdge->GetHalfEdgeNext(iTest);
 
-      // Add these cells to the multi-map
-      for(unsigned int iNbrCell = 0; iNbrCell < nCells; iNbrCell++)
-        xCellCount[lCells[iNbrCell]].insert(iPoint);
-      }
+      // Increment the adjacency index
+      iDualEdge++;
+      } 
+    while(iTest != iEdge);
 
-    // At this point, the map xCellCount has a number associated with each cell
-    // in the neighborhood, telling us how many points a nearby cell shares with
-    // this cell. 
+    // Adjust the center value
+    xCenter[iCell] *= 1.0 / (iDualEdge - m_AdjacencyIndex[iCell]);
 
-    // Find the cells that have two points shared with the current cell
-    CellMap::iterator it = xCellCount.begin();
-    while(it != xCellCount.end())
-      {
-      if(it->second.size() == 2)
-        {
-        Edge edge;
-        vtkIdType i1 = *(it->second.begin());
-        vtkIdType i2 = *(++(it->second.begin()));
-        
-        if(i1 < i2)
-          {
-          edge.first = i1;
-          edge.second = i2;
-          }
-        else
-          {
-          edge.first = i2;
-          edge.second = i1;
-          }
-        
-        m_EdgeMap.insert(make_pair(edge,lAdjacency.size()));
-        lAdjacency.push_back(it->first);
-        }
-      ++it;
-      }
-
-    // Scale the center by the number of points
-    xCenter[iCell] *= ( 1.0 / nPoints );
+    // Set the adjacency index for the next cell
+    m_AdjacencyIndex[iCell+1] = iDualEdge;
     }
   
-  // Record the last adjacency index
-  m_AdjacencyIndex[m_NumberOfVertices] = lAdjacency.size();
-  cout << " Number of edges (2) : " << m_AdjacencyIndex[m_NumberOfVertices] << endl;
-  cout << " Compare to : " << m_EdgeMap.size() << endl;
+  // Set the number of edges
+  m_NumberOfEdges = m_AdjacencyIndex[m_NumberOfVertices];
 
-  // Compute the edge weights and store adjacencies as an array
-  m_NumberOfEdges = lAdjacency.size();
-  m_Adjacency = new unsigned int[m_NumberOfEdges];
+  // Compute the edge weights 
   m_RawEdgeWeights = new float[m_NumberOfEdges];
   m_FullEdgeWeights = new float[m_NumberOfEdges];
 
-  // Populate the edge data
-  for(iCell = 0; iCell < m_NumberOfVertices; iCell++)
+  for(unsigned int iEdge = 0; iEdge < m_NumberOfEdges; iEdge++)
     {
-    for(iEdge = m_AdjacencyIndex[iCell]; 
-      iEdge < m_AdjacencyIndex[iCell+1]; iEdge++)
-      {
-      // Copy the adjacency value
-      m_Adjacency[iEdge] = lAdjacency[iEdge];
+    // Find the faces at the two sides of the edge
+    unsigned int iDual = m_DualEdgeMap[iEdge];
+    vtkIdType iFaceLeft = m_HalfEdge->GetHalfEdgeFace(iDual);
+    vtkIdType iFaceRight = m_HalfEdge->GetHalfEdgeFace(
+      m_HalfEdge->GetHalfEdgeOpposite(iDual));
 
-      // Compute the distance between centers
-      m_FullEdgeWeights[iEdge] = m_RawEdgeWeights[iEdge] = 
-        (float) (xCenter[iCell] - xCenter[m_Adjacency[iEdge]]).two_norm();
-      }
+    // Compute the distance between centers
+    m_FullEdgeWeights[iEdge] = m_RawEdgeWeights[iEdge] = 
+      (float) (xCenter[iFaceLeft] - xCenter[iFaceRight]).two_norm();
     }
 
   // Clean up
@@ -177,21 +135,11 @@ VTKMeshVoronoiDiagram
   list<Edge>::const_iterator it = edges.begin();
   while(it != edges.end())
     {
-    EdgeMap::iterator itMap = m_EdgeMap.find(*it);
-    if(itMap != m_EdgeMap.end())
-      {
-      while(itMap != m_EdgeMap.upper_bound(*it))
-        {
-        // cout << " Barrier edge [" << it->first << "," << it->second << "]" << " maps to " << itMap->second << endl;
-        m_FullEdgeWeights[itMap->second] = VoronoiDiagram::INFINITE_WEIGHT;
-        ++itMap;
-        }
-      }
-    else
-      {
-      // cout << " Barrier edge [ " << it->first << "," << it->second << "] NOT FOUND!!!" << endl;
-      }
-    ++it;
+    unsigned int iDual = m_DualEdgeMap[*it];
+    unsigned int iDualOpp = m_DualEdgeMap[m_HalfEdge->GetHalfEdgeOpposite(*it)];
+
+    m_FullEdgeWeights[iDual] = m_FullEdgeWeights[iDualOpp] = 
+      VoronoiDiagram::INFINITE_WEIGHT;
     }
 }
 

@@ -11,6 +11,7 @@
 #include <vtkTriangleFilter.h>
 #include <vtkCleanPolyData.h>
 #include <vtkLoopSubdivisionFilter.h>
+#include "VTKMeshHalfEdgeWrapper.h"
 
 #include <vector>
 #include <list>
@@ -111,7 +112,7 @@ public:
   ~VTKMeshShortestDistance();
 
   /** Specify the mesh to use for computing distances */
-  void SetInputMesh(vtkPolyData *mesh);
+  void SetInputMesh(VTKMeshHalfEdgeWrapper *mesh);
 
   /** Specify the edge weight function object to use in order to 
    * compute the costs of edge traversal */
@@ -164,7 +165,7 @@ public:
     { return m_SourceMesh; }
 
   /** Get the weight associated with an edge */
-  double GetEdgeWeight(vtkIdType x1, vtkIdType x2)
+  double GetEdgeWeight(vtkIdType x1, vtkIdType x2) const
     { return m_WeightFunctionPtr->GetEdgeWeight(m_SourceMesh,x1,x2); }
   
   /** Given a ray, find a point on the mesh that is closest to that 
@@ -176,36 +177,14 @@ public:
   /** Given a ray, find a cell clostest to that ray */
   bool PickCell(Vec xStart, Vec xEnd, vtkIdType &cell) const;
 
-  /** Get the number of vertices in the graph */
-  unsigned int GetNumberOfVertices() const 
-    { return m_NumberOfVertices; }
-
-  /** Get the number of edges in the graph. This returns the number of
-   * bidirectional edges, which is twice the number of directional edges.
-   * This way it is possible to have different weights for different 
-   * directions through the edge */
-  unsigned int GetNumberOfDirectedEdges() const
-    { return m_NumberOfEdges; }
-
-  /** Get number of vertices adjacent to a given vertex */
-  unsigned int GetVertexNumberOfEdges(vtkIdType iVertex) const
-    { return m_AdjacencyIndex[iVertex+1] - m_AdjacencyIndex[iVertex]; }
-
-  /** Get the given edge */
-  vtkIdType GetVertexEdge(vtkIdType iVertex, unsigned int iEdge) const
-    { return m_Adjacency[m_AdjacencyIndex[iVertex] + iEdge]; }
-
   /** Get the edge weight for a vertex */
-  float GetVertexEdgeWeight(vtkIdType iVertex, unsigned int iEdge) const
-    { return m_EdgeWeights[m_AdjacencyIndex[iVertex] + iEdge]; }
+  float GetEdgeWeight(unsigned int iEdge) const
+    { return m_EdgeWeights[iEdge]; }
 
 private:
 
   // Clean up graph structures
   void DeleteGraphData();
-
-  // Adjacency table used to represent the edge graph
-  unsigned int *m_AdjacencyIndex, *m_Adjacency; 
 
   // Mesh dimensions
   unsigned int m_NumberOfEdges, m_NumberOfVertices;
@@ -223,6 +202,7 @@ private:
 
   // VTK source poly-data
   vtkPolyData *m_SourceMesh;
+  VTKMeshHalfEdgeWrapper *m_HalfEdge;
 
   // Function object used to compute edge distances
   MeshEdgeWeightFunction *m_WeightFunctionPtr;

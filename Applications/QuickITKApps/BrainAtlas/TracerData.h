@@ -11,6 +11,7 @@
 #include "vtkPolyDataNormals.h"
 #include "VTKMeshShortestDistance.h"
 #include "VTKMeshVoronoiDiagram.h"
+#include "VTKMeshHalfEdgeWrapper.h"
 #include "vnl/vnl_cross.h"
 #include <list>
 #include <ctime>
@@ -129,7 +130,22 @@ private:
   friend class TracerData;
 };
 
-
+/**
+ * Landmark for debugging
+ */
+struct TracerLandmark
+{
+  typedef vnl_vector_fixed<double, 3> Vec;
+  Vec Position;
+  double Size;
+  Vec Color;
+  TracerLandmark(Vec x)
+    {
+    Position = x;
+    Size = 1;
+    Color.fill(1.0);
+    }
+};
 
 /**
  * An encapsulation of the data used by the curve tracer. This class provides
@@ -173,6 +189,10 @@ public:
   // Get the 'source' mesh
   vtkPolyData *GetInternalMesh() 
     { return m_Mesh; }
+
+  // Get the half-edge structure associated with the mesh
+  VTKMeshHalfEdgeWrapper *GetHalfEdge()
+    { return m_Half; }
 
   // Get the mesh used for display
   vtkPolyData *GetDisplayMesh() 
@@ -616,6 +636,10 @@ public:
 
   // Import curves from a mesh-independent file
   bool ImportCurves(const char *file);
+
+  // Get the landmark list
+  list <TracerLandmark> &GetLandmarks()
+    { return m_Landmarks; }
     
 private:
   // Shortest distance / voronoi computer
@@ -629,6 +653,9 @@ private:
 
   // The internal mesh (used to find shortest paths)
   vtkPolyData *m_Mesh;
+
+  // The Half-edge structure associated with that mesh
+  VTKMeshHalfEdgeWrapper *m_Half;
 
   // The displayed mesh (triangle stripped, used for rendering)
   // vtkPolyData *m_DisplayMesh;
@@ -650,6 +677,9 @@ private:
 
   // Curves that have been traced (?)
   TracerCurves m_Curves;
+
+  // Some landmarks used for debugging
+  list <TracerLandmark> m_Landmarks;
 
   // Constant indicating no focus
   const static int NO_FOCUS;
@@ -707,6 +737,9 @@ private:
 
   /** Clean up marker data */
   void RemoveMarkerData();
+
+  /** Compute vertex labels after distance mapping */
+  unsigned int RecursiveAssignCurveLabel(vector<unsigned int> &labels, unsigned int iPos);
 };
 
 #endif
