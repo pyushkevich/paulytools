@@ -188,7 +188,7 @@ double getGaussianRnd2(double mean,double sigma) {
 		haveSaved = true;
 		double r = mean + sigma * f * cos(2*PI*u2); 
 
-        if(numeric_limits<double>::signaling_NaN() == r) {
+        if(numeric_limits<double>::quiet_NaN() == r) {
             throw "error";
         }
         

@@ -1,5 +1,5 @@
 # Find the directory where MKL lives
-FIND_PATH(MKL_ROOT_DIR "include/mkl.h" "/opt/intel/mkl72" DOC "Location of the MKL package)
+FIND_PATH(MKL_ROOT_DIR "include/mkl.h" "/opt/intel/mkl72" DOC "Location of the MKL package")
 
 # Read the config file
 IF(MKL_ROOT_DIR)
