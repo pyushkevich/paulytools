@@ -30,13 +30,59 @@ void ProgressCommand(itk::Object *dummy, const itk::EventObject &, void *data)
   cout << "." << flush;
 }
 
+int usage()
+{
+  cout << "aalias - Apply ITK Whitaker's Anti-Aliasing method to a label image" << endl;
+  cout << "usage:" << endl;
+  cout << "   aalias [options] input.img output_base_name " << endl;
+  cout << "options:" << endl;
+  cout << "   -iso x.xx    Rescale image to be isotropic w/ voxel size x.xx" << endl;
+  cout << "   -rms x.xx    Max RMS error parameter (0.07) " << endl;
+  cout << "   -itr nn      Max iterations (omit: as many as needed) " << endl;
+  cout << endl;
+  return -1;
+}
+
 int main(int argc, char **argv)
 {
-  if(argc != 3)
+  // Check number of parameters
+  if(argc < 3) return usage();
+
+  // Read in the parameters
+  unsigned int nMaxIterations = 0;
+  bool flagDoResample = false;
+  double xMaxRMS = 0.07, xVoxelSize = 1.0;
+  string fnInput = argv[argc-2], fnOutput = argv[argc-1];
+
+  try 
     {
-    cout << "USAGE: aalias inputimage outputimage" << endl;
-    cout << "No more help" << endl;
-    return -1;
+    for(unsigned int iArg = 1; iArg < argc -2; iArg++)
+      {
+      string arg = argv[iArg];
+      if(arg == "-iso")
+        {
+        flagDoResample = true;
+        xVoxelSize = atof(argv[++iArg]);
+        }        
+      else if(arg == "-rms")
+        {
+        xMaxRMS = atof(argv[++iArg]);
+        }        
+      else if(arg == "itr")
+        {
+        nMaxIterations = atoi(argv[++iArg]);
+        }        
+      else
+        {
+        cerr << "Bad parameter " << arg << endl;
+        return usage();
+        }
+      }
+    }
+  catch(...)
+    {
+    cerr << "Error parsing parameters" << endl;
+    return usage();
     }
 
   // Load the input image
@@ -46,7 +92,7 @@ int main(int argc, char **argv)
   ReaderType::Pointer fltReader = ReaderType::New();
   ImageType::Pointer imgInput = ImageType::New();
   
-  fltReader->SetFileName(argv[1]);
+  fltReader->SetFileName(fnInput.c_str());
   imgInput = fltReader->GetOutput();
   fltReader->Update();
 
@@ -123,41 +169,54 @@ int main(int argc, char **argv)
         ++itBinSource;++itBinTarget;
         }
 
-      // Resample the image from 5mm z to 1mm z distance
-      typedef itk::ResampleImageFilter<FloatImageType,FloatImageType> ResampleFilter;
-      // typedef itk::BSplineInterpolateImageFunction<FloatImageType,double> IFType;
-      typedef itk::LinearInterpolateImageFunction<FloatImageType,double> IFType;
-      
-      ResampleFilter::Pointer fltResample = ResampleFilter::New();
-      fltResample->SetInput(imgBinary);
-      fltResample->SetTransform(itk::IdentityTransform<double,3>::New());
-      fltResample->SetInterpolator(IFType::New());
-
-      itk::Size<3> size; 
-      size[0] = imgBinary->GetBufferedRegion().GetSize()[0];
-      size[1] = imgBinary->GetBufferedRegion().GetSize()[1];
-      size[2] = imgBinary->GetBufferedRegion().GetSize()[2] * 5;
-      fltResample->SetSize(size);
-      
-      double spacing[] = {1.0,1.0,1.0};
-      fltResample->SetOutputSpacing(spacing);
-      fltResample->SetDefaultPixelValue(1.0f);
-
       // Create progress command
       itk::CStyleCommand::Pointer command = itk::CStyleCommand::New();
       command->SetCallback(ProgressCommand);
 
-      // Run the resampler
-      fltResample->AddObserver(itk::ProgressEvent(),command);
-      fltResample->UpdateLargestPossibleRegion();
-      
+      // If requested, resample the binary image
+      if(flagDoResample)
+        {
+        // Resample the image from 5mm z to 1mm z distance
+        typedef itk::ResampleImageFilter<FloatImageType,FloatImageType> ResampleFilter;
+        typedef itk::LinearInterpolateImageFunction<FloatImageType,double> IFType;
+          // typedef itk::BSplineInterpolateImageFunction<FloatImageType,double> IFType;
+
+        ResampleFilter::Pointer fltResample = ResampleFilter::New();
+        fltResample->SetInput(imgBinary);
+        fltResample->SetTransform(itk::IdentityTransform<double,3>::New());
+        fltResample->SetInterpolator(IFType::New());
+
+        // Compute the size
+        itk::Size<3> szInput = imgBinary->GetBufferedRegion().GetSize();
+        itk::Size<3> szOutput; 
+        for(unsigned int j=0;j<3;j++)
+          {
+          szOutput[j] = 
+            (unsigned long) (szInput[j] * imgBinary->GetSpacing()[j] / xVoxelSize);
+          }
+        fltResample->SetSize(szOutput);
+
+        // Set the spacing
+        double spacing[] = {xVoxelSize,xVoxelSize,xVoxelSize};
+        fltResample->SetOutputSpacing(spacing);
+        fltResample->SetDefaultPixelValue(1.0f);
+
+        // Run the resampler
+        fltResample->AddObserver(itk::ProgressEvent(),command);
+        fltResample->UpdateLargestPossibleRegion();
+
+        // Set the 'new' binary image 
+        imgBinary = fltResample->GetOutput();
+        }
+
       // Apply antialiasing to the binary image
       typedef itk::AntiAliasBinaryImageFilter<FloatImageType,FloatImageType>
         AntiFilterType;
       AntiFilterType::Pointer fltAnti = AntiFilterType::New();
-      fltAnti->SetInput(fltResample->GetOutput());
-      fltAnti->SetMaximumRMSError(0.0001);
-      fltAnti->SetNumberOfIterations(1500);
+      fltAnti->SetInput(imgBinary);
+      fltAnti->SetMaximumRMSError(xMaxRMS);      
+      if(nMaxIterations > 0)
+        fltAnti->SetNumberOfIterations(nMaxIterations);
       fltAnti->SetIsoSurfaceValue(0.0f);
       fltAnti->AddObserver(itk::ProgressEvent(),command);
       fltAnti->Update();

@@ -1,19 +1,19 @@
 /******************************************************************
  * MATRIX Library                                                 *
  ******************************************************************
- * Author:						Paul Yushkevich
+ * Author:                      Paul Yushkevich
  *
- * Date:							Apr 1, 1999
+ * Date:                            Apr 1, 1999
  *
- * Description					Basic and numerical matrix operations   
- *									See http://www.cs.unc.edu/~pauly/matrix
- *									
- *	Sources:						Uses my compilation of CLAPACK
- *									
- * Dependencies:				CLAPACK
+ * Description                  Basic and numerical matrix operations   
+ *                                  See http://www.cs.unc.edu/~pauly/matrix
+ *                                  
+ *  Sources:                        Uses my compilation of CLAPACK
+ *                                  
+ * Dependencies:                CLAPACK
  ******************************************************************
  * matrix.cpp
- *	-----------
+ *  -----------
  * Definitions for matrix and vector classes
  ******************************************************************/
 #include <matrix.h>
@@ -32,12 +32,12 @@ NAMESPACE_PAULY_START
  * CLAPACK IMPORTS
  * These functions are not present in Intel Extensions
  ***********************************************************************/
- 
+
 extern "C" {
-	//int dgesv_(long *n, long *nrhs, double *a, long *lda, long *ipiv, double *b, long *ldb, long *info);
-   //int dposv_(char *uplo, long *n, long *nrhs, double *a, long *lda, double *b, long *ldb, long *info);
-   //int dsyev_(char *jobz, char *uplo, long *n, double *a,long *lda, double *w, double *work, long *lwork, long *info);
-   //int dgesvd_(char *jobu, char *jobvt, long *m, long *n, double *a, long *lda, double *s, double *u, long * ldu, double *vt, long *ldvt, double *work, long *lwork, long *info);
+  //int dgesv_(long *n, long *nrhs, double *a, long *lda, long *ipiv, double *b, long *ldb, long *info);
+  //int dposv_(char *uplo, long *n, long *nrhs, double *a, long *lda, double *b, long *ldb, long *info);
+  //int dsyev_(char *jobz, char *uplo, long *n, double *a,long *lda, double *w, double *work, long *lwork, long *info);
+  //int dgesvd_(char *jobu, char *jobvt, long *m, long *n, double *a, long *lda, double *s, double *u, long * ldu, double *vt, long *ldvt, double *work, long *lwork, long *info);
 
 }
 
@@ -50,10 +50,10 @@ extern "C" {
  **********************************************************************
 
 */
-#ifdef _INTEL_SIMD_	
-	
+#ifdef _INTEL_SIMD_ 
+
 // Include mkl
-#include <mkl.h>
+  #include <mkl.h>
 
 // Declare lapack_int as the int 
 typedef int lapack_int;
@@ -63,20 +63,20 @@ typedef int lapack_int;
 typedef long lapack_int;
 /*
 extern "C" {
-	int dgemm_(char *transa, char *transb, long *m, long *n, long *k, 
-				  double *alpha, double *a, long *lda, double *b, long *ldb, 
-				  double *beta, double *c, long *ldc); 
+    int dgemm_(char *transa, char *transb, long *m, long *n, long *k, 
+                  double *alpha, double *a, long *lda, double *b, long *ldb, 
+                  double *beta, double *c, long *ldc); 
 
-	int dgetrf_(long *m, long *n, double *a, long *lda, long *ipiv, long *info);
+    int dgetrf_(long *m, long *n, double *a, long *lda, long *ipiv, long *info);
    int dgetri_(long *n, double *a, long *lda, long *ipiv, double *work, long *lwork, long *info);
    int dgetrs_(char *,long *, long *, double *a, long *lda, long *ipiv, double *work, long *lwork, long *info);
-	int dpotrf_(char *,long *, double *a, long *, long *);
+    int dpotrf_(char *,long *, double *a, long *, long *);
 }
 */
 
 int dgemm_(char *transa, char *transb, long *m, long *n, long *k, 
-  double *alpha, double *a, long *lda, double *b, long *ldb, 
-  double *beta, double *c, long *ldc)
+           double *alpha, double *a, long *lda, double *b, long *ldb, 
+           double *beta, double *c, long *ldc)
 {
   assert(0);
   return 0;
@@ -118,11 +118,11 @@ int dgesvd_(char *jobu, char *jobvt, long *m, long *n, double *a, long *lda, dou
   return 0;
 }
 
-#define DGETRI dgetri_ 
-#define DGETRF dgetrf_
-#define DGETRS dgetrs_
-#define DGEMM dgemm_ 
-#define DPOTRF dpotrf_
+  #define DGETRI dgetri_ 
+  #define DGETRF dgetrf_
+  #define DGETRS dgetrs_
+  #define DGEMM dgemm_ 
+  #define DPOTRF dpotrf_
 
 #endif
 
@@ -137,70 +137,81 @@ extern "C" {
         ldu, doublereal *vt, lapack_int *ldvt, doublereal *work, lapack_int *lwork, lapack_int *info);
    int dsyev_(char *jobz, char *uplo, lapack_int *n, doublereal *a,lapack_int *lda, doublereal *w, doublereal *work, lapack_int *lwork, lapack_int *info);
    int dgetri_(lapack_int *n, doublereal *a, lapack_int *lda, lapack_int *ipiv, doublereal *work, lapack_int *lwork, lapack_int *info);
-	
-	int dgemm_(char *transa, char *transb, lapack_int *m, lapack_int *n, lapack_int *k, 
-		doublereal *alpha, doublereal *a, lapack_int *lda, doublereal *b, lapack_int *ldb, 
-		doublereal *beta, doublereal *c, lapack_int *ldc); 
+    
+    int dgemm_(char *transa, char *transb, lapack_int *m, lapack_int *n, lapack_int *k, 
+        doublereal *alpha, doublereal *a, lapack_int *lda, doublereal *b, lapack_int *ldb, 
+        doublereal *beta, doublereal *c, lapack_int *ldc); 
 }
 #endif
 */
 
 void Matrix::initData(double *inData,bool columnMajorOrder) {
-	if(inData) {
-      if(columnMajorOrder) {
- 		   memcpy(data,inData,sizeof(double)*nCells);
+  if (inData)
+    {
+    if (columnMajorOrder)
+      {
+      memcpy(data,inData,sizeof(double)*nCells);
       }
-      else {
-         for(int iRow=0;iRow<nRows;iRow++) {
-            for(int iCol=0;iCol<nCols;iCol++) {
-               cols[iCol][iRow] = *inData;
-               inData++;
-            }
-         }
+    else
+      {
+      for (int iRow=0;iRow<nRows;iRow++)
+        {
+        for (int iCol=0;iCol<nCols;iCol++)
+          {
+          cols[iCol][iRow] = *inData;
+          inData++;
+          }
+        }
       }
-   }
-   else {
-      memset(data,0,sizeof(double)*nCells);
-   }
+    }
+  else
+    {
+    memset(data,0,sizeof(double)*nCells);
+    }
 }
 
 // Initializes a matrix to new size
 void Matrix::initStorage(int rows,int columns) {
-   nRows = rows;
-   nCols = columns;
-   nCells = nRows * nCols;
-	if(nCells > 0) {
-		data = new double[nCells];
-		cols = new double*[nCols];
+  nRows = rows;
+  nCols = columns;
+  nCells = nRows * nCols;
+  if (nCells > 0)
+    {
+    data = new double[nCells];
+    cols = new double*[nCols];
 
-		cols[0] = data;
-		for(int i=1;i<nCols;i++) {
-			cols[i] = cols[i-1] + nRows;
-		}
-	}
-	else {
-		cols = NULL;
-		data = NULL;
-	}
+    cols[0] = data;
+    for (int i=1;i<nCols;i++)
+      {
+      cols[i] = cols[i-1] + nRows;
+      }
+    }
+  else
+    {
+    cols = NULL;
+    data = NULL;
+    }
 }
 
 Matrix::Matrix(int rows,int columns,double firstValue...) {
-   initStorage(rows,columns);
+  initStorage(rows,columns);
 
-   // Read in values.  Values are in column major order
-   va_list ap;
-   va_start(ap, firstValue);
+  // Read in values.  Values are in column major order
+  va_list ap;
+  va_start(ap, firstValue);
 
-   for(int iCol=0;iCol<nCols;iCol++) {
-      for(int iRow=0;iRow<nRows;iRow++) {
-         if(iCol==0 && iRow==0)
-            cols[iCol][iRow] = firstValue;
-         else
-            cols[iCol][iRow] = va_arg(ap,double);
+  for (int iCol=0;iCol<nCols;iCol++)
+    {
+    for (int iRow=0;iRow<nRows;iRow++)
+      {
+      if (iCol==0 && iRow==0)
+        cols[iCol][iRow] = firstValue;
+      else
+        cols[iCol][iRow] = va_arg(ap,double);
       }
-   }
+    }
 
-   va_end(ap);
+  va_end(ap);
 }
 
 
@@ -229,73 +240,76 @@ Matrix Matrix::operator*(const Matrix &A) const {
 #ifdef _INTEL_SIMD_ 
 
 void Matrix::multiply(const Matrix &A, const Matrix &B, Matrix &C) {
-	static char code = 'c';
-	static double alpha = 1.0;
-   static double beta = 0.0;
-	lapack_int m = A.nRows;
-	lapack_int n = B.nCols;
-	lapack_int k = A.nCols;
-   cblas_dgemm(CblasColMajor,
-					CblasNoTrans,CblasNoTrans,
-					A.nRows,B.nCols,A.nCols,
-					1.0,
-					A.data,A.nRows,
-					B.data,A.nCols,
-					0.0,
-					C.data,A.nRows);
+  static char code = 'c';
+  static double alpha = 1.0;
+  static double beta = 0.0;
+  lapack_int m = A.nRows;
+  lapack_int n = B.nCols;
+  lapack_int k = A.nCols;
+  cblas_dgemm(CblasColMajor,
+              CblasNoTrans,CblasNoTrans,
+              A.nRows,B.nCols,A.nCols,
+              1.0,
+              A.data,A.nRows,
+              B.data,A.nCols,
+              0.0,
+              C.data,A.nRows);
 }
 
 #else 
 
 
 void Matrix::multiply(const Matrix &A, const Matrix &B, Matrix &C) {
-	register int i,j,k;
-	
-   // Compute product
-   for(i=0;i<C.nRows;i++) {
-      for(j=0;j<C.nCols;j++) {
-			C.cols[j][i] = A.cols[0][i] * B.cols[j][0];
-         for(k=1;k<A.nCols;k++) {
-            C.cols[j][i]  += A.cols[k][i] * B.cols[j][k];
-         }
+  register int i,j,k;
+
+  // Compute product
+  for (i=0;i<C.nRows;i++)
+    {
+    for (j=0;j<C.nCols;j++)
+      {
+      C.cols[j][i] = A.cols[0][i] * B.cols[j][0];
+      for (k=1;k<A.nCols;k++)
+        {
+        C.cols[j][i]  += A.cols[k][i] * B.cols[j][k];
+        }
       }
-   }
+    }
 
 }
 
 #endif
 /*
 void Matrix::multiply(const Matrix &A, const Vector &X, Vector &R) {
-	register int i,k;
+    register int i,k;
 
    for(i=0;i<A.nRows;i++) {
-		R.data[i] = A.cols[0][i] * X.data[0];
+        R.data[i] = A.cols[0][i] * X.data[0];
       for(k=1;k<A.nCols;k++) {
-			R.data[i]  += A.cols[k][i] * X.data[k];
+            R.data[i]  += A.cols[k][i] * X.data[k];
       }
    }
 }*/
 
 /*
 void Matrix::multiply(const Matrix &A, const Matrix &B, Matrix &C) {
-	static char code = 'c';
-	static double alpha = 1.0;
+    static char code = 'c';
+    static double alpha = 1.0;
    static double beta = 0.0;
-	lapack_int m = A.nRows;
-	lapack_int n = B.nCols;
-	lapack_int k = A.nCols;
+    lapack_int m = A.nRows;
+    lapack_int n = B.nCols;
+    lapack_int k = A.nCols;
    dgemm_(&code,&code,&m,&n,&k,&alpha,
           A.data,&m,B.data,&k,
           &beta,C.data,&m);
 }*/
 
 Matrix Matrix::operator*(const Matrix &A) const {
-   // Initialize target matrix
-	Matrix C(nRows,A.nCols);
+  // Initialize target matrix
+  Matrix C(nRows,A.nCols);
 
-   multiply(*this,A,C);
+  multiply(*this,A,C);
 
-   return C;
+  return C;
 }
 
 
@@ -303,31 +317,33 @@ Matrix Matrix::operator*(const Matrix &A) const {
  * Get transpose of a matrix
  */
 Matrix Matrix::t() const {
-   Matrix T(nCols,nRows);
+  Matrix T(nCols,nRows);
 
-   for(int iRow=0;iRow<T.nRows;iRow++) {
-      for(int iCol=0;iCol<T.nCols;iCol++) {
-         T.cols[iCol][iRow] = cols[iRow][iCol];
+  for (int iRow=0;iRow<T.nRows;iRow++)
+    {
+    for (int iCol=0;iCol<T.nCols;iCol++)
+      {
+      T.cols[iCol][iRow] = cols[iRow][iCol];
       }
-   }
+    }
 
-	return T;
+  return T;
 }
 
 int Matrix::ipFactorGenericLU(lapack_int pivot[]) {
-	lapack_int n = nRows;
-   lapack_int info = 0;
+  lapack_int n = nRows;
+  lapack_int info = 0;
 
-	DGETRF(&n,&n,data,&n,pivot,&info);
-	return info;
+  DGETRF(&n,&n,data,&n,pivot,&info);
+  return info;
 }
 
 int Matrix::ipFactorSPDLU() {
-	lapack_int n = nRows;
-	lapack_int info = 0;
+  lapack_int n = nRows;
+  lapack_int info = 0;
 
-	DPOTRF("u",&n,data,&n,&info);
-	return info;
+  DPOTRF("u",&n,data,&n,&info);
+  return info;
 }
 
 
@@ -337,14 +353,14 @@ int Matrix::factorGenericLU(Matrix &LU,lapack_int pivot[]) {
    LU = *this;
 
    // Data used in call
-   lapack_int	n		= nRows;
-   lapack_int	nrhs	= 0;
-   double *a	= LU.data;
-   lapack_int	lda	= n;   
-   lapack_int	info	= 0;
+   lapack_int   n       = nRows;
+   lapack_int   nrhs    = 0;
+   double *a    = LU.data;
+   lapack_int   lda = n;   
+   lapack_int   info    = 0;
 
    // Perform LU call
-	DGETRF(&n,&nrhs,a,&lda,pivot,&info);
+    DGETRF(&n,&nrhs,a,&lda,pivot,&info);
    //dgesv_(&n,&nrhs,a,&lda,pivot,b,&ldb,&info);
 
    return (int) info;
@@ -367,7 +383,7 @@ int Matrix::factorSPDLU(Matrix &LU) {
    char uplo = 'U';
 
    
-	DPOTRF(&uplo,&n,a,&lda,&info);
+    DPOTRF(&uplo,&n,a,&lda,&info);
 
    return (int) info;
 }
@@ -378,44 +394,50 @@ int Matrix::factorSPDLU(Matrix &LU) {
  * LU Factorization of a matrix - 'public' call
  */
 int Matrix::factorLU(Matrix &L, Matrix &U, Matrix &P,int type) {
-   int info;
+  int info;
 
-   P.setSize(nRows,nRows);
-   P = 1;
+  P.setSize(nRows,nRows);
+  P = 1;
 
-   Matrix LU = *this;
+  Matrix LU = *this;
 
-   if(type==SPD) {
-      info = LU.ipFactorSPDLU();      
-   }
+  if (type==SPD)
+    {
+    info = LU.ipFactorSPDLU();      
+    }
 
-   else {
-      lapack_int *pivot = new lapack_int[nRows];
-      info = LU.ipFactorGenericLU(pivot);
+  else
+    {
+    lapack_int *pivot = new lapack_int[nRows];
+    info = LU.ipFactorGenericLU(pivot);
 
-      // Create a permutation matrix
-      for(int iRow=0;iRow<nRows;iRow++) {
-         if(pivot[iRow] && pivot[iRow]-1!=iRow) {
-            P.swapColumns(iRow,pivot[iRow]-1);
-         }
+    // Create a permutation matrix
+    for (int iRow=0;iRow<nRows;iRow++)
+      {
+      if (pivot[iRow] && pivot[iRow]-1!=iRow)
+        {
+        P.swapColumns(iRow,pivot[iRow]-1);
+        }
       }
 
-      delete pivot;
-   }
+    delete pivot;
+    }
 
-   // Construct L, U
-   L = LU;
-   U = LU;
+  // Construct L, U
+  L = LU;
+  U = LU;
 
-   for(int iRow=0;iRow<nRows;iRow++) {
-      for(int iCol=0;iCol<iRow;iCol++) {
-         U.cols[iCol][iRow] = 0;
-         L.cols[iRow][iCol] = 0;
+  for (int iRow=0;iRow<nRows;iRow++)
+    {
+    for (int iCol=0;iCol<iRow;iCol++)
+      {
+      U.cols[iCol][iRow] = 0;
+      L.cols[iRow][iCol] = 0;
       }
-      L.cols[iRow][iRow] = 1;
-   }
+    L.cols[iRow][iRow] = 1;
+    }
 
-   return (int) info;
+  return(int) info;
 }
 
 /**
@@ -423,19 +445,19 @@ int Matrix::factorLU(Matrix &L, Matrix &U, Matrix &P,int type) {
  * result in B and the LU decomposition of A in A
  */
 int Matrix::ipSolveLinearSystem(Matrix &B) {
-   dassert(nRows == nCols);
-   dassert(B.nRows == nRows);
-	
-	lapack_int n = nRows;
-	lapack_int nrhs = B.nCols;
-	lapack_int *pivot = new lapack_int[n];
-	lapack_int info = 0;
+  dassert(nRows == nCols);
+  dassert(B.nRows == nRows);
 
-	ipFactorGenericLU(pivot);
-	DGETRS("N",&n,&nrhs,data,&n,pivot,B.data,&n,&info);
+  lapack_int n = nRows;
+  lapack_int nrhs = B.nCols;
+  lapack_int *pivot = new lapack_int[n];
+  lapack_int info = 0;
 
-	delete pivot;
-	return info;
+  ipFactorGenericLU(pivot);
+  DGETRS("N",&n,&nrhs,data,&n,pivot,B.data,&n,&info);
+
+  delete pivot;
+  return info;
 }
 
 /**
@@ -468,9 +490,9 @@ int Matrix::solveGE(const Matrix &B,Matrix &X,int type) {
    //}
    //else {
       int *ipiv = new int[n];
-		factorGenericLU(LU,ipiv);
+        factorGenericLU(LU,ipiv);
       // dgesv_(&n,&nrhs,a,&lda,ipiv,b,&ldb,&info);
-		DGETRS("N",&nRows,&X.nCols,LU.data,&nRows,ipiv,X.data,&nRows,&info);
+        DGETRS("N",&nRows,&X.nCols,LU.data,&nRows,ipiv,X.data,&nRows,&info);
       delete ipiv;
   // }
 
@@ -480,79 +502,87 @@ int Matrix::solveGE(const Matrix &B,Matrix &X,int type) {
 
 // Reverse a range of rows
 void Matrix::reverseRows(int startRow,int endRow) {
-	while(endRow > startRow) 
-		swapRows(startRow++,endRow--);
+  while (endRow > startRow)
+    swapRows(startRow++,endRow--);
 }
 
 // Reverse a range of columns
 void Matrix::reverseColumns(int startColumn,int endColumn) {
-	while(endColumn > startColumn) 
-		swapColumns(startColumn++,endColumn--);
+  while (endColumn > startColumn)
+    swapColumns(startColumn++,endColumn--);
 }
 
 // Compute the mean of this feature matrix
 Vector Matrix::computeMean() const {
-	// Compute the mean
-	Vector mean(nCols);
-	for(int c=0;c<nCols;c++) {
-		mean(c) = 0;
-		for(int r=0;r<nRows;r++) {
-			mean(c) += cols[c][r];
-		}
-		mean(c) /= nRows;
-	}
-	return mean;
+  // Compute the mean
+  Vector mean(nCols);
+  for (int c=0;c<nCols;c++)
+    {
+    mean(c) = 0;
+    for (int r=0;r<nRows;r++)
+      {
+      mean(c) += cols[c][r];
+      }
+    mean(c) /= nRows;
+    }
+  return mean;
 }
 
 // Compute the mean of the matrix and a the matrix where each row has the mean
 // removed
 Vector Matrix::computeMean(Matrix &minusMean) const {
-	Vector mean = computeMean();
-	minusMean.setSize(nRows,nCols);
-	for(int i=0;i<nRows;i++) {
-		for(int j=0;j<nCols;j++) {
-			minusMean(i,j) = cols[j][i] - mean(j);
-		}
-	}
-	return mean;
+  Vector mean = computeMean();
+  minusMean.setSize(nRows,nCols);
+  for (int i=0;i<nRows;i++)
+    {
+    for (int j=0;j<nCols;j++)
+      {
+      minusMean(i,j) = cols[j][i] - mean(j);
+      }
+    }
+  return mean;
 }
 
 // Compute the mean and covairance matrix of a feature matrix
 void Matrix::computeMeanCov(Vector &mean,Matrix &cov) const {
-	Matrix noMean;
-	mean = computeMean(noMean);
-	
-	cov.setSize(nCols,nCols);
-	cov.insertMatrix(0,0,(noMean.t() * noMean) / (nRows-1));
+  Matrix noMean;
+  mean = computeMean(noMean);
+
+  cov.setSize(nCols,nCols);
+  cov.insertMatrix(0,0,(noMean.t() * noMean) / (nRows-1));
 }
 
 // Compute the mean and covairance matrix of a feature matrix
 void Matrix::computeMeanCorr(Vector &mean,Vector &sdev,Matrix &corr) const {
-	int c,r;
-	
-	// Compute the mean
-	mean = computeMean();
+  int c,r;
 
-	// Compute the standard deviation of each column
-	sdev.setSize(nCols);
-	for(c=0;c<nCols;c++) {
-		double s = 0;
-		for(r=0;r<nRows;r++) {
-			double dx = cols[c][r] - mean(c);
-			s += dx*dx;
-		}
-		sdev(c) = sqrt(s / (nRows-1));
-	}
+  // Compute the mean
+  mean = computeMean();
 
-	// A Z-matrix
-	Matrix Z(nRows,nCols);
-	for(c=0;c<nCols;c++) {
-		for(r=0;r<nRows;r++) {
-			Z(r,c) = (cols[c][r] - mean(c)) / sdev(c);
-		}
-	}
-	
-	corr = (Z.t() * Z) / (nRows-1);
+  // Compute the standard deviation of each column
+  sdev.setSize(nCols);
+  for (c=0;c<nCols;c++)
+    {
+    double s = 0;
+    for (r=0;r<nRows;r++)
+      {
+      double dx = cols[c][r] - mean(c);
+      s += dx*dx;
+      }
+    sdev(c) = sqrt(s / (nRows-1));
+    }
+
+  // A Z-matrix
+  Matrix Z(nRows,nCols);
+  for (c=0;c<nCols;c++)
+    {
+    for (r=0;r<nRows;r++)
+      {
+      Z(r,c) = (cols[c][r] - mean(c)) / sdev(c);
+      }
+    }
+
+  corr = (Z.t() * Z) / (nRows-1);
 }
 
 /**
@@ -560,18 +590,18 @@ void Matrix::computeMeanCorr(Vector &mean,Vector &sdev,Matrix &corr) const {
  * are different features.  We expect this to be a tall matrix...  
  */
 int Matrix::computePCA(Vector &mean,Vector &eValues,Matrix &eVectors) const {
-	// Compute the covariance matrix
-	Matrix cov;
-	computeMeanCov(mean,cov);
+  // Compute the covariance matrix
+  Matrix cov;
+  computeMeanCov(mean,cov);
 
-	// Compute the PCA
-	int rc = cov.factorEV(eValues,eVectors);
+  // Compute the PCA
+  int rc = cov.factorEV(eValues,eVectors);
 
-	// Rerrange rows and columns
-	eVectors.reverseAllColumns();
-	eValues.reverseAllRows();
+  // Rerrange rows and columns
+  eVectors.reverseAllColumns();
+  eValues.reverseAllRows();
 
-	return rc;
+  return rc;
 }
 
 /**
@@ -579,49 +609,53 @@ int Matrix::computePCA(Vector &mean,Vector &eValues,Matrix &eVectors) const {
  * to a whitened matrix (uses correlation analysis instead of covariance)
  */
 int Matrix::computeCorrelationPCA(Vector &mean,Vector &sdev,Vector &eValues,Matrix &eVectors) const {
-	// Compute the covariance matrix
-	Matrix corr;
-	computeMeanCorr(mean,sdev,corr);
+  // Compute the covariance matrix
+  Matrix corr;
+  computeMeanCorr(mean,sdev,corr);
 
-	// Compute the PCA
-	int rc = corr.factorEV(eValues,eVectors);
+  // Compute the PCA
+  int rc = corr.factorEV(eValues,eVectors);
 
-	// Rerrange rows and columns
-	eVectors.reverseAllColumns();
-	eValues.reverseAllRows();
+  // Rerrange rows and columns
+  eVectors.reverseAllColumns();
+  eValues.reverseAllRows();
 
-	return rc;
+  return rc;
 }
 
 /**
  * Compute matrix determinant - Ill posed problem
  */
 double Matrix::det(int type) {
-   dassert(nRows == nCols);
-   double det=1;
+  dassert(nRows == nCols);
+  double det=1;
 
-   Matrix LU = *this;
-   
-   if(type==SPD) {
-      LU.ipFactorSPDLU();
-   }
-   else {
-      lapack_int *pivot = new lapack_int[nRows];
-      LU.ipFactorGenericLU(pivot);
+  Matrix LU = *this;
 
-      // Compute sign of determinant 
-      for(int iRow=0;iRow<nRows;iRow++) {
-         if(pivot[iRow] != iRow+1)
-            det = 0 - det;
+  if (type==SPD)
+    {
+    LU.ipFactorSPDLU();
+    }
+  else
+    {
+    lapack_int *pivot = new lapack_int[nRows];
+    LU.ipFactorGenericLU(pivot);
+
+    // Compute sign of determinant 
+    for (int iRow=0;iRow<nRows;iRow++)
+      {
+      if (pivot[iRow] != iRow+1)
+        det = 0 - det;
       }
-      delete pivot;
-   }
+    delete pivot;
+    }
 
-   for(int iRow=0;iRow<nRows;iRow++) {
-      det*=LU(iRow,iRow);
-   }
+  for (int iRow=0;iRow<nRows;iRow++)
+    {
+    det*=LU(iRow,iRow);
+    }
 
-   return det;
+  return det;
 }
 
 /** 
@@ -629,69 +663,78 @@ double Matrix::det(int type) {
  * second parameter
  */
 double Matrix::logDeterminant(double &sign,int type) {
-   dassert(nRows == nCols);
-   sign=1;
-	double ldet = 0;
+  dassert(nRows == nCols);
+  sign=1;
+  double ldet = 0;
 
-   Matrix LU = *this;
-   
-   if(type==SPD) {
-      LU.ipFactorSPDLU();
-   }
-   else {
-      lapack_int *pivot = new lapack_int[nRows];
-      LU.ipFactorGenericLU(pivot);
+  Matrix LU = *this;
 
-      // Compute sign of determinant 
-      for(int iRow=0;iRow<nRows;iRow++) {
-         if(pivot[iRow] != iRow+1)
-            sign = 0 - sign;
+  if (type==SPD)
+    {
+    LU.ipFactorSPDLU();
+    }
+  else
+    {
+    lapack_int *pivot = new lapack_int[nRows];
+    LU.ipFactorGenericLU(pivot);
+
+    // Compute sign of determinant 
+    for (int iRow=0;iRow<nRows;iRow++)
+      {
+      if (pivot[iRow] != iRow+1)
+        sign = 0 - sign;
       }
-      delete pivot;
-   }
+    delete pivot;
+    }
 
-	for(int iRow=0;iRow<nRows;iRow++) {
-		double lu = LU(iRow,iRow);
-		if(lu < 0) {
-			sign = 1 - sign;
-			lu = -lu;
-		}
-      ldet += log(lu);
-   }
+  for (int iRow=0;iRow<nRows;iRow++)
+    {
+    double lu = LU(iRow,iRow);
+    if (lu < 0)
+      {
+      sign = 1 - sign;
+      lu = -lu;
+      }
+    ldet += log(lu);
+    }
 
-	return ldet;
+  return ldet;
 }
 
 // Prints a matrix
 void Matrix::print()
 {
-	for(int iRow=0;iRow<nRows;iRow++) {
-      for(int iCol=0;iCol<nCols;iCol++) {
-			cout << cols[iCol][iRow] << "\t";			
-		}
-		cout << "\n";
-	}
-	cout << "\n";
+  for (int iRow=0;iRow<nRows;iRow++)
+    {
+    for (int iCol=0;iCol<nCols;iCol++)
+      {
+      cout << cols[iCol][iRow] << "\t";           
+      }
+    cout << "\n";
+    }
+  cout << "\n";
 }
 
 void Matrix::printMatlab(FILE *f) const {
-	fprintf(f,"[");
-	for(int iRow=0;iRow<nRows;iRow++) {
-		if(iRow)	fprintf(f,";\n");
-      for(int iCol=0;iCol<nCols;iCol++) {
-			if(iCol) fprintf(f," ");
-			fprintf(f,"%.8lg",cols[iCol][iRow]);			
-		}		
-	}
-	fprintf(f,"]\n");
+  fprintf(f,"[");
+  for (int iRow=0;iRow<nRows;iRow++)
+    {
+    if (iRow)    fprintf(f,";\n");
+    for (int iCol=0;iCol<nCols;iCol++)
+      {
+      if (iCol) fprintf(f," ");
+      fprintf(f,"%.8lg",cols[iCol][iRow]);            
+      }       
+    }
+  fprintf(f,"]\n");
 }
 
 // Prints a matrix
 void Matrix::printMatlab(const char *fname) const
 {
-	FILE *f = fopen(fname,"wb");
-	printMatlab(f);
-	fclose(f);
+  FILE *f = fopen(fname,"wb");
+  printMatlab(f);
+  fclose(f);
 }
 
 
@@ -699,84 +742,92 @@ void Matrix::printMatlab(const char *fname) const
  * Insert matrix into this matrix with top left of insreted matrix at row,col
  */
 void Matrix::insertMatrix(int row,int col,const Matrix &A) {
-	dassert(row + A.nRows <= nRows);
-   dassert(col + A.nCols <= nCols);
+  dassert(row + A.nRows <= nRows);
+  dassert(col + A.nCols <= nCols);
 
-   for(int iRow=row;iRow<row + A.nRows;iRow++) {
-      for(int iCol=col;iCol<col + A.nCols;iCol++) {
-         cols[iCol][iRow] = A.cols[iCol-col][iRow-row];
+  for (int iRow=row;iRow<row + A.nRows;iRow++)
+    {
+    for (int iCol=col;iCol<col + A.nCols;iCol++)
+      {
+      cols[iCol][iRow] = A.cols[iCol-col][iRow-row];
       }
-   }
+    }
 }
 
 // Extracts a sub-matrix
 void Matrix::extractMatrix(int row,int col,Matrix &A)  const{
-	dassert(row + A.nRows <= nRows);
-   dassert(col + A.nCols <= nCols);
+  dassert(row + A.nRows <= nRows);
+  dassert(col + A.nCols <= nCols);
 
-   for(int iRow=row;iRow<row + A.nRows;iRow++) {
-      for(int iCol=col;iCol<col + A.nCols;iCol++) {
-         A.cols[iCol-col][iRow-row] = cols[iCol][iRow];
+  for (int iRow=row;iRow<row + A.nRows;iRow++)
+    {
+    for (int iCol=col;iCol<col + A.nCols;iCol++)
+      {
+      A.cols[iCol-col][iRow-row] = cols[iCol][iRow];
       }
-   }
+    }
 }
 
 /**
  * Get column vector
  */
 Vector Matrix::getColumn(int col)  const{
-	dassert(col < nCols);
+  dassert(col < nCols);
 
-	Vector v(nRows);
+  Vector v(nRows);
 
-   for(int iRow=0;iRow<nRows;iRow++) {
-		v.data[iRow] = cols[col][iRow];
-   }
+  for (int iRow=0;iRow<nRows;iRow++)
+    {
+    v.data[iRow] = cols[col][iRow];
+    }
 
-   return v;
+  return v;
 }
 
 /**
  * Get row vector
  */
 Vector Matrix::getRow(int row)  const{
-	dassert(row < nRows);
+  dassert(row < nRows);
 
-	Vector v(nCols);
+  Vector v(nCols);
 
-   for(int iCol=0;iCol<nCols;iCol++) {
-		v.data[iCol] = cols[iCol][row];
-   }
+  for (int iCol=0;iCol<nCols;iCol++)
+    {
+    v.data[iCol] = cols[iCol][row];
+    }
 
-   return v;
+  return v;
 }
 
 /**
  * Swap two rows
  */
 void Matrix::swapRows(int r1,int r2) {
-	dassert(r1 < nRows);
-   dassert(r2 < nRows);
+  dassert(r1 < nRows);
+  dassert(r2 < nRows);
 
-   for(int iCol=0;iCol<nCols;iCol++) {
-      double tmp = cols[iCol][r1];
-      cols[iCol][r1] = cols[iCol][r2];
-      cols[iCol][r2] = tmp;
-   }
+  for (int iCol=0;iCol<nCols;iCol++)
+    {
+    double tmp = cols[iCol][r1];
+    cols[iCol][r1] = cols[iCol][r2];
+    cols[iCol][r2] = tmp;
+    }
 }
 
 /**
  * Swap two columns
  */
 void Matrix::swapColumns(int c1,int c2) {
-	dassert(c1 < nCols);
-   dassert(c2 < nCols);
+  dassert(c1 < nCols);
+  dassert(c2 < nCols);
 
-   for(int iRow=0;iRow<nRows;iRow++) {
-      double tmp = cols[c1][iRow];
-      cols[c1][iRow] = cols[c2][iRow];
-      cols[c2][iRow] = tmp;
-   }
+  for (int iRow=0;iRow<nRows;iRow++)
+    {
+    double tmp = cols[c1][iRow];
+    cols[c1][iRow] = cols[c2][iRow];
+    cols[c2][iRow] = tmp;
+    }
 }
 
 /**
@@ -797,39 +848,39 @@ void Matrix::swapColumns(int c1,int c2) {
  */
 int Matrix::factorSVD(Matrix &U,Matrix &Vt,Vector &sv,int type) {
 
-   // Have to create a copy of A so it does not get destroyed
-   Matrix A(*this);
+  // Have to create a copy of A so it does not get destroyed
+  Matrix A(*this);
 
-   // Compute the smaller of two dimensions
-   int nsv = (nRows < nCols) ? nRows : nCols;
+  // Compute the smaller of two dimensions
+  int nsv = (nRows < nCols) ? nRows : nCols;
 
-   // Set size of U,Vt
-   U.setSize(nRows,nRows);
-   Vt.setSize(nCols,nCols);
-   sv.setSize(nsv);
+  // Set size of U,Vt
+  U.setSize(nRows,nRows);
+  Vt.setSize(nCols,nCols);
+  sv.setSize(nsv);
 
-   // Input to svd method (get all rows/cols of u,vt)
-   char jobu = 'A';
-   char jobvt = 'A';
-   long m = nRows;
-   long n = nCols;
-   double *a = A.data;
-   long lda = n;
-   double *s = sv.data;
-   double *u = U.data;
-   long ldu = m;
-   double *vt = Vt.data;
-   long ldvt = n;
-   long lwork = 6*(m+n);
-   double *work = new double[lwork];
-   long info;
+  // Input to svd method (get all rows/cols of u,vt)
+  char jobu = 'A';
+  char jobvt = 'A';
+  long m = nRows;
+  long n = nCols;
+  double *a = A.data;
+  long lda = n;
+  double *s = sv.data;
+  double *u = U.data;
+  long ldu = m;
+  double *vt = Vt.data;
+  long ldvt = n;
+  long lwork = 6*(m+n);
+  double *work = new double[lwork];
+  long info;
 
-   // Call svd method
-   dgesvd_(&jobu,&jobvt,&m,&n,a,&lda,s,u,&ldu,vt,&ldvt,work,&lwork,&info);
+  // Call svd method
+  dgesvd_(&jobu,&jobvt,&m,&n,a,&lda,s,u,&ldu,vt,&ldvt,work,&lwork,&info);
 
-   delete work;
+  delete work;
 
-   return (int) info;
+  return(int) info;
 }
 
 /**
@@ -839,48 +890,48 @@ int Matrix::factorSVD(Matrix &U,Matrix &Vt,Vector &sv,int type) {
  * A must be symmetrical.
  */
 int Matrix::factorEV(Vector &l,Matrix &V,int type) {
-   dassert(nCols == nRows);
+  dassert(nCols == nRows);
 
-   V = *this;
-   l.setSize(nCols);
-   
-   // Parameters
-   char jobz = 'V';
-   char uplo = 'U';
-   long n = nCols;
-   double *a = V.data;
-   long lda = n;
-   double *w = l.data;
-   long lwork = 6*n;
-   double *work = new double[lwork];
-   long info = 0;
+  V = *this;
+  l.setSize(nCols);
 
-   dsyev_(&jobz, &uplo, &n, a,
-          &lda, w, work, &lwork, 
-          &info);
- 
-   delete work;
-   return (int)info;
+  // Parameters
+  char jobz = 'V';
+  char uplo = 'U';
+  long n = nCols;
+  double *a = V.data;
+  long lda = n;
+  double *w = l.data;
+  long lwork = 6*n;
+  double *work = new double[lwork];
+  long info = 0;
+
+  dsyev_(&jobz, &uplo, &n, a,
+         &lda, w, work, &lwork, 
+         &info);
+
+  delete work;
+  return(int)info;
 }
 
 int Matrix::ipInverse() {
-   dassert(nCols == nRows);
-   
-   lapack_int n = nCols;
-   lapack_int *ipiv = new lapack_int[n];
-   lapack_int lwork = 64 * n;
-   double *work = new double[lwork];
-   lapack_int info;
+  dassert(nCols == nRows);
 
-   // Compute inverse
-   ipFactorGenericLU(ipiv);
-	DGETRI(&n,data,&n,ipiv,work,&lwork,&info);
+  lapack_int n = nCols;
+  lapack_int *ipiv = new lapack_int[n];
+  lapack_int lwork = 64 * n;
+  double *work = new double[lwork];
+  lapack_int info;
 
-   // Delete trash
-   delete[] ipiv;
-   delete[] work;
+  // Compute inverse
+  ipFactorGenericLU(ipiv);
+  DGETRI(&n,data,&n,ipiv,work,&lwork,&info);
 
-   return (int)info;
+  // Delete trash
+  delete[] ipiv;
+  delete[] work;
+
+  return(int)info;
 }
 
 /**
@@ -916,47 +967,49 @@ int Matrix::inverse(Matrix &Ainv,int type) {
 
 // Norms of the matrix
 double Matrix::oneNorm() const {
-   double rtn = 0;
-   for(int i=0;i<nCells;i++) 
-      rtn += fabs(data[i]);
-   return rtn;
+  double rtn = 0;
+  for (int i=0;i<nCells;i++)
+    rtn += fabs(data[i]);
+  return rtn;
 }
 
 double Matrix::infinityNorm() const {
-   double rtn = 0;
-   for(int i=0;i<nCells;i++) {
-      double val = fabs(data[i]);
-      rtn = (val > rtn) ? val : rtn;
-   }
-   return rtn;
+  double rtn = 0;
+  for (int i=0;i<nCells;i++)
+    {
+    double val = fabs(data[i]);
+    rtn = (val > rtn) ? val : rtn;
+    }
+  return rtn;
 }
 
 double Matrix::twoNorm() const {
-   double rtn = 0;
-   for(int i=0;i<nCells;i++) 
-      rtn += data[i] * data[i];
-   return sqrt(rtn);
+  double rtn = 0;
+  for (int i=0;i<nCells;i++)
+    rtn += data[i] * data[i];
+  return sqrt(rtn);
 }
 
 double Matrix::pNorm(double p) const {
-   double rtn = 0;
-   for(int i=0;i<nCells;i++) 
-      rtn += pow(fabs(data[i]),p);
-   return pow(rtn,1/p);
+  double rtn = 0;
+  for (int i=0;i<nCells;i++)
+    rtn += pow(fabs(data[i]),p);
+  return pow(rtn,1/p);
 }
 
 
 Vector::Vector(int rows,double firstValue,...) : Matrix(rows,1) {
-   // Read in values.  Values are in column major order
-   va_list ap;
-   va_start(ap, firstValue);
+  // Read in values.  Values are in column major order
+  va_list ap;
+  va_start(ap, firstValue);
 
-   data[0] = firstValue;
-   for(int iRow=1;iRow<nRows;iRow++) {
-      data[iRow] = va_arg(ap,double);
-   }
+  data[0] = firstValue;
+  for (int iRow=1;iRow<nRows;iRow++)
+    {
+    data[iRow] = va_arg(ap,double);
+    }
 
-   va_end(ap);
+  va_end(ap);
 }
 
 
@@ -985,40 +1038,43 @@ Vector::Vector(int rows,double firstValue,...) : Matrix(rows,1) {
 
 float rand3(long *idum)
 {
-   static int inext,inextp;
-   static long ma[56];
-   static int iff=0;
-   long mj,mk;
-   int i,ii,k;
+  static int inext,inextp;
+  static long ma[56];
+  static int iff=0;
+  long mj,mk;
+  int i,ii,k;
 
-   if (*idum < 0 || iff == 0) {
-      iff=1;
-      mj=MSEED-(*idum < 0 ? -*idum : *idum);
-      mj %= MBIG;
-      ma[55]=mj;
-      mk=1;
-      for (i=1;i<=54;i++) {
-         ii=(21*i) % 55;
-         ma[ii]=mk;
-         mk=mj-mk;
-         if (mk < MZ) mk += MBIG;
-         mj=ma[ii];
+  if (*idum < 0 || iff == 0)
+    {
+    iff=1;
+    mj=MSEED-(*idum < 0 ? -*idum : *idum);
+    mj %= MBIG;
+    ma[55]=mj;
+    mk=1;
+    for (i=1;i<=54;i++)
+      {
+      ii=(21*i) % 55;
+      ma[ii]=mk;
+      mk=mj-mk;
+      if (mk < MZ) mk += MBIG;
+      mj=ma[ii];
       }
-      for (k=1;k<=4;k++)
-         for (i=1;i<=55;i++) {
-            ma[i] -= ma[1+(i+30) % 55];
-            if (ma[i] < MZ) ma[i] += MBIG;
-         }
-      inext=0;
-      inextp=31;
-      *idum=1;
-   }
-   if (++inext == 56) inext=1;
-   if (++inextp == 56) inextp=1;
-   mj=ma[inext]-ma[inextp];
-   if (mj < MZ) mj += MBIG;
-   ma[inext]=mj;
-   return (float) mj*FAC;
+    for (k=1;k<=4;k++)
+      for (i=1;i<=55;i++)
+        {
+        ma[i] -= ma[1+(i+30) % 55];
+        if (ma[i] < MZ) ma[i] += MBIG;
+        }
+    inext=0;
+    inextp=31;
+    *idum=1;
+    }
+  if (++inext == 56) inext=1;
+  if (++inextp == 56) inextp=1;
+  mj=ma[inext]-ma[inextp];
+  if (mj < MZ) mj += MBIG;
+  ma[inext]=mj;
+  return(float) mj*FAC;
 }
 
 /************************************************************************/
@@ -1031,10 +1087,10 @@ float rand3(long *idum)
 /************************************************************************/
 double unif_rand_dbl(long *idum)
 {
-   double highorder = (double) rand3(idum);
-   double loworder = (double) rand3(idum);
+  double highorder = (double) rand3(idum);
+  double loworder = (double) rand3(idum);
 
-   return highorder + loworder*FAC;
+  return highorder + loworder*FAC;
 }
 
 /************************************************************************/
@@ -1043,8 +1099,8 @@ double unif_rand_dbl(long *idum)
 /************************************************************************/
 int randint(int thismax, long *seed)
 {
-    double scaleval = (thismax + 1)*unif_rand_dbl(seed);
-    return (int) scaleval;
+  double scaleval = (thismax + 1)*unif_rand_dbl(seed);
+  return(int) scaleval;
 }
 
 #undef MBIG
@@ -1054,20 +1110,22 @@ int randint(int thismax, long *seed)
 
 
 Matrix *allocMatrixArray(int nMatrices,int rows,int columns) {
-   Matrix *array = new Matrix[nMatrices];
-   for(int i=0;i<nMatrices;i++) {
-      array[i].setSize(rows,columns);
-   }
-   return array;
+  Matrix *array = new Matrix[nMatrices];
+  for (int i=0;i<nMatrices;i++)
+    {
+    array[i].setSize(rows,columns);
+    }
+  return array;
 }
 
 
 Vector *allocVectorArray(int nVectors,int size) {
-   Vector *array = new Vector[nVectors];
-   for(int i=0;i<nVectors;i++) {
-      array[i].setSize(size);
-   }
-   return array;
+  Vector *array = new Vector[nVectors];
+  for (int i=0;i<nVectors;i++)
+    {
+    array[i].setSize(size);
+    }
+  return array;
 }
 
 
@@ -1153,17 +1211,17 @@ void main(void) {
 /*
 __declspec(naked) 
 void simdDotProduct4(float *x,float *y,double *result) {
-	__asm {
-		movaps	xmm0, dword ptr[esp+4]		;
-		mulps		xmm0, dword ptr[esp+8]		;
-		movaps	xmm1, xmm0						;
-		shufps	xmm1, xmm1, 4Eh				;
-		addps		xmm0, xmm1						;
-		movaps	xmm1, xmm0						;
-		shufps	xmm1, xmm1, 11h				;
-		addps		xmm0, xmm1
-		movss		dword ptr[esp+0Ch], xmm0	;
-	}
+    __asm {
+        movaps  xmm0, dword ptr[esp+4]      ;
+        mulps       xmm0, dword ptr[esp+8]      ;
+        movaps  xmm1, xmm0                      ;
+        shufps  xmm1, xmm1, 4Eh             ;
+        addps       xmm0, xmm1                      ;
+        movaps  xmm1, xmm0                      ;
+        shufps  xmm1, xmm1, 11h             ;
+        addps       xmm0, xmm1
+        movss       dword ptr[esp+0Ch], xmm0    ;
+    }
 }
 */
 

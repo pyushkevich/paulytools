@@ -342,11 +342,9 @@ drawBinaryTrianglesSheetFilled(unsigned char *image, int *dim,
   // image(0,0,0) as an origin
   // vertex_table is a table of num_triangles*3 Pointers to 3 doubles (a point)
 {
-  int i,j,k,p_p;
+  int i,k,p_p;
   int maxz, minz, maxy,miny, maxx, minx;
   Point3 p0, p1, p2; 
-  Point pt1, pt2;
-  int inout;
   int color = 255;
   
   maxz = 0;
