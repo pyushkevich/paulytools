@@ -6,8 +6,6 @@ template <class TReal, unsigned int VOrder, unsigned int VJetOrder>
 BSplineKnotList<TReal,VOrder,VJetOrder>
 ::BSplineKnotList(unsigned int m) 
 {
-  unsigned int i;
-
   // Save the m
   m_PieglM = m; 
   m_NumberOfControlPoints = m + 1;
@@ -33,7 +31,7 @@ BSplineKnotList<TReal,VOrder,VJetOrder>
 template <class TReal, unsigned int VOrder, unsigned int VJetOrder>
 void
 BSplineKnotList<TReal,VOrder,VJetOrder>
-::ComputeBasisJet(unsigned int i,TReal u,BasisVectorType N[]) 
+::ComputeBasisJet(unsigned int i,TReal u,BasisVectorType *N) 
 {
   // We use the variables p and n because we want the code to match the code in Piegl
   const unsigned int p = VOrder;
@@ -181,7 +179,7 @@ BSplineCurve<VDimension,TReal,VOrder,VJetOrder>
   MatrixType BN(m+1,n+1,0.0);
   for (int r=0;r<=m;r++)
     {
-    BasisVector W[VJetOrder];
+    BasisVector W[VJetOrder + 1];
     m_KnotList->ComputeBasisJet(uki[r],uk[r],W);
     unsigned int c0 = uki[r] - VOrder;
     unsigned int c1 = c0 + VOrder < n ? c0 + VOrder : n;

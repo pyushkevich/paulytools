@@ -21,7 +21,8 @@ int main(void)
   curve3d.SetControlPoint(4, CubicCurve3D::Point(7.0, 32.0, 1.0));
 
   // Interpolate the curve at a given position
-  cout << "Position at u = 0.5 \t" << curve3d.Evaluate(0.5,0) << endl;
+  for(double u=0;u<=1.0;u+=0.25)
+    cout << "Position at u = " << u << " \t" << curve3d.Evaluate(u,0) << endl;
 
   // Create an interpolation grid for the curve
   CubicCurve3D::EvaluationGrid grid3d;
@@ -42,6 +43,8 @@ int main(void)
   // Print the new control points
   for(unsigned int j=0;j<curve3d.GetNumberOfControlPoints();j++)
     {
-    cout << "New control point " << j << "\t" << curve3d.GetControlPoint(j);
+    cout << "New control point " << j << "\t" << curve3d.GetControlPoint(j) << endl;
     }
+
+  return -1;
 }

@@ -40,7 +40,7 @@ public:
    * When there are only two zero knots at ends, the 
    * function is matrix multiplication. 
    */
-  void ComputeBasisJet(unsigned int i,TReal u,BasisVectorType W[VJetOrder+1]);
+  void ComputeBasisJet(unsigned int i,TReal u,BasisVectorType *W);
 
   /**
    * Return the u or v value for a given knot index
@@ -163,11 +163,11 @@ public:
     unsigned int iKnot = m_KnotList->GetKnotAtParameterValue(u);
 
     // Compute the basis for the knot
-    BasisVector basis[VJetOrder];
+    BasisVector basis[VJetOrder + 1];
     m_KnotList->ComputeBasisJet(iKnot,u,basis);
 
     // Evaluate the basis for the requested order
-    return m_ControlGroups[iKnot] * basis[order];
+    return m_ControlGroups[iKnot - VOrder] * basis[order];
     }
 
   /** A structure used in the interpolation grid */
@@ -175,7 +175,7 @@ public:
     { 
     TReal u;
     unsigned int iKnot;
-    BasisVector basis[VJetOrder];
+    BasisVector basis[VJetOrder + 1];
     };
 
   // Interpolation grid typedef 
@@ -202,7 +202,7 @@ public:
     const GridPoint &point = grid[iPoint];
 
     // Compute the interpolation
-    return m_ControlGroups[point.iKnot] * point.basis[iJetOrder];
+    return m_ControlGroups[point.iKnot - VOrder] * point.basis[iJetOrder];
     }
 
 private:
