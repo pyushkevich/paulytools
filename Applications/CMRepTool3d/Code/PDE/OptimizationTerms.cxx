@@ -155,7 +155,7 @@ void SolutionData::UpdateInternalWeights(size_t nCuts)
 SolutionData::~SolutionData()
 {
   if(flagBoundaryWeights)
-    delete xBoundaryWeights;
+    { delete xBoundaryWeights; }
   if(flagInternalWeights)
     { delete xInternalWeights; delete xInternalPoints; delete xInternalProfileWeights; }
   if(flagOwnAtoms)
@@ -193,9 +193,14 @@ BoundaryImageMatchTerm
   S->UpdateBoundaryWeights();
 
   // Integrate the image match
-  xImageMatch = IntegrateFunctionOverBoundary(
-    S->xAtomGrid, S->xAtoms, 
-    S->xBoundaryWeights, &fImage);
+  // xImageMatch = IntegrateFunctionOverBoundary(
+  //  S->xAtomGrid, S->xAtoms, 
+  //  S->xBoundaryWeights, &fImage);
+
+  // Compute the adaptive match, making sure the interpolation works
+  double xMinArea = 0.5 * S->xBoundaryArea / S->xAtomGrid->GetNumberOfBoundaryQuads();
+  xImageMatch = AdaptivelyIntegrateFunctionOverBoundary(
+    S->xAtomGrid, S->xAtoms, xMinArea, &fImage);
 
   xBoundaryArea = S->xBoundaryArea;
   xFinalMatch = xImageMatch / xBoundaryArea;

@@ -145,6 +145,7 @@ double ComputeMedialBoundaryAreaWeights( MedialAtomGrid *xGrid,
   MedialBoundaryQuadIterator *itQuad = xGrid->NewBoundaryQuadIterator();
 
   // For each quad, compute the area associated with it
+  size_t iQuad = 0;
   while(!itQuad->IsAtEnd())
     {
     // Access the four medial points
@@ -314,6 +315,72 @@ double IntegrateFunctionOverBoundary (
     }
   
   delete itBoundary;
+  return xMatch;
+}
+
+double RecursiveGetTriangleMatch(
+  SMLVec3d &A, SMLVec3d &B, SMLVec3d &C, 
+  double xMinArea, EuclideanFunction *fMatch, double &xArea)
+{
+  // Compute the area of this triangle
+  xArea = TriangleArea(A, B, C);
+
+  // If the area is smaller or equal to the min area, return the current match
+  if(xArea <= xMinArea)
+    return 0.33333333333334 * 
+      (fMatch->Evaluate(A) + fMatch->Evaluate(B) + fMatch->Evaluate(C));
+
+  // Otherwise, subdivide the triangle into three points, and recurse for each
+  // of the triangles
+  double m[4], a[4];
+  SMLVec3d AB = 0.5 * (A + B);
+  SMLVec3d AC = 0.5 * (A + C);
+  SMLVec3d BC = 0.5 * (B + C);
+
+  m[0] = RecursiveGetTriangleMatch(A, AB, AC, xMinArea, fMatch, a[0]);
+  m[1] = RecursiveGetTriangleMatch(AB, B, BC, xMinArea, fMatch, a[1]);
+  m[2] = RecursiveGetTriangleMatch(AC, BC, C, xMinArea, fMatch, a[2]);
+  m[3] = RecursiveGetTriangleMatch(AC, AB, BC, xMinArea, fMatch, a[3]);
+
+  xArea = a[0] + a[1] + a[2] + a[3];
+  return (a[0]*m[0] + a[1]*m[1] + a[2]*m[2] + a[3]*m[3]) / xArea;
+}
+
+
+/** 
+ * Integrate a function over the boundary, making sure that irregular quads are 
+ * super-sampled. This results in better quality integration 
+ */
+double AdaptivelyIntegrateFunctionOverBoundary(
+  MedialAtomGrid *xGrid, MedialAtom *xAtoms, 
+  double xMinQuadArea, EuclideanFunction *fMatch)
+{
+  // Match
+  double xMatch = 0.0, xArea = 0.0;
+
+  // Integrate the match over each quad
+  MedialBoundaryQuadIterator *itQuad = xGrid->NewBoundaryQuadIterator();
+  for(; !itQuad->IsAtEnd(); ++(*itQuad))
+    {
+    // Get the vector at each vertex
+    SMLVec3d x00 = GetBoundaryPoint(itQuad, xAtoms, 0, 0).X;
+    SMLVec3d x01 = GetBoundaryPoint(itQuad, xAtoms, 0, 1).X;
+    SMLVec3d x11 = GetBoundaryPoint(itQuad, xAtoms, 1, 1).X;
+    SMLVec3d x10 = GetBoundaryPoint(itQuad, xAtoms, 1, 0).X;
+
+    // Call the recursive procedure for each sub-quad
+    double A1, A2;
+    double M1 = RecursiveGetTriangleMatch( x00, x01, x11, xMinQuadArea, fMatch, A1);
+    double M2 = RecursiveGetTriangleMatch( x00, x11, x10, xMinQuadArea, fMatch, A2);
+
+    // Add the weighted area to the match
+    xMatch += A1 * M1 + A2 * M2;
+    xArea += A1 + A2;
+    }
+
+  delete itQuad;
+
+  // Scale the match by the area
   return xMatch;
 }
 

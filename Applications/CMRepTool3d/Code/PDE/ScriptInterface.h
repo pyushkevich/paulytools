@@ -188,6 +188,11 @@ public:
   /** Should not be here! */
   MedialPDESolver *GetSolver() { return xSolver; }
 
+  /** This method takes an image and an m-rep and samples the image using the 
+   * m-reps coordinate system, with linear interpolation. The result is stored in 
+   * a separate image. */
+  void SampleImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zSamples);
+
 private:
   // Optimization modes and optimizers
   enum OptimizerType { CONJGRAD, GRADIENT, EVOLUTION };
@@ -219,6 +224,7 @@ private:
   friend void RenderMedialPDE(MedialPDE *);
   friend class MedialPCA;
 };
+
 
 class MedialPCA
 {

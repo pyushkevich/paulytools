@@ -747,134 +747,6 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
   cout << "Model Covariance: " << endl << yCov << endl;
 }
 
-/** 
-void MedialPDE::MatchImageByMoments(BinaryImage *image)
-{
-  // Compute the mean and covariance matrix of the non-zero voxels
-  typedef vnl_matrix_fixed<double,3,3> Mat;
-  typedef SMLVec3d Vec;
-
-  Mat xCov(0.0f);
-  Vec xMean(0.0f);
-  int n = 0;
-
-  // Iterate over all voxels in the image
-  typedef BinaryImage::WrapperType::ImageType ImageType;
-  typedef itk::ImageRegionConstIteratorWithIndex<ImageType> IteratorType;
-  ImageType::Pointer xImage = image->xImage->GetInternalImage();
-  IteratorType it(xImage, xImage->GetBufferedRegion());
-
-  while(!it.IsAtEnd())
-    {
-    if(it.Get() != 0)
-      {
-      // Get the spatial position of the point
-      itk::ContinuousIndex<double, 3> iRaw(it.GetIndex());
-      itk::Point<double, 3> ptPosition;
-      xImage->TransformContinuousIndexToPhysicalPoint(iRaw, ptPosition);
-      SMLVec3d xPosition(ptPosition.GetDataPointer());
-
-      // Add to the mean and 'covariance'
-      xMean += xPosition;
-      xCov += outer_product(xPosition, xPosition);
-      n++;
-      }
-    ++it;
-    }
-
-  // Compute the actual statistics
-  double xVolume = n * xImage->GetSpacing()[0] 
-    * xImage->GetSpacing()[1] * xImage->GetSpacing()[2];
-  double nn = n;
-  xMean = xMean / nn;
-  xCov = (xCov - nn *  outer_product(xMean, xMean)) / nn;
-  
-  cout << "Image Volume: " << xVolume << endl;
-  cout << "Image Mean: " << xMean << endl;
-  cout << "Image Covariance: " << endl << xCov << endl;
-
-  // Now compute the same statistics for the m-rep (compute coordinates)
-  Mat yCov; Vec yMean; double yVolume;
-  
-  unsigned int i, j, k, f;
-  for(i = 0; i < 3; i++)
-    {
-    for(j = 0; j <= i; j++)
-      {
-      SecondMomentComputer smc(i,j);
-      yCov[i][j] = yCov[j][i] = xSolver->IntegrateVolumeMeasure(&smc, 10, yVolume);
-      }
-    FirstMomentComputer fmc(i);
-    yMean[i] = xSolver->IntegrateVolumeMeasure(&fmc, 10, yVolume);
-    }
-
-  // Compute the actual mean and covariance
-  yMean /= yVolume;
-  yCov = (yCov - yVolume * outer_product(yMean, yMean)) / yVolume;
-  
-  cout << "Model Mean: " << yMean << endl;
-  cout << "Model Covariance: " << endl << yCov << endl;
-
-  // Now, compute the alignment that will line up the moments
-  
-  // Decompose xCov and yCov into eigenvalues
-  vnl_vector<double> Dx(3), Dy(3);
-  vnl_matrix<double> Vx(3,3), Vy(3,3);
-  vnl_symmetric_eigensystem_compute(xCov, Vx, Dx);
-  vnl_symmetric_eigensystem_compute(yCov, Vy, Dy);
-
-  // Compute the scale factor
-  double s = sqrt(dot_product(Dx,Dy) / dot_product(Dy,Dy));
-
-  // The best set of coefficients and the associated match value
-  unsigned int iBestSurface;
-  double xBestMatch;
-
-  // Get the numbers of coefficients
-  unsigned int nCoeff = xSurface->GetNumberOfRawCoefficients();
-  vnl_vector<double> xRotatedCoeff[8], 
-    xInitCoeff(xSurface->GetRawCoefficientArray(), nCoeff);
-
-  // Compute the best image match over all possible flips of the eigenvalues
-  // (there are 8 possible matches, including mirroring)
-  for(f = 0; f<8; f++)
-    {
-    // Set the flip/scale matrix
-    vnl_matrix<double> F(3, 3, 0.0), S(3, 3, 0.0);
-    F(0,0) = (f & 1) ? -s : s;
-    F(1,1) = (f & 2) ? -s : s;
-    F(2,2) = (f & 4) ? -s : s;
-
-    // Compute the rotation+flip matrix
-    vnl_matrix<double> R = Vx * F * Vy.transpose();
-
-    // Create a temporary problem
-    xSurface->SetRawCoefficientArray(xInitCoeff.data_block());
-    xSurface->ApplyAffineTransform(R, xMean, yMean);
-    xRotatedCoeff[f] = vnl_vector<double>(xSurface->GetRawCoefficientArray(), nCoeff);
-
-    // Solve the problem
-    xSolver->Solve();
-
-    // Integrate the image match over the interior
-    ImageVolumeMatch<unsigned char> ivm(image->xImage);
-    double xMatch = xSolver->IntegrateVolumeMeasure(&ivm, 10, xVolume);
-
-    if(f == 0 || xMatch > xBestMatch)
-      {
-      xBestMatch = xMatch;
-      iBestSurface = f;
-      }
-
-    cout << "Rotation " << f << " match value " << (xMatch/xVolume) << endl;
-    }
-
-  // Use the best surface as the new surface
-  xSurface->SetRawCoefficientArray(xRotatedCoeff[iBestSurface].data_block());
-  xSolver->Solve();
-}
-*/
-
 void MedialPDE::SaveBYUMesh(const char *file)
 {
   // Export the model as a BYU mesh
@@ -921,7 +793,81 @@ void MedialPDE::SaveBYUMesh(const char *file)
   fout.close();
 }
 
+void MedialPDE::SampleImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zSamples)
+{
+  // Allocate the output image
+  typedef FloatImage::WrapperType::ImageType ImageType;
+  ImageType::Pointer imgOutputInternal = ImageType::New();
+  ImageType::RegionType regOutput;
 
+  // Iterate over the samples in the m-rep
+  size_t m = xSolver->GetNumberOfUPoints();
+  size_t n = xSolver->GetNumberOfVPoints();
+    
+  // Initialize the output region size
+  regOutput.SetSize(0, m);
+  regOutput.SetSize(1, n);
+  regOutput.SetSize(2, zSamples * 2 + 1);
+  
+  // Continue creating the image
+  imgOutputInternal->SetRegions(regOutput);
+  imgOutputInternal->Allocate();
+  imgOutputInternal->FillBuffer(0.0f);
+
+  // Get an internal point iterator
+  MedialInternalPointIterator *itPoint = 
+    xSolver->GetAtomGrid()->NewInternalPointIterator(zSamples);
+  for(; !itPoint->IsAtEnd(); ++(*itPoint))
+    {
+    // Interpolate the position in 3-space
+    SMLVec3d xPoint = GetInternalPoint(itPoint, xSolver->GetAtomArray());
+
+    // Get the corresponding medial atom
+    MedialAtom &xAtom = xSolver->GetAtomArray()[itPoint->GetAtomIndex()];
+
+    // Get the i and j coordinates of the atom (using cartesian logic)
+    size_t i = (size_t) round(xAtom.u * (m - 1));
+    size_t j = (size_t) round(xAtom.v * (n - 1));
+    size_t k = itPoint->GetBoundarySide() ? 
+      zSamples + 1 - itPoint->GetDepth() :
+       zSamples + 1 + itPoint->GetDepth();
+
+    // Create an index into the output image
+    ImageType::IndexType idxTarget;
+    idxTarget.SetElement(0, i); 
+    idxTarget.SetElement(1, j); 
+    idxTarget.SetElement(2, k); 
+
+    // Sample the input image
+    float f = imgInput->xImage->Interpolate(xAtom.X[0], xAtom.X[1], xAtom.X[2], 0.0f);
+    imgOutputInternal->SetPixel(idxTarget, f); 
+    }
+
+  delete itPoint;
+
+  // Store the output image
+  imgOutput->xImage->SetInternalImage(imgOutputInternal);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**
+ * MEDIAL PCA CODE
+ */
 void MedialPCA::AddSample(MedialPDE *pde)
 {
   // Make sure that the number of coefficients matches

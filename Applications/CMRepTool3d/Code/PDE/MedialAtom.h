@@ -160,5 +160,14 @@ double ComputeFunctionJetOverBoundary(
   double *xWeights, EuclideanFunction *fMatch, SMLVec3d *xOutGradient);
 
 
+/** 
+ * Integrate a function over the boundary, making sure that irregular quads are 
+ * super-sampled. This results in better quality integration, but is more costly
+ * to compute.
+ */
+double AdaptivelyIntegrateFunctionOverBoundary(
+  MedialAtomGrid *xGrid, MedialAtom *xAtoms, 
+  double xMinQuadArea, EuclideanFunction *fMatch);
+
 
 #endif
