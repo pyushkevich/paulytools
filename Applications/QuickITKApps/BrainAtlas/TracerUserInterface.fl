@@ -9,7 +9,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
     Fl_Window m_WinMain {
       label {GeeLab Brain Tracer}
       callback {OnMenuQuit();} open
-      xywh {54 153 925 710} type Double resizable
+      xywh {140 246 925 710} type Double resizable
       code0 {\#include "TracerUserInterfaceBase.h"}
       code1 {\#include "TracerMainWindow.h"} visible
     } {
@@ -56,6 +56,16 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
             label {Save Trace Data &As...}
             callback {this->OnMenuSaveCurvesAs();}
             xywh {10 10 100 20} shortcut 0x50073 deactivate divider
+          }
+          menuitem m_MenuImportCurves {
+            label {&Import Trace Data...}
+            callback {OnMenuImportCurves()}
+            tooltip {Import curve data that was created with another mesh} xywh {20 20 100 20} shortcut 0x4006c deactivate
+          }
+          menuitem m_MenuExportCurves {
+            label {&Export Trace Data...}
+            callback {this->OnMenuExportCurves();} selected
+            tooltip {Export tracer data so that it can be used with another mesh} xywh {10 10 100 20} shortcut 0x40073 deactivate divider
           }
           menuitem {} {
             label Quit
@@ -184,7 +194,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           } {
             Fl_Browser m_BrsMarkers {
               label {Region markers:}
-              callback {OnSelectMarker(o->value());} selected
+              callback {OnSelectMarker(o->value());}
               xywh {665 350 245 100} type Select labelsize 12 align 5 textsize 12
             }
             Fl_Button m_BtnDeleteMarker {

@@ -26,7 +26,7 @@ TracerData
   // m_Stripper = vtkStripper::New();
   m_Triangulator = vtkTriangleFilter::New();
   m_NormalsFilter = vtkPolyDataNormals::New();
-  m_CleanFilter = vtkCleanPolyData::New();
+  // m_CleanFilter = vtkCleanPolyData::New();
   
   // m_DisplayMesh = 
   m_Mesh = NULL;
@@ -45,7 +45,7 @@ TracerData
   // m_Stripper->Delete();
   m_Triangulator->Delete();
   m_NormalsFilter->Delete();
-  m_CleanFilter->Delete();
+  // m_CleanFilter->Delete();
 
   // Clean up marker data
   RemoveMarkerData();
@@ -71,10 +71,10 @@ TracerData
   */
 
   // Clean the input data
-  //m_CleanFilter->SetInput(m_Mesh);
-  //m_CleanFilter->SetTolerance(0);
-  //m_CleanFilter->Update();
-  //m_Mesh = m_CleanFilter->GetOutput();
+  // m_CleanFilter->SetInput(m_Mesh);
+  // m_CleanFilter->SetTolerance(0.001);
+  // m_CleanFilter->Update();
+  // m_Mesh = m_CleanFilter->GetOutput();
 
   // Convert the input to triangles
   m_Triangulator->PassLinesOff();
@@ -324,4 +324,24 @@ TracerData
   // Fire the appropriate event
   TracerDataEvent evt(this);
   BroadcastOnEdgeWeightsUpdate(&evt);
+}
+
+bool
+TracerData
+::ExportCurves(const char *file)
+{
+  ofstream fout(file,iob_base::binary);
+
+  // Write the header
+  fout << "# GeeLab BrainTracer Mesh Independent Curve Export File" << endl;
+  fout << "# Version 1.0 " << endl;
+  fout << "# Please don't edit the above two lines!" << endl;
+  fout << "# " << endl;
+  fout << "# Format Specification: " << endl;
+  fout << "#    CONTROL id vertex-id x y z " << endl;
+  fout << "#    CURVE   id name num_ctls c1 ... cn" << endl;
+  fout << "#" << endl;
+  
+    
+
 }

@@ -751,7 +751,6 @@ TracerMainWindow
     {
     // A cell has been located
     m_CurrentMarkerCell = iCell;
-    cout << "Cell " << iCell << endl;
     }
   else
     {

@@ -26,6 +26,8 @@ public:
   void OnMenuLoadMesh();
   void OnMenuLoadCurves();
   void OnMenuSaveCurves();
+  void OnMenuImportCurves();
+  void OnMenuExportCurves();
   void OnMenuSaveCurvesAs();
   void OnMenuQuit();
 

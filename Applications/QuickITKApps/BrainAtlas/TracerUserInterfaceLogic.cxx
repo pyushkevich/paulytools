@@ -32,9 +32,11 @@ TracerUserInterfaceLogic
   // Set up the state-based control activation
   m_Activation.AddMenuItem(m_MenuLoadCurves, AF_MESH); 
   m_Activation.AddMenuItem(m_MenuSaveCurves, AF_TRACER_DATA);
+  m_Activation.AddMenuItem(m_MenuSaveCurvesAs, AF_TRACER_DATA ); 
+  m_Activation.AddMenuItem(m_MenuImportCurves, AF_MESH); 
+  m_Activation.AddMenuItem(m_MenuExportCurves, AF_TRACER_DATA);
   m_Activation.AddMenuItem(m_MenuModeTracer, AF_ACTIVE_CURVE); 
   m_Activation.AddMenuItem(m_MenuModeMarker, AF_MESH);
-  m_Activation.AddMenuItem(m_MenuSaveCurvesAs, AF_ACTIVE_CURVE ); 
   m_Activation.AddMenuItem(m_MenuStartCurve, AF_MESH); 
   m_Activation.AddMenuItem(m_MenuEditCurve, AF_ACTIVE_CURVE); 
   m_Activation.AddMenuItem(m_MenuDeleteCurve,    AF_ACTIVE_CURVE); 
@@ -118,6 +120,20 @@ TracerUserInterfaceLogic
     }
 }
 
+void
+TracerUserInterfaceLogic
+::OnMenuExportCurves()
+{
+  // Prompt for a file name using curves.txt as default
+  char *file = fl_file_chooser(
+    "Select a text file to export the curves","*.txt",
+    "curves_export.txt", 1);
+  
+  // Do the actual save
+  if(file) 
+    m_Data->ExportCurves(file);
+}
+
 
 void 
 TracerUserInterfaceLogic
@@ -153,6 +169,30 @@ TracerUserInterfaceLogic
     {
     // Try loading
     if(m_Data->LoadCurves(file))
+      { 
+      m_CurvesDirty = false;
+      m_CurvesFile = file;
+      }
+    }
+}
+
+void 
+TracerUserInterfaceLogic
+::OnMenuImportCurves()
+{
+  // Check if we can continue with this destructive operation
+  if(!PromptForSaveOrCancel(
+    "Do you want to save the current curves before loading new ones?")) return;
+  
+  // Load curves from a file
+  char *file = fl_file_chooser(
+    "Select a text file containing the curves","*.txt",m_CurvesFile.c_str(),1);
+
+  // Update the user interface
+  if(file)
+    {
+    // Try loading
+    if(m_Data->ImportCurves(file))
       { 
       m_CurvesDirty = false;
       m_CurvesFile = file;

@@ -356,7 +356,7 @@ public:
       GetPathToPoint(iPoint, lPoints);
     
       // Remove the first point in the list
-      lPoints.pop_front();
+      // lPoints.pop_front();
 
       // Add the link
       m_Curves.AddLink(m_FocusPoint, iNewControl, m_FocusCurve, lPoints);
@@ -546,6 +546,12 @@ public:
   // Get the marker assigned to a given cell by segmentation
   vtkIdType GetCellLabel(vtkIdType iCell) const
     { return m_VoronoiDiagram->GetVertexSource(iCell); }
+
+  // Export curves to a mesh-independent file
+  bool ExportCurves(const char *file);
+
+  // Import curves from a mesh-independent file
+  bool ImportCurves(const char *file);
     
 private:
   // Shortest distance computer

@@ -2,6 +2,7 @@
 #include "vtkIdList.h"
 #include <vector>
 #include <map>
+#include <set>
 
 using namespace std;
 
@@ -57,9 +58,6 @@ VTKMeshVoronoiDiagram
   // Create a vector to collect adjacencies
   vector<vtkIdType> lAdjacency;
 
-  // Create a structure to hold neighbor info
-  vtkIdList *lNeighbors = vtkIdList::New();
-
   // Iterate over all cells in the mesh
   for(iCell = 0; iCell < m_Mesh->GetNumberOfCells(); iCell++)
     {
@@ -72,16 +70,19 @@ VTKMeshVoronoiDiagram
 
     // For each point, look at the cells that the point belongs to and 
     // add them to a counter.
-    typedef list<vtkIdType> IdList;
+    typedef set<vtkIdType> IdList;
     typedef map<vtkIdType, IdList> CellMap;
     CellMap xCellCount;
 
     // Compute the center of the cell and add adjacencies
     xCenter[iCell].fill(0.0);
-    for(unsigned int iPoint = 0; iPoint < nPoints; iPoint++)
+    for(unsigned int iNbr = 0; iNbr < nPoints; iNbr++)
       {
+      // Get the point's ID in the mesh
+      vtkIdType iPoint = lPoints[iNbr];
+
       // Add point coordinate to center
-      double *xPoint = m_Mesh->GetPoint(lPoints[iPoint]);
+      double *xPoint = m_Mesh->GetPoint(iPoint);
       xCenter[iCell][0] += xPoint[0];
       xCenter[iCell][1] += xPoint[1];
       xCenter[iCell][2] += xPoint[2];
@@ -89,11 +90,11 @@ VTKMeshVoronoiDiagram
       // Find cells around the current point
       unsigned short nCells;
       vtkIdType *lCells;
-      m_Mesh->GetPointCells(lPoints[iPoint], nCells, lCells);
+      m_Mesh->GetPointCells(iPoint, nCells, lCells);
 
       // Add these cells to the multi-map
-      for(unsigned int iNbr = 0; iNbr < nCells; iNbr++)
-        xCellCount[lCells[iNbr]].push_back(lPoints[iPoint]);
+      for(unsigned int iNbrCell = 0; iNbrCell < nCells; iNbrCell++)
+        xCellCount[lCells[iNbrCell]].insert(iPoint);
       }
 
     // At this point, the map xCellCount has a number associated with each cell
@@ -107,16 +108,20 @@ VTKMeshVoronoiDiagram
       if(it->second.size() == 2)
         {
         Edge edge;
-        if(it->second.front() < it->second.back())
+        vtkIdType i1 = *(it->second.begin());
+        vtkIdType i2 = *(++(it->second.begin()));
+        
+        if(i1 < i2)
           {
-          edge.first = it->second.front();
-          edge.second = it->second.back();
+          edge.first = i1;
+          edge.second = i2;
           }
         else
           {
-          edge.second = it->second.front();
-          edge.first = it->second.back();
+          edge.first = i2;
+          edge.second = i1;
           }
+        
         m_EdgeMap.insert(make_pair(edge,lAdjacency.size()));
         lAdjacency.push_back(it->first);
         }
@@ -130,6 +135,7 @@ VTKMeshVoronoiDiagram
   // Record the last adjacency index
   m_AdjacencyIndex[m_NumberOfVertices] = lAdjacency.size();
   cout << " Number of edges (2) : " << m_AdjacencyIndex[m_NumberOfVertices] << endl;
+  cout << " Compare to : " << m_EdgeMap.size() << endl;
 
   // Compute the edge weights and store adjacencies as an array
   m_NumberOfEdges = lAdjacency.size();
@@ -147,14 +153,13 @@ VTKMeshVoronoiDiagram
       m_Adjacency[iEdge] = lAdjacency[iEdge];
 
       // Compute the distance between centers
-      m_RawEdgeWeights[iEdge] = (float)
-        (xCenter[iCell] - xCenter[m_Adjacency[iEdge]]).two_norm();
+      m_FullEdgeWeights[iEdge] = m_RawEdgeWeights[iEdge] = 
+        (float) (xCenter[iCell] - xCenter[m_Adjacency[iEdge]]).two_norm();
       }
     }
 
   // Clean up
   delete[] xCenter;
-  lNeighbors->Delete();
 
   // Create the diagram
   m_Diagram = new VoronoiDiagram(
@@ -181,6 +186,10 @@ VTKMeshVoronoiDiagram
         m_FullEdgeWeights[itMap->second] = VoronoiDiagram::INFINITE_WEIGHT;
         ++itMap;
         }
+      }
+    else
+      {
+      cout << " Barrier edge [ " << it->first << "," << it->second << "] NOT FOUND!!!" << endl;
       }
     ++it;
     }
