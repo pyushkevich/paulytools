@@ -24,7 +24,6 @@ int usage()
   cout << "   uses METIS to segment a binary image into num_part partitions" << endl;
   cout << "options: " << endl;
   cout << "   -w N XX.X           weight of partition N is XX.X" << endl;
-  cout << "   -s N                number of 'slack nodes'" << endl;
   cout << "   -p N1 N2 N3         define cut plane at dimension N1, slice N2" << endl;
   cout << "                       with relative edge strength N3" << endl;
   return -1;
@@ -271,6 +270,83 @@ void VerifyGraph(int n, T *ai, T *a, S *wv, S *we)
     }
 }
 
+#include <vnl/vnl_cost_function.h>
+
+class MetisPartitionProblem : public vnl_cost_function
+{
+public:
+  typedef itk::Image<short,3> ImageType; 
+  typedef BinaryImageToGraphFilter<ImageType> GraphFilter;
+  
+  MetisPartitionProblem(GraphFilter *fltGraph, int *wgtEdges, unsigned int nParts);
+  virtual ~MetisPartitionProblem() {};
+  
+  /** Virtual method from parent class */
+  double f(vnl_vector<double> const& x);
+
+  /** Get the result of the last partition */
+  idxtype *GetLastPartition() { return m_Partition; }
+  
+private:
+  /** The stored graph information */
+  GraphFilter *m_Graph;
+
+  /** Edge weights */
+  int *m_EdgeWeights;
+  
+  /** The partition array */
+  idxtype *m_Partition;
+};
+
+MetisPartitionProblem
+::MetisPartitionProblem(GraphFilter *fltGraph, int *wgtEdges, unsigned int nParts)
+: vnl_cost_function(nParts)
+{
+  m_Graph = fltGraph;
+  m_EdgeWeights = wgtEdges;
+  m_Partition = new idxtype[m_Graph->GetNumberOfVertices()];
+}
+
+double
+MetisPartitionProblem
+::f(vnl_vector<double> const& x)
+{
+  // Convert the vector to floating array
+  float *wgt = new float[x.size()];
+  for(unsigned int i=0;i<x.size();i++)
+    wgt[i] = (float) x[i];
+
+  // Variables used to call METIS
+  int nVertices = m_Graph->GetNumberOfVertices();
+  int nParts = x.size();
+  int wgtflag = 1;
+  int numflag = 0;
+  int options[] = {0,0,0,0,0};
+  int edgecut = 0;
+
+  // Apply METIS to the graph
+  cout << "applying METIS with weights " << x << flush;
+
+  METIS_WPartGraphRecursive(
+    &nVertices,
+    m_Graph->GetAdjacencyIndex(),
+    m_Graph->GetAdjacencyArray(),
+    NULL,
+    m_EdgeWeights,
+    &wgtflag,
+    &numflag,
+    &nParts,
+    wgt,
+    options,
+    &edgecut,
+    m_Partition);
+
+  // Report the edge cut
+  cout << "  - done - edge cut " << edgecut << endl;
+
+  return (double) edgecut;
+}
+
 int main(int argc, char *argv[])
 {
   // Check arguments
@@ -279,8 +355,7 @@ int main(int argc, char *argv[])
   // Variables to hold command line arguments
   string fnInput(argv[argc-3]), fnOutput(argv[argc-2]);
   int nParts = atoi(argv[argc-1]);
-  vnl_vector<float> xWeights(nParts,1.0 / nParts);
-  unsigned int nSlack = 0;
+  vnl_vector<double> xWeights(nParts,1.0 / nParts);
   int iPlaneDim = -1, iPlaneSlice = -1, iPlaneStrength = 10;
   
   // Read the options
@@ -299,10 +374,6 @@ int main(int argc, char *argv[])
         cerr << "Incorrent index in -w parameter" << endl;
         return usage();
         }
-      }
-    else if(!strcmp(argv[iArg],"-s"))
-      {
-      nSlack = atoi(argv[++iArg]);
       }
     else if(!strcmp(argv[iArg],"-p"))
       {
@@ -332,10 +403,6 @@ int main(int argc, char *argv[])
       << " in dimension " << iPlaneDim 
       << " with strength " << iPlaneStrength << endl;
     }
-  if(nSlack)
-    {
-    cout << "will insert " << nSlack << " spare vertices in the graph " << endl;
-    }
   cout << endl;
 
   // Read the input image image
@@ -354,60 +421,17 @@ int main(int argc, char *argv[])
   typedef BinaryImageToGraphFilter<ImageType,idxtype> GraphFilter;
   GraphFilter::Pointer fltGraph = GraphFilter::New();
   fltGraph->SetInput(img);
-  
-  // Deal with slack edges
-  int nSlackEdges = nSlack * 2 + 2;
-  if(nSlack)
-    {
-    fltGraph->SetSpareVertices(nSlack);
-    fltGraph->SetSpareEdges(nSlackEdges);
-    }
-
-  // Compute the graph
   fltGraph->Update();
   
   // Get the number of vertices and edges
   int nVertices = fltGraph->GetNumberOfVertices();
   int nEdges = fltGraph->GetNumberOfEdges();
-  int iVertex;
-
-  // The number of vertices and edges with slack
-  int nVerticesWithSpares = nVertices + nSlack;
-  int nEdgesWithSpares = nEdges + nSlackEdges;
-
-  cout << "   graph has " << nVertices << " vertices and " 
-    << nEdges << " edges" << endl;
-
-  // Verify graph
-  cout << "verifying graph" << endl;
-  for(iVertex=0;iVertex<nVertices;iVertex++)
-    {
-    unsigned int nAdj = fltGraph->GetVertexNumberOfNeighbors(iVertex);
-    GraphFilter::VertexType *adj = fltGraph->GetVertexNeighbors(iVertex);
-    GraphFilter::IndexType idxCenter = fltGraph->GetVertexImageIndex(iVertex);
-    for(unsigned int iAdj=0;iAdj<nAdj;iAdj++)
-      {
-      GraphFilter::IndexType idxAdj = fltGraph->GetVertexImageIndex(adj[iAdj]);
-      unsigned int diff = 0;
-      for(unsigned int d=0;d<3;d++)
-        diff += abs(idxCenter[d] - idxAdj[d]);
-      if(diff != 1)
-        cout << "   error at node " << iVertex << endl;
-      }
-    }
+  int iVertex, iEdge = 0;
   
   // Compute weight arrays
-  GraphFilter::VertexType *xVertexWeight = 
-  	new GraphFilter::VertexType [nVerticesWithSpares];
-  GraphFilter::VertexType  *xEdgeWeight = 	
-  	new GraphFilter::VertexType [nEdgesWithSpares];
-  	
-  int iEdge = 0;
+  GraphFilter::VertexType *xEdgeWeight = new GraphFilter::VertexType [nEdges];
   for(iVertex = 0;iVertex < nVertices;iVertex++)
   	{
-  	// Record the weight for the vertex
-  	xVertexWeight[iVertex] = 1;
-  	
   	// Get the index of the vertex of interest
   	GraphFilter::IndexType idx = fltGraph->GetVertexImageIndex(iVertex);
   	
@@ -434,92 +458,17 @@ int main(int argc, char *argv[])
   		}
   	}
 
-  // Construct the spare vertices and edges
-  if(nSlack)
-    {
-    // Fill the spare index
-    // int iSpareEdge = nEdges + 2;
-    int iSpareEdge = nEdges;
-    for(int iSpare = 0;iSpare < nSlack;iSpare++)
-      {
-      fltGraph->GetAdjacencyIndex()[nVertices + iSpare] = iSpareEdge;
-      
-      if(iSpare > 0)
-        {
-        fltGraph->GetAdjacencyArray()[iSpareEdge] = (iSpare - 1) + nVertices;
-        xEdgeWeight[iSpareEdge] = iPlaneStrength;
-        ++iSpareEdge;
-        }
-      
-      if(iSpare < nSlack - 1)
-        {
-        fltGraph->GetAdjacencyArray()[iSpareEdge] = (iSpare + 1) + nVertices;
-        xEdgeWeight[iSpareEdge] = iPlaneStrength;
-        ++iSpareEdge;
-        }
-      
-      xVertexWeight[nVertices + iSpare] = 1;
-      }
-    
-    // Point the last vertex
-    fltGraph->GetAdjacencyIndex()[nVertices + nSlack] = iSpareEdge;
+  // Create a METIS problem based on the graph and weights
+  MetisPartitionProblem mp(fltGraph,xEdgeWeight,nParts);
 
-    // Connect the two sub-graphs
-    /*
-    fltGraph->GetAdjacencyArray()[nEdges] = nVertices;
-    fltGraph->GetAdjacencyArray()[nEdges+1] = nVertices-1;
-    fltGraph->GetAdjacencyIndex()[nVertices] = nEdges + 1;
-    xEdgeWeight[nEdges] = iPlaneStrength;
-    xEdgeWeight[nEdges+1] = iPlaneStrength;
-    */
-    }
- /* 
-  for(unsigned int i=nVertices;i<nVerticesWithSpares;i++)
-    {
-    cout << fltGraph->GetAdjacencyIndex()[i] << " ";
-    for(unsigned int j = 0; j < fltGraph->GetVertexNumberOfNeighbors(i); j++)
-      {
-      cout << fltGraph->GetVertexNeighbors(i)[j] << " ";
-      }
-    cout << endl;
-    }
-  */
-  	
-  // Apply METIS to the graph
-  int wgtflag = 1;
-  int numflag = 0;
-  int options[] = {0,0,0,0,0};
-  int edgecut = 0;
-  idxtype *xPartition = new idxtype[nVertices];
-
-  cout << "verifying the graph with 'slack' " << endl;
-  VerifyGraph(nVerticesWithSpares, fltGraph->GetAdjacencyIndex(),
-    fltGraph->GetAdjacencyArray(),
-    xVertexWeight,
-    xEdgeWeight);
-  
-  cout << "running METIS graph partition algorithm" << endl;
-
-  METIS_WPartGraphRecursive(
-    &nVerticesWithSpares,
-    fltGraph->GetAdjacencyIndex(),
-    fltGraph->GetAdjacencyArray(),
-    NULL,
-    xEdgeWeight,
-    &wgtflag,
-    &numflag,
-    &nParts,
-    xWeights.data_block(),
-    options,
-    &edgecut,
-    xPartition);
-
-  cout << "   edge cut value is " << edgecut << endl;
+  // Evaluate the problem
+  cout << "   edge cut value is " << mp.f(xWeights) << endl;
+  idxtype *xPartition = mp.GetLastPartition();
 
   // Verify the edge cut ourselves
   iEdge = 0;
   int cut = 0;
-  for(iVertex = 0;iVertex < nVerticesWithSpares;iVertex++)
+  for(iVertex = 0;iVertex < nVertices;iVertex++)
   	{
   	// Look at all the edges for this vertex
   	unsigned int nNbr = fltGraph->GetVertexNumberOfNeighbors(iVertex);

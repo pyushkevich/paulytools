@@ -22,6 +22,7 @@ LINK_LIBRARIES(ITKCommon ITKBasicFilters ITKIO ${PAULY_CORE_LIBS}
 
 # Tracer application GUI
 SET(TRACER_SRCS
+  ShortestPath.cxx
   TracerData.cxx
   TracerData.h
   TracerMain.cxx
@@ -49,7 +50,7 @@ OPTION(USE_METIS "Use METIS graph partitioning library" OFF)
 IF(USE_METIS)
   FIND_PATH(METIS_ROOT_DIR "Lib/metis.h")
   IF(METIS_ROOT_DIR)
-    FIND_LIBRARY(METIS_LIBRARY "metis" ${METIS_ROOT_DIR})
+    FIND_LIBRARY(METIS_LIBRARY "metis" ${METIS_ROOT_DIR} ${METIS_ROOT_DIR}/Release ${METIS_ROOT_DIR}/Debug)
     FIND_PATH(METIS_INCLUDE_DIR "metis.h" ${METIS_ROOT_DIR}/Lib)
 
     INCLUDE_DIRECTORIES(${METIS_INCLUDE_DIR})
