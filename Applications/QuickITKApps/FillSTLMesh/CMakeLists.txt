@@ -4,10 +4,10 @@ SET(FILLSTLMESH_SRCS
   FillSTLMesh.cxx
 )
 
+ADD_EXECUTABLE(meshdiff CompareMeshes.cxx)
 ADD_EXECUTABLE(mesh2img ${FILLSTLMESH_SRCS})
 ADD_EXECUTABLE(avgmesh AverageMeshes.cxx)
 ADD_EXECUTABLE(identimg IdentifyImage.cxx)
-ADD_EXECUTABLE(meshdiff CompareMeshes.cxx)
 
 LINK_LIBRARIES(
   BasicImaging

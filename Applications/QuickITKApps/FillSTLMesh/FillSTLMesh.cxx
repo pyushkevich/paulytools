@@ -201,16 +201,14 @@ int main(int argc, char **argv)
     drawPolyData(pd);
 
   // Get the extents of the data
-  double *bounds = pd->GetBounds();  
-
   cout << "STL mesh bounds: " << endl;
-  cout << "   X : " << bounds[0] << " to " << bounds[1] << endl;
-  cout << "   Y : " << bounds[2] << " to " << bounds[3] << endl;
-  cout << "   Z : " << bounds[4] << " to " << bounds[5] << endl;
+  cout << "   X : " << pd->GetBounds()[0] << " to " << pd->GetBounds()[1] << endl;
+  cout << "   Y : " << pd->GetBounds()[2] << " to " << pd->GetBounds()[3] << endl;
+  cout << "   Z : " << pd->GetBounds()[4] << " to " << pd->GetBounds()[5] << endl;
 
-  if(bounds[0] < bb[0][0] || bounds[1] > bb[0][0] + bb[1][0] ||
-    bounds[2] < bb[0][1] || bounds[3] > bb[0][1] + bb[1][1] ||
-    bounds[4] < bb[0][2] || bounds[5] > bb[0][2] + bb[1][2])
+  if(pd->GetBounds()[0] < bb[0][0] || pd->GetBounds()[1] > bb[0][0] + bb[1][0] ||
+    pd->GetBounds()[2] < bb[0][1] || pd->GetBounds()[3] > bb[0][1] + bb[1][1] ||
+    pd->GetBounds()[4] < bb[0][2] || pd->GetBounds()[5] > bb[0][2] + bb[1][2])
     {
     cout << "User specified bounds (-o -s) are out of range! Can't continue!" << endl;
     return -1;
@@ -227,7 +225,8 @@ int main(int argc, char **argv)
     {
     for(unsigned int i=0;i<3;i++)
       {
-      double *x = pd->GetPoints()->GetPoint(pts[i]);
+      // double *x = pd->GetPoints()->GetPoint(pts[i]);
+      float *x = pd->GetPoints()->GetPoint(pts[i]);
       vtx[it] = (double *) malloc(3*sizeof(double));
       for(unsigned int j=0;j<3;j++)
         {
