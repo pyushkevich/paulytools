@@ -58,62 +58,6 @@ TracerUserInterfaceLogic
   m_Activation.AddWidget(m_BtnComputeRegions, AF_MARKERS_EXIST);
 }
 
-// Constructor
-TracerUserInterfaceLogic 
-::TracerUserInterfaceLogic() 
-: TracerUserInterface() 
-{
-  m_Data = NULL;
-  m_CurvesFile = "";
-  m_CurvesDirty = false;
-
-  // Set up the dependences between activation flags
-  m_Activation.SetFlagImplies(AF_TRACER_DATA, AF_MESH);
-  m_Activation.SetFlagImplies(AF_CURVES_EXIST, AF_TRACER_DATA);
-  m_Activation.SetFlagImplies(AF_MARKERS_EXIST, AF_TRACER_DATA);
-  m_Activation.SetFlagImplies(AF_ACTIVE_CURVE, AF_CURVES_EXIST);
-  m_Activation.SetFlagImplies(AF_ACTIVE_CONTROL, AF_ACTIVE_CURVE);
-  m_Activation.SetFlagImplies(AF_ACTIVE_MARKER, AF_MARKERS_EXIST);
-  m_Activation.SetFlagImplies(AF_TRACER_MODE, AF_ACTIVE_CURVE);
-  m_Activation.SetFlagImplies(AF_MARKER_MODE, AF_MESH);
-}
-
-void
-TracerUserInterfaceLogic
-::MakeWindow()
-{
-  // Call the parent method that creates all the controls
-  TracerUserInterface::MakeWindow();
-
-  // Set up the state-based control activation
-  m_Activation.AddMenuItem(m_MenuLoadCurves, AF_MESH); 
-  m_Activation.AddMenuItem(m_MenuSaveCurves, AF_TRACER_DATA);
-  m_Activation.AddMenuItem(m_MenuModeTracer, AF_ACTIVE_CURVE); 
-  m_Activation.AddMenuItem(m_MenuModeMarker, AF_MESH);
-  m_Activation.AddMenuItem(m_MenuSaveCurvesAs, AF_ACTIVE_CURVE ); 
-  m_Activation.AddMenuItem(m_MenuStartCurve, AF_MESH); 
-  m_Activation.AddMenuItem(m_MenuEditCurve, AF_ACTIVE_CURVE); 
-  m_Activation.AddMenuItem(m_MenuDeleteCurve,    AF_ACTIVE_CURVE); 
-  m_Activation.AddMenuItem(m_MenuDeleteLastPoint, AF_ACTIVE_CONTROL); 
-  m_Activation.AddMenuItem(m_MenuRenameMarker, AF_ACTIVE_MARKER);
-  m_Activation.AddMenuItem(m_MenuDeleteMarker, AF_ACTIVE_MARKER);
-  m_Activation.AddMenuItem(m_MenuRecolorMarker, AF_ACTIVE_MARKER);
-  m_Activation.AddMenuItem(m_MenuComputeRegions, AF_MARKERS_EXIST);
-  
-  m_Activation.AddWidget(m_ChcCurve, AF_TRACER_DATA); 
-  m_Activation.AddWidget(m_BtnStartCurve, AF_MESH); 
-  m_Activation.AddWidget(m_BtnDeleteCurve, AF_ACTIVE_CURVE); 
-  m_Activation.AddWidget(m_BtnEditCurve, AF_ACTIVE_CURVE); 
-  m_Activation.AddWidget(m_BtnDeleteLastPoint, AF_ACTIVE_CONTROL); 
-  m_Activation.AddWidget(m_BtnModeTracer, AF_ACTIVE_CURVE); 
-  m_Activation.AddWidget(m_BtnModeMarker, AF_MESH);
-  m_Activation.AddWidget(m_BtnRenameMarker, AF_ACTIVE_MARKER);
-  m_Activation.AddWidget(m_BtnDeleteMarker, AF_ACTIVE_MARKER);
-  m_Activation.AddWidget(m_BtnRecolorMarker, AF_ACTIVE_MARKER);
-  m_Activation.AddWidget(m_BrsMarkers, AF_MARKERS_EXIST);
-  m_Activation.AddWidget(m_BtnComputeRegions, AF_MARKERS_EXIST);
-}
-
 bool
 TracerUserInterfaceLogic
 ::PromptForSaveOrCancel(const char *message)

@@ -502,12 +502,6 @@ private:
   pyShortBroadcastEventMacro(TracerData, OnFocusMarkerChange);
   pyShortBroadcastEventMacro(TracerData, OnSegmentationChange);
 
-  pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
-    OnMarkerListChange, TracerDataEvent);
-
-  pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
-    OnFocusMarkerChange, TracerDataEvent);
-
   // Set the focus curve, firing the associated event
   void SetFocusCurve(int inFocusCurve);
 

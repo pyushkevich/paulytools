@@ -120,8 +120,8 @@ VTKMeshVoronoiDiagram
         m_EdgeMap.insert(make_pair(edge,lAdjacency.size()));
         lAdjacency.push_back(it->first);
         }
+      ++it;
       }
-    ++it;
 
     // Scale the center by the number of points
     xCenter[iCell] *= ( 1.0 / nPoints );
