@@ -9,9 +9,9 @@ int main(int argc, char *argv[])
 {
   // Initialize FLTK
   Fl::visual(FL_DOUBLE|FL_INDEX);
-  Fl::gl_visual(FL_RGB);  
+  Fl::gl_visual(FL_RGB);
   // Fl::background(236,233,216);
-  
+
   // Create the main window
   TracerUserInterfaceLogic *ui = new TracerUserInterfaceLogic();
   ui->MakeWindow();
@@ -21,12 +21,12 @@ int main(int argc, char *argv[])
 
   // Create the tracer data
   TracerData *data = new TracerData();
-  
+
   // Assign the data to the UI
   ui->SetTracerData(data);
 
   // If the mesh specified as parameter, load it
-  if(argc > 1) 
+  if(argc > 1)
     {
     data->LoadInputMesh(argv[1]);
     }

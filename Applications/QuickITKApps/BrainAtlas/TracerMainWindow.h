@@ -7,7 +7,8 @@
 
 class TracerMainWindow 
 : public Fl_Gl_Window,
-  virtual public ITracerDataListener
+  virtual public ITracerDataListener,
+  virtual public VTKMeshShortestDistance::ICellChecher
 {
 public:
   // Modes and button information
@@ -72,6 +73,7 @@ public:
     {
     m_SurfaceDisplayMode = mode;
     m_EdgeDisplayListDirty = true;
+    redraw();
     }
 
   // Set the neighborhood size for surface display
@@ -183,6 +185,9 @@ private:
   void GLDrawSphere(double *x, double r);
   void GLDrawMarker(vtkIdType iCell, const Vec &color);
   void GLDrawStrippedPolyData(vtkPolyData *poly);
+
+  // Callback used to accept/reject cells during ray-mesh intersection
+  bool CheckCell(vtkIdType iCell);
 };
 
 

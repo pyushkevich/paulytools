@@ -102,6 +102,22 @@ TracerCurves
   // Return the id
   return id;
 }
+  
+TracerCurves::IdType
+TracerCurves
+::AddMarker(IdType id, const char * name, 
+  const Vec &clr, MeshFace iFace, const Vec &xFace )
+{
+  // Generate the id for the control point
+  m_Markers[id].name = name;
+  m_Markers[id].color = clr;
+  m_Markers[id].iFace = iFace;
+  m_Markers[id].xFace = xFace;
+  m_Markers[id].visible = true;
+
+  // Return the id
+  return id;
+}
 
 void 
 TracerCurves
@@ -145,6 +161,14 @@ TracerCurves
   
   // Clean up links and control points
   CleanUpDeadLinksAndControls();
+}
+
+void
+TracerCurves
+::DeleteMarker(IdType iMarker)
+{
+  // Delete the marker
+  m_Markers.erase(iMarker);
 }
 
 void 
@@ -242,6 +266,7 @@ TracerCurves
   fout << "#    CONTROL id vertex-id x y z" << endl;
   fout << "#    CURVE   id name" << endl;
   fout << "#    LINK    id start-ctl end-ctl curve num-vertices v1 .. vn" << endl;
+  fout << "#    MARKER  id face-id x y z r g b visible_flag name" << endl;
   fout << "#" << endl;
 
   // Write the contols
@@ -249,9 +274,14 @@ TracerCurves
   while(itControl != m_Controls.end())
     {
     const ControlPoint &cp = itControl->second;
-    fout << "CONTROL\t" << setw(12) << itControl->first << "\t" 
-      << cp.iVertex << "\t" << cp.xVertex[0] << "\t" 
-      << cp.xVertex[1] << "\t" << cp.xVertex[2] << endl;
+    
+    fout << "CONTROL  ";
+    fout << setw(12) << itControl->first    << " ";
+    fout << setw(12) << cp.iVertex          << " ";
+    fout << setw(12) << cp.xVertex[0]       << " ";
+    fout << setw(12) << cp.xVertex[1]       << " ";
+    fout << setw(12) << cp.xVertex[2]       << endl;
+    
     itControl++;
     }
 
@@ -260,29 +290,63 @@ TracerCurves
   while(itCurve != m_Curves.end())
     {
     const Curve &c = itCurve->second;
-    fout << "CURVE\t" << setw(12) << itCurve->first << " " 
-      << StringEncode(c.name) << endl;
+    
+    fout << "CURVE   "; 
+    fout << setw(12) << itCurve->first      << " ";
+    fout << StringEncode(c.name) << endl;
+    
     itCurve++;
     }
 
-  // Write the links
-  LinkMap::const_iterator itLink = m_Links.begin();
-  while(itLink != m_Links.end())
+  // Write the markers
+  MarkerMap::const_iterator itMarker = m_Markers.begin();
+  while(itMarker != m_Markers.end())
     {
-    const Link &l = itLink->second;
-    fout << "LINK\t" << setw(12) << itLink->first << "\t" << l.ctlStart << "\t"
-      << l.ctlEnd << "\t" << l.curve << "\t" << l.points.size();
-   
-    // Write out the connecting points
-    MeshCurve::const_iterator it = l.points.begin();
-    while(it != l.points.end())
-      {
-      fout << " " << *it; 
-      it++;
-      }
+    const Marker &m = itMarker->second;
 
-    fout << endl;
-    itLink++;
+    fout << "MARKER  ";
+    fout << setw(12) << itMarker->first     << " ";
+    fout << setw(12) << m.iFace             << " ";
+    fout << setw(12) << m.xFace[0]          << " ";
+    fout << setw(12) << m.xFace[1]          << " ";
+    fout << setw(12) << m.xFace[2]          << " ";
+    fout << setw(12) << m.color[0]          << " ";
+    fout << setw(12) << m.color[1]          << " ";
+    fout << setw(12) << m.color[2]          << " ";
+    fout << setw(12) << (int)m.visible      << " ";
+    fout << StringEncode(m.name) << endl;
+   
+    itMarker++;
+    }
+
+  // Write the links in the order that they appear in curves
+  itCurve = m_Curves.begin();
+  while(itCurve != m_Curves.end())
+    {
+    IdList::const_iterator itLink = itCurve->second.links.begin();
+    while(itLink != itCurve->second.links.end())
+      {
+      const Link &l = m_Links[*itLink];
+    
+      // Write the header 
+      fout << "LINK    ";
+      fout << setw(12) << *itLink             << " ";
+      fout << setw(12) << l.ctlStart          << " ";
+      fout << setw(12) << l.ctlEnd            << " ";
+      fout << setw(12) << l.curve             << " ";
+      fout << setw(12) << l.points.size();
+
+      // Write out the connecting points
+      MeshCurve::const_iterator itPoints = l.points.begin();
+      while(itPoints != l.points.end())
+        fout << " " << setw(12) << *itPoints++; 
+
+      // Finish the line
+      fout << endl;
+
+      ++itLink;
+      }
+    ++itCurve;
     }
 }
 
@@ -365,6 +429,19 @@ TracerCurves
 
         // Add the curve
         AddCurve(id, StringDecode(name).c_str());
+        }
+      else if(key == "MARKER")
+        {
+        // This is a marker definition
+        IdType id;          iss >> id;
+        MeshFace iFace;     iss >> iFace;
+        Vec xFace;          iss >> xFace[0]; iss >> xFace[1]; iss >> xFace[2];
+        Vec color;          iss >> color[0]; iss >> color[1]; iss >> color[2];
+        int flagVisible;    iss >> flagVisible;
+        string name;        iss >> name;
+
+        // Add the marker
+        AddMarker( id, StringDecode(name).c_str(), color, iFace, xFace);
         }
       else if(key == "LINK")
         {

@@ -9,9 +9,9 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
     Fl_Window m_WinMain {
       label {GeeLab Brain Tracer}
       callback {OnMenuQuit();} open
-      xywh {140 246 925 710} type Double resizable
+      xywh {61 74 925 710} type Double hide resizable
       code0 {\#include "TracerUserInterfaceBase.h"}
-      code1 {\#include "TracerMainWindow.h"} visible
+      code1 {\#include "TracerMainWindow.h"}
     } {
       Fl_Group {} {open
         xywh {5 30 645 645} box PLASTIC_DOWN_FRAME
@@ -30,7 +30,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           xywh {660 35 260 245} box FLAT_BOX color 0 labelcolor 7
         }
       }
-      Fl_Menu_Bar {} {open
+      Fl_Menu_Bar {} {open selected
         xywh {0 0 930 25}
       } {
         submenu {} {
@@ -145,77 +145,77 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
         Fl_Group {} {open
           xywh {655 685 260 10} resizable
         } {}
-        Fl_Tabs {} {open
-          xywh {655 295 265 410} box PLASTIC_THIN_UP_BOX
+        Fl_Tabs m_TabControlPanel {open
+          xywh {655 295 265 410} box PLASTIC_THIN_UP_BOX selection_color 54
         } {
-          Fl_Group {} {
+          Fl_Group m_GrpCurves {
             label Curves open
-            xywh {655 320 265 385} labelfont 1 labelsize 12 hide
+            xywh {655 320 265 385} color 167 selection_color 77 labelfont 1 labelsize 12
           } {
-            Fl_Choice m_ChcCurve {
-              label {Current curve:}
-              callback {OnSelectCurve();} open
-              xywh {665 350 245 25} down_box BORDER_BOX labelsize 12 align 5 textsize 12 deactivate
-            } {}
+            Fl_Browser m_BrsCurves {
+              label {Available curves:}
+              callback {OnSelectCurve(o->value());}
+              xywh {665 350 245 200} type Select labelsize 12 align 5 textsize 12
+            }
             Fl_Button m_BtnStartCurve {
               label {add curve}
               callback {OnButtonStartCurve();}
-              xywh {665 390 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
+              xywh {665 555 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
             }
             Fl_Button m_BtnDeleteCurve {
               label delete
               callback {OnButtonDeleteCurve();}
-              xywh {835 390 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
+              xywh {835 555 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
             }
             Fl_Button m_BtnEditCurve {
               label rename
               callback {OnButtonEditCurve();}
-              xywh {750 390 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
+              xywh {750 555 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
             }
             Fl_Value_Input {} {
               label {Sulcal support factor:}
               callback {OnInputSulcalFactor(o->value());}
-              tooltip {The degree to which curvature affects the path traced on the surface.} xywh {855 670 55 25} labelsize 12 when 8 step 0.1 textsize 11
+              tooltip {The degree to which curvature affects the path traced on the surface.} xywh {855 670 55 25} labelsize 12 when 8 step 0.1 textsize 11 hide
             }
             Fl_Button m_BtnDeleteLastPoint {
               label {undo last point}
               callback {OnButtonDeleteLastPoint();}
-              xywh {665 425 100 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
+              xywh {665 590 100 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
             }
           }
-          Fl_Group {} {
+          Fl_Group m_GrpMarkers {
             label Markers open
-            xywh {655 320 265 385} labelfont 1 labelsize 12
+            xywh {655 320 265 385} color 214 selection_color 210 labelfont 1 labelsize 12 hide
           } {
             Fl_Browser m_BrsMarkers {
               label {Region markers:}
               callback {OnSelectMarker(o->value());}
-              xywh {665 350 245 100} type Select labelsize 12 align 5 textsize 12
+              xywh {665 350 245 200} type Select labelsize 12 align 5 textsize 12
             }
             Fl_Button m_BtnDeleteMarker {
               label delete
               callback {OnButtonDeleteMarker();}
-              xywh {830 460 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
+              xywh {835 555 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
             }
             Fl_Button m_BtnRenameMarker {
               label rename
               callback {OnButtonRenameMarker();}
-              xywh {670 460 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
+              xywh {665 555 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
             }
             Fl_Button m_BtnRecolorMarker {
               label recolor
               callback {OnButtonRecolorMarker();}
-              xywh {750 460 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
+              xywh {750 555 75 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
             }
             Fl_Button m_BtnComputeRegions {
               label {compute regions}
               callback {OnButtonComputeRegions();}
-              xywh {670 495 120 25} box PLASTIC_UP_BOX shortcut 0x80072 color 9 labelfont 1 labelsize 12 deactivate
+              xywh {665 590 120 25} box PLASTIC_UP_BOX shortcut 0x80072 color 9 labelfont 1 labelsize 12 deactivate
             }
           }
-          Fl_Group {} {
-            label Display open
-            xywh {655 320 265 385} labelfont 1 labelsize 12 hide
+          Fl_Group m_GrpDisplay {
+            label Display
+            xywh {655 320 265 385} color 246 selection_color 227 labelfont 1 labelsize 12 hide
           } {
             Fl_Check_Button {} {
               label { Center mesh on current point}

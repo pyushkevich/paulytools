@@ -26,7 +26,7 @@ TracerData
   // m_Stripper = vtkStripper::New();
   m_Triangulator = vtkTriangleFilter::New();
   m_NormalsFilter = vtkPolyDataNormals::New();
-  // m_CleanFilter = vtkCleanPolyData::New();
+  m_CleanFilter = vtkCleanPolyData::New();
   
   // m_DisplayMesh = 
   m_Mesh = NULL;
@@ -45,7 +45,7 @@ TracerData
   // m_Stripper->Delete();
   m_Triangulator->Delete();
   m_NormalsFilter->Delete();
-  // m_CleanFilter->Delete();
+  m_CleanFilter->Delete();
 
   // Clean up marker data
   RemoveMarkerData();
@@ -71,10 +71,10 @@ TracerData
   */
 
   // Clean the input data
-  // m_CleanFilter->SetInput(m_Mesh);
-  // m_CleanFilter->SetTolerance(0.001);
-  // m_CleanFilter->Update();
-  // m_Mesh = m_CleanFilter->GetOutput();
+  m_CleanFilter->SetInput(m_Mesh);
+  m_CleanFilter->SetTolerance(0.0);
+  m_CleanFilter->Update();
+  m_Mesh = m_CleanFilter->GetOutput();
 
   // Convert the input to triangles
   m_Triangulator->PassLinesOff();
@@ -90,18 +90,11 @@ TracerData
   // Create a marker array and assign null marker to all cells
   vtkIdTypeArray *xArray = vtkIdTypeArray::New();
   xArray->SetNumberOfValues(m_Mesh->GetNumberOfCells());
-  for(vtkIdType iCell = 0; iCell < m_Mesh->GetNumberOfCells(); iCell++)
-    xArray->SetValue(iCell, NO_MARKER);
   xArray->SetName("markers");
   m_Mesh->GetCellData()->AddArray(xArray);
 
   // Clean up the markers too
-  RemoveMarkerData();
-
-  // Create a clear label marker and update it's mesh
-  AddMarker(NO_MARKER, "no label", 0.5, 0.5, 0.5);
-  m_Markers[NO_MARKER]->m_NumberOfCells = m_Mesh->GetNumberOfCells();
-  m_Markers[NO_MARKER]->UpdateMesh(m_Mesh);
+  ResetMarkerState();
 
   // Set up the stripper
   // m_Stripper->SetInput(m_Mesh);
@@ -134,11 +127,19 @@ void
 TracerData
 ::RemoveMarkerData()
 {
-  list<vtkIdType> lMarkers;
-  this->GetMarkerIds(lMarkers);
-  list<vtkIdType>::iterator it = lMarkers.begin();
-  while(it != lMarkers.end())
-    DeleteMarker(*it++);
+  // Get all the marker data in the mesh
+  MarkerIterator it = m_Markers.begin();
+  while(it != m_Markers.end())
+    {
+    if(it->first == NO_MARKER)
+      {
+      delete it->second;
+      m_Markers.erase(it->first);
+      }
+    else
+      DeleteMarker(it->first);
+    ++it;
+    }
 }
 
 void
@@ -179,13 +180,25 @@ TracerData
         }
       }
 
+    // Remove all marker data
+    ResetMarkerState();
+
+    // Register each of the markers that has been loaded
+    TracerCurves::IdList lMarkers;
+    m_Curves.GetMarkerIdList(lMarkers);
+    TracerCurves::IdList::iterator itMarker = lMarkers.begin();
+    while(itMarker != lMarkers.end())
+      RegisterMarker(*itMarker++);
+
     // Reset the current point and curve
     SetFocusPoint(NO_FOCUS);
     SetFocusCurve(NO_FOCUS);
+    SetCurrentMarker(NO_FOCUS);
 
     // Notify listeners that the curves have changed
     TracerDataEvent evt(this);
     BroadcastOnCurveListChange(&evt);
+    BroadcastOnMarkerListChange(&evt);
     }
 
   return rc;
@@ -263,10 +276,18 @@ TracerData
   // Time the computation
   double tStart = (double) clock();
 
+  // Get the list of all markers
+  TracerCurves::IdList lMarkerIds;
+  m_Curves.GetMarkerIdList(lMarkerIds);
+
+  // Create a list of marker cell faces
+  list<vtkIdType> lMarkerCells;
+  TracerCurves::IdList::iterator itMarkerId = lMarkerIds.begin();
+  while(itMarkerId != lMarkerIds.end())
+    lMarkerCells.push_back(m_Curves.GetMarkerFace(*itMarkerId++));
+
   // Compute shortest distances to that point
-  list<vtkIdType> lMarkers;
-  GetMarkerIds(lMarkers);
-  m_VoronoiDiagram->ComputeVoronoiDiagram(lMarkers);
+  m_VoronoiDiagram->ComputeVoronoiDiagram(lMarkerCells);
 
   // Get the elapsed time
   double tElapsed = (clock() - tStart) * 1000.0 / CLOCKS_PER_SEC;    
@@ -284,8 +305,13 @@ TracerData
     {
     // Get the marker for the given cell
     vtkIdType iSource = m_VoronoiDiagram->GetVertexSource(iCell);
-    xArray->SetValue(iCell, iSource);
-    m_Markers[iSource]->m_NumberOfCells++;
+    TracerCurves::IdType iSourceMarker = m_CellToMarker[iSource];
+
+    // Assign the marker to the cell as additional data
+    xArray->SetValue(iCell, iSourceMarker);
+
+    // Increase the number of cells assigned to the source marker
+    m_Markers[iSourceMarker]->m_NumberOfCells++;
     }
 
   // Update the individual meshes
@@ -343,6 +369,47 @@ TracerData
   // Fire the appropriate event
   TracerDataEvent evt(this);
   BroadcastOnEdgeWeightsUpdate(&evt);
+}
+
+void
+TracerData
+::ResetMarkerState()
+{
+  // Remove all markers except marker -1
+  RemoveMarkerData();
+
+  // Reset the label associated with each cell to -1
+  vtkIdTypeArray *xArray = 
+    (vtkIdTypeArray *) m_Mesh->GetCellData()->GetArray("markers");
+  for(vtkIdType iCell = 0; iCell < m_Mesh->GetNumberOfCells(); iCell++)
+    xArray->SetValue(iCell, NO_MARKER);
+
+  // Associate mesh data with the 'clear' label
+  m_Markers[NO_MARKER] = new SegmentationMarkerData();
+  m_Markers[NO_MARKER]->m_Id = NO_MARKER;
+  m_CellToMarker[NO_MARKER] = NO_MARKER;
+  m_Markers[NO_MARKER]->m_NumberOfCells = m_Mesh->GetNumberOfCells();
+  m_Markers[NO_MARKER]->UpdateMesh(m_Mesh);
+}
+
+void
+TracerData
+::RegisterMarker(TracerCurves::IdType idMarker)
+{
+  // Disassociate information previously associated with this id
+  DeleteMarker(idMarker);
+
+  // Add the mesh information associated with this marker
+  m_Markers[idMarker] = new SegmentationMarkerData();
+  m_Markers[idMarker]->m_Id = idMarker;
+  m_Markers[idMarker]->m_NumberOfCells = 0;
+
+  // Update the mesh for the marker
+  m_Markers[idMarker]->UpdateMesh(m_Mesh);
+
+  // Add a mapping from the cell to the marker
+  vtkIdType idCell = m_Curves.GetMarkerFace(idMarker);
+  m_CellToMarker[idCell] = idMarker;
 }
 
 bool
@@ -403,7 +470,32 @@ TracerData
 
     ++itCurve;
     }
-  
+
+  // Remove the markers currently there
+  ResetMarkerState();
+
+  // Import the markers
+  TracerCurves::IdList lMarkers;
+  xImportCurves.GetMarkerIdList(lMarkers);
+  TracerCurves::IdList::iterator itMarker = lMarkers.begin();
+  while(itMarker != lMarkers.end())
+    {
+    // Get the coordinate for the marker
+    Vec xCenter = xImportCurves.GetMarkerPosition(*itMarker);
+
+    // Get the color of the marker
+    Vec xColor = xImportCurves.GetMarkerColor(*itMarker);
+
+    // Find the cell closest to the marker
+    vtkIdType iCell = m_DistanceMapper->FindClosestCellInSpace(xCenter);
+
+    // Add the marker using the normal process
+    this->AddMarker(
+      iCell, xImportCurves.GetMarkerName(*itMarker), 
+      xColor[0], xColor[1], xColor[2]);
+
+    ++itMarker;
+    }
 
   // Reset the current point and curve
   SetFocusPoint(NO_FOCUS);
@@ -412,6 +504,7 @@ TracerData
   // Notify listeners that the curves have changed
   TracerDataEvent evt(this);
   BroadcastOnCurveListChange(&evt);
+  BroadcastOnMarkerListChange(&evt);
   
   return true;
 }

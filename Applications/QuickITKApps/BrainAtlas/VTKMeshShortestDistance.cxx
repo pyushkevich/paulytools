@@ -173,16 +173,30 @@ VTKMeshShortestDistance
 
 bool 
 VTKMeshShortestDistance
-::PickPoint(Vec xStart, Vec xEnd, vtkIdType &point) const
+::PickPoint(Vec xStart, Vec xEnd, vtkIdType &point, ICellChecher *cbCell) const
 {
   Vec ptLine, pCoords;
   double t; 
-  vtkIdType subId;
+  int subId; vtkIdType iCell;
 
-  // Compute the intersection with the line
-  int rc = fltCellLocator->IntersectWithLine(
-    xStart.data_block(),xEnd.data_block(),
-    0.001, t, ptLine.data_block(), pCoords.data_block(), subId);
+  do
+    {
+    cout << "Searching ray " << xStart << "  to  " << xEnd << endl;
+    
+    // Compute the intersection with the line
+    int rc = fltCellLocator->IntersectWithLine(
+      xStart.data_block(),xEnd.data_block(),
+      0.001, t, ptLine.data_block(), pCoords.data_block(), subId, iCell);
+
+    cout << "   RC: " << rc << " \t T = " << t << " \t iCell " << iCell << endl;
+
+    // If no intersection found, return false
+    if(!rc) return false;
+
+    // Increase the starting vector by t + epsilon
+    xStart += (t + 0.001) * (xEnd - xStart);
+    }
+  while(cbCell && !cbCell->CheckCell(iCell));
 
   // cout << "Tracing from " << xStart << " to " << xEnd << endl;
   // cout << "Intersection at t = " << t << ", ptline " << ptLine << endl;

@@ -101,15 +101,18 @@ TracerMainWindow
   // Draw each of the segmented triangle strips
   if(m_Data->GetNumberOfMarkers() > 0)
     {
+    // Get an explicit pointer to TracerCurves
+    const TracerCurves *curves = m_Data->GetCurves();
+
     // Get the marker ids
-    list<vtkIdType> lMarkers;
-    m_Data->GetMarkerIds(lMarkers);
+    TracerCurves::IdList lMarkers;
+    curves->GetMarkerIdList(lMarkers);
 
     // Paint the corresponding meshes
-    list<vtkIdType>::iterator it = lMarkers.begin();
+    TracerCurves::IdList::iterator it = lMarkers.begin();
     while(it != lMarkers.end())
       {
-      glColor3dv(m_Data->GetMarkerColor(*it).data_block());
+      glColor3dv(curves->GetMarkerColor(*it).data_block());
       GLDrawStrippedPolyData(m_Data->GetMarkerMesh(*it));
       ++it;
       }
@@ -164,15 +167,15 @@ TracerMainWindow
     if(m_Data->IsMarkerSegmentationValid())
       {
       // Get the marker associated with the cell
-      vtkIdType idMarker = m_Data->GetCellLabel(iCell);
+      TracerCurves::IdType idMarker = m_Data->GetCellLabel(iCell);
       //cout << "Cell " << iCell << " maps to " << idMarker ;
       //cout << " distance " <<
       //  m_Data->GetVoronoiDiagram()->GetDiagram()->GetDistanceArray()[iCell] << endl;
 
       if(idMarker != iLastMarker)
         {
-        if(idMarker != (vtkIdType) -1)
-          glColor3dv(m_Data->GetMarkerColor(idMarker).data_block());
+        if(idMarker != TracerData::NO_MARKER)
+          glColor3dv(m_Data->GetCurves()->GetMarkerColor(idMarker).data_block());
         else
           glColor3d(0.0, 0.0, 0.0);
 
@@ -508,6 +511,9 @@ TracerMainWindow
   // Restore the attributes
   glPopAttrib();
 
+  // Determine the appropriate radius of the little balls
+  double radius = 0.5;
+
   // Draw control points (balls representing points)
   for(IdList::iterator it = lCurves.begin(); it!=lCurves.end(); it++)
     {
@@ -521,14 +527,32 @@ TracerMainWindow
     IdList::const_iterator itControl = lControls.begin();
     while(itControl != lControls.end())
       {
-      // Get the coordinate of the control point
-      Vec xPoint = m_Data->GetCurves()->GetControlPointPosition(*itControl++);
+      // Don't draw the current control
+      if(*itControl != m_Data->GetCurrentControlPoint())
+        {
+        // Get the coordinate of the control point
+        Vec xPoint = m_Data->GetCurves()->GetControlPointPosition(*itControl);
 
-      // Display the point currently under the cursor as a little sphere
-      GLDrawSphere(xPoint.data_block(), 0.5);
+        // Display the point currently under the cursor as a little sphere
+        GLDrawSphere(xPoint.data_block(), radius);
+        }
+      ++itControl;
       }
     }
 
+  // Draw the current path source
+  if(m_Data->IsPathSourceSet())
+    {
+    // Get the coordinate of the current point
+    Vec xPoint;
+    m_Data->GetPointCoordinate(m_Data->GetPathSource(), xPoint);
+
+    // Display the point currently under the cursor as a little sphere
+    glColor3d(0.8,0.8,0.2);
+    GLDrawSphere(xPoint.data_block(), radius);
+    }
+
+  // Draw the current point
   if(m_CurrentPoint != -1 && m_EditMode == TRACER)
     {
     // Get the coordinate of the current point
@@ -537,7 +561,7 @@ TracerMainWindow
 
     // Display the point currently under the cursor as a little sphere
     glColor3d(0.8,0.2,0.2);
-    GLDrawSphere(xPoint.data_block(), 0.5);
+    GLDrawSphere(xPoint.data_block(), radius);
     }
 }
 
@@ -546,54 +570,91 @@ TracerMainWindow
 ::GLDrawMarker(vtkIdType iCell, const Vec &color)
 {
   // Get the corners of the marker
-  Vec x, y, z, c, n, p;
-  m_Data->GetMarkerGeometry(iCell, x, y, z, n, c);
+  Vec x, y, z, c, n, f[4], p;
+  m_Data->GetCellGeometry(iCell, x, y, z, n, c);
 
-  // Compute the lollipop position
-  p = c + 4.0 * n;
+  // Compute the direction of the flag
+  Vec v(1.0,0.0,0.0);
+  if(v == n)
+    v = Vec(0.0,1.0,0.0);
+  p = v - dot_product(v,n) * n;
+  p.normalize();
 
-  // Draw the marker's triagle
-  glColor3dv(color.data_block());
-  glBegin(GL_TRIANGLES);
-  glNormal3dv(n.data_block());
-  glVertex3dv(x.data_block());
-  glVertex3dv(y.data_block());
-  glVertex3dv(z.data_block());
-  glEnd();
-
-  // Draw the stick of the lollipop
+  // Compute the corners of the flag
+  f[0] = c + 10.0 * n;
+  f[1] = c + 15.0 * n;
+  f[2] = c + 15.0 * n + 8.0 * p;
+  f[3] = c + 10.0 * n + 8.0 * p;
+  
+  // Save the state
   glPushAttrib(GL_LIGHTING_BIT);
   glDisable(GL_LIGHTING);
-  glBegin(GL_LINES);
-  glColor3d(1,1,1);
-  glVertex3dv(c.data_block());
-  glVertex3dv(p.data_block());
-  glEnd();
-  glPopAttrib();
+  glEnable(GL_LINE_SMOOTH);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);    
+  glLineWidth(1.0);
 
-  // Draw the head of the lollipop
+  // Draw the field of the flag
   glColor3dv(color.data_block());
-  GLDrawSphere(p.data_block(), 
-    iCell == m_Data->GetCurrentMarker() ? 2.0 : 1.0);
+  glBegin(GL_QUADS);
+  glVertex3dv(f[0].data_block());
+  glVertex3dv(f[1].data_block());
+  glVertex3dv(f[2].data_block());
+  glVertex3dv(f[3].data_block());
+  glEnd();
+
+  // Draw the stick and outline of the flag
+
+  // Set the color of the flag based on selected state
+  if(iCell == 
+     m_Data->GetCurves()->GetMarkerFace(
+       m_Data->GetCurrentMarker()))
+    {
+    glColor3d(1.0,1.0,1.0);
+    }
+  else
+    {
+    glColor3d(0.6,0.6,0.6);
+    }
+
+  // Draw the flag
+  glBegin(GL_LINE_STRIP);
+  glVertex3dv(c.data_block());
+  glVertex3dv(f[0].data_block());
+  glVertex3dv(f[1].data_block());
+  glVertex3dv(f[2].data_block());
+  glVertex3dv(f[3].data_block());
+  glVertex3dv(f[0].data_block());
+  glEnd();
+
+  // Restore state
+  glPopAttrib();
 }
 
 void 
 TracerMainWindow
 ::DrawMarkers()
 {
+  // Get the curves object
+  const TracerCurves *curves = m_Data->GetCurves();
+
   // Get the list of marker ID's
-  list<vtkIdType> lMarkers;
-  m_Data->GetMarkerIds(lMarkers);
+  TracerCurves::IdList lMarkers;
+  curves->GetMarkerIdList(lMarkers);
   
   // Markers are displayed as little lolly-pops sticking out of the surface
-  list<vtkIdType>::iterator itMarker = lMarkers.begin();
+  TracerCurves::IdList::iterator itMarker = lMarkers.begin();
   while(itMarker != lMarkers.end())
     {
     // Get the color of the marker
-    Vec xColor = m_Data->GetMarkerColor(*itMarker);
+    Vec xColor = curves->GetMarkerColor(*itMarker);
+    vtkIdType iFace = curves->GetMarkerFace(*itMarker);
 
     // Draw the marker
-    GLDrawMarker(*itMarker++, xColor);
+    GLDrawMarker(iFace, xColor);
+
+    // On to the next
+    ++itMarker;
     }
 
   // Draw a white marker at the current position of the mouse
@@ -756,6 +817,22 @@ TracerMainWindow
     }
 }
 
+bool
+TracerMainWindow
+::CheckCell(vtkIdType iCell)
+{
+  if(m_Data->IsPathSourceSet() && 
+    m_SurfaceDisplayMode == SURFACE_DISPLAY_NEIGHBORHOOD)
+    {
+    // We are in neighborhood display mode. Check that the distance
+    // from all corners of the cell is close enough
+    return
+      m_Data->GetCellDistanceToPathSource(iCell) < m_NeighborhoodSize;
+    }
+  else
+    return true;
+}
+
 void 
 TracerMainWindow
 ::FindPointUnderCursor()
@@ -768,7 +845,7 @@ TracerMainWindow
 
   // Find the point corresponding to the intersection
   vtkIdType iPoint;
-  if(m_Data->GetDistanceMapper()->PickPoint(xStart,xEnd,iPoint))
+  if(m_Data->GetDistanceMapper()->PickPoint(xStart,xEnd,iPoint,this))
     {
     // Point has been found
     m_CurrentPoint = iPoint;

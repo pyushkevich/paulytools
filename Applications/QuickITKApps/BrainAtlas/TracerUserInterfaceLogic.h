@@ -38,7 +38,7 @@ public:
   void OnButtonDeleteLastPoint();
   void OnButtonEditCurve();
   void OnButtonStartCurve();
-  void OnSelectCurve();
+  void OnSelectCurve(int value);
 
   void OnButtonRenameMarker();
   void OnButtonRecolorMarker();
@@ -96,7 +96,11 @@ private:
   // The name of the last saved curve file
   string m_CurvesFile;
 
+  /** Rebuild the list of curves */
   void RebuildCurveList();
+
+  /** Update the currently selected curve in the list of curves */
+  void UpdateCurveSelection();
   
   /** State flags used in conjunction with the activation manager */
   enum ActivationFlag {

@@ -28,6 +28,7 @@ public:
 
   /** Pointer to a mesh vertex */
   typedef vtkIdType MeshVertex;
+  typedef vtkIdType MeshFace;
   typedef list<MeshVertex> MeshCurve;
   typedef unsigned int IdType;
   typedef list<IdType> IdList;
@@ -67,7 +68,8 @@ public:
   };
 
   /** Structure representing a curve */
-  struct Curve {
+  struct Curve 
+    {
     string name;
     list<IdType> links, controls;
     MeshCurve points;
@@ -75,7 +77,27 @@ public:
     Curve() {}
     Curve(const char *inName) 
       : name(inName) {}
-  };
+    };
+
+  /** Structure representing a marker */
+  struct Marker 
+    {
+    /** Name of the marker */
+    string name;
+    
+    /** Color of the marker */
+    Vec color;
+    
+    /** Face of the mesh where the marker belongs */
+    MeshFace iFace;
+
+    /** Center of the face where the marker belongs */
+    Vec xFace;
+
+    /** Whether the marker is visible */
+    bool visible;
+    };
+
 
   /** Add a control point to the list */
   IdType AddControlPoint(MeshVertex id, const Vec &x)
@@ -88,6 +110,10 @@ public:
   /** Add an empty curve to the collection */
   IdType AddCurve( const char * name )
     { return AddCurve( GenerateId(m_Curves), name); }
+
+  /** Add an empty curve to the collection */
+  IdType AddMarker( const char * name, const Vec &clr, MeshFace id, const Vec &ctr )
+    { return AddMarker( GenerateId(m_Markers), name, clr, id, ctr); }
 
   /** Get a chain of mesh vertices associated with a curve */
   const MeshCurve & GetCurveVertices(IdType iCurve) const
@@ -158,6 +184,7 @@ public:
     m_Curves.clear();
     m_Controls.clear();
     m_Links.clear();
+    m_Markers.clear();
     }
 
   /** Get the vertex id at a given control point */
@@ -172,6 +199,61 @@ public:
   void SetControlPointPosition(IdType iControl, const Vec &x)
     { m_Controls.find(iControl)->second.xVertex = x; }
 
+  /** Get marker name */
+  const char *GetMarkerName(IdType iMarker) const
+    { return m_Markers.find(iMarker)->second.name.c_str(); }
+
+  /** Set marker name */
+  void SetMarkerName(IdType iMarker, const char *name)
+    { m_Markers.find(iMarker)->second.name = name; }
+  
+  /** Get marker coror */
+  const Vec &GetMarkerColor(IdType iMarker) const
+    { return m_Markers.find(iMarker)->second.color; }
+
+  /** Get marker color */
+  void SetMarkerColor(IdType iMarker, const Vec &color)
+    { m_Markers.find(iMarker)->second.color = color; }
+  
+  /** Get index of the face associated with a marker */
+  MeshFace GetMarkerFace(IdType iMarker) const
+    { return m_Markers.find(iMarker)->second.iFace; }
+
+  /** Set index of the face associated with a marker */
+  void SetMarkerFace(IdType iMarker, MeshFace iFace)
+    { m_Markers.find(iMarker)->second.iFace = iFace; }
+
+  /** Get marker position in space */
+  const Vec &GetMarkerPosition(IdType iMarker) const
+    { return m_Markers.find(iMarker)->second.xFace; }
+
+  /** Set marker position in space */
+  void SetMarkerPosition(IdType iMarker, const Vec &xPos)
+    { m_Markers.find(iMarker)->second.xFace = xPos; }
+
+  /** Get a list of all the markers */
+  void GetMarkerIdList(IdList &target) const
+    {
+    MarkerMap::const_iterator it;
+    target.clear();
+    for(it = m_Markers.begin(); it!=m_Markers.end(); it++)
+      target.push_back(it->first);
+    }
+
+  /** Get the list of curves sorted by name */
+  void GetAlphabeticMarkerList(list<StringIdPair> &target) const
+    {
+    MarkerMap::const_iterator it;
+    
+    target.clear();
+    for(it = m_Markers.begin(); it!=m_Markers.end(); it++)
+      target.push_back(StringIdPair(it->second.name, it->first));
+    target.sort();
+    }
+
+  /** Delete a marker */
+  void DeleteMarker(IdType iMarker);
+
 private:
 
   /** A list of curves */
@@ -185,6 +267,10 @@ private:
   /** A list of links */
   typedef map<IdType, Link> LinkMap;
   LinkMap m_Links;
+
+  /** A list of links */
+  typedef map<IdType, Marker> MarkerMap;
+  MarkerMap m_Markers;
 
   /** An ID generator for map */
   template <class T> static IdType GenerateId(const map<IdType, T> &xMap)
@@ -204,6 +290,10 @@ private:
   
   /** Add an empty curve to the collection */
   IdType AddCurve(IdType id, const char * name );
+  
+  /** Add a marker to the collection */
+  IdType AddMarker(IdType id, const char * name, const Vec &clr, 
+    MeshFace iFace, const Vec &xFace );
 
   /** Clean up links and controls that do not belong to any curves */
   void CleanUpDeadLinksAndControls();

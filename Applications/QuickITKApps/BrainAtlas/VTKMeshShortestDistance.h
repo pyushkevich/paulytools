@@ -100,6 +100,12 @@ class VTKMeshShortestDistance
 public:
   // type definitions
   typedef vnl_vector_fixed<double,3> Vec;
+
+  /** A callback interface used in conjunction with point checking */
+  class ICellChecher { 
+  public:
+    virtual bool CheckCell(vtkIdType iCell) = 0; 
+  };
   
   /** Constructor */
   VTKMeshShortestDistance();
@@ -139,6 +145,18 @@ public:
   vtkIdType FindClosestVertexInSpace(Vec vec)
     { return fltLocator->FindClosestPoint(vec.data_block()); }
 
+  /** Find the cell closest to the specified point */
+  vtkIdType FindClosestCellInSpace(Vec vec)
+    {
+    Vec xClosestPoint;
+    vtkIdType iCell;
+    int subid;
+    double dist2;
+    fltCellLocator->FindClosestPoint(
+      vec.data_block(), xClosestPoint.data_block(),iCell,subid,dist2);
+    return iCell;
+    }
+
   /** Get the edge mesh to which the indices map */
   vtkPolyData *GetInputMesh() const 
     { return m_SourceMesh; }
@@ -147,8 +165,11 @@ public:
   double GetEdgeWeight(vtkIdType x1, vtkIdType x2)
     { return m_WeightFunctionPtr->GetEdgeWeight(m_SourceMesh,x1,x2); }
   
-  /** Given a ray, find a point closest to that ray */
-  bool PickPoint(Vec xStart, Vec xEnd, vtkIdType &point) const;
+  /** Given a ray, find a point on the mesh that is closest to that 
+    * and (optinally) satisfies some condition specified by 
+    * making a callback to cbCellChecker object */
+  bool PickPoint(Vec xStart, Vec xEnd, vtkIdType &point, 
+    ICellChecher *cbCellChecher = NULL) const;
 
   /** Given a ray, find a cell clostest to that ray */
   bool PickCell(Vec xStart, Vec xEnd, vtkIdType &cell) const;

@@ -19,7 +19,7 @@ public:
   virtual void OnButtonDeleteLastPoint() = 0;
   virtual void OnButtonEditCurve() = 0;
   virtual void OnButtonStartCurve() = 0;  
-  virtual void OnSelectCurve() = 0;
+  virtual void OnSelectCurve(int value) = 0;
  
   virtual void OnButtonRenameMarker() = 0;
   virtual void OnButtonRecolorMarker() = 0;

@@ -71,8 +71,6 @@ public:
 
   SegmentationMarkerData()
     {
-    m_Visible = true;
-    m_Color.fill(1.0);
     m_Mesh = vtkPolyData::New();
     m_Stripper = vtkStripper::New();
     m_Stripper->SetInput(m_Mesh);
@@ -100,7 +98,7 @@ public:
     // Create an array of id's for copying
     for(vtkIdType iCell = 0; iCell < source->GetNumberOfCells(); iCell++)
       {
-      if(xArray->GetValue(iCell) == m_PointId)
+      if(xArray->GetValue(iCell) == m_Id)
         {
         vtkIdType nCellPoints, *xCellPoints;
         source->GetCellPoints(iCell,nCellPoints,xCellPoints);
@@ -113,20 +111,11 @@ public:
     }
   
 private:
-  // The name of the marker
-  string m_Name;
-
-  // The color of the marker
-  Vec m_Color;
-
-  // The point ID associated with this marker
-  vtkIdType m_PointId;
+  // Id of the marker in the tracer curves object
+  TracerCurves::IdType m_Id;
 
   // Number of cells assigned to this marker
   vtkIdType m_NumberOfCells;
-
-  // The visibility of the marker
-  bool m_Visible;
 
   // The internal triangle mesh
   vtkPolyData *m_Mesh;
@@ -214,8 +203,13 @@ public:
   // Create a new curve (given a name)
   void AddNewCurve(const char *name)
     {
+    // Create curve and set focus
     SetFocusPoint(NO_FOCUS);
     SetFocusCurve(m_Curves.AddCurve(name));
+
+    // Fire appropriate event
+    TracerDataEvent evt(this);
+    BroadcastOnCurveListChange(&evt);
     }
     
   // Set the current curve
@@ -253,19 +247,29 @@ public:
     {
     // The current point must be the last point in a curve
     assert(m_FocusPoint != NO_FOCUS && m_FocusCurve != NO_FOCUS);
-    assert(m_FocusPoint == 
-      m_Curves.GetCurveControls(m_FocusCurve).back());
 
-    // Delete the last point in the curve
-    m_Curves.DeleteLastControlPointInCurve(m_FocusCurve);
+    // The curve might be empty, but there is a focus point
+    if(m_Curves.GetCurveControls(m_FocusCurve).size() == 0)
+      {
+      m_FocusPoint = NO_FOCUS;
+      }
+    else
+      {
+      // Better match the last point in the curve
+      assert( m_FocusPoint == m_Curves.GetCurveControls(m_FocusCurve).back());
 
-    // Set the focus point if the curve isn't empty
-    SetFocusPoint( m_Curves.GetCurveControls(m_FocusCurve).size()
-      ? (int) m_Curves.GetCurveControls(m_FocusCurve).back() : NO_FOCUS );
+      // Delete the last point in the curve
+      m_Curves.DeleteLastControlPointInCurve(m_FocusCurve);
+
+      // Set the focus point if the curve isn't empty
+      SetFocusPoint( m_Curves.GetCurveControls(m_FocusCurve).size()
+        ? (int) m_Curves.GetCurveControls(m_FocusCurve).back() : NO_FOCUS );
+      }
 
     // Nofity listeners that the current curve's data has changed
     TracerDataEvent evt(this);
     BroadcastOnFocusCurveDataChange(&evt);
+    BroadcastOnFocusPointChange(&evt);
     }
     
   void DeleteCurrentCurve() 
@@ -289,8 +293,11 @@ public:
   bool IsCurrentCurveValid()
     { return m_FocusCurve != NO_FOCUS; }
    
-  IdType GetCurrentCurve()
+  IdType GetCurrentCurve() const
     { return m_FocusCurve; }
+
+  IdType GetCurrentControlPoint() const
+    { return m_FocusPoint; }
 
   unsigned int GetNumberOfCurvePoints(IdType iCurve)
     {
@@ -343,7 +350,7 @@ public:
   // Add a point to the current curve
   void AddNewPoint(vtkIdType iPoint)
     {
-    assert(m_FocusCurve >= 0);
+    assert(m_FocusCurve != NO_FOCUS);
 
     // Get the vector for the control point
     Vec xControl(m_Mesh->GetPoint(iPoint));
@@ -395,21 +402,23 @@ public:
   void AddMarker(vtkIdType idCell, const char *name, 
     double r, double g, double b)
     { 
-    // Delete existing marker if one is there
-    DeleteMarker(idCell);
+    // Get the center position of the marker
+    Vec xCenter;
+    vtkIdType nPoints, *xPoints;
+    m_Mesh->GetCellPoints(idCell, nPoints, xPoints);
+    for(unsigned int iPoint = 0; iPoint < nPoints; iPoint++)
+      xCenter += Vec(m_Mesh->GetPoint(xPoints[iPoint]));
+    xCenter /= 3.0;
+    
+    // Add the marker to the TracerCurves, get back an ID
+    TracerCurves::IdType idMarker = 
+      m_Curves.AddMarker(name,Vec(r,g,b),idCell,xCenter);
 
-    // Add the marker
-    m_Markers[idCell] = new SegmentationMarkerData();
-    m_Markers[idCell]->m_PointId = idCell;
-    m_Markers[idCell]->m_Name = name; 
-    m_Markers[idCell]->m_Color = Vec(r, g, b);
-    m_Markers[idCell]->m_NumberOfCells = 0;
-
-    // Update the mesh for the marker
-    m_Markers[idCell]->UpdateMesh(m_Mesh);
+    // Disassociate information previously associated with this id
+    RegisterMarker(idMarker);
 
     // Update the active marker
-    m_FocusMarker = idCell;
+    m_FocusMarker = idMarker;
 
     // Nofity of the change in curve data
     TracerDataEvent evt(this);
@@ -417,17 +426,23 @@ public:
     }
 
   /** Delete the marker */
-  void DeleteMarker(vtkIdType idCell)
+  void DeleteMarker(TracerCurves::IdType idMarker)
     { 
     // Find the cell
-    MarkerMap::iterator it = m_Markers.find(idCell);
+    MarkerMap::iterator it = m_Markers.find(idMarker);
     if(it != m_Markers.end())
       {
-      // Delete the data
+      // Remove the cell reference to this marker
+      m_CellToMarker.erase(m_Curves.GetMarkerFace(idMarker));
+
+      // Remove the marker definition from m_Curves
+      m_Curves.DeleteMarker(idMarker);
+      
+      // Delete the data associated with the marker
       delete it->second;
       
       // Remove the cell
-      m_Markers.erase(idCell);
+      m_Markers.erase(idMarker);
       }
 
     // Change the active marker
@@ -439,9 +454,10 @@ public:
     }
 
   /** Rename the marker */
-  void RenameMarker(vtkIdType idCell, const char *name)
+  void RenameMarker(TracerCurves::IdType idMarker, const char *name)
     { 
-    m_Markers[idCell]->m_Name = name;
+    // Set the marker name
+    m_Curves.SetMarkerName(idMarker, name);
 
     // Nofity of the change in curve data
     TracerDataEvent evt(this);
@@ -449,9 +465,10 @@ public:
     }
 
   /** Recolor the marker */
-  void RecolorMarker(vtkIdType idCell, double r, double g, double b)
+  void RecolorMarker(TracerCurves::IdType idMarker, double r, double g, double b)
     { 
-    m_Markers[idCell]->m_Color = Vec(r, g, b);
+    // Set the marker color
+    m_Curves.SetMarkerColor(idMarker,Vec(r, g, b));
 
     // Nofity of the change in curve data
     TracerDataEvent evt(this);
@@ -459,10 +476,10 @@ public:
     }
 
   /** Change the active marker */
-  void SetCurrentMarker(vtkIdType idCell) 
+  void SetCurrentMarker(TracerCurves::IdType idMarker) 
     {
     // Set the focus
-    m_FocusMarker = idCell;
+    m_FocusMarker = idMarker;
 
     // Fire an event
     TracerDataEvent evt(this);
@@ -482,6 +499,7 @@ public:
     { return m_Markers.size(); }
     
   /** Get the list of marker ids */
+  /*
   void GetMarkerIds(list<vtkIdType> &outList) const
     { 
     MarkerMap::const_iterator it = m_Markers.begin();
@@ -492,25 +510,36 @@ public:
       ++it;
       }
     }
+  */
 
   /** Get the corners of a marker */
-  void GetMarkerVertices(vtkIdType id, Vec &x1, Vec &x2, Vec &x3) const
+  /*
+  void GetMarkerVertices(TracerCurves::IdType id, Vec &x1, Vec &x2, Vec &x3) const
     {
+    vtkIdType idCell = m_Curves.GetMarkerFace(id);
     vtkIdType nPoints, *iPoints;
-    m_Mesh->GetCellPoints(id, nPoints, iPoints);
+    m_Mesh->GetCellPoints(idCell, nPoints, iPoints);
     
     x1.set(m_Mesh->GetPoint(iPoints[0]));
     x2.set(m_Mesh->GetPoint(iPoints[1]));
     x3.set(m_Mesh->GetPoint(iPoints[2]));
     }
+    */
 
   /** Get the corners, the normal and the center of a marker */
-  void GetMarkerGeometry(vtkIdType id, 
+  void GetCellGeometry(vtkIdType idCell, 
     Vec &x1, Vec &x2, Vec &x3, Vec &xNormal, Vec &xCenter) const
     {
-    // Get the vertices
-    GetMarkerVertices(id, x1, x2, x3);
-
+    // Get the cell points
+    vtkIdType nPoints, *iPoints;
+    m_Mesh->GetCellPoints(idCell, nPoints, iPoints);
+    assert(nPoints == 3);
+    
+    // Assign the corners
+    x1.set(m_Mesh->GetPoint(iPoints[0]));
+    x2.set(m_Mesh->GetPoint(iPoints[1]));
+    x3.set(m_Mesh->GetPoint(iPoints[2]));
+    
     // Compute the normal using cross-product
     xNormal = vnl_cross_3d(x2-x1,x3-x1).normalize();
 
@@ -518,22 +547,48 @@ public:
     xCenter = 0.33333333 * (x1 + x2 + x3);
     }
 
+  /** Get the shortest grapg distance from the vertices of a cell to the
+    * path source */
+  float GetCellDistanceToPathSource(vtkIdType idCell)
+    {
+    assert(IsPathSourceSet());
+   
+    // Get the points in the cell 
+    vtkIdType nPoints, *lPoints;
+    m_Mesh->GetCellPoints(idCell, nPoints, lPoints);
+
+    // Test each point
+    float dMin = DijkstraShortestPath<float>::INFINITE_WEIGHT;
+    for(unsigned int iPoint = 0;iPoint < nPoints;iPoint++)
+      {
+      float d = m_DistanceMapper->GetVertexDistance(lPoints[iPoint]);
+      if(dMin > d) dMin = d;
+      }
+
+    return dMin;
+    }
+
+
   /** Get the color of a marker */
+  /*
   Vec GetMarkerColor(vtkIdType id) const
     { 
     assert(m_Markers.find(id) != m_Markers.end());
     return m_Markers.find(id)->second->m_Color; 
     }
+  */
   
   /** Get the name of a marker */
+  /*
   const char * GetMarkerName(vtkIdType id) const
     { 
     assert(m_Markers.find(id) != m_Markers.end());
     return m_Markers.find(id)->second->m_Name.c_str(); 
     }
+  */
 
   /** Get the VTK mesh for drawing the given marker */
-  vtkPolyData *GetMarkerMesh(vtkIdType id) const
+  vtkPolyData *GetMarkerMesh(TracerCurves::IdType id) const
     { 
     assert(m_Markers.find(id) != m_Markers.end());
     return m_Markers.find(id)->second->m_DisplayMesh; 
@@ -548,7 +603,13 @@ public:
 
   // Get the marker assigned to a given cell by segmentation
   vtkIdType GetCellLabel(vtkIdType iCell) const
-    { return m_VoronoiDiagram->GetVertexSource(iCell); }
+    { 
+    // Find the source cell corresponding to the given cell
+    vtkIdType iSrcCell = m_VoronoiDiagram->GetVertexSource(iCell); 
+
+    // Find which marker that corresponds to
+    return m_CellToMarker.find(iSrcCell)->second;
+    }
 
   // Import curves from a mesh-independent file
   bool ImportCurves(const char *file);
@@ -599,16 +660,13 @@ private:
   // Currently selected marker (not very relevant)
   vtkIdType m_FocusMarker;
 
-  // A structure representing a region marker
-  struct MarkerData {
-    string Name;
-    Vec Color;
-  };
-
   // List of markers (a marker is a cell in the mesh)
   typedef map<vtkIdType, SegmentationMarkerData *> MarkerMap;
   typedef MarkerMap::iterator MarkerIterator;
   MarkerMap m_Markers;
+
+  // Mapping from cells to markers
+  map<vtkIdType, TracerCurves::IdType> m_CellToMarker;
 
   // Listener list (m_TracerDataListener)
   pyListenerArrayMacro(TracerDataListener,ITracerDataListener);
@@ -635,6 +693,14 @@ private:
 
   /** Set the edge weight function to another mode */
   void UpdateEdgeWeightFunction(MeshEdgeWeightFunction *fnNew);
+
+  /** Call this method when all the markers have been removed, such
+    as when new data is loaded, or the new mesh is loaded */
+  void ResetMarkerState();
+
+  /** Call this method when a new marker is added, in order to assign
+    mesh data to the marker */
+  void RegisterMarker(TracerData::IdType iMarker);
 
   /** Clean up marker data */
   void RemoveMarkerData();

@@ -45,7 +45,7 @@ TracerUserInterfaceLogic
   m_Activation.AddMenuItem(m_MenuRecolorMarker, AF_ACTIVE_MARKER);
   m_Activation.AddMenuItem(m_MenuComputeRegions, AF_MARKERS_EXIST);
   
-  m_Activation.AddWidget(m_ChcCurve, AF_TRACER_DATA); 
+  // m_Activation.AddWidget(m_BrsCurves, AF_TRACER_DATA); 
   m_Activation.AddWidget(m_BtnStartCurve, AF_MESH); 
   m_Activation.AddWidget(m_BtnDeleteCurve, AF_ACTIVE_CURVE); 
   m_Activation.AddWidget(m_BtnEditCurve, AF_ACTIVE_CURVE); 
@@ -55,7 +55,7 @@ TracerUserInterfaceLogic
   m_Activation.AddWidget(m_BtnRenameMarker, AF_ACTIVE_MARKER);
   m_Activation.AddWidget(m_BtnDeleteMarker, AF_ACTIVE_MARKER);
   m_Activation.AddWidget(m_BtnRecolorMarker, AF_ACTIVE_MARKER);
-  m_Activation.AddWidget(m_BrsMarkers, AF_MARKERS_EXIST);
+  // m_Activation.AddWidget(m_BrsMarkers, AF_MARKERS_EXIST);
   m_Activation.AddWidget(m_BtnComputeRegions, AF_MARKERS_EXIST);
 }
 
@@ -218,6 +218,9 @@ TracerUserInterfaceLogic
   m_BtnModeMarker->value(0);
   m_MenuModeTracer->setonly();
   
+  // Flip to the curves page
+  m_TabControlPanel->value(m_GrpCurves);
+
   m_WinTrace->SetMode(TracerMainWindow::TRACER);
 }
 
@@ -229,6 +232,9 @@ TracerUserInterfaceLogic
   m_BtnModeTracer->value(0);
   m_BtnModeMarker->value(1);
   m_MenuModeMarker->setonly();
+  
+  // Flip to the markers page
+  m_TabControlPanel->value(m_GrpMarkers);
   
   m_WinTrace->SetMode(TracerMainWindow::MARKER);
 }
@@ -315,6 +321,7 @@ TracerUserInterfaceLogic
 ::OnInputNeighborhoodRadius(double value)
 {
   m_WinTrace->SetNeighborhoodSize(value);
+  m_WinMain->take_focus();
 }
 
 void
@@ -322,7 +329,7 @@ TracerUserInterfaceLogic
 ::RebuildCurveList()
 {
   // Clear the choice of curves
-  m_ChcCurve->clear();
+  m_BrsCurves->clear();
 
   // If there are no curves, disable the drop down
   if(m_Data->GetCurves()->GetNumberOfCurves() > 0)
@@ -333,41 +340,53 @@ TracerUserInterfaceLogic
     StringIdList lCurveNames;
     m_Data->GetCurves()->GetAlphabeticCurveList(lCurveNames);
 
-    // Keep track of which item is current
-    int iCurrent = -1;
-
     // Add the curves to the choice
     StringIdList::iterator it=lCurveNames.begin();
     while(it != lCurveNames.end())
       {
-      int iPos = 
-        m_ChcCurve->add(it->first.c_str(), 0, NULL, (void *) it->second, 0);
-
-      if(m_Data->GetCurrentCurve() == it->second)
-        iCurrent = iPos; 
-
+      m_BrsCurves->add(it->first.c_str(), (void *) it->second );
       ++it;
       }
+    }
 
-    // Set the current item
-    m_ChcCurve->value(iCurrent);
+  // Set the current item
+  UpdateCurveSelection();
+}
+
+void 
+TracerUserInterfaceLogic
+::UpdateCurveSelection()
+{
+  // Deselect all items in the browser
+  m_BrsCurves->deselect();
+  
+  // Select the active item
+  if(m_Data->IsCurrentCurveValid())
+    {
+    
+    // Select the active item
+    for(unsigned int i = 1; i <= m_BrsCurves->size(); i++)
+      {
+      TracerCurves::IdType iCurve = 
+        (TracerCurves::IdType) m_BrsCurves->data(i);
+      if(iCurve == m_Data->GetCurrentCurve())
+        {
+        m_BrsCurves->select(i);
+        break;
+        }
+      }
     }
 }
 
 void 
 TracerUserInterfaceLogic
-::OnSelectCurve()
+::OnSelectCurve(int value)
 {
-  // Get the currently selected curve
-  int i = m_ChcCurve->value();
-
   // Make sure this is a valid item
-  if(i < 0 || i >= m_ChcCurve->size()) 
-    return;
+  if(value < 1) return;
   
   // Get the user data for the selected curve
-  TracerCurves::IdType id = 
-    (TracerCurves::IdType) m_ChcCurve->menu()[i].user_data_;
+  TracerCurves::IdType id = (TracerCurves::IdType) m_BrsCurves->data(value);
   
   // Select the curve in the data
   m_Data->SetCurrentCurve(id);
@@ -438,7 +457,7 @@ TracerUserInterfaceLogic
     this->OnButtonModeTrackball();
 
   // Change the current item in the drop-down
-  RebuildCurveList();
+  UpdateCurveSelection();
 }
 
 void 
@@ -478,11 +497,12 @@ TracerUserInterfaceLogic
 ::OnButtonRenameMarker()
 {
   // The marker id
-  vtkIdType id = m_Data->GetCurrentMarker();
+  TracerCurves::IdType id = m_Data->GetCurrentMarker();
+  const char *inName = m_Data->GetCurves()->GetMarkerName(id);
   
   // Show the color chooser
   const char *name = 
-    fl_input("Please enter the name of the marker", m_Data->GetMarkerName(id));
+    fl_input("Please enter the name of the marker", inName);
 
   if(name) m_Data->RenameMarker(id, name);
 }
@@ -492,10 +512,8 @@ TracerUserInterfaceLogic
 ::OnButtonRecolorMarker()
 {
   // The marker id
-  vtkIdType id = m_Data->GetCurrentMarker();
-  
-  // Get the current color of the marker
-  TracerData::Vec x = m_Data->GetMarkerColor(id);
+  TracerCurves::IdType id = m_Data->GetCurrentMarker();
+  TracerData::Vec x = m_Data->GetCurves()->GetMarkerColor(id);
 
   // Show the color chooser
   if(fl_color_chooser("Please select the marker color", x[0],x[1],x[2]))
@@ -525,7 +543,7 @@ TracerUserInterfaceLogic
 ::OnSelectMarker(int value)
 {
   // Get the id associated with the marker
-  vtkIdType id = (vtkIdType) m_BrsMarkers->data(value);
+  TracerCurves::IdType id = (TracerCurves::IdType) m_BrsMarkers->data(value);
 
   // Set the id as active id
   m_Data->SetCurrentMarker(id);
@@ -539,14 +557,16 @@ OnMarkerListChange(TracerDataEvent *evt)
   m_BrsMarkers->clear();
 
   // Get a list of marker ID's
-  list<vtkIdType> lMarkers;
-  m_Data->GetMarkerIds(lMarkers);
+  typedef TracerCurves::StringIdPair StringIdPair;
+  typedef list<StringIdPair> StringIdList;
+  StringIdList lMarkerNames;
+  m_Data->GetCurves()->GetAlphabeticMarkerList(lMarkerNames);
 
   // Populate the list of markers
-  list<vtkIdType>::iterator it = lMarkers.begin();
-  while(it != lMarkers.end())
+  StringIdList::iterator it = lMarkerNames.begin();
+  while(it != lMarkerNames.end())
     {
-    m_BrsMarkers->add( m_Data->GetMarkerName(*it), (void *)(*it) );
+    m_BrsMarkers->add( it->first.c_str(), (void *)it->second );
     ++it;
     }
   
