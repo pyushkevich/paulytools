@@ -2,6 +2,7 @@
 #define _ABSTRACT_LP_CLASSIFICATION_H_
 
 #include "LPWrapper.h"
+#include <cassert>
 
 class AbstractLPClassification {
 public:

@@ -108,9 +108,8 @@ void SoPlex::shiftPvec()
       tmp = !isBasic(id(i));
       if ((*theUbound)[i] + allow <= (*thePvec)[i] && tmp)
       {
-         if ((*theUbound)[i] != (*theLbound)[i]) {
+         if ((*theUbound)[i] != (*theLbound)[i])
             shiftUPbound(i, (*thePvec)[i] + Real(mult));
-         }
          else
          {
             shiftUPbound(i, (*thePvec)[i]);

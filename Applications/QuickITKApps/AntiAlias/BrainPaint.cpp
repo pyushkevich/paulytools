@@ -80,7 +80,7 @@ struct Curve {
 
 typedef struct Curve CurveType;
 typedef Image<char,3> CharImageType;
-typedef Image<short,3> ShortImageType;
+typedef Image<unsigned short,3> ShortImageType;
 typedef Image<float,3> FloatImageType;
 typedef ImageFileReader<CharImageType> CharReaderType;
 typedef ImageFileReader<ShortImageType> ShortReaderType;
@@ -485,6 +485,24 @@ void ConvertImageToVTK(TImage *src, vtkImageData **imgOut)
   fltImport -> Delete();
 }
 
+
+template<class TImage>
+void ConnectITKToVTK(itk::VTKImageExport<TImage> *fltExport,vtkImageImport *fltImport)
+{
+  fltImport->SetUpdateInformationCallback( fltExport->GetUpdateInformationCallback());
+  fltImport->SetPipelineModifiedCallback( fltExport->GetPipelineModifiedCallback());
+  fltImport->SetWholeExtentCallback( fltExport->GetWholeExtentCallback());
+  fltImport->SetSpacingCallback( fltExport->GetSpacingCallback());
+  fltImport->SetOriginCallback( fltExport->GetOriginCallback());
+  fltImport->SetScalarTypeCallback( fltExport->GetScalarTypeCallback());
+  fltImport->SetNumberOfComponentsCallback( fltExport->GetNumberOfComponentsCallback());
+  fltImport->SetPropagateUpdateExtentCallback( fltExport->GetPropagateUpdateExtentCallback());
+  fltImport->SetUpdateDataCallback( fltExport->GetUpdateDataCallback());
+  fltImport->SetDataExtentCallback( fltExport->GetDataExtentCallback());
+  fltImport->SetBufferPointerCallback( fltExport->GetBufferPointerCallback());
+  fltImport->SetCallbackUserData( fltExport->GetCallbackUserData());
+}
+
 /********************************************************************************
  * Create a VTK mesh from the white matter image
  *******************************************************************************/
@@ -493,6 +511,15 @@ vtkPolyData *CreateWhiteMatterMesh(CharImageType *imgWhite)
   // Compute the mesh
   cout << "Computing white matter mesh" << endl;
   
+  // Make a negative image
+  typedef itk::ImageRegionIterator<CharImageType> IteratorType;
+  IteratorType it(imgWhite, imgWhite->GetBufferedRegion());
+  while(!it.IsAtEnd())
+    {
+    it.Set(255-it.Get());
+    ++it;
+    }
+
   // Create an anti-aliasing image filter
   typedef itk::AntiAliasBinaryImageFilter<CharImageType,FloatImageType> AAFilter;
   AAFilter::Pointer fltAlias = AAFilter::New();
@@ -502,13 +529,19 @@ vtkPolyData *CreateWhiteMatterMesh(CharImageType *imgWhite)
   cout << "   anti-aliasing the image " << endl;
   fltAlias->Update();
 
-  // Cast the image to VTK 
-  vtkImageData *imgVTK;
-  ConvertImageToVTK(fltAlias->GetOutput(), &imgVTK);
-
+  // Cast the image to VTK
+  typedef itk::VTKImageExport<FloatImageType> ExportFilter;
+  ExportFilter::Pointer fltExport = ExportFilter::New();
+  vtkImageImport *fltImport = vtkImageImport::New();
+  fltExport->SetInput(fltAlias->GetOutput());
+  ConnectITKToVTK(fltExport.GetPointer(),fltImport);
+                                                                                
+  cout << "   converting image to ITK" << endl;
+  fltImport->Update();
+                                                                                
   // Compute marching cubes
   vtkImageMarchingCubes *fltMarching = vtkImageMarchingCubes::New();
-  fltMarching->SetInput(imgVTK);
+  fltMarching->SetInput(fltImport->GetOutput());
   fltMarching->ComputeScalarsOff();
   fltMarching->ComputeGradientsOff();
   fltMarching->SetNumberOfContours(1);
@@ -518,7 +551,7 @@ vtkPolyData *CreateWhiteMatterMesh(CharImageType *imgWhite)
   fltMarching->Update();
 
   cout << "      mesh has " << fltMarching->GetOutput()->GetNumberOfCells() << " cells." << endl;
-  
+/*  
   // Decimate the triangles 
   vtkDecimate *fltDecimate = vtkDecimate::New();
   fltDecimate->SetInput(fltMarching->GetOutput());
@@ -533,10 +566,10 @@ vtkPolyData *CreateWhiteMatterMesh(CharImageType *imgWhite)
   fltDecimate->Update();
   
   cout << "      mesh has " << fltDecimate->GetOutput()->GetNumberOfCells() << " cells." << endl;
-
+*/
   // Keep the largest connected component
   vtkPolyDataConnectivityFilter *fltConnect = vtkPolyDataConnectivityFilter::New();
-  fltConnect->SetInput(fltDecimate->GetOutput());
+  fltConnect->SetInput(fltMarching->GetOutput());
   fltConnect->SetExtractionModeToLargestRegion();
    
   cout << "   extracting the largest component" << endl;
@@ -560,13 +593,12 @@ vtkPolyData *CreateWhiteMatterMesh(CharImageType *imgWhite)
   // CLean up
   fltMarching->Delete();
   fltConnect->Delete();
-  fltDecimate->Delete();
+  // fltDecimate->Delete();
   fltWriter->Delete();
 
   // Return
   return poly;
 }
-
 #include <utility>
 #include <boost/config.hpp>
 #include <boost/graph/graph_traits.hpp>
@@ -794,7 +826,7 @@ void drawRibbonsAndBrain(
     actor->SetProperty(prop);
     ren->AddActor(actor);
     }
-
+/*
   // Add the white matter mesh
   vtkDecimate *fltDecimate = vtkDecimate::New();
   fltDecimate->SetInput(whiteMesh);
@@ -805,18 +837,26 @@ void drawRibbonsAndBrain(
   fltDecimate->SetMaximumIterations(6);
   fltDecimate->SetInitialFeatureAngle(40);
   fltDecimate->Update();
-
+  whiteMesh = fltDecimate->GetOutput();
+*/
   vtkLODActor *actor = vtkLODActor::New();
   vtkPolyDataMapper *mapper = vtkPolyDataMapper::New();
-  mapper->SetInput(fltDecimate->GetOutput());
+  mapper->SetInput(whiteMesh);
   actor->SetMapper(mapper);
   ren->AddActor(actor);
 
+  // Cast the grey image to VTK
+  typedef itk::VTKImageExport<ShortImageType> ExportFilter;
+  ExportFilter::Pointer fltExport = ExportFilter::New();
+  vtkImageImport *fltImport = vtkImageImport::New();
+  fltExport->SetInput(imgGrey);
+  ConnectITKToVTK(fltExport.GetPointer(),fltImport);
+  fltImport->Update();
+                                                                                
   // Add the grey image
-  vtkImageData *imgGreyVTK;
-  ConvertImageToVTK(imgGrey, &imgGreyVTK);
+/*
   vtkVolumeRayCastMapper *volMapper = vtkVolumeRayCastMapper::New();
-  volMapper->SetInput(imgGreyVTK);
+  volMapper->SetInput(fltImport->GetOutput());
   volMapper->SetVolumeRayCastFunction(
     vtkVolumeRayCastCompositeFunction::New());
 
@@ -824,7 +864,7 @@ void drawRibbonsAndBrain(
   vol->SetMapper(volMapper);
  
   ren->AddVolume(vol);
-  
+*/  
   vtkRenderWindow *renWin = vtkRenderWindow::New();
   renWin->AddRenderer(ren);
   renWin->SetSize(500,500);
@@ -1047,7 +1087,7 @@ int main(int argc, char *argv[])
   
   CreateWhiteMatterMesh(imgWhite);
   vtkPolyData *polyWhiteMesh = CreateWhiteMatterGraph(vCurves);
-  
+/*  
   // This is the most interesting part of the program. We attempt to 
   // improve the ribbons by making their free side pass entirely through
   // the white matter
@@ -1158,7 +1198,22 @@ int main(int argc, char *argv[])
       // drawRibbons(vCurves,iCurve);
 
     }
-
+*/
+  
+  // Verify that the points are located inside of the white matter
+  cout << "Listing White Point intensities " << endl;
+  for(iCurve = 0;iCurve < vCurves.size(); iCurve++) 
+    {
+    vector<CurvePoint> &pp = vCurves[iCurve].points;
+    for(iPoint = 0;iPoint < pp.size();iPoint++)
+      {
+      CharImageType::IndexType index;
+      index[0] = (unsigned int) pp[iPoint].xWhite[0];
+      index[1] = (unsigned int) pp[iPoint].xWhite[1];
+      index[2] = (unsigned int) pp[iPoint].xWhite[2];
+      cout << "   " << (int) imgWhite->GetPixel(index) << endl;
+      }
+    }
 
   // Draw the results in VTK
   drawRibbonsAndBrain(vCurves,polyWhiteMesh,imgGrey);
