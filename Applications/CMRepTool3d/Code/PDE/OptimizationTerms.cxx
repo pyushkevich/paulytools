@@ -667,6 +667,94 @@ void AtomBadnessTerm::PrintReport(ostream &sout)
   sout << "    total penalty            : " << xTotalPenalty << endl;
 }
 
+/*********************************************************************************
+ * Regularity term (used to maintain correspondence)
+ ********************************************************************************/
+MedialRegularityTerm::MedialRegularityTerm(
+  MedialAtom *xTempAtoms, MedialAtomGrid *xTempGrid)
+{
+  // Compute all the distances between adjacent atoms. This involves quad diagonals 
+  // as well as sides, because a quad can be deformed without changing edge lengths, 
+  // while a triangle is defined by the edge lengths.
+  MedialQuadIterator *itQuad = xTempGrid->NewQuadIterator();
+  for(; !itQuad->IsAtEnd(); ++(*itQuad))
+    {
+    // Get the four atoms at the corner of the quad
+    MedialAtom &a00 = xTempAtoms[itQuad->GetAtomIndex(0, 0)];
+    MedialAtom &a01 = xTempAtoms[itQuad->GetAtomIndex(0, 1)];
+    MedialAtom &a10 = xTempAtoms[itQuad->GetAtomIndex(1, 0)];
+    MedialAtom &a11 = xTempAtoms[itQuad->GetAtomIndex(1, 1)];
+
+    // Record the distances (repeat in this order later)
+    xEdgeLength.push_back( vnl_vector_ssd(a00.X, a01.X) );
+    xEdgeLength.push_back( vnl_vector_ssd(a01.X, a11.X) );
+    xEdgeLength.push_back( vnl_vector_ssd(a11.X, a10.X) );
+    xEdgeLength.push_back( vnl_vector_ssd(a10.X, a00.X) );
+    xEdgeLength.push_back( vnl_vector_ssd(a00.X, a11.X) );
+    xEdgeLength.push_back( vnl_vector_ssd(a01.X, a10.X) );
+    }
+
+  delete itQuad;
+}
+
+double MedialRegularityTerm::ComputeDistortionPenalty(
+  double dTemplate, double dSubject)
+{
+  double xDistortion = dSubject - dTemplate;
+  double xPenalty = xDistortion * xDistortion;
+  
+  // Record the maximum and minimum distortion
+  if(xDistortion < xMinDistortion) xMinDistortion = xDistortion;
+  if(xDistortion < xMaxDistortion) xMaxDistortion = xDistortion;
+
+  // Return the squared distortion
+  return xPenalty;
+}
+
+double MedialRegularityTerm::ComputeEnergy(SolutionData *data)
+{
+  // The prior is based on the distortion in terms of distances between adjacent 
+  // atoms as compared to the template. We iterate over the edges on the medial 
+  // surface and compute these distortions
+  xTotalPenalty = 0.0;
+  xMaxDistortion = xMinDistortion = 0.0;
+  
+  // Iterate over the quads
+  MedialQuadIterator *itQuad = data->xAtomGrid->NewQuadIterator();
+  vector<double>::iterator itDist = xEdgeLength.begin();
+  for(; !itQuad->IsAtEnd(); ++(*itQuad), ++itDist)
+    {
+    // Get the four atoms at the corner of the quad
+    MedialAtom &a00 = data->xAtoms[itQuad->GetAtomIndex(0, 0)];
+    MedialAtom &a01 = data->xAtoms[itQuad->GetAtomIndex(0, 1)];
+    MedialAtom &a10 = data->xAtoms[itQuad->GetAtomIndex(1, 0)];
+    MedialAtom &a11 = data->xAtoms[itQuad->GetAtomIndex(1, 1)];
+
+    // Record the distances (repeat in this order later)
+    xTotalPenalty += ComputeDistortionPenalty( *itDist, vnl_vector_ssd(a00.X, a01.X) );
+    xTotalPenalty += ComputeDistortionPenalty( *itDist, vnl_vector_ssd(a01.X, a11.X) );
+    xTotalPenalty += ComputeDistortionPenalty( *itDist, vnl_vector_ssd(a11.X, a10.X) );
+    xTotalPenalty += ComputeDistortionPenalty( *itDist, vnl_vector_ssd(a10.X, a00.X) );
+    xTotalPenalty += ComputeDistortionPenalty( *itDist, vnl_vector_ssd(a00.X, a11.X) );
+    xTotalPenalty += ComputeDistortionPenalty( *itDist, vnl_vector_ssd(a01.X, a10.X) );
+    }
+
+  // Compute the average error
+  xTotalPenalty /= xEdgeLength.size();
+  xMeanSquareDistortion = xTotalPenalty;
+
+  // Return the error
+  return xTotalPenalty; 
+}
+
+void MedialRegularityTerm::PrintReport(ostream &sout)
+{
+  sout << "  Medial Regularization Term: " << endl;
+  sout << "    minimum distortion:     " << xMinDistortion << endl;
+  sout << "    maximum distortion:     " << xMaxDistortion << endl;
+  sout << "    mean square distortion: " << xMeanSquareDistortion << endl;
+  sout << "    total penalty:          " << xTotalPenalty << endl;
+}
 
 /*********************************************************************************
  * MEDIAL OPTIMIZATION PROBLEM

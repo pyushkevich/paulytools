@@ -152,8 +152,8 @@ PDESplineRenderer
   glEnableClientState(GL_NORMAL_ARRAY);
 
   // Get the numtber of points
-  unsigned int m = solver->GetNumberOfUPoints();
-  unsigned int n = solver->GetNumberOfVPoints();
+  // unsigned int m = solver->GetNumberOfUPoints();
+  // unsigned int n = solver->GetNumberOfVPoints();
 
   // Initialize the medial colors
   matMedial->apply();
@@ -164,7 +164,7 @@ PDESplineRenderer
   glNormalPointer(GL_DOUBLE, sizeof(MedialAtom), mp->X.data_block());
 
   // Build the quad array
-  glDrawWireframeElements(m, n);
+  // glDrawWireframeElements(m, n);
   // glDrawQuadElements(solver->GetAtomGrid());
   
   DrawInternalPoints( 5 );

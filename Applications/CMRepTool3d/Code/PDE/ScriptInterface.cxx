@@ -504,12 +504,14 @@ void MedialPDE
   BoundaryJacobianEnergyTerm xTermJacobian;
   CrestLaplacianEnergyTerm xTermCrest;
   AtomBadnessTerm xTermBadness;
+  MedialRegularityTerm xTermRegularize(xSolver->GetAtomArray(), xSolver->GetAtomGrid());
 
   // Add the terms to the problem
   xProblem.AddEnergyTerm(xTermImage, 1.0);
   xProblem.AddEnergyTerm(&xTermJacobian, 0.005);
   xProblem.AddEnergyTerm(&xTermCrest, 0.005);
   xProblem.AddEnergyTerm(&xTermBadness, 1.0);
+  xProblem.AddEnergyTerm(&xTermRegularize, 1.0);
 
   // Create the initial solution
   size_t nCoeff = xMask->GetNumberOfCoefficients();
@@ -946,58 +948,125 @@ void MedialPCA::ComputePCA()
   Mat *R = new Mat[xSurfaces.size()];
   Vec *t = new Vec[xSurfaces.size()];
   double *s = new double[xSurfaces.size()];
-  size_t i;
+  size_t i, j;
   
   // Populate the input matrices
-  MedialPDESolver xSolver(20, 20);
+  MedialPDESolver xSolver(32, 80);
   for(i = 0; i < xSurfaces.size(); i++)
     {
-    // Solve the medial PDE
+    // Solve for this surface
     xSolver.SetMedialSurface(xSurfaces[i]);
     xSolver.Solve();
 
     // Initialize the A matrix
-    A[i].set_size(xSolver.GetAtomGrid()->GetNumberOfBoundaryPoints(), 3);
+    A[i].set_size(xSolver.GetAtomGrid()->GetNumberOfAtoms(), 3);
     R[i].set_size(3,3);
     t[i].set_size(3);
 
     // Parse over all the boundary sites
-    MedialBoundaryPointIterator *it = 
-      xSolver.GetAtomGrid()->NewBoundaryPointIterator();
+    MedialAtomIterator *it = 
+      xSolver.GetAtomGrid()->NewAtomIterator();
     size_t j = 0;
     while(!it->IsAtEnd())
       {
-      BoundaryAtom &ba = GetBoundaryPoint(it, xSolver.GetAtomArray());
-      A[i][j][0] = ba.X[0];
-      A[i][j][1] = ba.X[1];
-      A[i][j][2] = ba.X[2];
-      ++it; ++j;
+      MedialAtom &atom = xSolver.GetAtomArray()[it->GetIndex()];
+      A[i][j][0] = atom.X[0];
+      A[i][j][1] = atom.X[1];
+      A[i][j][2] = atom.X[2];
+      ++(*it); ++j;
       }
+    delete it;
     }
+
+  // cout << "Testing Procrustes" << endl;
+  // TestProcrustes(A[0]);
   
   // Run the procrustes method
   cout << "Procrustenating..." << endl;
+  
   GeneralizedProcrustesAnalysis(xSurfaces.size(), A, R, t, s);
 
+  // A medial PCA to play with
+  MedialPDE xJunk(8,12,32,80);
+    
   // Rotate each of the models into the common coordinate frame
   for(i = 0; i < xSurfaces.size(); i++)
     {
-    xSurfaces[i]->ApplyAffineTransform(s[i] * R[i], t[i], Vec(3, 0.0));
-    MedialPDE xJunk(4,4,80,80);
+    xSurfaces[i]->ApplyAffineTransform(s[i] * R[i].transpose(), t[i], Vec(3, 0.0));
+    
+    MedialPDE xJunk(8,12,32,80);
     xJunk.xSurface = new FourierSurface(*xSurfaces[i]);
+    xJunk.xSolver->SetMedialSurface(xJunk.xSurface);
+    xJunk.xSurface->SetRawCoefficientArray(xSurfaces[i]->GetRawCoefficientArray());
     xJunk.Solve();
     
     ostringstream sJunk1, sJunk2;
-    sJunk1 << "/tmp/pcamed_" << (i / 10) << (i % 10);
-    sJunk2 << "/tmp/pcabnd_" << (i / 10) << (i % 10);
-    
+    sJunk1 << "/tmp/alignmed_" << (i / 10) << (i % 10) << ".vtk";
+    sJunk2 << "/tmp/alignbnd_" << (i / 10) << (i % 10) << ".vtk";    
     xJunk.SaveVTKMesh(sJunk1.str().c_str(), sJunk2.str().c_str());
     }
+
+  // Compute the mean shape and the covariance matrix on the fourier
+  // parameters. Since the Fourier basis is orthonormal, doing PCA on the
+  // surface and on the Fourier components is identical
+  size_t m = xSurfaces[0]->GetNumberOfRawCoefficients();
+  size_t n = xSurfaces.size();
+  Mat K(n, m, 0.0);
+  Vec mu(m, 0.0);
+
+  // Populate the matrix A
+  for(i = 0; i < n; i++) for(j = 0; j < m; j++)
+    {
+    K[i][j] = xSurfaces[i]->GetRawCoefficient(j);
+    mu[j] += K[i][j];
+    }
+  mu /= n;
   
+  // Subtract out the mean
+  for(i = 0; i < n; i++) for(j = 0; j < m; j++)
+    K[i][j] -= mu[j];
 
+  // Compute the covariance matrix
+  Mat Sigma = (K.transpose() * K) / (n-1.0);
+  vnl_symmetric_eigensystem<double> eig(Sigma);
+
+  // Let's see the eigenvalues
+  for(i = 0; i < m; i++)
+    cout << eig.get_eigenvalue(i) << ", ";
+  cout << endl;
+
+  // Check that the projection on the eigenvectors is on the same order as
+  // the eigenvalue square roots
+  for(i = 0; i < n; i++)
+    {
+    Vec a(xSurfaces[i]->GetRawCoefficientArray(), m);
+    cout << dot_product(a - mu, eig.get_eigenvector(m-1)) << " ";
+    }
+  cout << endl;
+
+  // Generate shapes along the first four eigenvectors
+  for(i = 0; i < 4; i++)
+    {
+    double sigma0 = sqrt(eig.get_eigenvalue(m-(i+1)));
+    Vec ev0 = eig.get_eigenvector(m-(i+1));
+    for(int y = 0; y < 60; y++)
+      {
+      // A shape!
+      Vec z = 0.1 * (y - 30) * sigma0 * ev0 + mu;
+
+      MedialPDE xJunk(8,12,32,80);
+      xJunk.xSurface = new FourierSurface(*xSurfaces[0]);
+      xJunk.xSolver->SetMedialSurface(xJunk.xSurface);
+      xJunk.xSurface->SetRawCoefficientArray(z.data_block());
+      xJunk.Solve();
+
+      ostringstream sJunk1, sJunk2;
+      sJunk1 << "/tmp/pcamed_m" << i << "_" << (y / 10) << (y % 10) << ".vtk";
+      sJunk2 << "/tmp/pcabnd_m" << i << "_" << (y / 10) << (y % 10) << ".vtk";    
+      xJunk.SaveVTKMesh(sJunk1.str().c_str(), sJunk2.str().c_str());
+      }
+    }
 }
-
-
 
 // Move along a given mode a certain number of S.D.
 void MedialPCA::SetFSLocation(unsigned int iMode, double xSigma)
@@ -1010,24 +1079,6 @@ MedialPDE *MedialPCA::GetShapeAtFSLocation()
 {
   return NULL;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 void RenderMedialPDE(MedialPDE *model)

@@ -15,4 +15,6 @@ void GeneralizedProcrustesAnalysis(size_t m,
   vnl_matrix<double> *A, vnl_matrix<double> *R,
   vnl_vector<double> *t, double *s);
 
+void TestProcrustes(const vnl_matrix<double> &A);
+
 #endif

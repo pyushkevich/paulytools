@@ -203,6 +203,19 @@ private:
   size_t nBadAtoms, nAtoms;
 };
 
+class MedialRegularityTerm : public EnergyTerm
+{
+public:
+  /** Initialize the term with the template info */
+  MedialRegularityTerm(MedialAtom *xTempAtoms, MedialAtomGrid *xTempGrid);
+  double ComputeEnergy(SolutionData *data);
+  void PrintReport(ostream &sout);
+private:
+  double ComputeDistortionPenalty(double, double);
+  vector<double> xEdgeLength;
+  double xMaxDistortion, xMinDistortion, xMeanSquareDistortion, xTotalPenalty;
+};
+
 class MedialOptimizationProblem : public DifferentiableFunction
 {
 public:

@@ -182,7 +182,7 @@ public:
   void Solve(double delta = 1e-12);
 
   /** Alternative, very slow method to solve the equation */
-  void SolveByJacobiMethod(double delta = 1e-8);
+  // void SolveByJacobiMethod(double delta = 1e-8);
   
   /** Get the array of atoms */
   MedialAtom *GetAtomArray()
@@ -193,11 +193,11 @@ public:
     { return xGrid; }
 
   /** Integrate a boundary measure */
-  virtual double IntegrateBoundaryMeasure(EuclideanFunction *m, double &area);
+  // virtual double IntegrateBoundaryMeasure(EuclideanFunction *m, double &area);
 
   /** Integrate a volume measure */
-  virtual double IntegrateVolumeMeasure(
-    EuclideanFunction *m, unsigned int nSamples, double &volume);
+  //virtual double IntegrateVolumeMeasure(
+  //  EuclideanFunction *m, unsigned int nSamples, double &volume);
 
   /** Get the number of atoms */
   unsigned int GetNumberOfAtoms()

@@ -797,6 +797,7 @@ MedialPDESolver
   ReconstructAtoms(y);
 }
 
+/**
 void 
 MedialPDESolver
 ::SolveByJacobiMethod(double delta)
@@ -1023,3 +1024,4 @@ double MedialPDESolver
   volume = xVolume; 
   return xMeasure / 6.0;
 }
+*/
