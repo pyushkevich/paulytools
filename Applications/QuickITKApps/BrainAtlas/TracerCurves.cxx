@@ -157,8 +157,8 @@ TracerCurves
         continue;
 
       // Create a stream to parse that string
-      istringstream iss(line);
-      iss.exceptions(ios_base::eofbit | ios_base::badbit | ios_base::failbit);
+      istringstream iss(line), tss(line);
+      iss.exceptions(ios_base::badbit | ios_base::failbit);
 
       // We need a keyword before proceeding
       iss >> key;

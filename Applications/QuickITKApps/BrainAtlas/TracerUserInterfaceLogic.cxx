@@ -29,14 +29,18 @@ void
 TracerUserInterfaceLogic
 ::OnMenuLoadCurves()
 {
-  // Save the curves to a file
-  char *file = fl_file_chooser("Select a text file containing the curves","*.txt","curves.txt",1);
+  // Load curves from a file
+  char *file = 
+    fl_file_chooser("Select a text file containing the curves","*.txt","curves.txt",1);
+
+  // Update the user interface
   if(file)
     {
     if(m_Data->LoadCurves(file))
       {
       m_WinTrace->SetTracerData(m_Data);
       RebuildCurveList();
+      ActivateCurveEditControls();
       }
     }
 }

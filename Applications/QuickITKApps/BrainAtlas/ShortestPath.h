@@ -150,11 +150,11 @@ private:
 template<class TWeight>
 const TWeight
 DijkstraShortestPath<TWeight>
-::INFINITE_WEIGHT = numeric_limits<TWeight>::max();
+::INFINITE_WEIGHT = std::numeric_limits<TWeight>::max();
 
 template<class TWeight>
 const unsigned int
 DijkstraShortestPath<TWeight>
-::NO_PATH = numeric_limits<unsigned int>::max();
+::NO_PATH = std::numeric_limits<unsigned int>::max();
 
 #endif
