@@ -34,10 +34,13 @@ public:
   void OnButtonDeleteLastPoint();
   void OnButtonEditCurve();
   void OnButtonStartCurve();
-  void OnInputSulcalFactor(double value);
   void OnSelectCurve();
   void OnSelectEdgeColoring(int value);
   void OnCheckDisplayEdges(int value);
+  void OnCheckCenterMesh(int value);
+  void OnCheckDisplayNeighborhood(int value);
+  void OnInputNeighborhoodRadius(double value);
+  void OnInputSulcalFactor(double value);
 
   // Callbacks from TracerData event system
   void OnMeshChange(TracerDataEvent *evt);
@@ -82,7 +85,6 @@ private:
   void RebuildCurveList();
   void DeactivateCurveEditControls();
   void ActivateCurveEditControls();
-  void OnCurveStateChange();
 
   /** Check if it's ok to proceed with a destructive operation or
     * if the user wants to save the curves first */

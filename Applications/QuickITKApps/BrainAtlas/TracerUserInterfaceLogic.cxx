@@ -188,12 +188,40 @@ TracerUserInterfaceLogic
     }
 }
 
-void
+void 
 TracerUserInterfaceLogic
-::OnCurveStateChange()
+::OnCheckCenterMesh(int value)
 {
+  // Tell the window to center mesh when possible
+  m_WinTrace->SetCenterMesh(value != 0);
 }
-
+  
+void 
+TracerUserInterfaceLogic
+::OnCheckDisplayNeighborhood(int value)
+{
+  if(value)
+    {
+    m_WinTrace->SetSurfaceDisplayMode(
+      TracerMainWindow::SURFACE_DISPLAY_NEIGHBORHOOD);
+    m_WinTrace->SetNeighborhoodSize(m_InNeighborhoodSize->value());
+    m_InNeighborhoodSize->activate();
+    }
+  else
+    {
+    m_WinTrace->SetSurfaceDisplayMode(
+      TracerMainWindow::SURFACE_DISPLAY_ALL);
+    m_InNeighborhoodSize->deactivate();
+    }
+}
+  
+void 
+TracerUserInterfaceLogic
+::OnInputNeighborhoodRadius(double value)
+{
+  m_WinTrace->SetNeighborhoodSize(value);
+}
+  
 void
 TracerUserInterfaceLogic
 ::ActivateCurveEditControls()
@@ -285,9 +313,6 @@ TracerUserInterfaceLogic
   
   // Select the curve in the data
   m_Data->SetCurrentCurve(id);
-  
-  // Pass the current curve information to the GL window
-  OnCurveStateChange();
 }
 
 void
@@ -304,11 +329,11 @@ void
 TracerUserInterfaceLogic
 ::OnSelectEdgeColoring(int value)
 {
-  if(value == 0)
+  if(value == 2)
     m_WinTrace->SetEdgeDisplayMode(TracerMainWindow::EDGE_DISPLAY_DISTANCE);
   else if(value == 1)
     m_WinTrace->SetEdgeDisplayMode(TracerMainWindow::EDGE_DISPLAY_LENGTH);
-  else if(value == 2)
+  else if(value == 0)
     m_WinTrace->SetEdgeDisplayMode(TracerMainWindow::EDGE_DISPLAY_PLAIN);
 }
 

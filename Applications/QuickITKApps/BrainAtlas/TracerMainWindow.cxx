@@ -12,6 +12,19 @@
 
 #include "Trackball.h"
 
+inline void glVertexNormal(double *x, double *n)
+{
+  glNormal3dv(n);
+  glVertex3dv(x);
+}
+
+inline void glVertexNormalRGB(double *x, double *n, double *rgb)
+{
+  glColor3dv(rgb);
+  glNormal3dv(n);
+  glVertex3dv(x);
+}
+
 TracerMainWindow::
 TracerMainWindow(int x, int y, int w, int h, const char *label) 
 : Fl_Gl_Window(x,y,w,h,label) 
@@ -27,6 +40,8 @@ TracerMainWindow(int x, int y, int w, int h, const char *label)
   m_CurrentPoint = -1;
   m_EdgeDisplayMode = EDGE_DISPLAY_NONE;
   m_SurfaceDisplayMode = SURFACE_DISPLAY_ALL;
+  m_CenterMesh = false;
+  m_NeighborhoodSize = 10.0;
 } 
 
 TracerMainWindow
@@ -43,46 +58,92 @@ TracerMainWindow
   // Generate a display list number if needed
   if(m_DisplayList < 0)
     m_DisplayList = glGenLists(1);
-
-  // Get the triangle strip information.
-  vtkCellArray *triStrips = m_Data->GetDisplayMesh()->GetStrips();
-    
-  // Get the vertex information.
-  vtkPoints *verts = m_Data->GetDisplayMesh()->GetPoints();
-
-  // Get the normal information.
-  vtkDataArray *norms = m_Data->GetDisplayMesh()->GetPointData()->GetNormals();
-
+  
   // Build display list
   glNewList(m_DisplayList,GL_COMPILE_AND_EXECUTE);
 
-  // Data for getting consecutive points
-  vtkIdType ntris = 0;
-  vtkIdType npts;
-  vtkIdType *pts;
-  for ( triStrips->InitTraversal(); triStrips->GetNextCell(npts,pts); ) 
+  // If the mode is to display the entire surface, use the display mesh
+  if(m_SurfaceDisplayMode == SURFACE_DISPLAY_ALL || !m_Data->IsPathSourceSet())
     {
-    ntris += npts-2;
-    glBegin( GL_TRIANGLE_STRIP );
-    for (vtkIdType j = 0; j < npts; j++) 
+    // Get the triangle strip information.
+    vtkCellArray *triStrips = m_Data->GetDisplayMesh()->GetStrips();
+
+    // Get the vertex information.
+    vtkPoints *verts = m_Data->GetDisplayMesh()->GetPoints();
+
+    // Get the normal information.
+    vtkDataArray *norms = m_Data->GetDisplayMesh()->GetPointData()->GetNormals();
+
+    // Data for getting consecutive points
+    vtkIdType ntris = 0;
+    vtkIdType npts;
+    vtkIdType *pts;
+    for ( triStrips->InitTraversal(); triStrips->GetNextCell(npts,pts); ) 
       {
-      // Some ugly code to ensure VTK version compatibility
-      double vx = verts->GetPoint(pts[j])[0];
-      double vy = verts->GetPoint(pts[j])[1];
-      double vz = verts->GetPoint(pts[j])[2];
-      double nx = norms->GetTuple(pts[j])[0];
-      double ny = norms->GetTuple(pts[j])[1];
-      double nz = norms->GetTuple(pts[j])[2];
-      double l = 1.0 / sqrt(nx*nx+ny*ny+nz*nz);
+      ntris += npts-2;
+      glBegin( GL_TRIANGLE_STRIP );
+      for (vtkIdType j = 0; j < npts; j++) 
+        {
+        // Some ugly code to ensure VTK version compatibility
+        double vx = verts->GetPoint(pts[j])[0];
+        double vy = verts->GetPoint(pts[j])[1];
+        double vz = verts->GetPoint(pts[j])[2];
+        double nx = norms->GetTuple(pts[j])[0];
+        double ny = norms->GetTuple(pts[j])[1];
+        double nz = norms->GetTuple(pts[j])[2];
+        double l = 1.0 / sqrt(nx*nx+ny*ny+nz*nz);
 
-      // Specify normal.
-      glNormal3d(l*nx, l*ny, l*nz);
+        // Specify normal.
+        glNormal3d(nx, ny, nz);
 
-      // Specify vertex.
-      glVertex3d(vx, vy, vz);
+        // Specify vertex.
+        glVertex3d(vx, vy, vz);
+        }
+      glEnd();
       }
-    glEnd();
     }
+
+  // Otherwise, use the input mesh, and only draw the triangles that have vertices
+  // within the desired distance to the source
+  else
+    {
+    // Get the triangle strip information.
+    vtkCellArray *polys = m_Data->GetInternalMesh()->GetPolys();
+
+    // Get the vertex information.
+    vtkPoints *verts = m_Data->GetInternalMesh()->GetPoints();
+
+    // Get the normal information.
+    vtkDataArray *norms = m_Data->GetInternalMesh()->GetPointData()->GetNormals();
+
+    // Data for getting consecutive points
+    vtkIdType ntris = 0;
+    vtkIdType npts;
+    vtkIdType *pts;
+      
+    glBegin(GL_TRIANGLES);
+    
+    for ( polys->InitTraversal(); polys->GetNextCell(npts,pts); ) 
+      {
+      // Check if the triangle qualifies
+      bool qual = true;
+      for(vtkIdType iPoint = 0; qual && (iPoint < npts); iPoint++)
+        if(m_Data->GetDistanceMapper()->GetVertexDistance(pts[iPoint]) 
+          > m_NeighborhoodSize) qual = false;
+      if(!qual) continue;
+
+      // Display the qualified triangle
+      for(vtkIdType iPoint = 0; iPoint < npts; iPoint++)
+        {
+        glNormal3dv(norms->GetTuple3(pts[iPoint]));
+        glVertex3dv(verts->GetPoint(pts[iPoint]));
+        }
+      }
+
+    glEnd();
+    
+    }
+  
   glEndList();
 
   // Clear the dirty flag
@@ -107,7 +168,7 @@ TracerMainWindow
   double hue = fmod(xDistance * 0.01, 1.0);
   
   // Set the HSV color
-  SetGLColorHSV(hue, 0.5, 1.0);
+  SetGLColorHSV(hue, 0.5, 0.7);
 }
 
 void
@@ -120,7 +181,7 @@ TracerMainWindow
   if(hue > 0.67) hue = 0.67;
   
   // Set the HSV color
-  SetGLColorHSV(hue, 0.5, 1.0);
+  SetGLColorHSV(hue, 0.5, 0.7);
 }
 
 void
@@ -142,16 +203,20 @@ TracerMainWindow
   if(xActualMode == EDGE_DISPLAY_DISTANCE && !m_Data->IsPathSourceSet())
     xActualMode = EDGE_DISPLAY_PLAIN;
 
+  // A similar flag for neighborhood display
+  SurfaceDisplayMode xActualSurfaceMode = m_SurfaceDisplayMode;
+  if(!m_Data->IsPathSourceSet())
+    xActualSurfaceMode = SURFACE_DISPLAY_ALL;
+
   // Only do something if the mode is set
   if(xActualMode != EDGE_DISPLAY_NONE)
     {
 
     // Draw the edges
     glPushAttrib(GL_LIGHTING_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT);
-    glDisable(GL_LIGHTING);
 
     // Set the default drawing color
-    glColor3f(0.2f, 0.8f, 0.6f);
+    glColor3f(0.1f, 0.6f, 0.4f);
     
     // Start line drawing
     glBegin(GL_LINES);
@@ -159,7 +224,16 @@ TracerMainWindow
     // Go through all the edges
     for(vtkIdType p = 0; p < dm->GetNumberOfVertices(); p++)
       {
+      // If we are in neighborhood surface display mode and this point
+      // is too far away, reject it
+      if(xActualSurfaceMode == SURFACE_DISPLAY_NEIGHBORHOOD &&
+        m_Data->GetDistanceMapper()->GetVertexDistance(p) > m_NeighborhoodSize)
+        continue;
+
+      // Get the number of edges
       unsigned int nEdges = dm->GetVertexNumberOfEdges(p);
+
+      // Draw each edge
       for(unsigned int j = 0; j < nEdges; j++)
         {
         // Get the adjacent point
@@ -168,15 +242,21 @@ TracerMainWindow
         // Only process each edge once
         if( p < q )
           {
-          vnl_vector_fixed<double,3> x1, x2;
-          m_Data->GetPointCoordinate(p, x1);
-          m_Data->GetPointCoordinate(q, x2);
+          // If we are in neighborhood surface display mode and this point
+          // is too far away, reject it
+          if(xActualSurfaceMode == SURFACE_DISPLAY_NEIGHBORHOOD &&
+            m_Data->GetDistanceMapper()->GetVertexDistance(q) > m_NeighborhoodSize)
+            continue;
+
+          vnl_vector_fixed<double,3> x1, x2, n1, n2;
+          m_Data->GetPointCoordinateAndNormal(p, x1, n1);
+          m_Data->GetPointCoordinateAndNormal(q, x2, n2);
 
           // If in plain mode, don't set any color
           if(xActualMode == EDGE_DISPLAY_PLAIN)
             {
-            glVertex3dv(x1.data_block());
-            glVertex3dv(x2.data_block());
+            glVertexNormal(x1.data_block(), n1.data_block());
+            glVertexNormal(x2.data_block(), n2.data_block());
             }
           else if(m_EdgeDisplayMode == EDGE_DISPLAY_LENGTH)
             {
@@ -187,16 +267,16 @@ TracerMainWindow
             SetGLEdgeColorFromWeight(xWeight);
 
             // Draw the vertices
-            glVertex3dv(x1.data_block());
-            glVertex3dv(x2.data_block());
+            glVertexNormal(x1.data_block(), n1.data_block());
+            glVertexNormal(x2.data_block(), n2.data_block());
             }
           else if(m_EdgeDisplayMode == EDGE_DISPLAY_DISTANCE)
             {
             SetGLEdgeColorFromDistance(dm->GetVertexDistance(p));
-            glVertex3dv(x1.data_block());
+            glVertexNormal(x1.data_block(), n1.data_block());
             
             SetGLEdgeColorFromDistance(dm->GetVertexDistance(q));
-            glVertex3dv(x2.data_block());
+            glVertexNormal(x2.data_block(), n2.data_block());
             }
           }
         }
@@ -318,7 +398,7 @@ TracerMainWindow
     
     // Set the attributes for line drawing
     glPushAttrib(GL_LIGHTING_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT);
-    glDisable(GL_LIGHTING);
+    // glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
@@ -351,9 +431,9 @@ TracerMainWindow
       ConstMeshCurve::const_iterator pit = lPoints.begin(); 
       while(pit != lPoints.end())
         {
-        TracerData::Vec xPoint;
-        m_Data->GetPointCoordinate(*pit, xPoint);
-        glVertex3dv(xPoint.data_block());
+        TracerData::Vec xPoint, xNormal;
+        m_Data->GetPointCoordinateAndNormal(*pit, xPoint, xNormal);
+        glVertexNormal(xPoint.data_block(), xNormal.data_block());
         ++pit;
         }
       glEnd();
@@ -372,32 +452,17 @@ TracerMainWindow
       lPoints.push_back(m_CurrentPoint);
       lPoints.push_front(m_Data->GetPathSource());
 
-      // Need at least two points to draw
-      MeshCurve::const_iterator it1 = lPoints.begin();
-      MeshCurve::const_iterator it2 = it1; it2++;
 
-      glBegin(GL_LINES);
+      glColor3d(0.8,0.6,0.2);
+      glBegin(GL_LINE_STRIP);
       
-      while(it2 != lPoints.end())
+      MeshCurve::const_iterator it = lPoints.begin();
+      while(it != lPoints.end())
         {
-        TracerData::Vec xPoint;
-
-        // Get the distance measurement
-        double xDistance = m_Data->GetMeshEdgeWeight(*it1, *it2);
-
-        // Use xDistance to set the color
-        double xColorBase = 1 * xDistance;
-        glColor3d(1 - xColorBase, 1, xColorBase);
-
-        // Plot the first points
-        m_Data->GetPointCoordinate(*it1, xPoint);
-        glVertex3dv(xPoint.data_block());
-
-        m_Data->GetPointCoordinate(*it2, xPoint);
-        glVertex3dv(xPoint.data_block());
-
-        // Increase the iterators
-        it1++; it2++;
+        TracerData::Vec xPoint, xNormal;
+        m_Data->GetPointCoordinateAndNormal(*it, xPoint, xNormal);
+        glVertexNormal(xPoint.data_block(), xNormal.data_block());
+        it++;
         }
 
       glEnd();
@@ -477,8 +542,14 @@ TracerMainWindow
     2.0 / (m_Trackball.GetZoom() * m_Data->GetDisplayMesh()->GetLength());
   glScaled(xScale,xScale,xScale);
 
-  // Now, translate for the center of the mesh
-  double *xCenter = m_Data->GetDisplayMesh()->GetCenter();
+  // Determine which point should be the center
+  TracerData::Vec xCenter;
+  if(m_CenterMesh && m_Data->IsPathSourceSet())
+    m_Data->GetPointCoordinate(m_Data->GetPathSource(), xCenter);
+  else
+    xCenter.set(m_Data->GetDisplayMesh()->GetCenter());
+    
+  // Translate to the center
   glTranslated(-xCenter[0],-xCenter[1],-xCenter[2]);
 }
 
@@ -683,7 +754,10 @@ TracerMainWindow
 
   // If surface display is in neighborhood mode, dirty it
   if(m_SurfaceDisplayMode == SURFACE_DISPLAY_NEIGHBORHOOD)
+    {
     m_DisplayListDirty = true;
+    m_EdgeDisplayListDirty = true;
+    }
 
   // Redraw the window
   redraw();

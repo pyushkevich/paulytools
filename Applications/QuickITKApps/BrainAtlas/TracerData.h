@@ -97,9 +97,16 @@ public:
   const VTKMeshShortestDistance *GetDistanceMapper()
     { return m_DistanceMapper; }
 
-  // Get the coordinate for a given point index (in edge-mesh)
+  // Get the coordinate for a given point index (in internal mesh)
   void GetPointCoordinate(vtkIdType id, Vec &target)
-    { m_DistanceMapper->GetInputMesh()->GetPoint(id,target.data_block()); }
+    { m_Mesh->GetPoint(id,target.data_block()); }
+
+  // Get the coordinate and normal for a given point index (in internal mesh)
+  void GetPointCoordinateAndNormal(vtkIdType id, Vec &x, Vec &n)
+    {
+    m_Mesh->GetPoint(id,x.data_block());
+    n.set( m_Mesh-> GetPointData()->GetNormals()->GetTuple3(id));
+    }
 
   // Create a new curve (given a name)
   void AddNewCurve(const char *name)

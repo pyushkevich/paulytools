@@ -70,6 +70,25 @@ public:
     m_EdgeDisplayListDirty = true;
     }
 
+  // Set the neighborhood size for surface display
+  void SetNeighborhoodSize(double size)
+    {
+    m_NeighborhoodSize = size;
+    if(m_SurfaceDisplayMode == SURFACE_DISPLAY_NEIGHBORHOOD)
+      {
+      m_DisplayListDirty = true;
+      m_EdgeDisplayListDirty = true;
+      redraw();
+      }
+    }
+
+  // Set mesh centering mode
+  void SetCenterMesh(bool mode)
+    {
+    m_CenterMesh = mode;
+    redraw();
+    }
+
   // Draw method
   void draw();
 
@@ -115,6 +134,12 @@ private:
   // Point under the cursor
   vtkIdType m_CurrentPoint;
 
+  // Whether the mesh should be centered on current point or not
+  bool m_CenterMesh;
+
+  // Neighborhood size for neighborhood display mode
+  double m_NeighborhoodSize;
+  
   // Internal GL init method
   void InitializeGL();
   void SetUpModelMatrix();
@@ -130,7 +155,6 @@ private:
   void SetGLColorHSV(double xHue, double xSaturation, double xValue);
   void SetGLEdgeColorFromDistance(double xDistance);
   void SetGLEdgeColorFromWeight(double xWeight);
-
 };
 
 
