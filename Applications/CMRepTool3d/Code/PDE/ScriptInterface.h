@@ -174,6 +174,13 @@ public:
   void DisableMeshDump()
     { xMeshDumpImprovementPercentage = 0.0; }
 
+  /** Enable the optimizer dump */
+  void EnableOptimizerDump(const char *file)
+    { strOptimizerDump = file; }
+
+  void DisableOptimizerDump() 
+    { strOptimizerDump = ""; }
+
   /** Should not be here! */
   MedialPDESolver *GetSolver() { return xSolver; }
 
@@ -193,7 +200,7 @@ private:
   double xCoarsenessX, xCoarsenessRho, xStepSize;
 
   // A file where the mesh info is dumped
-  std::string strDumpPath;
+  std::string strDumpPath, strOptimizerDump;
   double xMeshDumpImprovementPercentage;
 
   // Current modes

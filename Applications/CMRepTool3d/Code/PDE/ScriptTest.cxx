@@ -90,11 +90,11 @@ void TestAreaAndVolume(MedialPDESolver *xSolver)
 
 void Test01()
 {
-  MedialPDE *mp = new MedialPDE(3, 5, 40, 80);
+  MedialPDE *mp = new MedialPDE(2, 4, 20, 40);
   //mp->LoadFromParameterFile(fMrep.c_str());
   
-  // mp->LoadFromDiscreteMRep("/tmp/surf01.txt",-0.5);
-  mp->GenerateSampleModel();
+  mp->LoadFromDiscreteMRep("/tmp/surf01.txt",-0.3);
+  // mp->GenerateSampleModel();
   mp->Solve();
   mp->SaveBYUMesh("temp.byu");
 

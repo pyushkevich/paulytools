@@ -312,8 +312,8 @@ void GradientDescentOptimization(MedialOptimizationProblem *xProblem,
   vnl_vector<double> xGradient(nCoeff, 0.0);
 
   // Print report information  
-  ofstream fdump("conjgrad.txt",ios_base::out);
-  fdump << "CONJUGATE GRADIENT OPTIMIZER DUMP" << endl;
+  // ofstream fdump("conjgrad.txt",ios_base::out);
+  // fdump << "CONJUGATE GRADIENT OPTIMIZER DUMP" << endl;
 
   // Iterate, moving in the gradient direction
   for(unsigned int p = 0; p < nSteps; p++)
@@ -326,10 +326,10 @@ void GradientDescentOptimization(MedialOptimizationProblem *xProblem,
     xSolution -= xStep * xGradient;
 
     // Report the current state
-    fdump << "STEP " << p << endl;
-    xProblem->PrintReport(fdump);
+    // fdump << "STEP " << p << endl;
+    // xProblem->PrintReport(fdump);
 
-    cout << "Step " << p << ", best value: " << xMatch << endl;
+    // cout << "Step " << p << ", best value: " << xMatch << endl;
     }
 }
 
@@ -371,8 +371,8 @@ void MedialPDE::ConjugateGradientOptimization(
   xMethod.setBrentStepTolerance(2.0e-3);
 
   // Debugging info
-  ofstream fdump("conjgrad.txt",ios_base::out);
-  fdump << "CONJUGATE GRADIENT OPTIMIZER DUMP" << endl;
+  // ofstream fdump("conjgrad.txt",ios_base::out);
+  // fdump << "CONJUGATE GRADIENT OPTIMIZER DUMP" << endl;
 
   // When we last dumped a mesh
   double xLastMeshDumpValue = xMethod.getBestEverValue();
@@ -385,8 +385,8 @@ void MedialPDE::ConjugateGradientOptimization(
       break;
     xMethod.performIteration();
 
-    fdump << "STEP " << p << endl;
-    xProblem->PrintReport(fdump);
+    // fdump << "STEP " << p << endl;
+    // xProblem->PrintReport(fdump);
 
     cout << "Step " << p << ", best value: " << xMethod.getBestEverValue() << endl;
 
@@ -401,12 +401,12 @@ void MedialPDE::ConjugateGradientOptimization(
         }
 
     // Save the file 
-    ostringstream oss;
-    oss << "iter_" << p;
-    SaveToParameterFile(oss.str().c_str());
+    // ostringstream oss;
+    // oss << "iter_" << p;
+    // SaveToParameterFile(oss.str().c_str());
     }
 
-  fdump.close();
+  // fdump.close();
 
   // Store the best result
   xSolution.copy_in(xMethod.getBestEverX().getDataArray());
