@@ -21,13 +21,13 @@ TracerMainWindow
     m_DisplayList = glGenLists(1);
 
   // Get the triangle strip information.
-  vtkCellArray *triStrips = m_Data->GetSourceMesh()->GetStrips();
+  vtkCellArray *triStrips = m_Data->GetDisplayMesh()->GetStrips();
     
   // Get the vertex information.
-  vtkPoints *verts = m_Data->GetSourceMesh()->GetPoints();
+  vtkPoints *verts = m_Data->GetDisplayMesh()->GetPoints();
 
   // Get the normal information.
-  vtkDataArray *norms = m_Data->GetSourceMesh()->GetPointData()->GetNormals();
+  vtkDataArray *norms = m_Data->GetDisplayMesh()->GetPointData()->GetNormals();
 
   // Build display list
   glNewList(m_DisplayList,GL_COMPILE_AND_EXECUTE);
@@ -148,7 +148,7 @@ TracerMainWindow
   glFlush();
 
   // If there is no mesh, don't do any of the following
-  if(m_Data->GetSourceMesh() != NULL)
+  if(m_Data->GetDisplayMesh() != NULL)
     {
     // Set up the model view matrix
     glPushMatrix();
@@ -162,6 +162,32 @@ TracerMainWindow
     // Create the display list if needed
     if(m_DisplayListDirty) ComputeDisplayList();
     else glCallList(m_DisplayList);
+
+    // Draw the edges
+    glPushAttrib(GL_LIGHTING_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT);
+    glDisable(GL_LIGHTING);
+
+    const VTKMeshShortestDistance *dm = m_Data->GetDistanceMapper();
+    glBegin(GL_LINES);
+    for(unsigned int i=0;i<dm->GetNumberOfEdges();i++)
+      {
+      vtkIdType iStart = dm->GetEdgeStart(i);
+      vtkIdType iEnd = dm->GetEdgeEnd(i);
+
+      if(iStart < iEnd)
+        {
+        vnl_vector_fixed<double,3> p1, p2;
+        m_Data->GetPointCoordinate(iStart, p1);
+        m_Data->GetPointCoordinate(iEnd, p2);
+        glVertex3dv(p1.data_block());
+        glVertex3dv(p2.data_block());
+        }
+      }
+    glEnd();
+    
+
+    glPopAttrib();
+    
 
     // Set the attributes for line drawing
     glPushAttrib(GL_LIGHTING_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT);
@@ -204,44 +230,103 @@ TracerMainWindow
       }
 
     // Display the path to the current point
-    if(m_CurrentPoint != -1 && m_EditMode == TRACER)
+    if(m_EditMode == TRACER && m_Data->IsPathSourceSet() &&
+      m_CurrentPoint != -1 && m_CurrentPoint != m_Data->GetPathSource())
       {
-      glColor3d(1,1,0);
-      glPointSize(4.0);
-
+      // Get the path between the source point and the current point
       MeshCurve lPoints;
       m_Data->GetPathToPoint(m_CurrentPoint, lPoints);
-      MeshCurve::const_iterator it = lPoints.begin();
 
-      TracerData::Vec xPoint;
+      // Since the point list does not include the starting and ending points, we must include
+      // them ourselves
+      lPoints.push_back(m_CurrentPoint);
+      lPoints.push_front(m_Data->GetPathSource());
 
-      if(m_Data->IsPathSourceSet()) 
+      // Need at least two points to draw
+      MeshCurve::const_iterator it1 = lPoints.begin();
+      MeshCurve::const_iterator it2 = it1; it2++;
+
+      glBegin(GL_LINES);
+      
+      while(it2 != lPoints.end())
         {
-        glBegin(GL_LINE_STRIP);
+        TracerData::Vec xPoint;
 
-        // Get the last point on the current curve
-        vtkIdType vLast = m_Data->GetPathSource();
-        m_Data->GetPointCoordinate(vLast, xPoint);
+        // Get the distance measurement
+        double xDistance = m_Data->GetMeshEdgeWeight(*it1, *it2);
+
+        // Use xDistance to set the color
+        double xColorBase = 1 * xDistance;
+        glColor3d(1 - xColorBase, 1, xColorBase);
+
+        // Plot the first points
+        m_Data->GetPointCoordinate(*it1, xPoint);
         glVertex3dv(xPoint.data_block());
 
-        }
-      else 
-        {
-        glBegin(GL_POINTS);
-        }
-      
-      while(it != lPoints.end())
-        {
-        m_Data->GetPointCoordinate(*it, xPoint);
+        m_Data->GetPointCoordinate(*it2, xPoint);
         glVertex3dv(xPoint.data_block());
-        ++it;
+
+        cout << *it1 << " " << std::flush;
+
+        // Increase the iterators
+        it1++; it2++;
         }
-      
+
+      cout << *it1 << endl;
+
       glEnd();
       }
 
     // Restore the attributes
     glPopAttrib();
+
+    // Draw control points (balls representing points)
+    for(IdList::iterator it = lCurves.begin(); it!=lCurves.end(); it++)
+      {
+      // Get the control points in the curve
+      const IdList &lControls = 
+        m_Data->GetCurves()->GetCurveControls(*it);
+
+      // Draw each of the control points
+      IdList::const_iterator itControl = lControls.begin();
+      while(itControl != lControls.end())
+        {
+        TracerData::Vec xPoint;
+
+        // Display the point currently under the cursor as a little sphere
+        glColor3d(0.2,0.6,0.8);
+        
+        glPushMatrix();
+        m_Data->GetPointCoordinate(
+          m_Data->GetCurves()->GetControlPointVertex(*itControl),xPoint);
+        glTranslated(xPoint(0),xPoint(1),xPoint(2));
+        
+        GLUquadricObj *sphere = gluNewQuadric();
+        gluSphere(sphere, 0.5, 10, 10);
+        gluDeleteQuadric(sphere);
+
+        glPopMatrix();
+
+        ++itControl;
+        }
+      }
+    
+    if(m_CurrentPoint != -1 && m_EditMode == TRACER)
+      {
+      TracerData::Vec xPoint;
+      
+      // Display the point currently under the cursor as a little sphere
+      glColor3d(0.8,0.2,0.2);
+      glPushMatrix();
+      m_Data->GetPointCoordinate(m_CurrentPoint,xPoint);
+      
+      glTranslated(xPoint(0),xPoint(1),xPoint(2));
+      GLUquadricObj *sphere = gluNewQuadric();
+      gluSphere(sphere, 0.5, 10, 10);
+      gluDeleteQuadric(sphere);
+
+      glPopMatrix();
+      }
 
     // Pop the matrix
     glPopMatrix();
@@ -263,11 +348,11 @@ TracerMainWindow
 
   // Compute the scaling factor based on the zoom level
   float xScale = 
-    2.0 / (m_Trackball.GetZoom() * m_Data->GetSourceMesh()->GetLength());
+    2.0 / (m_Trackball.GetZoom() * m_Data->GetDisplayMesh()->GetLength());
   glScaled(xScale,xScale,xScale);
 
   // Now, translate for the center of the mesh
-  double *xCenter = m_Data->GetSourceMesh()->GetCenter();
+  double *xCenter = m_Data->GetDisplayMesh()->GetCenter();
   glTranslated(-xCenter[0],-xCenter[1],-xCenter[2]);
 }
 

@@ -3,7 +3,7 @@ ADD_EXECUTABLE("viewmesh" MeshViewer.cxx)
 ADD_EXECUTABLE("binary2metis" ImageToMetis.cxx)
 ADD_EXECUTABLE("metis2mask" MetisToImage.cxx)
 ADD_EXECUTABLE("sulcusfilter" FilterSulci.cxx)
-ADD_EXECUTABLE("sinctest" SincResample.cxx)
+ADD_EXECUTABLE("shorty" ShortestPath.cxx)
 
 INCLUDE_DIRECTORIES(
   ${PAULY_SOURCE_DIR}/Applications/QuickITKApps/BrainAtlas
@@ -29,7 +29,7 @@ LINK_LIBRARIES(
 
 # Tracer application GUI
 SET(TRACER_SRCS
-  ShortestPath.cxx
+#  ShortestPath.cxx
   TracerCurves.cxx
   TracerCurves.h
   TracerData.cxx

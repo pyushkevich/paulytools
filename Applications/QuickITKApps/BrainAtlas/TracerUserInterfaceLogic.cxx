@@ -180,7 +180,7 @@ TracerUserInterfaceLogic
       m_ChcCurve->add(it->first.c_str(), 0, NULL, (void *) it->second, 0);
     
     if(m_Data->GetCurrentCurve() == it->second)
-      iCurrent = iPos;
+      iCurrent = iPos; 
     
     ++it;
     }
@@ -208,5 +208,15 @@ TracerUserInterfaceLogic
   
   // Pass the current curve information to the GL window
   m_WinTrace->OnCurrentCurveChange();
+}
+
+void
+TracerUserInterfaceLogic
+::OnInputSulcalFactor(double value)
+{
+  if(value == 0)
+    m_Data->SetEdgeWeightsToEuclideanDistance();
+  else
+    m_Data->SetEdgeWeightsToPitchDistance(value);
 }
 

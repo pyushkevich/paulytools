@@ -65,6 +65,9 @@ TracerCurves
 {
   // Generate the id for the control point
   m_Curves[id] = Curve(name);
+
+  // Return the id
+  return id;
 }
 
 void 

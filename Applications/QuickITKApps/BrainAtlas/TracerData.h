@@ -4,6 +4,7 @@
 #include "vtkPolyData.h"
 #include "vtkPolyDataReader.h"
 #include "vtkStripper.h"
+#include "vtkPolyDataNormals.h"
 #include "VTKMeshShortestDistance.h"
 #include <list>
 
@@ -31,16 +32,20 @@ public:
   bool LoadCurves(const char *file);
 
   // Get the 'source' mesh
-  vtkPolyData *GetSourceMesh() 
-    {
-    return m_Mesh;
-    }
+  vtkPolyData *GetInternalMesh() 
+    { return m_Mesh; }
+
+  // Get the mesh used for display
+  vtkPolyData *GetDisplayMesh() 
+    { return m_DisplayMesh; }
+
+  /** Get the distance mapper */
+  const VTKMeshShortestDistance *GetDistanceMapper()
+    { return m_DistanceMapper; }
 
   // Get the coordinate for a given point index (in edge-mesh)
   void GetPointCoordinate(vtkIdType id, Vec &target)
-    {
-    m_DistanceMapper->GetEdgeMesh()->GetPoint(id,target.data_block());
-    }
+    { m_DistanceMapper->GetInputMesh()->GetPoint(id,target.data_block()); }
 
   // Create a new curve (given a name)
   void AddNewCurve(const char *name)
@@ -94,9 +99,7 @@ public:
     }
    
   IdType GetCurrentCurve()
-    {
-    return m_FocusCurve;
-    }
+    { return m_FocusCurve; }
 
   unsigned int GetNumberOfCurvePoints(IdType iCurve)
     {
@@ -119,14 +122,12 @@ public:
 
   // Given a ray, find a point closest to that ray
   bool PickPoint(Vec xStart, Vec xRay, vtkIdType &iPoint)
-    {
-    return m_DistanceMapper->PickPoint(xStart,xRay,iPoint);
-    }
+    { return m_DistanceMapper->PickPoint(xStart,xRay,iPoint); }
 
   // Create a path from the last point on the focused curve (if any)
   // to the specified point. The path includes the specified point, but
   // not the last point on the focused curve
-  void GetPathToPoint(vtkIdType iPoint, TracerCurves::MeshCurve &target)
+  bool GetPathToPoint(vtkIdType iPoint, TracerCurves::MeshCurve &target)
     {
     // Clear the return array
     target.clear();
@@ -140,7 +141,15 @@ public:
         {
         target.push_front(iCurrent);
         iCurrent = m_DistanceMapper->GetVertexPredecessor(iCurrent);
+        if(iCurrent == target.front())
+          {
+          cout << "No path exists from " << iPoint << " to " << iLast << 
+            " (distance = " << m_DistanceMapper->GetVertexDistance(iPoint) << " ) "
+            << endl;
+          return -1;
+          }
         }
+      cout << endl;
       }
     else
       {
@@ -150,15 +159,11 @@ public:
 
   // Check if there is a path source
   bool IsPathSourceSet()
-    {
-    return m_FocusPoint != -1;
-    }
+    { return m_FocusPoint != -1; }
 
   // Get the vertex to which the path currently extends
   vtkIdType GetPathSource()
-    {
-    return m_Curves.GetControlPointVertex(m_FocusPoint);
-    }
+    { return m_Curves.GetControlPointVertex(m_FocusPoint); }
 
   // Add a point to the current curve
   void AddNewPoint(vtkIdType iPoint)
@@ -191,18 +196,52 @@ public:
     m_FocusPoint = iNewControl;
     }
 
+  /** Use the Euclidean edge weight function */
+  void SetEdgeWeightsToEuclideanDistance()
+    { UpdateEdgeWeightFunction(new EuclideanDistanceMeshEdgeWeightFunction); }
+
+  /** Use the Pitch edge weight function with pitch weight factor k */
+  void SetEdgeWeightsToPitchDistance(double xPitchFactor)
+    {
+    PitchBasedMeshEdgeWeightFunction *fnNew = 
+      new PitchBasedMeshEdgeWeightFunction();
+    fnNew->SetPitchFactor(xPitchFactor);
+    UpdateEdgeWeightFunction(fnNew);
+    }
+
+  /** Use currect edge weight distance to compute distance between a pair
+   * of vertices */
+  double GetMeshEdgeWeight(vtkIdType x1, vtkIdType x2)
+    { return m_DistanceMapper->GetEdgeWeight(x1, x2); }
+    
+
 private:
   // Shortest distance computer
   VTKMeshShortestDistance *m_DistanceMapper;
 
-  // The source mesh
+  // The edge weight function object
+  MeshEdgeWeightFunction *m_EdgeWeightFunction;
+
+  // The internal mesh (used to find shortest paths)
   vtkPolyData *m_Mesh;
+
+  // The displayed mesh (triangle stripped, used for rendering)
+  vtkPolyData *m_DisplayMesh;
 
   // The reader used to get the mesh
   vtkPolyDataReader *m_DataReader;
 
   // Triangle strip filter
   vtkStripper *m_Stripper;
+
+  // Convert to triangles filter
+  vtkTriangleFilter *m_Triangulator;
+
+  // Compute normals filter
+  vtkPolyDataNormals *m_NormalsFilter;
+
+  // Cleaner for polygon data
+  vtkCleanPolyData *m_CleanFilter;
 
   // Curves that have been traced (?)
   TracerCurves m_Curves;
@@ -212,6 +251,27 @@ private:
 
   // Point under focus
   int m_FocusPoint;
+  
+  /** Set the edge weight function to another mode */
+  void UpdateEdgeWeightFunction(MeshEdgeWeightFunction *fnNew)
+    {
+    // Pass on the new function
+    m_DistanceMapper->SetEdgeWeightFunction(fnNew);
+
+    // Recompute the graph
+    m_DistanceMapper->ComputeGraph();
+
+    // If there is a focus point, compute distances to it
+    if(m_FocusPoint != -1)
+      m_DistanceMapper->ComputeDistances(m_FocusPoint);
+    
+    // Delete the old edge weight function
+    delete m_EdgeWeightFunction;
+
+    // Assign the edge weight function 
+    m_EdgeWeightFunction = fnNew;
+    }
+
 };
 
 #endif

@@ -16,6 +16,7 @@ public:
   void OnButtonDeleteCurve();
   void OnButtonEditCurve();
   void OnButtonStartCurve();
+  void OnInputSulcalFactor(double value);
   void OnSelectCurve();
 
   void ShowWindows() 

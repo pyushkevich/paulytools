@@ -1,33 +1,38 @@
-#include <vector>
-#include <queue>
+#include "ShortestPath.h"
 
 using namespace std;
 
-template <class TVertex, class TDistance>
-class DijkstraShortestPath 
+void TestShortestPath()
 {
-public:
-  /** Constructor, creates shortest path computer for given graph
-   * specified in METIS form */
-  DijkstraShortestPath(unsigned int nVertices, 
-    TVertex *xAdjacencyIndex,TVertex *xAdjacency, TDistance *xEdgeLen);
-
-  /** Compute the shortest paths for given source vertex */
-  void ComputePathsFromSource(TVertex iSource);
-
-private:
-  vector<unsigned int> m_QueBase;    
-  vector<TDistance> m_Distance;
-  vector<TVertex> m_Predecessor;  
-};
-
-template<class TVertex, class TDistance>
-DijkstraShortestPath<TVertex, TDistance>
-::DijkstraShortestPath(unsigned int nVertices, 
-    TVertex *xAdjacencyIndex,TVertex *xAdjacency, TDistance *xEdgeLen)
-: m_QueBase(nVertices), m_Distance(nVertices), m_Predecessor(nVertices)
-{
+  // Create a graph (taken from website below)
+  // http://ciips.ee.uwa.edu.au/~morris/Year2/PLDS210/dij-op.html
+  unsigned int AI[] = {0,2,4,5,7,10};
+  unsigned int A[] =  {1,  4,  2,  4,  3,  2,  0,  1,  2,  3};
+  unsigned int w[] =  {10, 5,  1,  2,  4,  6,  7,  3,  9,  2};
   
+  // Create shortest pather
+  DijkstraShortestPath<unsigned int> sp(5, AI, A, w);
+
+  // Compute shortest path from starting point
+  sp.ComputePathsFromSource(0);
+
+  // Reconstruct the shortest path to each vertex
+  for(unsigned int i=1; i<5; i++)
+    {
+    cout << "Path to 0 from " << i << " : ";
+    unsigned int j = i;
+    while(j != 0)
+      {
+      cout << j << " - ";
+      j = sp.GetPredecessorArray()[j];
+      }
+    cout << "0" << endl;
+    }
 }
 
-  
+int main(int argc, char *argv[])
+{
+  TestShortestPath();
+}
+
+

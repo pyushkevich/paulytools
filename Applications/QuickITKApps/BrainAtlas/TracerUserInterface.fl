@@ -1,5 +1,5 @@
 # data file for the Fltk User Interface Designer (fluid)
-version 1.0102 
+version 1.0104 
 header_name {.h} 
 code_name {.cxx}
 class TracerUserInterface {open : {public TracerUserInterfaceBase}
@@ -8,7 +8,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
   } {
     Fl_Window m_WinMain {
       label {GeeLab Brain Tracer} open
-      xywh {614 287 925 665} type Double resizable
+      xywh {287 49 925 665} type Double resizable
       code0 {\#include "TracerUserInterfaceBase.h"}
       code1 {\#include "TracerMainWindow.h"} visible
     } {
@@ -43,7 +43,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           }
           menuitem {} {
             label {Load Curves...}
-            callback {OnMenuLoadCurves()} selected
+            callback {OnMenuLoadCurves()}
             xywh {10 10 100 20}
           }
           menuitem m_MenuSaveCurves {
@@ -99,6 +99,11 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
             label edit
             callback {OnButtonEditCurve();}
             xywh {760 445 65 25} box PLASTIC_UP_BOX labelfont 1 labelsize 12 deactivate
+          }
+          Fl_Value_Input {} {
+            label {Sulcal support factor:}
+            callback {OnInputSulcalFactor(o->value());}
+            tooltip {The degree to which curvature affects the path traced on the surface.} xywh {840 575 60 25} labelsize 12 when 8 step 0.1 textsize 12
           }
         }
         Fl_Group {} {open

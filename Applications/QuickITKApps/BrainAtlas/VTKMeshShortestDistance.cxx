@@ -1,17 +1,52 @@
 #include "VTKMeshShortestDistance.h"
+#include "vtkIdList.h"
+
+const double
+VTKMeshShortestDistance
+::EDGE_WEIGHT_FACTOR = 100000.0;
 
 VTKMeshShortestDistance
-::VTKMeshShortestDistance(vtkPolyData *mesh)
+::VTKMeshShortestDistance()
 {
-  // Store the input
-  m_SourcePolys = mesh;
+  // Set the distance function
+  m_DefaultWeightFunction2.SetPitchFactor(1.0);
+  m_WeightFunctionPtr = &m_DefaultWeightFunction;
 
-  cout << "  input mesh has " << mesh->GetNumberOfPoints() << " points" << endl;
-  cout << "  input mesh has " << mesh->GetNumberOfCells() << " cells" << endl;
+  // Initialize the filters
+  fltLocator = vtkPointLocator::New();
+  fltCellLocator = vtkCellLocator::New();
+
+  // Initialize the graph to NULL
+  m_Graph = NULL;
+};
+
+void
+VTKMeshShortestDistance
+::SetInputMesh(vtkPolyData *mesh)
+{
+  // Store the input mesh
+  m_SourceMesh = mesh;
+
+  // Make sure that the links and the cells are built
+  m_SourceMesh->BuildCells();
+  m_SourceMesh->BuildLinks();
+  
+  // Construct a locator
+  fltLocator->SetDataSet(m_SourceMesh);
+  fltLocator->BuildLocator();
+
+  // Construct the cell locator
+  fltCellLocator->SetDataSet(m_SourceMesh);
+  fltCellLocator->BuildLocator();
+  
+/*
+  // Store the input
+  m_SourceMesh = mesh;
+  cout << "  input mesh has " << m_SourceMesh->GetNumberOfPoints() << " points" << endl;
+  cout << "  input mesh has " << m_SourceMesh->GetNumberOfCells() << " cells" << endl;
 
   // Construct simple triangles
-  fltTriangle = vtkTriangleFilter::New();
-  fltTriangle->SetInput(m_SourcePolys);
+  fltTriangle->SetInput(m_SourceMesh);
 
   cout << "   converting mesh to triangles " << endl;
   fltTriangle->Update();
@@ -20,7 +55,6 @@ VTKMeshShortestDistance
   cout << "  this mesh has " << fltTriangle->GetOutput()->GetNumberOfCells() << " cells" << endl;
 
   // Clean the data
-  fltCleaner = vtkCleanPolyData::New();
   fltCleaner->SetInput(fltTriangle->GetOutput());
   fltCleaner->SetTolerance(0);
   fltCleaner->ConvertPolysToLinesOn();
@@ -53,7 +87,6 @@ VTKMeshShortestDistance
   //cout << "  this mesh has " << p->GetNumberOfCells() << " cells" << endl;
 
   // Compute the edge map
-  fltEdge = vtkFeatureEdges::New();
   fltEdge->BoundaryEdgesOff();
   fltEdge->FeatureEdgesOff();
   fltEdge->NonManifoldEdgesOff();
@@ -73,55 +106,133 @@ VTKMeshShortestDistance
   cout << "      number if points : " << m_EdgePolys->GetNumberOfPoints() << endl;
 
   // Construct a locator
-  fltLocator = vtkPointLocator::New();
   fltLocator->SetDataSet(m_EdgePolys);
   fltLocator->BuildLocator();
 
   // Construct the cell locator
-  fltCellLocator = vtkCellLocator::New();
   fltCellLocator->SetDataSet(p);
   fltCellLocator->BuildLocator();
-
-  // Create an edge list
-  m_Edges.resize(nEdges);
-  m_EdgeWeights.resize(nEdges);
-
-  vtkIdType nPoints = 0; vtkIdType *xPoints = NULL;
-  for(unsigned int i=0;i<nEdges;i++)
-    {
-    // Get the next edge
-    m_EdgePolys->GetCellPoints(i, nPoints, xPoints);
-
-    // Place the edge into the Edge structure
-    assert(nPoints == 2);
-    m_Edges[i].first = xPoints[0];
-    m_Edges[i].second = xPoints[1];
-
-    // Compute the associated weight
-    vnl_vector_fixed<double,3> p1(m_EdgePolys->GetPoint(m_Edges[i].first));
-    vnl_vector_fixed<double,3> p2(m_EdgePolys->GetPoint(m_Edges[i].second));
-    m_EdgeWeights[i] = (int) (10000000 * (p1-p2).two_norm());
-    if(m_EdgeWeights[i] == 0)
-      cout << "Bad length at " << i << " equal to " << (p1-p2).two_norm() << endl;
-    }
-
-  // Declare the graph object
-  cout << "   constructing the graph" << endl;
-  m_Graph = new GraphType(
-    m_Edges.begin(), m_Edges.end(), 
-    m_EdgeWeights.begin(), m_EdgePolys->GetNumberOfPoints());
+*/  
 }
 
+void
+VTKMeshShortestDistance
+::ComputeGraph()
+{
+  list<EdgeType> lEdges;
+  list<unsigned int> lWeights;
+  
+  // Clear the edge arrays
+  // m_Edges.clear();
+  // m_EdgeWeights.clear();
+
+  // List used to keep cells adjacent to each point
+  vtkIdList *lCells = vtkIdList::New();
+  vtkIdList *lAdjacent = vtkIdList::New();
+
+  // Go trough all the points and find their neighbors
+  for(vtkIdType iPoint = 0; iPoint < m_SourceMesh->GetNumberOfPoints(); iPoint++)
+    {
+    // Get all cells containing the point
+    m_SourceMesh->GetPointCells(iPoint, lCells);
+
+    // Reset the adjacency list
+    lAdjacent->Reset();
+
+    // Go though the cells
+    for(unsigned int iCellIdx = 0; iCellIdx < lCells->GetNumberOfIds(); iCellIdx++)
+      {
+      // Get the cell id
+      vtkIdType iCell = lCells->GetId(iCellIdx);
+
+      // Get the list of points in the cell
+      vtkIdType nCellPoints;
+      vtkIdType *pCellPoints;
+      m_SourceMesh->GetCellPoints(iCell, nCellPoints, pCellPoints);
+
+      // Parse the points
+      for(unsigned int iNbrIdx = 0; iNbrIdx < nCellPoints; iNbrIdx++)
+        {
+        // Get the neighbor ID
+        vtkIdType iNbr = pCellPoints[iNbrIdx];
+        
+        // Determine if this is an 'actionable' edge
+        if(iNbr != iPoint /* && m_SourceMesh->IsEdge(iNbr, iPoint) */ )
+          {
+          // Add the tartget to the adjacency list
+          lAdjacent->InsertUniqueId(iNbr);
+          }
+        } // go through neighbor points
+      } // go through cells
+
+    // Now we have an adjacency list for this vertex. Add the edges
+    for(unsigned int iAdjIdx = 0; iAdjIdx < lAdjacent->GetNumberOfIds(); iAdjIdx++)
+      {
+      vtkIdType iNbr = lAdjacent->GetId(iAdjIdx);
+
+      // Add the edge to the list of edges
+      if(!m_SourceMesh->IsEdge(iPoint, iNbr))
+        cout << "Bad edge " << iPoint << " " << iNbr <<  endl;
+      EdgeType edge(iPoint, iNbr);
+      lEdges.push_back(edge);
+
+      // Compute the associated weight
+      double xWeight = 
+        m_WeightFunctionPtr->GetEdgeWeight(
+          m_SourceMesh, edge.first, edge.second);
+
+      // cout << "Edge [" << edge.first << "," << edge.second << "] = " << xWeight << endl;
+
+      // Convert the weight to integer
+      lWeights.push_back((int) (EDGE_WEIGHT_FACTOR * xWeight));
+
+      // Check that there are no zero weights (?)
+      // if(m_EdgeWeights.back() <= 0)
+      //   m_EdgeWeights.back() = 1;
+
+      //if(m_EdgeWeights.back() <= 0)
+      //  cout << "Edge [" << edge.first << ","  << edge.second 
+      //    << "] has zero integer length (" << xWeight << ")" << endl;
+      }
+
+    } // go through points
+
+  cout << "Number of edges: " << m_Edges.size() << endl;
+
+  // Clean up
+  lCells->Delete();
+  lAdjacent->Delete();
+
+  // Create arrays
+  m_Edges.resize(lEdges.size());
+  m_EdgeWeights.resize(lEdges.size());
+  unsigned int iEdge = 0;
+  list<EdgeType>::const_iterator itEdge = lEdges.begin();
+  list<unsigned int>::const_iterator itWeight = lWeights.begin();
+  while(itEdge != lEdges.end())
+    {
+    m_Edges[iEdge] = *itEdge;
+    m_EdgeWeights[iEdge] = *itWeight;
+    ++iEdge; ++itEdge; ++itWeight;
+    }
+
+  // Construct the graph from the edge information
+  cout << "   constructing the graph" << endl;
+
+  if(m_Graph)
+    delete m_Graph;
+
+  m_Graph = new GraphType(
+    m_Edges.begin(), m_Edges.end(), 
+    m_EdgeWeights.begin(), m_SourceMesh->GetNumberOfPoints());
+}
 
 VTKMeshShortestDistance
 ::~VTKMeshShortestDistance()
 {
-  delete m_Graph;
+  if(m_Graph) delete m_Graph;
   fltLocator->Delete();
   fltCellLocator->Delete();
-  fltEdge->Delete();
-  fltTriangle->Delete();
-  fltCleaner->Delete();
 }
 
 
