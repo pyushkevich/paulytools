@@ -165,7 +165,7 @@ void DynamicBSpline2D::basisJet(int dim,int i,float u,SMLVec4f *N) {
     __m128 M0,M1,M2,M3;
     
     
-    float *jm = (float *)jetMul[dim];
+    SMLVec4f *jm = jetMul[dim];
     float *ub = UB->data_block();
 
     // Load u                                                   //  3       2       1       0
@@ -186,10 +186,10 @@ void DynamicBSpline2D::basisJet(int dim,int i,float u,SMLVec4f *N) {
     r2 = _mm_mul_ps(r2,r1);                                     //  1       u       uu      uuu
 
     // Compute all the products
-    r4 = _mm_load_ps(jm);
-    r5 = _mm_load_ps(jm+4);
-    r6 = _mm_load_ps(jm+8);
-    r7 = _mm_load_ps(jm+12);
+    r4 = _mm_load_ps(jm[0].data_block());
+    r5 = _mm_load_ps(jm[1].data_block());
+    r6 = _mm_load_ps(jm[2].data_block());
+    r7 = _mm_load_ps(jm[3].data_block());
 
     // Compute the vector 3*u^2 2u 1 0
     r4 = _mm_mul_ps(r4,r2);
@@ -203,9 +203,9 @@ void DynamicBSpline2D::basisJet(int dim,int i,float u,SMLVec4f *N) {
     M3 = _mm_load_ps(ub+12);
 
     // That should be it because we will encorporate the BSpline matrix into the control point's matrix
-    r1 = mul_4x4_4x1(M0,M1,M2,M3,r4);
-    r2 = mul_4x4_4x1(M0,M1,M2,M3,r5);
-    r3 = mul_4x4_4x1(M0,M1,M2,M3,r6);
+    r0 = mul_4x4_4x1(M0,M1,M2,M3,r4);
+    r1 = mul_4x4_4x1(M0,M1,M2,M3,r5);
+    r2 = mul_4x4_4x1(M0,M1,M2,M3,r6);
 
     // Store the results
     _mm_store_ps(N[0].data_block(),r0);
@@ -428,14 +428,14 @@ DynamicBSpline2D::DynamicBSpline2D(int M,int N,int k,int zeroKnotMargin) {
   // Standard Spline Matrix 
   const float sixth = 1.0f/6.0f;
   float coeff[] = {-sixth, 0.5f, -0.5f, sixth, 0.5f, -1.0f, 0.5f, 0.0f, -0.5f, 0.0f, 0.5f, 0.0f, sixth, 4.0f*sixth, sixth, 0.0f};
-  UB = (SMLMatrix4f *)_aligned_malloc(sizeof(SMLMatrix4f),32);
+  UB = (SMLMatrix4f *)_aligned_malloc(sizeof(SMLMatrix4f),16);
   *UB = SMLMatrix4f(coeff).transpose();
 
   // Initialize the jet multipliers
   for (d=0;d<2;d++)
     {
-    float M = m[d];
-    jetMul[d] = (SMLVec4f*)_aligned_malloc(sizeof(SMLVec4f)*4,32);
+    float M = (float) m[d];
+    jetMul[d] = (SMLVec4f*)_aligned_malloc(sizeof(SMLVec4f)*4,16);
     
     jetMul[d][0][0] = M*M*M;
     jetMul[d][0][1] = M*M;
@@ -488,7 +488,7 @@ DynamicBSpline2D::DynamicBSpline2D(int M,int N,int k,int zeroKnotMargin) {
               value = -0.7f;
             // value = 0.025 + (float)(0.05 * rand()) / RAND_MAX;
             else
-              value = 0.025 + (float)(0.05 * rand()) / RAND_MAX;
+              value = 0.025f + (float)(0.05 * rand()) / RAND_MAX;
             0.075;
             break;
           }
@@ -543,7 +543,7 @@ void DynamicBSpline2D::push(int uKnot,int vKnot,float u,float v,int iControlFirs
   int i;
 
   // Compute the basis function at the position
-  ALIGN32_PRE SMLVec4f ALIGN32_POST NJu[4],NJv[4];
+  ALIGN_PRE SMLVec4f ALIGN_POST NJu[4],NJv[4];
   basisJet(0,uKnot,u,NJu);
   basisJet(1,vKnot,v,NJv);
 
@@ -577,7 +577,8 @@ void DynamicBSpline2D::push(int uKnot,int vKnot,float u,float v,int iControlFirs
         for (int k=iControlFirst;k<=iControlLast;k++)
           {
           float p = getControl(uKnot-2+i,vKnot-2+j,k);
-          p += (i?g:1-g) * (j?d:1-d) * a * vec[k-iControlFirst] * Nu.data_block()[i+1] * Nv.data_block()[j+1];
+          p += (float)
+            ((i?g:1-g) * (j?d:1-d) * a * vec[k-iControlFirst] * Nu.data_block()[i+1] * Nv.data_block()[j+1]);
           setControl(uKnot-2+i,vKnot-2+j,k,p);
           }
         }
@@ -655,7 +656,7 @@ void testMultiply() {
   // Perform the final addition
   B0 = _mm_add_ps(B0,B2);
 
-  _mm_storeu_ps(R.data_block(),B0);
+  _mm_store_ps(R.data_block(),B0);
 
   R1 = M * X;
 
@@ -684,8 +685,8 @@ inline __m128 crossProduct(__m128 A,__m128 B) {
 
 // Perform the cross product 
 inline void triangleAreaVec(float *A,float *B,float *C, float *outR) {
-  __m128 r0,r1,r2,r3,r4;
-  ALIGN32_PRE float N[4] ALIGN32_POST;
+  __m128 r0,r1,r2;
+  ALIGN_PRE float N[4] ALIGN_POST;
 
   // Load A, B and C
   r0 = _mm_loadu_ps(A);
@@ -710,8 +711,8 @@ inline void triangleAreaVec(float *A,float *B,float *C, float *outR) {
 
 inline void triangleArea(float *A,float *B,float *C,float *outN, float *outArea) 
 {
-  __m128 r0,r1,r2,r3,r4;
-  ALIGN32_PRE float N[4] ALIGN32_POST;
+  __m128 r0,r1,r2;
+  ALIGN_PRE float N[4] ALIGN_POST;
 
   // Load A, B and C
   r0 = _mm_loadu_ps(A);
@@ -1020,9 +1021,9 @@ void MSpline::interpolateMedialPoint02(int iPatch,int jPatch,
   __m128 CR3 = _mm_load_ps(Cr+12);
 
   // Get the weight factors
-  __m128 WV0 = _mm_loadu_ps(Wv[0].data_block());
-  __m128 WV1 = _mm_loadu_ps(Wv[1].data_block());
-  __m128 WV2 = _mm_loadu_ps(Wv[2].data_block());
+  __m128 WV0 = _mm_load_ps(Wv[0].data_block());
+  __m128 WV1 = _mm_load_ps(Wv[1].data_block());
+  __m128 WV2 = _mm_load_ps(Wv[2].data_block());
 
   // Multiply this by the matrices that we need
   __m128 LX0 = mul_4x4_4x1(CX0,CX1,CX2,CX3,WV0);
@@ -1041,9 +1042,9 @@ void MSpline::interpolateMedialPoint02(int iPatch,int jPatch,
   __m128 LR2 = mul_4x4_4x1(CR0,CR1,CR2,CR3,WV2);
 
   // Get the U, V data
-  __m128 WU0 = _mm_loadu_ps(Wu[0].data_block());
-  __m128 WU1 = _mm_loadu_ps(Wu[1].data_block());
-  __m128 WU2 = _mm_loadu_ps(Wu[2].data_block());
+  __m128 WU0 = _mm_load_ps(Wu[0].data_block());
+  __m128 WU1 = _mm_load_ps(Wu[1].data_block());
+  __m128 WU2 = _mm_load_ps(Wu[2].data_block());
 
   __m128 mX =  mul_4x4_4x1(LX0,LY0,LZ0,LR0,WU0);
   __m128 mXu = mul_4x4_4x1(LX0,LY0,LZ0,LR0,WU1);
@@ -1058,16 +1059,16 @@ void MSpline::interpolateMedialPoint02(int iPatch,int jPatch,
   __m128 mN = normalize(mNRaw);
 
   // Access the medial point
-  _mm_storeu_ps(mp.F.data_block(),mX);
-  _mm_storeu_ps(mp.Fu.data_block(),mXu);
-  _mm_storeu_ps(mp.Fv.data_block(),mXv);
+  _mm_store_ps(mp.F.data_block(),mX);
+  _mm_store_ps(mp.Fu.data_block(),mXu);
+  _mm_store_ps(mp.Fv.data_block(),mXv);
 
-  _mm_storeu_ps(mp.Fuu.data_block(),mXuu);
-  _mm_storeu_ps(mp.Fuv.data_block(),mXuv);
-  _mm_storeu_ps(mp.Fvv.data_block(),mXvv);
+  _mm_store_ps(mp.Fuu.data_block(),mXuu);
+  _mm_store_ps(mp.Fuv.data_block(),mXuv);
+  _mm_store_ps(mp.Fvv.data_block(),mXvv);
 
-  _mm_storeu_ps(mp.F3raw.data_block(),mNRaw);
-  _mm_storeu_ps(mp.F3.data_block(),mN);         
+  _mm_store_ps(mp.F3raw.data_block(),mNRaw);
+  _mm_store_ps(mp.F3.data_block(),mN);         
 }
 
 void MSpline::interpolateMedialCrestD1(int iPatch,int jPatch,SMLVec4f *Wu,SMLVec4f *Wv,MedialPoint &mp) 
@@ -1097,11 +1098,11 @@ void MSpline::interpolateMedialCrestD1(int iPatch,int jPatch,SMLVec4f *Wu,SMLVec
   __m128 CR3 = _mm_load_ps(Cr+12);
 
   // Get the weight factors
-  __m128 WU0 = _mm_loadu_ps(Wu[0].data_block());
-  __m128 WU1 = _mm_loadu_ps(Wu[1].data_block());
-  __m128 WU2 = _mm_loadu_ps(Wu[2].data_block());
-  __m128 WV0 = _mm_loadu_ps(Wv[0].data_block());
-  __m128 WV1 = _mm_loadu_ps(Wv[1].data_block());
+  __m128 WU0 = _mm_load_ps(Wu[0].data_block());
+  __m128 WU1 = _mm_load_ps(Wu[1].data_block());
+  __m128 WU2 = _mm_load_ps(Wu[2].data_block());
+  __m128 WV0 = _mm_load_ps(Wv[0].data_block());
+  __m128 WV1 = _mm_load_ps(Wv[1].data_block());
 
   // Multiply this by the matrices that we need
   __m128 LX0 = mul_4x4_4x1(CX0,CX1,CX2,CX3,WV0);
@@ -1124,11 +1125,11 @@ void MSpline::interpolateMedialCrestD1(int iPatch,int jPatch,SMLVec4f *Wu,SMLVec
   __m128 mNRaw = crossProduct(mXu,mXv);
 
   // Access the medial point
-  _mm_storeu_ps(mp.Fu.data_block(),mXu);
-  _mm_storeu_ps(mp.Fv.data_block(),mXv);
-  _mm_storeu_ps(mp.Fuu.data_block(),mXuu);
-  _mm_storeu_ps(mp.Fuv.data_block(),mXuv);
-  _mm_storeu_ps(mp.F3raw.data_block(),mNRaw);
+  _mm_store_ps(mp.Fu.data_block(),mXu);
+  _mm_store_ps(mp.Fv.data_block(),mXv);
+  _mm_store_ps(mp.Fuu.data_block(),mXuu);
+  _mm_store_ps(mp.Fuv.data_block(),mXuv);
+  _mm_store_ps(mp.F3raw.data_block(),mNRaw);
 }
 
 
@@ -1159,11 +1160,11 @@ void MSpline::interpolateMedialCrestD2(int iPatch,int jPatch,SMLVec4f *Wu,SMLVec
   __m128 CR3 = _mm_load_ps(Cr+12);
 
   // Get the weight factors
-  __m128 WU0 = _mm_loadu_ps(Wu[0].data_block());
-  __m128 WU1 = _mm_loadu_ps(Wu[1].data_block());
-  __m128 WV0 = _mm_loadu_ps(Wv[0].data_block());
-  __m128 WV1 = _mm_loadu_ps(Wv[1].data_block());
-  __m128 WV2 = _mm_loadu_ps(Wv[2].data_block());
+  __m128 WU0 = _mm_load_ps(Wu[0].data_block());
+  __m128 WU1 = _mm_load_ps(Wu[1].data_block());
+  __m128 WV0 = _mm_load_ps(Wv[0].data_block());
+  __m128 WV1 = _mm_load_ps(Wv[1].data_block());
+  __m128 WV2 = _mm_load_ps(Wv[2].data_block());
 
   // Multiply this by the matrices that we need
   __m128 LX0 = mul_4x4_4x1(CX0,CX1,CX2,CX3,WU0);
@@ -1186,11 +1187,11 @@ void MSpline::interpolateMedialCrestD2(int iPatch,int jPatch,SMLVec4f *Wu,SMLVec
   __m128 mNRaw = crossProduct(mXu,mXv);
 
   // Access the medial point
-  _mm_storeu_ps(mp.Fu.data_block(),mXu);
-  _mm_storeu_ps(mp.Fv.data_block(),mXv);
-  _mm_storeu_ps(mp.Fuv.data_block(),mXuv);
-  _mm_storeu_ps(mp.Fvv.data_block(),mXvv);
-  _mm_storeu_ps(mp.F3raw.data_block(),mNRaw);
+  _mm_store_ps(mp.Fu.data_block(),mXu);
+  _mm_store_ps(mp.Fv.data_block(),mXv);
+  _mm_store_ps(mp.Fuv.data_block(),mXuv);
+  _mm_store_ps(mp.Fvv.data_block(),mXvv);
+  _mm_store_ps(mp.F3raw.data_block(),mNRaw);
 }
 
 void MSpline::interpolateMedialCrestD1Missing(int iPatch,int jPatch,
@@ -1224,9 +1225,9 @@ void MSpline::interpolateMedialCrestD1Missing(int iPatch,int jPatch,
   __m128 CR3 = _mm_load_ps(Cr+12);
 
   // Get the weight factors
-  __m128 WV0 = _mm_loadu_ps(Wv[0].data_block());
-  __m128 WV2 = _mm_loadu_ps(Wv[2].data_block());
-  __m128 WU0 = _mm_loadu_ps(Wu[0].data_block());
+  __m128 WV0 = _mm_load_ps(Wv[0].data_block());
+  __m128 WV2 = _mm_load_ps(Wv[2].data_block());
+  __m128 WU0 = _mm_load_ps(Wu[0].data_block());
 
   // Multiply this by the matrices that we need
   __m128 LX0 = mul_4x4_4x1(CX0,CX1,CX2,CX3,WU0);
@@ -1239,13 +1240,13 @@ void MSpline::interpolateMedialCrestD1Missing(int iPatch,int jPatch,
   __m128 mXvv = mul_4x4_4x1(LX0,LY0,LZ0,LR0,WV2);
 
   // Now the unit normal.
-  __m128 mNRaw = _mm_loadu_ps(mp.F3raw.data_block());
+  __m128 mNRaw = _mm_load_ps(mp.F3raw.data_block());
   __m128 mN = normalize(mNRaw);
 
   // Access the medial point
-  _mm_storeu_ps(mp.F.data_block(),mX);
-  _mm_storeu_ps(mp.Fvv.data_block(),mXvv);
-  _mm_storeu_ps(mp.F3.data_block(),mN);         
+  _mm_store_ps(mp.F.data_block(),mX);
+  _mm_store_ps(mp.Fvv.data_block(),mXvv);
+  _mm_store_ps(mp.F3.data_block(),mN);         
 }
 
 
@@ -1280,9 +1281,9 @@ void MSpline::interpolateMedialCrestD2Missing(int iPatch,int jPatch,
   __m128 CR3 = _mm_load_ps(Cr+12);
 
   // Get the weight factors
-  __m128 WV0 = _mm_loadu_ps(Wv[0].data_block());
-  __m128 WU0 = _mm_loadu_ps(Wu[0].data_block());
-  __m128 WU2 = _mm_loadu_ps(Wu[2].data_block());
+  __m128 WV0 = _mm_load_ps(Wv[0].data_block());
+  __m128 WU0 = _mm_load_ps(Wu[0].data_block());
+  __m128 WU2 = _mm_load_ps(Wu[2].data_block());
 
   // Multiply this by the matrices that we need
   __m128 LX0 = mul_4x4_4x1(CX0,CX1,CX2,CX3,WV0);
@@ -1295,13 +1296,13 @@ void MSpline::interpolateMedialCrestD2Missing(int iPatch,int jPatch,
   __m128 mXuu = mul_4x4_4x1(LX0,LY0,LZ0,LR0,WU2);
 
   // Now the unit normal.
-  __m128 mNRaw = _mm_loadu_ps(mp.F3raw.data_block());
+  __m128 mNRaw = _mm_load_ps(mp.F3raw.data_block());
   __m128 mN = normalize(mNRaw);
 
   // Access the medial point
-  _mm_storeu_ps(mp.F.data_block(),mX);
-  _mm_storeu_ps(mp.Fuu.data_block(),mXuu);
-  _mm_storeu_ps(mp.F3.data_block(),mN);         
+  _mm_store_ps(mp.F.data_block(),mX);
+  _mm_store_ps(mp.Fuu.data_block(),mXuu);
+  _mm_store_ps(mp.F3.data_block(),mN);         
 }
 
 void MSpline::interpolateMedialPoint02(const SplineGridDefinition &grid,int u,int v,MedialPoint &mp) {
@@ -1360,8 +1361,8 @@ void MSpline::interpolateMedialSurfacePatch(const SplineGridDefinition &grid,
     {
 
     // Get the weight factors
-    __m128 WV0 = _mm_loadu_ps(Wv[j][0].data_block());
-    __m128 WV1 = _mm_loadu_ps(Wv[j][1].data_block());
+    __m128 WV0 = _mm_load_ps(Wv[j][0].data_block());
+    __m128 WV1 = _mm_load_ps(Wv[j][1].data_block());
 
     // Multiply this by the matrices that we need
     __m128 LX0 = mul_4x4_4x1(CX0,CX1,CX2,CX3,WV0);
@@ -1380,8 +1381,8 @@ void MSpline::interpolateMedialSurfacePatch(const SplineGridDefinition &grid,
     for (i=0;i<=iLast;i+=step)
       {
       // Get the U, V data
-      __m128 WU0 = _mm_loadu_ps(Wu[i][0].data_block());
-      __m128 WU1 = _mm_loadu_ps(Wu[i][1].data_block());
+      __m128 WU0 = _mm_load_ps(Wu[i][0].data_block());
+      __m128 WU1 = _mm_load_ps(Wu[i][1].data_block());
 
       __m128 mX =  mul_4x4_4x1(LX0,LY0,LZ0,LR0,WU0);
       __m128 mXu = mul_4x4_4x1(LX0,LY0,LZ0,LR0,WU1);
@@ -1394,11 +1395,11 @@ void MSpline::interpolateMedialSurfacePatch(const SplineGridDefinition &grid,
       // Access the medial point
       MedialPoint &mp = (*MP)(i,j);
 
-      _mm_storeu_ps(mp.F.data_block(),mX);
-      _mm_storeu_ps(mp.Fu.data_block(),mXu);
-      _mm_storeu_ps(mp.Fv.data_block(),mXv);
-      _mm_storeu_ps(mp.F3raw.data_block(),mNRaw);
-      _mm_storeu_ps(mp.F3.data_block(),mN);         
+      _mm_store_ps(mp.F.data_block(),mX);
+      _mm_store_ps(mp.Fu.data_block(),mXu);
+      _mm_store_ps(mp.Fv.data_block(),mXv);
+      _mm_store_ps(mp.F3raw.data_block(),mNRaw);
+      _mm_store_ps(mp.F3.data_block(),mN);         
       }
     }
 }
@@ -1451,9 +1452,9 @@ void MSpline::interpolateMedialSurfacePatch02(const SplineGridDefinition &grid,
     {
 
     // Get the weight factors
-    __m128 WV0 = _mm_loadu_ps(Wv[j][0].data_block());
-    __m128 WV1 = _mm_loadu_ps(Wv[j][1].data_block());
-    __m128 WV2 = _mm_loadu_ps(Wv[j][2].data_block());
+    __m128 WV0 = _mm_load_ps(Wv[j][0].data_block());
+    __m128 WV1 = _mm_load_ps(Wv[j][1].data_block());
+    __m128 WV2 = _mm_load_ps(Wv[j][2].data_block());
 
     // Multiply this by the matrices that we need
     __m128 LX0 = mul_4x4_4x1(CX0,CX1,CX2,CX3,WV0);
@@ -1477,9 +1478,9 @@ void MSpline::interpolateMedialSurfacePatch02(const SplineGridDefinition &grid,
     for (i=0;i<=iLast;i+=step)
       {
       // Get the U, V data
-      __m128 WU0 = _mm_loadu_ps(Wu[i][0].data_block());
-      __m128 WU1 = _mm_loadu_ps(Wu[i][1].data_block());
-      __m128 WU2 = _mm_loadu_ps(Wu[i][2].data_block());
+      __m128 WU0 = _mm_load_ps(Wu[i][0].data_block());
+      __m128 WU1 = _mm_load_ps(Wu[i][1].data_block());
+      __m128 WU2 = _mm_load_ps(Wu[i][2].data_block());
 
       __m128 mXuu = mul_4x4_4x1(LX0,LY0,LZ0,LR0,WU2);
       __m128 mXuv = mul_4x4_4x1(LX1,LY1,LZ1,LR1,WU1);
@@ -1487,9 +1488,9 @@ void MSpline::interpolateMedialSurfacePatch02(const SplineGridDefinition &grid,
 
       // Access the medial point
       MedialPoint &mp = (*MP)(i,j);
-      _mm_storeu_ps(mp.Fuu.data_block(),mXuu);
-      _mm_storeu_ps(mp.Fuv.data_block(),mXuv);
-      _mm_storeu_ps(mp.Fvv.data_block(),mXvv);
+      _mm_store_ps(mp.Fuu.data_block(),mXuu);
+      _mm_store_ps(mp.Fuv.data_block(),mXuv);
+      _mm_store_ps(mp.Fvv.data_block(),mXvv);
       }
     }
 }
@@ -1534,7 +1535,7 @@ void MSpline::interpolateBoundaryCrest(MedialPoint &MP) {
 
   // Determinant of the one form
   float dI = E*G - F*F;
-  float _dI = 1.0 / dI;
+  float _dI = 1.0f / dI;
 
   // Terms going into gradR
   float CXv = (E*Rv-F*Ru)*_dI;
@@ -1573,7 +1574,7 @@ bool MSpline::interpolateBoundary(MedialPoint &MP) {
 
   // Determinant of the one form
   float dI = E*G - F*F;
-  float _dI = 1.0 / dI;
+  float _dI = 1.0f / dI;
 
   // Terms going into gradR
   float CXv = (E*Rv-F*Ru)*_dI;
@@ -1587,7 +1588,7 @@ bool MSpline::interpolateBoundary(MedialPoint &MP) {
 
   // Compute squared length of GradR
   // MP.sinTheta2 = 1.0 - MP.GradR.Dot(MP.GradR);
-  MP.sinTheta2 = 1.0 - (MP.GradR[0] * MP.GradR[0] + MP.GradR[1] * MP.GradR[1] + MP.GradR[2] * MP.GradR[2]);
+  MP.sinTheta2 = 1.0f - (MP.GradR[0] * MP.GradR[0] + MP.GradR[1] * MP.GradR[1] + MP.GradR[2] * MP.GradR[2]);
 
   // If the sine exists
   if (MP.sinTheta2 >= 0)
@@ -1807,7 +1808,7 @@ void MSpline::computeCurvatures(MedialPoint &MP,bool isCrest) {
 
   // The Gaussian and mean curvatures
   float K = (IIL*IIN-IIM*IIM) / (E*G-F*F);
-  float H = 0.5 * (E*IIN-2*F*IIM+G*IIL) / (E*G-F*F);
+  float H = 0.5f * (E*IIN-2*F*IIM+G*IIL) / (E*G-F*F);
 
   // The principal curvatures
   MP.kappa1 = H + sqrtf(H*H-K);
@@ -1823,7 +1824,7 @@ void MSpline::computeCurvatures(MedialPoint &MP,bool isCrest) {
 
   // Determinant of the one form
   float dI = E*G - F*F;
-  float _dI = 1.0 / dI;
+  float _dI = 1.0f / dI;
 
   // Derivative of the determinant and the multipliers
   float dIu = Eu*G + E*Gu - 2 * F * Fu;
@@ -1864,8 +1865,8 @@ void MSpline::computeCurvatures(MedialPoint &MP,bool isCrest) {
 
     // Normal multiplier
     float k = _dI * sT;
-    float ku = _dIu * sT + 0.5 * sT2u * _dI / sT;
-    float kv = _dIv * sT + 0.5 * sT2v * _dI / sT;
+    float ku = _dIu * sT + 0.5f * sT2u * _dI / sT;
+    float kv = _dIv * sT + 0.5f * sT2v * _dI / sT;
 
     // Derivatives of the normal
     SMLVec3f Nu = vnl_cross_3d(Xu,Xuv) + vnl_cross_3d(Xuu,Xv);
@@ -1912,7 +1913,7 @@ void MSpline::computeCurvatures(MedialPoint &MP,bool isCrest) {
       float b22 = Fdv[2];
 
       // Now we have the shape operator
-      float trm1 = 0.5 * (b11+b22), trm2 = sqrt(b12*b21+0.25*(b11-b22)*(b11-b22));
+      float trm1 = 0.5f * (b11+b22), trm2 = sqrt(b12*b21+0.25f*(b11-b22)*(b11-b22));
       float ev1 = trm1 - trm2, ev2 = trm1 + trm2;         
 
       // Left and right positions
@@ -1936,15 +1937,15 @@ void MSpline::computeCurvatures(MedialPoint &MP,bool isCrest) {
 
       // The Gaussian and mean curvatures
       float K = (Lb*Nb-Mb*Mb) / (Eb*Gb-Fb*Fb);
-      float H = 0.5 * (Eb*Nb-2*Fb*Mb+Gb*Lb) / (Eb*Gb-Fb*Fb);
+      float H = 0.5f * (Eb*Nb-2.0f*Fb*Mb+Gb*Lb) / (Eb*Gb-Fb*Fb);
 
       // The principal curvatures
       bp.kappa1 = H + sqrtf(H*H-K);
       bp.kappa2 = H - sqrtf(H*H-K);
 
       // double gc = bp.kappa1 * bp.kappa2;
-      bp.kappa1 = 1.0 / (1.0 / ev1 - R);
-      bp.kappa2 = 1.0 / (1.0 / ev2 - R);
+      bp.kappa1 = 1.0f / (1.0f / ev1 - R);
+      bp.kappa2 = 1.0f / (1.0f / ev2 - R);
       }
     }
   else if (isCrest || sT2 == 0)
@@ -1963,8 +1964,8 @@ void MSpline::computeCurvatures(MedialPoint &MP,bool isCrest) {
     SMLVec3f &Y = bp1.X;
 
     // The principal curvatures
-    bp1.kappa1 = bp0.kappa1 = -1.0 / R;
-    bp1.kappa2 = bp0.kappa2 = -1.0 / R;
+    bp1.kappa1 = bp0.kappa1 = -1.0f / R;
+    bp1.kappa2 = bp0.kappa2 = -1.0f / R;
 
     // Figure out the direction of tangent vector v1
     const float faFrame[] = {
@@ -2012,7 +2013,7 @@ void MSpline::computeCurvatures(MedialPoint &MP,bool isCrest) {
     float c2 = mDBDvn[1];
     float b2 = mDBDvn[2];
 
-    float kappa2 = 1.0 / (1.0 / b1 - R);
+    float kappa2 = 1.0f / (1.0f / b1 - R);
     bp1.kappa2 = bp0.kappa2 = kappa2;
     }
 }
@@ -2107,7 +2108,7 @@ SplineGridDefinition *SplineGridDefinition::newSGDForCache(DynamicBSpline2D *spl
     for (iGrid=0;iGrid<sgd->size[d];iGrid++)
       {
       sgd->W[d][iGrid] = 
-        (SMLVec4f *) _aligned_malloc(sizeof(SMLVec4f) * 4, 32);
+        (SMLVec4f *) _aligned_malloc(sizeof(SMLVec4f) * 4, 16);
       }
 
     // Initialize the patch weights
@@ -2118,7 +2119,7 @@ SplineGridDefinition *SplineGridDefinition::newSGDForCache(DynamicBSpline2D *spl
       for (int iRes=0;iRes<=res;iRes++)
         {
         sgd->patchWeight[d][iPatch][iRes] = 
-          (SMLVec4f *) _aligned_malloc(sizeof(SMLVec4f) * 4, 32);
+          (SMLVec4f *) _aligned_malloc(sizeof(SMLVec4f) * 4, 16);
         }
       }
     }
@@ -2819,7 +2820,7 @@ float PatchDataCache::integrateMedialMeasure(MedialMeasure &measure,float &area)
     total += awMed[t] * measure.computeMedialMeasure(MP(t));
     }
 
-  area = awMedTotal * 0.5;
+  area = awMedTotal * 0.5f;
   return total * scale;
 }
 
@@ -2842,7 +2843,7 @@ float PatchDataCache::integrateTrimmedMedialMeasure(MedialMeasure &measure,float
     total += awMed[idx] * measure.computeMedialMeasure(MP(idx));
     }
 
-  area = awMedTrimmedTotal * 0.5;
+  area = awMedTrimmedTotal * 0.5f;
   return total * scale;
 }
 
@@ -2876,7 +2877,7 @@ float PatchDataCache::integrateBoundaryMeasure(BoundaryMeasure &measure,float &a
     }
 
   // Compute area
-  area = awBndTotal * 0.5;
+  area = awBndTotal * 0.5f;
 
   // Adjust the integrals by 1/32 and 1/18
   return total * scale;
@@ -3209,7 +3210,7 @@ void PatchDataCache::rtsafe(CrestSearch &crestSearch,float x1, float x2,float xa
     xh=x1;
     xl=x2;
     }
-  rts=0.5*(x1+x2); 
+  rts=0.5f*(x1+x2); 
   dxold=fabs(x2-x1); 
   dx=dxold; 
   computeCrestFunction(crestSearch,rts,&f,&df);
@@ -3219,7 +3220,7 @@ void PatchDataCache::rtsafe(CrestSearch &crestSearch,float x1, float x2,float xa
         || (fabs(2.0*f) > fabs(dxold*df)))
       {
       dxold=dx;
-      dx=0.5*(xh-xl);
+      dx=0.5f*(xh-xl);
       rts=xl+dx;
       if (xl == rts) return;
       }

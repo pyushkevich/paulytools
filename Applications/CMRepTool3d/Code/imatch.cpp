@@ -57,7 +57,7 @@ void triLerp(float V000,float V001,float V010,float V100,
               float V011,float V101,float V110,float    V111,
               float x,   float  y,  float z, float *out)    
 {
-    __m128 r0,r1,r2,r3,r4,r5,r6,r7,r8;
+    __m128 r0,r1,r2,r3,r4,r5,r6,r8;
                                                             //  3       2       1       0
 
     r0 = _mm_loadu_ps(&x);                                  //  ?       z       y       x

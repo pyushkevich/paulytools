@@ -849,6 +849,9 @@ GLFont::GLFont(string title,int height,bool bold,bool italics) {
 }
 
 void GLFont::print(const char *text,unsigned int length) {
+
+#ifdef _MSC_VER
+  
   // Build the font on demand
   if (dlBase < 0)
     build();
@@ -858,7 +861,15 @@ void GLFont::print(const char *text,unsigned int length) {
   glListBase(dlBase - 32);                                // Sets The Base Character to 32
   glCallLists(length, GL_UNSIGNED_BYTE, text);    // Draws The Display List Text
 
-  glPopAttrib();                                      // Pops The Display List Bits   
+  glPopAttrib();                                      // Pops The Display List Bits
+
+#else
+  while(*text)
+    {
+    glutBitmapCharacter(GLUT_BITMAP_HELVETICA_10,*text);
+    text++;
+    }
+#endif
 }
 
 void GLFont::printf(const char *fmt, ...)                   // Custom GL "Print" Routine
@@ -877,6 +888,7 @@ void GLFont::printf(const char *fmt, ...)                   // Custom GL "Print"
 }
 
 void GLFont::build() {
+
 #ifdef _MSC_VER
   HFONT   font;                                       // Windows Font ID
 

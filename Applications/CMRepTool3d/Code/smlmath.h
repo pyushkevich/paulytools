@@ -11,7 +11,6 @@
 
 typedef vnl_vector_fixed<float,2> SMLVec2f;
 typedef vnl_vector_fixed<float,3> SMLVec3f;
-// typedef ALIGN32_PRE vnl_vector_fixed<float,4> ALIGN32_POST SMLVec4f;
 typedef vnl_vector_fixed<double,2> SMLVec2d;
 typedef vnl_vector_fixed<double,3> SMLVec3d;
 typedef vnl_vector_fixed<double,4> SMLVec4d;
@@ -20,7 +19,7 @@ typedef vnl_matrix_fixed<float,4,4> SMLMatrix4f;
 typedef vnl_matrix_fixed<double,3,3> SMLMatrix3d;
 typedef vnl_matrix_fixed<double,4,4> SMLMatrix4d;
 
-ALIGN32_PRE
+ALIGN_PRE
 class SMLVec4f : public vnl_vector_fixed<float,4> 
 {
 public:
@@ -34,7 +33,7 @@ public:
   SMLVec4f &operator =(const Superclass &src) 
     { *((Superclass *)this) = src; return *this; }
   
-} ALIGN32_POST;
+} ALIGN_POST;
 
 // Use a 4x4 matrix to transform a point in 3D euclidean space
 template<class T>

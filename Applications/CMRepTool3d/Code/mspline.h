@@ -30,8 +30,8 @@ public:
 
     BSplineControl() {
         nbr.fill(0);
-        mmNbrArray = (float *)_aligned_malloc(sizeof(float)*16,32);
-        mmNbrArrayT = (float *)_aligned_malloc(sizeof(float)*16,32);
+        mmNbrArray = (float *)_aligned_malloc(sizeof(float)*16,16);
+        mmNbrArrayT = (float *)_aligned_malloc(sizeof(float)*16,16);
     }
 
     ~BSplineControl() {
@@ -143,7 +143,7 @@ struct SurfacePoint {
 /**
  * This structure represents a point sampled from the medial spline
  */
-ALIGN32_PRE struct MedialPoint {
+ALIGN_PRE struct MedialPoint {
     // The function (xyzr) and its partial derivatives
     SMLVec4f F,Fu,Fv,Fuu,Fuv,Fvv;
 
@@ -192,7 +192,7 @@ ALIGN32_PRE struct MedialPoint {
 
     // This is needed for callback functions
     void *data;
-} ALIGN32_POST;
+} ALIGN_POST;
 
 /** 
  * Two dimensional rectangular uniform B-spline
@@ -206,12 +206,12 @@ public:
 
     // This method sets one of the control values
     void setControl(int i,int j,int k,float value);
-    void setControl(int i,int j,const SMLVec3f X) {
+    void setControl(int i,int j,const SMLVec3f &X) {
         setControl(i,j,0,X[0]);
         setControl(i,j,1,X[1]);
         setControl(i,j,2,X[2]);
     }
-    void setControl(int i,int j,const SMLVec4f X) {
+    void setControl(int i,int j,const SMLVec4f &X) {
         setControl(i,j,0,X[0]);
         setControl(i,j,1,X[1]);
         setControl(i,j,2,X[2]);

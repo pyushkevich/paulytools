@@ -863,9 +863,7 @@ template <class T>
 void ImageCube<T>::interpolateVoxelGradient(float xs,float ys,float zs, float *G) 
 {
   __m128 r0,r1,r2,r3;                                    //      3       2       1       0
-  __m128 r4,r5,r6,r7,r8;                                 //      3       2       1       0
-  __m64 i0,i1,i2,i3,i4,i5,i6;
-  __m64 j0,j1;
+  __m128 r4,r5,r6,r7;                                 //      3       2       1       0
 
   if (!getEightVoxels(xs,ys,zs,r0,r4,r5))
     {

@@ -57,7 +57,7 @@ public:
 		alloc();
 	}
 
-	Array2D(int w,int h,T init_value) {
+	Array2D(int w,int h,const T &init_value) {
 		this->w = w;
 		this->h = h;
 		array = NULL;
@@ -159,7 +159,7 @@ private:
 		len = h*w+auxLen;
 		
 		// Allocate the array on an aligned boundary!
-		array = (T*) _aligned_malloc(sizeof(T)*len,32);
+		array = (T*) _aligned_malloc(sizeof(T)*len,16);
 		
 		rows = new T*[h];
 

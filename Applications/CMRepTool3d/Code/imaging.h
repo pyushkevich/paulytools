@@ -178,7 +178,7 @@ class AbstractImage3D
   {
 public:
   AbstractImage3D() {
-    mmData = (float*)_aligned_malloc(sizeof(float)*20,32);
+    mmData = (float*)_aligned_malloc(sizeof(float)*20,16);
   }
 
   virtual ~AbstractImage3D() {
