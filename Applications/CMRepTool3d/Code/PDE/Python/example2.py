@@ -15,10 +15,12 @@ img.SetOutsideValue(-1.0);
 # Compute the affine transform
 mp.SetOptimizationToAffine();
 mp.SetOptimizerToConjugateGradientDescent(1.0);
+mp.SetMatchToVolumeOverlap();
+mp.EnableMeshDump("/tmp/meshdump/step1",0.001);
 mp.RunOptimization(img, 400);
 
 # Save the results
 mp.SaveToParameterFile(dirWork + "avg/average_mrepL_affine.mpde");
-mp.SaveBYUMesh(dirWork + "avg/average_mrepL_affine.byu");
-
-RenderMedialPDE(mp);
+mp.SaveVTKMesh(
+    dirWork + "avg/average_mrepL_affine.med.vtk",
+    dirWork + "avg/average_mrepL_affine.bnd.vtk");

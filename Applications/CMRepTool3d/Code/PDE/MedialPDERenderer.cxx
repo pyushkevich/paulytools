@@ -115,6 +115,22 @@ void PDESplineRenderer::DrawInternalPoints( size_t nCuts )
   delete it;
   
   glEnd();
+
+  glBegin(GL_LINES);
+  MedialProfileIntervalIterator *itp = S.xAtomGrid->NewProfileIntervalIterator(nCuts);
+  for(; !itp->IsAtEnd(); ++(*itp))
+    {
+    glColor3d(1,1,1);
+    glVertex3dv(S.xInternalPoints[itp->GetInnerPointIndex()].data_block());
+    glColor3d(0,1,0);
+    glVertex3dv(S.xInternalPoints[itp->GetOuterPointIndex()].data_block());
+    }
+  delete itp;
+  glEnd();
+
+
+
+  
   glPopAttrib();
 }
 

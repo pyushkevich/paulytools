@@ -2,7 +2,7 @@ PROJECT(CMREPS)
 
 # Option to build the new PDE code
 OPTION(BUILD_PDE "Build the PDE CM-Reps code" OFF)
-VARIABLE_REQUIRES(BUILD_PDE DO_BUILD_PDE USE_SWIG) 
+VARIABLE_REQUIRES(BUILD_PDE DO_BUILD_PDE USE_SWIG USE_VTK) 
 
 # Don't build anything unless the version of CMake is high enough.
 # The matching ELSE/ENDIF should be the last lines in the file.
@@ -126,6 +126,7 @@ IF(BUILD_PDE)
     Code/PDE/Registry.cxx
     Code/PDE/ScriptImaging.cxx
     Code/PDE/ScriptInterface.cxx
+    Code/PDE/VTKMedialMesh.cxx
     )
 
   # Apply SWIG to the .i file
@@ -172,7 +173,10 @@ IF(BUILD_PDE)
     ITKIO
     ITKCommon
     ITKBasicFilters
-    ${GLUT_LIBRARY})
+    ${GLUT_LIBRARY}
+    vtkCommon
+    vtkIO
+    )
 
   # Create the executable
   # TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS})
@@ -186,6 +190,7 @@ IF(BUILD_PDE)
     example3.py 
     example4.py
     example5.py
+    example6.py
     common.py 
     imageprep.py)
   

@@ -222,6 +222,9 @@ GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV
   // Check the parameters
   if(mu == 0 || mv == 0 || mk != NComponents) return false;
 
+  // Expand the number of coefficients
+  if(mu < ncu) mu = ncu; if(mv < ncv) mv = ncv;
+
   // Reinitialize the coefficient array
   C = Index3D(NComponents, mu, mv);
   Initialize(mu, mv);

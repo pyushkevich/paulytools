@@ -43,7 +43,10 @@ public:
 
   // Y = 0.5 (X + 1)
   double Evaluate(const SMLVec3d &X)
-    { return FloatImageEuclideanFunctionAdapter::Evaluate(X); }
+    { 
+    // return FloatImageEuclideanFunctionAdapter::Evaluate(X); 
+    return FloatImageEuclideanFunctionAdapter::Evaluate(X);
+    }
 
   SMLVec3d ComputeGradient(const SMLVec3d &X)
     { return FloatImageEuclideanFunctionAdapter::ComputeGradient(X); }
@@ -409,6 +412,7 @@ double VolumeOverlapEnergyTerm::ComputeEnergy(SolutionData *data)
     xImageValue[i] = fImage.Evaluate(data->xInternalPoints[i]);
 
   // Iterate over all the profiles (intervals of the sail vectors)
+  /*
   MedialProfileIntervalIterator *itProfile = 
     data->xAtomGrid->NewProfileIntervalIterator(nCuts);
   for( ; !itProfile->IsAtEnd(); ++(*itProfile) )
@@ -436,6 +440,16 @@ double VolumeOverlapEnergyTerm::ComputeEnergy(SolutionData *data)
     // Add the weighted sum to the match
     xIntersect += w * xLocal;
     }
+  delete itProfile; 
+  */
+
+  MedialInternalPointIterator *it = data->xAtomGrid->NewInternalPointIterator(nCuts);
+  for(; !it->IsAtEnd(); ++(*it))
+    {
+    double xLocal = 0.5 * (1.0 + xImageValue[it->GetIndex()]);
+    double w = data->xInternalWeights[it->GetIndex()];
+    xIntersect += xLocal * w;
+    }
   
   // Get (remember) the object volume 
   xObjectVolume = data->xInternalVolume;
@@ -444,7 +458,6 @@ double VolumeOverlapEnergyTerm::ComputeEnergy(SolutionData *data)
   xOverlap = xIntersect / (xImageVolume + xObjectVolume - xIntersect); 
 
   // Clean up
-  delete itProfile; 
   delete xImageValue;
 
   // Return a value that can be minimized
@@ -508,7 +521,8 @@ VolumeOverlapEnergyTerm::ComputeGradient(
       double z = dot_product( dX, B.N ) * w;
 
       // Compute the two partials
-      dOverlap += z * xImageVal[iPoint];
+      double xImg = 0.5 * (xImageVal[iPoint] + 1.0);
+      dOverlap += z * xImg;
       dVolume += z;
       }
 

@@ -14,7 +14,10 @@
 #include <iostream>
 #include <fstream>
 
+void ExportMedialMeshToVTK(MedialAtomGrid *xGrid, MedialAtom *xAtoms, const char *file);
+void ExportBoundaryMeshToVTK(MedialAtomGrid *xGrid, MedialAtom *xAtoms, const char *file);
 using namespace std;
+
 
 namespace medialpde {
 
@@ -38,10 +41,12 @@ MedialPDE::MedialPDE(unsigned int nBasesU, unsigned int nBasesV,
 
   eMask = FULL; 
   eOptimizer = GRADIENT;
+  eMatch = VOLUME;
   
   xStepSize = 0.1;
   xCoarsenessRho = 1.0;
   xCoarsenessX = 1.0;
+  xMeshDumpImprovementPercentage = 0.0;
 }
 
 MedialPDE::~MedialPDE()
@@ -326,7 +331,33 @@ void GradientDescentOptimization(MedialOptimizationProblem *xProblem,
     }
 }
 
-void ConjugateGradientOptimization(MedialPDE *pde, MedialOptimizationProblem *xProblem, 
+
+void MedialPDE::ExportIterationToVTK(unsigned int iter)
+{
+  ostringstream oss;
+  oss << strDumpPath << ".";
+  oss.width(5);
+  oss.fill('0');
+  oss << iter;
+  string fMedial = oss.str() + ".med.vtk";
+  string fBoundary = oss.str() + ".bnd.vtk";
+
+  ExportMedialMeshToVTK(
+    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), fMedial.c_str());
+  ExportBoundaryMeshToVTK(
+    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), fBoundary.c_str());
+}
+
+void MedialPDE::SaveVTKMesh(const char *fMedial, const char *fBnd)
+{
+  ExportMedialMeshToVTK(
+    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), fMedial);
+  ExportBoundaryMeshToVTK(
+    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), fBnd);
+}
+
+void MedialPDE::ConjugateGradientOptimization(
+  MedialOptimizationProblem *xProblem, 
   vnl_vector<double> &xSolution, unsigned int nSteps, double xStep)
 {
   size_t nCoeff = xSolution.size();
@@ -340,6 +371,11 @@ void ConjugateGradientOptimization(MedialPDE *pde, MedialOptimizationProblem *xP
   // Debugging info
   ofstream fdump("conjgrad.txt",ios_base::out);
   fdump << "CONJUGATE GRADIENT OPTIMIZER DUMP" << endl;
+
+  // When we last dumped a mesh
+  double xLastMeshDumpValue = xMethod.getBestEverValue();
+  if(xMeshDumpImprovementPercentage > 0.0)
+    ExportIterationToVTK(0);
   
   for(size_t p = 0; p < nSteps; p++)
     {
@@ -352,10 +388,20 @@ void ConjugateGradientOptimization(MedialPDE *pde, MedialOptimizationProblem *xP
 
     cout << "Step " << p << ", best value: " << xMethod.getBestEverValue() << endl;
 
+    // Dump the mesh
+    if(xMeshDumpImprovementPercentage > 0.0)
+      if(xMethod.getBestEverValue() < 
+        (1.0 - xMeshDumpImprovementPercentage) * xLastMeshDumpValue)
+        {
+        xProblem->evaluate(xMethod.getBestEverX());
+        ExportIterationToVTK(p);
+        xLastMeshDumpValue = xMethod.getBestEverValue(); 
+        }
+
     // Save the file 
     ostringstream oss;
     oss << "iter_" << p;
-    pde->SaveToParameterFile(oss.str().c_str());
+    SaveToParameterFile(oss.str().c_str());
     }
 
   fdump.close();
@@ -434,12 +480,18 @@ void MedialPDE
   MedialOptimizationProblem xProblem(xSolver, xMask);
 
   // Create an image match term and a jacobian term
-  VolumeOverlapEnergyTerm xTermImage(image, 5);
+  EnergyTerm *xTermImage;
+  if(eMatch == VOLUME)
+    xTermImage = new VolumeOverlapEnergyTerm(image, 8);
+  else
+    xTermImage = new BoundaryImageMatchTerm(image);
+  
+  // Create the other terms
   BoundaryJacobianEnergyTerm xTermJacobian;
   CrestLaplacianEnergyTerm xTermCrest;
 
   // Add the terms to the problem
-  xProblem.AddEnergyTerm(&xTermImage, 1.0);
+  xProblem.AddEnergyTerm(xTermImage, 1.0);
   xProblem.AddEnergyTerm(&xTermJacobian, 0.005);
   xProblem.AddEnergyTerm(&xTermCrest, 0.005);
 
@@ -454,7 +506,7 @@ void MedialPDE
 
   // At this point, split depending on the method
   if(eOptimizer == CONJGRAD)
-    ConjugateGradientOptimization(this, &xProblem, xSolution, nSteps, xStepSize);
+    ConjugateGradientOptimization(&xProblem, xSolution, nSteps, xStepSize);
   else if(eOptimizer == GRADIENT)
     GradientDescentOptimization(&xProblem, xSolution, nSteps, xStepSize);
   else
@@ -466,6 +518,7 @@ void MedialPDE
 
   // Delete the mask
   delete xMask;
+  delete xTermImage;
 }
 class FirstMomentComputer : public EuclideanFunction
 {

@@ -20,6 +20,3 @@ mp.SaveToParameterFile(dirWork + "avg/average_mrepL_align.mpde");
 
 # Compute the boundary image match
 print "Image Match = ", mp.ComputeImageMatch(img)
-
-# Draw the m-rep
-RenderMedialPDE(mp)

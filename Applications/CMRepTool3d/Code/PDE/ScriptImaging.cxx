@@ -199,6 +199,7 @@ double FloatImage::ComputeObjectVolume()
 
   // Create the volume accumulator
   long nPositiveVoxels = 0;
+  double xVolume = 0.0;
 
   // Add each voxel to the accumulator
   FloatImageType::Pointer img = xImage->GetInternalImage();
@@ -207,6 +208,7 @@ double FloatImage::ComputeObjectVolume()
     {
     if(it.Get() > 0)
       nPositiveVoxels++;
+    xVolume += 0.5 * (it.Get() + 1.0);
     ++it;
     }
 
@@ -214,7 +216,8 @@ double FloatImage::ComputeObjectVolume()
   double xVoxelVolume = 
     img->GetSpacing()[0] * img->GetSpacing()[1] * img->GetSpacing()[2];
   cout << "NPositive = " << nPositiveVoxels << endl;
-  return nPositiveVoxels * xVoxelVolume;
+  // return nPositiveVoxels * xVoxelVolume;
+  return xVolume * xVoxelVolume;
 }
 
 BinaryImage::BinaryImage()

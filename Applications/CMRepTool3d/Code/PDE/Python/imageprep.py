@@ -20,6 +20,6 @@ img.SetOutsideValue(-1.0)
 img.SaveToPath(dirWork + "avg/average_hippo_blurred_med","mha")
 
 # Apply different levels of blurring to the image
-img.SetToBlurredBinary(bin, 0.5)
+img.SetToBlurredBinary(bin, 0.6)
 img.SetOutsideValue(-1.0)
 img.SaveToPath(dirWork + "avg/average_hippo_blurred_low","mha")

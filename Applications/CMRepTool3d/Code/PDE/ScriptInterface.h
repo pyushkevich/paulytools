@@ -1,6 +1,9 @@
 #ifndef __ScriptInterface_h_
 #define __ScriptInterface_h_
 
+#include <string>
+#include <smlmath.h>
+
 class MedialPDESolver;
 class FourierSurface;
 class MedialOptimizationProblem;
@@ -129,6 +132,9 @@ public:
   /** Save the model as a BYU mesh */
   void SaveBYUMesh(const char *file);
 
+  /** Save to a VTK file */
+  void SaveVTKMesh(const char *fileMedial, const char *fileBoundary);
+
   /** Compute the radius function after surface/pho update */
   void Solve();
 
@@ -153,6 +159,21 @@ public:
   void SetOptimizerToEvolutionaryMethod(double xStep)
     { eOptimizer = EVOLUTION; }
 
+  /** Set the match type */
+  void SetMatchToVolumeOverlap()
+    { eMatch = VOLUME; }
+
+  void SetMatchToBoundaryGradient()
+    { eMatch = BOUNDARY; }
+
+  /** Set the optimizer dump path. As the optimizer runs, it will periodically
+   * dump meshes into path.number.med.vtk and path.number.bnd.vtk */
+  void EnableMeshDump(const char *path, double xImprovement = 0.01)
+    { strDumpPath = path; xMeshDumpImprovementPercentage = xImprovement; }
+
+  void DisableMeshDump()
+    { xMeshDumpImprovementPercentage = 0.0; }
+
   /** Should not be here! */
   MedialPDESolver *GetSolver() { return xSolver; }
 
@@ -160,6 +181,7 @@ private:
   // Optimization modes and optimizers
   enum OptimizerType { CONJGRAD, GRADIENT, EVOLUTION };
   enum MaskType { AFFINE, COARSE_TO_FINE, FULL }; 
+  enum MatchType { VOLUME, BOUNDARY };
   
   // The solver
   MedialPDESolver *xSolver;
@@ -170,11 +192,19 @@ private:
   // Properties associated with different modes
   double xCoarsenessX, xCoarsenessRho, xStepSize;
 
+  // A file where the mesh info is dumped
+  std::string strDumpPath;
+  double xMeshDumpImprovementPercentage;
+
   // Current modes
   OptimizerType eOptimizer;
   MaskType eMask;
+  MatchType eMatch;
 
   // Friend functions
+  void ExportIterationToVTK(unsigned int iIter);
+  void ConjugateGradientOptimization(MedialOptimizationProblem *xProblem, 
+    vnl_vector<double> &xSolution, unsigned int nSteps, double xStep);
   friend void RenderMedialPDE(MedialPDE *);
 };
 
