@@ -66,7 +66,8 @@ public:
     { 
     // Get the image match from the superclass
     double I = FloatImageEuclideanFunctionAdapter::Evaluate(X);
-    return (I - xLevelSet) * (I - xLevelSet);
+    double d = I - xLevelSet;
+    return d * d * d * d;
     }
 
   SMLVec3d ComputeGradient(const SMLVec3d &X)
@@ -74,9 +75,10 @@ public:
     // Get the gradient and match from the superclass
     SMLVec3d G = FloatImageEuclideanFunctionAdapter::ComputeGradient(X);
     double I = FloatImageEuclideanFunctionAdapter::Evaluate(X);
+    double d = I - xLevelSet;
 
     // Scale the gradient by the match
-    return (2.0 * (I - xLevelSet)) * G;
+    return (4.0 * d * d * d) * G;
     }
 private:
   float xLevelSet;
@@ -204,6 +206,7 @@ BoundaryImageMatchTerm
 
   xBoundaryArea = S->xBoundaryArea;
   xFinalMatch = xImageMatch / xBoundaryArea;
+  xFinalMatch = sqrt(sqrt(xFinalMatch));
 
   // Scale by area
   return xFinalMatch;
