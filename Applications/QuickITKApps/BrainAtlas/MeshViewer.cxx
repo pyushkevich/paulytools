@@ -9,22 +9,78 @@
 #include "vtkRenderer.h"
 #include "vtkRenderWindow.h"
 #include "vtkRenderWindowInteractor.h"
+#include "vtkPointData.h"
+#include "vtkPolyData.h"
 
 using namespace std;
 
 
 int main(int argc, char *argv[])
 {
-  cout << "usage: MeshViewer mesh.vtk" << endl;
+  if(argc < 2)
+    {
+    cout << "usage: [options] MeshViewer mesh.vtk" << endl;
+    cout << "options:" << endl;
+    cout << "   -a NAME         Specify the name of a scalar array to overlay " << endl;
+    cout << "   -s X.XX X.XX    Specify the scalar range to show the array " << endl;
+    return -1;
+    }
 
+  // Parameter scanning
+  const char *fnInput = argv[argc - 1];
+  const char *sScalarArray = NULL;
+  double xScalarMin, xScalarMax;
+  bool flagSetScalars = false;
+  for(unsigned int iArg = 1; iArg < argc-1; iArg++)
+    {
+    if(!strcmp(argv[iArg],"-a"))
+      {
+      sScalarArray = argv[++iArg];
+      }
+    else if(!strcmp(argv[iArg],"-s"))
+      {
+      xScalarMin = atof(argv[++iArg]);
+      xScalarMax = atof(argv[++iArg]);
+      flagSetScalars = true;
+      }
+    }
+      
   // Load the mesh
   vtkPolyDataReader *fltReader = vtkPolyDataReader::New();
-  fltReader->SetFileName(argv[1]);
+  fltReader->SetFileName(fnInput);
   fltReader->Update();
+
+  // Check what additional information the mesh has
+  vtkPolyData *mesh = fltReader->GetOutput();
+
+  // If the scalar arrays are specified ...
+  if(sScalarArray) 
+    {
+    // Check how many arrays there are
+    unsigned int nArrays = mesh->GetPointData()->GetNumberOfArrays();
+    cout << "Mesh has " << nArrays << " arrays " << endl;
+    
+    // List arrays 
+    for(unsigned int i = 0; i < nArrays; i++)
+      {
+      cout << " Array " << i << "\tnamed " << mesh->GetPointData()->GetArrayName(i) << "\thas "
+        << mesh->GetPointData()->GetArray(i)->GetNumberOfTuples() << " tuples " << endl;
+      }
+
+    // Assign the selected array to scalars
+    vtkDataArray *array = mesh->GetPointData()->GetArray(sScalarArray);
+    if(array)
+      mesh->GetPointData()->SetScalars(array);
+    else
+      cout << "Your array could not be found!" << endl;
+    }
   
   // Draw the mesh
   vtkPolyDataMapper *mapper = vtkPolyDataMapper::New();
-  mapper->SetInput(fltReader->GetOutput());
+  mapper->SetInput(mesh);
+
+  if(flagSetScalars)
+    mapper->SetScalarRange(xScalarMin,xScalarMax);
 
   vtkLODActor *actor = vtkLODActor::New();
   actor->SetMapper(mapper);

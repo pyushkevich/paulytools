@@ -33,8 +33,11 @@ TracerUserInterfaceLogic
   char *file = fl_file_chooser("Select a text file containing the curves","*.txt","curves.txt",1);
   if(file)
     {
-    // m_Data->LoadCurves(file);
-    m_WinTrace->SetTracerData(m_Data);
+    if(m_Data->LoadCurves(file))
+      {
+      m_WinTrace->SetTracerData(m_Data);
+      RebuildCurveList();
+      }
     }
 }
 
@@ -63,8 +66,11 @@ void
 TracerUserInterfaceLogic
 ::OnButtonDeleteCurve()
 {
+  // Get the curves info
+  const TracerCurves *curves = m_Data->GetCurves();
+  
   if(fl_ask("Do you really want to delete\ncurve %s ?",
-    m_Data->GetCurveName(m_Data->GetCurrentCurve())))
+    curves->GetCurveName(m_Data->GetCurrentCurve())))
     {
     // Remove the currently selected curve
     m_Data->DeleteCurrentCurve();
@@ -73,7 +79,7 @@ TracerUserInterfaceLogic
     m_WinTrace->OnCurrentCurveChange();
 
     // Potentially, clear the list of names
-    if(m_Data->GetNumberOfCurves() == 0)
+    if(curves->GetNumberOfCurves() == 0)
       {
       // Enter trackball mode
       m_BtnModeTrackball->value(1);
@@ -97,7 +103,7 @@ TracerUserInterfaceLogic
   // Update the name of the curve
   const char *name = 
     fl_input("Please enter the new name for the curve: ",
-      m_Data->GetCurveName(m_Data->GetCurrentCurve()));
+      m_Data->GetCurves()->GetCurveName(m_Data->GetCurrentCurve()));
   
   // Change the name
   m_Data->SetCurveName(m_Data->GetCurrentCurve(),name);
@@ -157,12 +163,30 @@ TracerUserInterfaceLogic
   // Clear the choice of curves
   m_ChcCurve->clear();
 
-  // Get all the curves
-  for(unsigned int iCurve=0;iCurve<m_Data->GetNumberOfCurves();iCurve++)
-    m_ChcCurve->add(m_Data->GetCurveName(iCurve));
+  // Get the alphabetical curve list
+  typedef TracerCurves::StringIdPair StringIdPair;
+  typedef list<StringIdPair> StringIdList;
+  StringIdList lCurveNames;
+  m_Data->GetCurves()->GetAlphabeticCurveList(lCurveNames);
+
+  // Keep track of which item is current
+  int iCurrent = -1;
+  
+  // Add the curves to the choice
+  StringIdList::iterator it=lCurveNames.begin();
+  while(it != lCurveNames.end())
+    {
+    int iPos = 
+      m_ChcCurve->add(it->first.c_str(), 0, NULL, (void *) it->second, 0);
+    
+    if(m_Data->GetCurrentCurve() == it->second)
+      iCurrent = iPos;
+    
+    ++it;
+    }
 
   // Set the current item
-  m_ChcCurve->value(m_Data->GetCurrentCurve());
+  m_ChcCurve->value(iCurrent);
 }
 
 void 
@@ -171,9 +195,16 @@ TracerUserInterfaceLogic
 {
   // Get the currently selected curve
   int i = m_ChcCurve->value();
+
+  // Make sure this is a valid item
+  if(i < 0 || i >= m_ChcCurve->size()) 
+    return;
+  
+  // Get the user data for the selected curve
+  TracerCurves::IdType id = (TracerCurves::IdType) m_ChcCurve->menu()[i].user_data_;
   
   // Select the curve in the data
-  m_Data->SetCurrentCurve(i);
+  m_Data->SetCurrentCurve(id);
   
   // Pass the current curve information to the GL window
   m_WinTrace->OnCurrentCurveChange();

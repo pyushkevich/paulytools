@@ -100,6 +100,9 @@ TracerMainWindow
   glEnable(GL_LIGHT0);
   glEnable(GL_LIGHTING);
 
+  glEnable(GL_POLYGON_OFFSET_FILL);
+  glPolygonOffset(1.0,1.0);
+
   // glShadeModel(GL_FLAT);
   // glPolygonMode(GL_FRONT_AND_BACK,GL_LINE);
 }
@@ -169,20 +172,33 @@ TracerMainWindow
     glEnable(GL_LINE_SMOOTH);
     glLineWidth(2.5);
 
-    // Display the existing curves
-    for(unsigned int iCurve = 0; iCurve<m_Data->GetNumberOfCurves();iCurve++)
+    // Get a list of curve id's
+    typedef list<TracerCurves::IdType> IdList;
+    typedef TracerCurves::MeshCurve MeshCurve;
+    typedef const TracerCurves::MeshCurve ConstMeshCurve;
+    
+    IdList lCurves;
+    m_Data->GetCurves()->GetCurveIdList(lCurves);
+    
+    // Display each of the curves
+    for(IdList::iterator it = lCurves.begin(); it!=lCurves.end(); it++)
       {
       // Choose a color for the curve
-      if(iCurve == m_Data->GetCurrentCurve()) glColor3d(1,0.5,0.5);
-      else glColor3d(0.5,0,0);
+      if(*it == m_Data->GetCurrentCurve()) 
+        glColor3d(1,0.5,0.5);
+      else 
+        glColor3d(0.5,0,0);
+
+      // Get the curve as a list of vertex IDs
+      ConstMeshCurve &lPoints = m_Data->GetCurves()->GetCurveVertices(*it);
 
       // Draw the curve
       glBegin(GL_LINE_STRIP);
-      for(unsigned int iPoint = 0;
-        iPoint < m_Data->GetNumberOfCurvePoints(iCurve);iPoint++)
+      for(ConstMeshCurve::const_iterator pit = lPoints.begin(); pit != lPoints.end(); pit++)
         {
-        TracerData::Vec x = m_Data->GetCurvePoint(iCurve,iPoint);
-        glVertex3dv(x.data_block());
+        TracerData::Vec xPoint;
+        m_Data->GetPointCoordinate(*pit, xPoint);
+        glVertex3dv(xPoint.data_block());
         }
       glEnd();
       }
@@ -193,16 +209,21 @@ TracerMainWindow
       glColor3d(1,1,0);
       glPointSize(4.0);
 
-      list<vtkIdType> lPoints = m_Data->GetPathToPoint(m_CurrentPoint);
-      list<vtkIdType>::const_iterator it = lPoints.begin();
+      MeshCurve lPoints;
+      m_Data->GetPathToPoint(m_CurrentPoint, lPoints);
+      MeshCurve::const_iterator it = lPoints.begin();
 
-      if(lPoints.size() > 1) 
+      TracerData::Vec xPoint;
+
+      if(m_Data->IsPathSourceSet()) 
         {
         glBegin(GL_LINE_STRIP);
-        TracerData::Vec x = m_Data->GetCurvePoint(
-          m_Data->GetCurrentCurve(),
-          m_Data->GetNumberOfCurvePoints(m_Data->GetCurrentCurve())-1);
-        glVertex3d(x[0],x[1],x[2]);
+
+        // Get the last point on the current curve
+        vtkIdType vLast = m_Data->GetPathSource();
+        m_Data->GetPointCoordinate(vLast, xPoint);
+        glVertex3dv(xPoint.data_block());
+
         }
       else 
         {
@@ -211,8 +232,8 @@ TracerMainWindow
       
       while(it != lPoints.end())
         {
-        TracerData::Vec x = m_Data->GetPointCoordinate(*it);
-        glVertex3d(x[0],x[1],x[2]);
+        m_Data->GetPointCoordinate(*it, xPoint);
+        glVertex3dv(xPoint.data_block());
         ++it;
         }
       

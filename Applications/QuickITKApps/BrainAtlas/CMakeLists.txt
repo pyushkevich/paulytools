@@ -8,7 +8,13 @@ INCLUDE_DIRECTORIES(
   ${PAULY_SOURCE_DIR}/Applications/QuickITKApps/BrainAtlas
 )
 
-LINK_LIBRARIES(ITKCommon ITKBasicFilters ITKIO ${PAULY_CORE_LIBS}
+LINK_LIBRARIES(
+  ITKCommon 
+  ITKBasicFilters 
+  ITKIO 
+  ITKNumerics
+  ITKStatistics
+  ${PAULY_CORE_LIBS}
   vtkCommon 
   vtkFiltering
   vtkImaging
@@ -23,6 +29,8 @@ LINK_LIBRARIES(ITKCommon ITKBasicFilters ITKIO ${PAULY_CORE_LIBS}
 # Tracer application GUI
 SET(TRACER_SRCS
   ShortestPath.cxx
+  TracerCurves.cxx
+  TracerCurves.h
   TracerData.cxx
   TracerData.h
   TracerMain.cxx

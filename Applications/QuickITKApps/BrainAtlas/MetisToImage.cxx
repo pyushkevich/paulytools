@@ -17,6 +17,7 @@ extern "C" {
 }
 
 using namespace std;
+using namespace itk;
 
 int usage()
 {
@@ -26,11 +27,15 @@ int usage()
   cout << "   -w N XX.X           weight of partition N is XX.X" << endl;
   cout << "   -p N1 N2 N3         define cut plane at dimension N1, slice N2" << endl;
   cout << "                       with relative edge strength N3" << endl;
+  cout << "   -o                  use optimization to refine partition weights" << endl;
   return -1;
 }
 
 #include <itkConstantBoundaryCondition.h>
 #include <itkConstNeighborhoodIterator.h>
+#include <itkSingleValuedCostFunction.h>
+#include <itkOnePlusOneEvolutionaryOptimizer.h>
+#include <itkNormalVariateGenerator.h>
 
 template<class TImage, class TVertex = int> 
 class BinaryImageToGraphFilter : public itk::ProcessObject
@@ -273,17 +278,37 @@ void VerifyGraph(int n, T *ai, T *a, S *wv, S *we)
 #include <vnl/vnl_cost_function.h>
 #include <vnl/algo/vnl_powell.h>
 
-class MetisPartitionProblem : public vnl_cost_function
+class MetisPartitionProblem : public SingleValuedCostFunction
 {
 public:
+  typedef MetisPartitionProblem Self;
+  typedef SingleValuedCostFunction Superclass;
+  typedef SmartPointer<Self> Pointer;
+  typedef SmartPointer<const Self> ConstPointer;
+  
+  itkTypeMacro(MetisPartitionProblem, SingleValuedCostFunction);
+
+  itkNewMacro(Self);
+  
   typedef itk::Image<short,3> ImageType; 
   typedef BinaryImageToGraphFilter<ImageType> GraphFilter;
-  
-  MetisPartitionProblem(GraphFilter *fltGraph, int *wgtEdges, unsigned int nParts);
-  virtual ~MetisPartitionProblem() {};
+
+  typedef Superclass::MeasureType MeasureType;
+  typedef Superclass::ParametersType ParametersType;
+  typedef Superclass::DerivativeType DerivativeType;
+
+  /** Set the problem parameters */
+  void SetProblem(GraphFilter *fltGraph, int *wgtEdges, unsigned int nParts);
+
+  /** Return the number of parameters */
+  unsigned int GetNumberOfParameters() const
+    { return m_NumberOfParameters; }
   
   /** Virtual method from parent class */
-  double f(vnl_vector<double> const& x);
+  MeasureType GetValue(const ParametersType &x) const;
+
+  /** Not used, since there are no derivatives to evaluate */
+  void GetDerivative(const ParametersType &, DerivativeType &) const {}
 
   /** Get the result of the last partition */
   idxtype *GetLastPartition() { return m_Partition; }
@@ -297,20 +322,24 @@ private:
   
   /** The partition array */
   idxtype *m_Partition;
+
+  /** Problem size */
+  unsigned int m_NumberOfParameters;
 };
 
+void
 MetisPartitionProblem
-::MetisPartitionProblem(GraphFilter *fltGraph, int *wgtEdges, unsigned int nParts)
-: vnl_cost_function(nParts)
+::SetProblem(GraphFilter *fltGraph, int *wgtEdges, unsigned int nParts)
 {
   m_Graph = fltGraph;
   m_EdgeWeights = wgtEdges;
   m_Partition = new idxtype[m_Graph->GetNumberOfVertices()];
+  m_NumberOfParameters = nParts;
 }
 
-double
+MetisPartitionProblem::MeasureType
 MetisPartitionProblem
-::f(vnl_vector<double> const& x)
+::GetValue(const ParametersType &x) const 
 {
   // Convert the vector to floating array
   vnl_vector<float> wgt(x.size() + 1);
@@ -350,7 +379,7 @@ MetisPartitionProblem
   // Report the edge cut
   cout << "  - done - edge cut " << edgecut << endl;
 
-  return (double) edgecut;
+  return (MeasureType) edgecut;
 }
 
 int main(int argc, char *argv[])
@@ -363,6 +392,7 @@ int main(int argc, char *argv[])
   int nParts = atoi(argv[argc-1]);
   vnl_vector<double> xWeights(nParts,1.0 / nParts);
   int iPlaneDim = -1, iPlaneSlice = -1, iPlaneStrength = 10;
+  bool flagOptimize = false;
   
   // Read the options
   for(unsigned int iArg=1;iArg<argc-3;iArg++)
@@ -386,6 +416,10 @@ int main(int argc, char *argv[])
       iPlaneDim = atoi(argv[++iArg]);
       iPlaneSlice = atoi(argv[++iArg]);
       iPlaneStrength = atoi(argv[++iArg]);
+      }
+    else if(!strcmp(argv[iArg],"-o"))
+      {
+      flagOptimize = true;
       }
     else
       {
@@ -465,18 +499,34 @@ int main(int argc, char *argv[])
   	}
 
   // Create a METIS problem based on the graph and weights
-  MetisPartitionProblem mp(fltGraph,xEdgeWeight,nParts - 1);
+  MetisPartitionProblem::Pointer mp = MetisPartitionProblem::New();
+  mp->SetProblem(fltGraph,xEdgeWeight,nParts - 1);
 
-  vnl_powell optPowell(&mp);
-  optPowell.set_max_function_evals(10);
-  optPowell.set_verbose(true);
-  optPowell.set_trace(true);
-  optPowell.set_initial_step(0.001);
-  optPowell.minimize(xWeights);
+  // Get the starting solution
+  MetisPartitionProblem::ParametersType x(nParts - 1);
+  x.set(xWeights.data_block());
 
-  // Evaluate the problem
-  // cout << "   edge cut value is " << mp.f(xWeights) << endl;
-  idxtype *xPartition = mp.GetLastPartition();
+  if(flagOptimize)
+    {
+    typedef OnePlusOneEvolutionaryOptimizer Optimizer;
+    Optimizer::Pointer opt = Optimizer::New();
+
+    typedef itk::Statistics::NormalVariateGenerator Generator;
+    Generator::Pointer generator = Generator::New();
+
+    opt->SetCostFunction(mp);
+    opt->SetInitialPosition(x);
+    opt->SetInitialRadius(0.001);
+    opt->SetMaximumIteration(100);
+    opt->SetNormalVariateGenerator(generator);
+    opt->StartOptimization();
+
+    x = opt->GetCurrentPosition();
+    }
+
+  // Evaluate the problem using the best value
+  cout << "   edge cut value is " << mp->GetValue(x) << endl;
+  idxtype *xPartition = mp->GetLastPartition();
 
   // Verify the edge cut ourselves
   /*

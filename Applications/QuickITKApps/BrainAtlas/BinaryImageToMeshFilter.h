@@ -58,25 +58,27 @@ public:
 
   /** Get the result mesh */
   vtkPolyData *GetMesh()
-    {
-    return fltStripper->GetOutput();
-    }
+    { return fltStripper->GetOutput(); }
+
+  /** Get the intermediate antialiased image */
+  FloatImageType *GetAntiAliasImage() 
+    { return fltAlias->GetOutput(); }
 
   /** Whether to invert the binary image */
   itkSetMacro(InvertInput,bool);
   itkGetMacro(InvertInput,bool);
 
   /** Set the input */
-  void SetInput(TImage *image) { this->SetNthInput(0,image); }
+  void SetInput(TImage *image) 
+    { this->SetNthInput(0,image); }
 
   /** Update method (why?) */
-  void Update() { this->GenerateData(); }
+  void Update() 
+    { this->GenerateData(); }
 
   /** Set the anti-aliasing quality parameter */
   void SetAntiAliasMaxRMSError(double value) 
-    {
-    fltAlias->SetMaximumRMSError(value);
-    }
+    { fltAlias->SetMaximumRMSError(value); }
 
   /** Get the 'distance image' based on anti-aliasing the binary image */
   FloatImageType *GetDistanceImage() { return fltAlias->GetOutput(); }
@@ -91,23 +93,11 @@ public:
 
     cout << "        mesh has " << mesh->GetNumberOfPoints() << " points." << endl;
     cout << "        mesh has " << mesh->GetNumberOfCells() << " cells. " << endl;
-    //cout << "        mesh has " << cellHist[VTK_EMPTY_CELL] << " vtk_empty_cell" << endl;
     cout << "        mesh has " << cellHist[VTK_VERTEX] << " vtk_vertex" << endl;      
-    //cout << "        mesh has " << cellHist[VTK_POLY_VERTEX] << "vtk_poly_vertex" << endl;      
     cout << "        mesh has " << cellHist[VTK_LINE] << " vtk_line" << endl;      
     cout << "        mesh has " << cellHist[VTK_POLY_LINE] << " vtk_poly_line" << endl;      
     cout << "        mesh has " << cellHist[VTK_TRIANGLE] << " vtk_triangle" << endl;      
     cout << "        mesh has " << cellHist[VTK_TRIANGLE_STRIP] << " vtk_triangle_strip" << endl;      
-    //cout << "        mesh has " << cellHist[VTK_POLYGON] << "vtk_polygon" << endl;      
-    //cout << "        mesh has " << cellHist[VTK_PIXEL] << "vtk_pixel" << endl;      
-    //cout << "        mesh has " << cellHist[VTK_QUAD] << "vtk_quad" << endl;      
-    //cout << "        mesh has " << cellHist[VTK_TETRA] << "vtk_tetra" << endl;      
-    //cout << "        mesh has " << cellHist[VTK_VOXEL] << "vtk_voxel" << endl;      
-    //cout << "        mesh has " << cellHist[VTK_HEXAHEDRON] << "vtk_hexahedron" << endl;      
-    //cout << "        mesh has " << cellHist[VTK_WEDGE] << "vtk_wedge" << endl;      
-    //cout << "        mesh has " << cellHist[VTK_PYRAMID] << "vtk_pyramid" << endl;      
-    //cout << "        mesh has " << cellHist[VTK_PARAMETRIC_CURVE] << "vtk_parametric_curve" << endl;      
-    //cout << "        mesh has " << cellHist[VTK_PARAMETRIC_SURFACE] << "vtk_parametric_surface" << endl;      
     }
 
 protected:

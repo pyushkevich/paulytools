@@ -7,6 +7,7 @@
 #include "VTKMeshShortestDistance.h"
 #include <list>
 
+#include "TracerCurves.h"
 
 class TracerData
 {
@@ -14,18 +15,7 @@ public:
   // Typedef for the 3d vector
   typedef vnl_vector_fixed<double, 3> Vec;
   typedef vector<Vec> VecArray;
-
-  // Structure representing a point on the curve
-  struct Vertex {
-    vtkIdType i;
-    Vec x;
-  };
-
-  // Structure representing a curve on the surface of the grey matter
-  struct Curve {
-    string name;
-    vector<Vertex> points;
-  };
+  typedef TracerCurves::IdType IdType;
 
   // Tracer data constructors
   TracerData();
@@ -37,6 +27,9 @@ public:
   // Save the curves to disk
   void SaveCurves(const char *file);
 
+  // Load curves from disk
+  bool LoadCurves(const char *file);
+
   // Get the 'source' mesh
   vtkPolyData *GetSourceMesh() 
     {
@@ -44,75 +37,85 @@ public:
     }
 
   // Get the coordinate for a given point index (in edge-mesh)
-  Vec GetPointCoordinate(vtkIdType id)
+  void GetPointCoordinate(vtkIdType id, Vec &target)
     {
-    Vec x;
-    m_DistanceMapper->GetEdgeMesh()->GetPoint(id,x.data_block());
-    return x;
+    m_DistanceMapper->GetEdgeMesh()->GetPoint(id,target.data_block());
     }
 
   // Create a new curve (given a name)
   void AddNewCurve(const char *name)
     {
-    Curve cnew;
-    cnew.name = name;
-    m_Curves.push_back(cnew);
-    m_FocusCurve = m_Curves.size() - 1;
+    m_FocusCurve = m_Curves.AddCurve(name);
+    m_FocusPoint = -1;
     }
     
   // Set the current curve
-  void SetCurrentCurve(unsigned int iCurve)
+  void SetCurrentCurve(IdType iCurve)
     {
-    assert(iCurve < m_Curves.size());
+    // Check that the curve exists
+    assert(m_Curves.IsCurvePresent(iCurve));
     m_FocusCurve = iCurve;
-    
-    // Compute the shortest distance to the last point in the curve
-    m_DistanceMapper->ComputeDistances(m_Curves[m_FocusCurve].points.back().i);
+
+    // Set the focus point
+    if(m_Curves.GetCurveControls(iCurve).size())
+      {
+      // Get the point of focus
+      m_FocusPoint = m_Curves.GetCurveControls(iCurve).back();
+
+      // Compute shortest distances to that point
+      m_DistanceMapper->ComputeDistances(
+        m_Curves.GetControlPointVertex(m_FocusPoint));
+      }
+    else
+      {
+      m_FocusPoint = -1;
+      }
     }
 
-  unsigned int GetNumberOfCurves() 
-    {
-    return m_Curves.size();
-    }
+  const TracerCurves *GetCurves()
+    { return &m_Curves; }
 
-  const char *GetCurveName(unsigned int iCurve)
+  void SetCurveName(IdType iCurve, const char *name)
     {
-    return m_Curves[iCurve].name.c_str();
-    }
-
-  void SetCurveName(unsigned int iCurve, const char *name)
-    {
-    assert(iCurve <= m_Curves.size());
-    m_Curves[iCurve].name = name;
+    assert(m_Curves.IsCurvePresent(iCurve));
+    m_Curves.SetCurveName(iCurve, name);
     }
     
   void DeleteCurrentCurve() 
     {
+/*
     // Erase the current curve
     m_Curves.erase(m_Curves.begin() + m_FocusCurve);
     
     // Update the curve index
     m_FocusCurve = (m_Curves.size() > 0) ? 
       (m_FocusCurve + 1) % m_Curves.size() : -1;
+*/
     }
    
-  int GetCurrentCurve()
+  IdType GetCurrentCurve()
     {
     return m_FocusCurve;
     }
 
-  unsigned int GetNumberOfCurvePoints(unsigned int iCurve)
+  unsigned int GetNumberOfCurvePoints(IdType iCurve)
     {
-    assert(iCurve < m_Curves.size());
-    return m_Curves[iCurve].points.size();
+    assert(m_Curves.IsCurvePresent(iCurve));
+    return m_Curves.GetCurveVertices(iCurve).size();
     }
 
+  /* 
   Vec GetCurvePoint(unsigned int iCurve, unsigned int iPoint)
     {
-    assert(iCurve < m_Curves.size());
-    assert(iPoint < m_Curves[iCurve].points.size());
-    return m_Curves[iCurve].points[iPoint].x;
+    assert(m_Curves.IsCurvePresent(iCurve));
+
+    const TracerCurves::MeshCurve &points = m_Curves.GetCurveVertices(iCurve);
+    
+    assert(iPoint < points.size());
+
+    return GetPointCoordinate(points[iPoint]);
     }
+  */
 
   // Given a ray, find a point closest to that ray
   bool PickPoint(Vec xStart, Vec xRay, vtkIdType &iPoint)
@@ -123,26 +126,38 @@ public:
   // Create a path from the last point on the focused curve (if any)
   // to the specified point. The path includes the specified point, but
   // not the last point on the focused curve
-  list<vtkIdType> GetPathToPoint(vtkIdType iPoint)
+  void GetPathToPoint(vtkIdType iPoint, TracerCurves::MeshCurve &target)
     {
-    list<vtkIdType> lPoints;
+    // Clear the return array
+    target.clear();
 
-    if(m_Curves[m_FocusCurve].points.size())
+    // Do we have a 'focus' point
+    if(m_FocusPoint != -1)
       {
-      vtkIdType iLast = m_Curves[m_FocusCurve].points.back().i;
+      vtkIdType iLast = m_Curves.GetControlPointVertex(m_FocusPoint);
       vtkIdType iCurrent = iPoint;
       while(iCurrent != iLast)
         {
-        lPoints.push_front(iCurrent);
+        target.push_front(iCurrent);
         iCurrent = m_DistanceMapper->GetVertexPredecessor(iCurrent);
         }
       }
     else
       {
-      lPoints.push_front(iPoint);
+      target.push_front(iPoint);
       }
+    }
 
-    return lPoints;
+  // Check if there is a path source
+  bool IsPathSourceSet()
+    {
+    return m_FocusPoint != -1;
+    }
+
+  // Get the vertex to which the path currently extends
+  vtkIdType GetPathSource()
+    {
+    return m_Curves.GetControlPointVertex(m_FocusPoint);
     }
 
   // Add a point to the current curve
@@ -150,23 +165,30 @@ public:
     {
     assert(m_FocusCurve >= 0);
     
-    // Get the path to the current point
-    list<vtkIdType> lPoints = GetPathToPoint(iPoint);
+    // Add the point to the curve info
+    IdType iNewControl = m_Curves.AddControlPoint(iPoint);
 
-    // Add the points on the list
-    list<vtkIdType>::const_iterator it;
-    for(it = lPoints.begin();it != lPoints.end(); it++)
+    // If this is not the first point in the curve, add a link
+    if(m_FocusPoint != -1)
       {
-      Vertex p;
-      p.i = *it; p.x = GetPointCoordinate(p.i);
-      m_Curves[m_FocusCurve].points.push_back(p);
-      cout << "adding point " << p.i << endl;
+      // Get the path to the current point
+      TracerCurves::MeshCurve lPoints;
+      GetPathToPoint(iPoint, lPoints);
+    
+      // Remove the first point in the list
+      lPoints.pop_front();
+
+      // Add the link
+      m_Curves.AddLink(m_FocusPoint, iNewControl, m_FocusCurve, lPoints);
       }
 
     // Compute distances from this point
     cout << "computing distances to point " << iPoint << endl;
     m_DistanceMapper->ComputeDistances(iPoint);
     cout << "done" << endl;
+
+    // Save the added point as the focus point
+    m_FocusPoint = iNewControl;
     }
 
 private:
@@ -183,7 +205,7 @@ private:
   vtkStripper *m_Stripper;
 
   // Curves that have been traced (?)
-  vector<Curve> m_Curves;
+  TracerCurves m_Curves;
 
   // Curve under focus
   int m_FocusCurve;
