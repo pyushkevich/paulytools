@@ -412,26 +412,32 @@ class MRepEdgeMatcher : public MRepImageMatcher
 {
 public:
   // Initialize with an image
-  void SetEdgeImage(GrayImage *xImage);
+  void SetEdgeImage(AbstractImage3D *xImage)
+    { this->xImage = xImage; }
 
   // Compute the match
-  float computeBoundaryMeasure(const MedialPoint &mp, int d);
+  float computeBoundaryMeasure(const MedialPoint &mp, int d)
+    {
+    const float *x = mp.bp[d].X.data_block();
+    return xImage->interpolateVoxel(x[0], x[1], x[2]);
+    }
+  
   float computeCrestBoundaryMeasure(const MedialPoint &mp)
     { return computeBoundaryMeasure(mp, 0); }
   
 private:
-  GrayImage *xImage;
+  AbstractImage3D *xImage;
 };
 
 #include "itkImageFileReader.h"
 #include "itkLinearInterpolateImageFunction.h"
 
-void TestImageIO(const char *fname)
+ImageCubeITK<float> *TestImageIO(const char *fname)
 {
   cout << "Reading image " << fname << endl;
 
   // Load an image from ITK
-  typedef itk::Image<short, 3> ImageType;
+  typedef itk::Image<float, 3> ImageType;
   typedef itk::ImageFileReader<ImageType> ReaderType;
   ReaderType::Pointer fltReader = ReaderType::New();
   fltReader->SetFileName(fname);
@@ -441,27 +447,47 @@ void TestImageIO(const char *fname)
   cout << "Creating image cube" << fname << endl;
 
   // Create an image cube from this image
-  ImageCubeITK<short> cubeInput;
-  cubeInput.SetImage(imgInput, 0);
+  ImageCubeITK<float> *cubeInput = new ImageCubeITK<float>;
+  cubeInput->SetImage(imgInput, 1.0);
 
   // Get the size object
   ImageType::SizeType szImage = imgInput->GetBufferedRegion().GetSize();
 
   cout << "Generating random indices" << fname << endl;
 
+  // Generate indices around a sphere of radius 0.6 in the image (some
+  // samples fall outside, some inside)
+  unsigned int nSamples = 300;
+  unsigned int nTests = nSamples * nSamples * nSamples, iTest, q;
+  vector<SMLVec3f> xIndex;
+  for(unsigned int iTheta = 0; iTheta < nSamples; ++iTheta)
+    for(unsigned int iPhi = 0; iPhi < nSamples; ++iPhi)
+      for(unsigned int iRad = 0; iRad < nSamples; ++iRad)
+        {
+        double theta = iTheta * M_PI / nSamples; 
+        double phi = iPhi * 2.0 * M_PI / nSamples; 
+        double r = iRad * 0.6 / nSamples;
+
+        double x = r * cos(phi) * sin(theta);
+        double y = r * sin(phi) * sin(theta);
+        double z = r * cos(theta);
+
+        xIndex.push_back(SMLVec3f(x,y,z));
+        }
+  /*
   //  Generate an array of random indices into the image
-  unsigned int nTests = 1000000, iTest, q;
+  unsigned int nTests = 2000000, iTest, q;
   vector<SMLVec3f> xIndex(nTests);
   for(iTest = 0; iTest < nTests; iTest++)
     {
-    xIndex[iTest][0] = rand() * (szImage[0] * 1.0f) / RAND_MAX;
-    xIndex[iTest][1] = rand() * (szImage[1] * 1.0f) / RAND_MAX;
-    xIndex[iTest][2] = rand() * (szImage[2] * 1.0f) / RAND_MAX;
+    xIndex[iTest][0] = rand() * 1.0 / RAND_MAX * szImage[0];
+    xIndex[iTest][1] = rand() * 1.0 / RAND_MAX * szImage[1];
+    xIndex[iTest][2] = rand() * 1.0 / RAND_MAX * szImage[2];
     }
+  */
 
-  
   // Interpolate the image at these locations using the cube
-  clock_t tCube, tITK;
+  double tCube, tITK;
   float xTestCube = 0, xTestITK = 0;
 
   cout << "Running ITK interpolation" << fname << endl;
@@ -471,27 +497,38 @@ void TestImageIO(const char *fname)
   FuncType::Pointer funInterp = FuncType::New();
   funInterp->SetInputImage(imgInput);
 
+  cout << imgInput->GetOrigin() << endl;
+  cout << imgInput->GetSpacing() << endl;
+  cout << imgInput->GetBufferedRegion() << endl;
+
   tITK = clock();
-  for(q = 0; q < 100; q++)
+  for(q = 0; q < 10; q++)
     for(iTest = 0; iTest < nTests; iTest++)
       {
       itk::ContinuousIndex<float, 3> idx(xIndex[iTest].data_block());
-      xTestITK += funInterp->EvaluateAtContinuousIndex(idx);
+      if(funInterp->IsInsideBuffer(idx))
+        {
+      	float xVal = funInterp->EvaluateAtContinuousIndex(idx);
+        xTestITK += xVal;
+        }
       }
   tITK = (clock() - tITK) * 1.0 / CLOCKS_PER_SEC;
 
   cout << "Running image cube interpolation" << fname << endl;
   tCube = clock();
-  for(q = 0; q < 100; q++)
+  for(q = 0; q < 10; q++)
     for(iTest = 0; iTest < nTests; iTest++)
       {
       float *p = xIndex[iTest].data_block();
-      xTestCube += cubeInput.interpolateVoxel(p[0], p[1], p[2]);
+      float xVal = cubeInput->interpolateVoxel(p[0], p[1], p[2]);
+      xTestCube += xVal;
       }
   tCube = (clock() - tCube) * 1.0 / CLOCKS_PER_SEC;
   
   cout << "ITK returned " << xTestITK << " in " << (1000 * tITK) << " ms." << endl;
   cout << "CUB returned " << xTestCube << " in " << (1000 * tCube) << " ms." << endl;
+
+  return cubeInput;
 }
 
 int main(int argc, char *argv[])
@@ -510,11 +547,12 @@ int main(int argc, char *argv[])
     if(strcmp(argv[iArg],"-m") == 0 && iArg < argc - 1)
       fnModel = argv[++iArg];
     }
-
-  // Test the imaging
-  if(fnImage)
-    TestImageIO(fnImage);
   
+  if(fnImage)
+    {
+    ImageCubeITK<float> *cube = TestImageIO(fnImage);return 0;
+    }
+
   /* Step 1. Test the Differential Geometry code */
   double u = 0.3, v = 0.4;
   
@@ -573,17 +611,15 @@ int main(int argc, char *argv[])
   mps.Solve(&pfw);
   cout << "*** Elapsed Time: " << ((clock() - t) * 1.0 / CLOCKS_PER_SEC) << " ms." << " ***" << endl;
   
-  // Save the atoms
-  /** 
-  for(unsigned int i = 0; i < m; i++)
-    for(unsigned int j = 0; j < n; j++)
-      {
-      MedialPoint *mp = mps.GetAtom(i, j);
-      cout << "Medial Point [" << i << "][" << j << "] : ";
-      cout << " R = " << mp->R() << "; ";
-      cout << " B = { " << mp->bp[0].X << ", " << mp->bp[1].X << "} " << endl;
-      }
-      */
+  // Test the image matching code
+  if(fnImage)
+    {
+    ImageCubeITK<float> *cube = TestImageIO(fnImage);
+    MRepEdgeMatcher matcher;
+    matcher.SetEdgeImage(cube);
+    cout << "Image Match: " << matcher.ComputeMatch(&mps) << endl;
+    return -1;
+    }
 
   // Create a renderer
   PDESplineRenderer *rndPDESpline = new PDESplineRenderer(&mps);

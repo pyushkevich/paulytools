@@ -623,7 +623,9 @@ void ImageCube<T>::loadFromITKReadableFile(const char *giplFile, std::ostream &o
  * r2:  last 4 voxels
  */
 template <class T>
-bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &out0,__m128 &out1,__m128 &out2) 
+inline bool 
+ImageCube<T>
+::getEightVoxels(float x,float y,float z,__m128 &out0,__m128 &out1,__m128 &out2) 
 {
   register __m128 r0,r1,r2,r3;                        //      3       2       1       0
   __m64 i0,i1,i2;
@@ -675,7 +677,7 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &out0,__m128 &o
 
   // Prefetch the cube (is this really worth while?)
   DataCube<T> *C = cube.voxel(*((short*)&i1 + 0),*((short*)&i1 + 1),*((short*)&i1 + 2));
-  // _mm_prefetch((const char *)C->root(),_MM_HINT_T0);
+  _mm_prefetch((const char *)C->root(),_MM_HINT_T0);
 
   // Shift back and subtract to get the in-cube index of the voxel
   i2 = _mm_slli_pi16(i1,ImageCube::LDCUBE);
@@ -700,52 +702,59 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,__m128 &out0,__m128 &o
 
 template <class T>
 float ImageCube<T>::interpolateVoxel(float x,float y,float z) {
-  __m128 r0,r1,r2;
+  __m128 z0,z1,z2;
   float val;
 
-  bool in = getEightVoxels(x,y,z,r0,r1,r2);
+  bool in = getEightVoxels(x,y,z,z0,z1,z2);
   if(in)
     {
-    doInterpolation(r0,r1,r2,&val);
-/*
-    // Transform the coordinates
-    SMLVec4f X(x,y,z,1.0f);
-    vnl_vector_fixed<float,4> Y = SI * X;
-    float xx = Y[0]; float yy = Y[1]; float zz = Y[2];
+    // doInterpolation(r0,r1,r2,&val);
 
-    // Perform a test
-    float c000 = this->getVoxelNBCFloat(   (int) xx,    (int) yy,    (int) zz);
-    float c100 = this->getVoxelNBCFloat( 1+(int) xx,    (int) yy,    (int) zz);
-    float c010 = this->getVoxelNBCFloat(   (int) xx,  1+(int) yy,    (int) zz);
-    float c001 = this->getVoxelNBCFloat(   (int) xx,    (int) yy,  1+(int) zz);
-    float c110 = this->getVoxelNBCFloat( 1+(int) xx,  1+(int) yy,    (int) zz);
-    float c101 = this->getVoxelNBCFloat( 1+(int) xx,    (int) yy,  1+(int) zz);
-    float c011 = this->getVoxelNBCFloat(   (int) xx,  1+(int) yy,  1+(int) zz);
-    float c111 = this->getVoxelNBCFloat( 1+(int) xx,  1+(int) yy,  1+(int) zz);
+    // Registers we are going to use
+    __m128 r1,r2,r3,r4,r5,r6,r8,i0,i1;                      //  3       2       1       0
 
-    float txx = xx - ((int) xx); 
-    float tyy = yy - ((int) yy); 
-    float tzz = zz - ((int) zz); 
+    // Perform the interpolation
+    r1 = _mm_shuffle_ps(z0,z0,0x19);                        //  x       y       z       y
+    r2 = _mm_shuffle_ps(z0,z0,0x62);                        //  y       z       x       z
+    r3 = _mm_mul_ps(r1,r2);                                 //  xy      yz      zx      yz
+    r4 = _mm_shuffle_ps(z0,z0,0x84);                        //  z       x       y       x           
+    r5 = _mm_mul_ps(r4,r3);                                 //  xyz     xyz     xyz     xyz
+    r4 = _mm_sub_ps(r1,r3);                                 //  x-xy    y-yz    z-zx    y-yz
+    r1 = _mm_shuffle_ps(r3,r3,0x71);                        //  zx      yx      yz      xz
+    r3 = _mm_sub_ps(r1,r5);                                 //  zx-xyz  yx-xyz  yz-xyz  xz-xyz
+    r1 = _mm_shuffle_ps(r4,r4,0xc7);                        //  x-xy    y-yz    z-zx    x-xy
+    r6 = _mm_sub_ps(r1,r3);                                 //  x-xy-xz y-yz-yx z-zx-yz x-xy-xz
+                                                            //   +xyz    +xyz    +xyz    +xyz
+    r1 = _mm_add_ps(r6,r4);                                 //  ...     ...     ...     x+y-yz-xy-xz+xyz
+    r8 = _mm_set_ss(1.0f);                                  //  0       0       0       1
+    r8 = _mm_sub_ss(r8,r2);                                 //  0       0       0       1-z 
+    r8 = _mm_sub_ss(r8,r1);                                 //  0       0       0       1-z-x-y+xy+yz+xz-xyz
+    r5 = _mm_shuffle_ps(r5,r3,0xa0);                        //  yx-xyz  yx-xyz  xyz     xyz
+    r3 = _mm_shuffle_ps(r3,r5,0x2d);                        //  xyz     yx-xyz  zx-xyz  yz-xyz
+    r8 = _mm_shuffle_ps(r8,r6,0x54);                        //  z-zx-.. z-zx-.. 0       1-z-x-y+xy+yz+xz-xyz
+    r8 = _mm_shuffle_ps(r8,r6,0xe8);                        //  x-xy..  y-yz..  z-zx..  1-z-x-y+xy+yz+xz-xyz
 
-    float val2 = 
-      (1-txx) * (1-tyy) * (1-tzz) * c000 + 
-      (  txx) * (1-tyy) * (1-tzz) * c100 + 
-      (1-txx) * (  tyy) * (1-tzz) * c010 + 
-      (1-txx) * (1-tyy) * (  tzz) * c001 + 
-      (  txx) * (  tyy) * (1-tzz) * c110 + 
-      (  txx) * (1-tyy) * (  tzz) * c101 + 
-      (1-txx) * (  tyy) * (  tzz) * c011 + 
-      (  txx) * (  tyy) * (  tzz) * c111;
-*/
+    // Scale the intensities by multipliers
+    i0 = _mm_mul_ps(z1,r8);                                 
+    i1 = _mm_mul_ps(z2,r3);                                 
+
+    // Now add up all elements
+    i0 = _mm_add_ps(i0,i1);
+    i1 = _mm_shuffle_ps(i0,i0,0xb1);
+    i0 = _mm_add_ps(i0,i1);
+    i1 = _mm_shuffle_ps(i0,i0,0x4e);
+    i0 = _mm_add_ps(i0,i1);
+
+    // The result is in r1
+    _mm_store_ss(&val, i0);
+
     return val;
     }
   else
-    {
-    return handleOutsideVoxel(x,y,z);
-    }
+    { return handleOutsideVoxel(x,y,z); }
 }
 
-template <class T>
+  template <class T>
 void ImageCube<T>::interpolateVoxelGradient(float xs,float ys,float zs, float *G) 
 {
   __m128 r0,r1,r2,r3;                                    //      3       2       1       0
@@ -810,7 +819,7 @@ void ImageCube<T>::interpolateVoxelGradient(float xs,float ys,float zs, float *G
   // Store the gradient
   ALIGN_PRE float gtemp[4] ALIGN_POST;
   _mm_store_ps(gtemp,r0);
-  
+
   G[0] = gtemp[0];
   G[1] = gtemp[1];
   G[2] = gtemp[2];

@@ -5438,15 +5438,8 @@ int usage()
     return -1;
   }
 
-int main(int argc,char *argv[]) {
-
-  // Set memory debugging
-  // _CrtSetDbgFlag(_CrtSetDbgFlag(_CRTDBG_REPORT_FLAG) | _CRTDBG_CHECK_ALWAYS_DF | _CRTDBG_LEAK_CHECK_DF);
-  // _CrtDumpMemoryLeaks();
-  float *test = (float*)_aligned_malloc(sizeof(float) * 4, 256);
-  __m128 junk;
-  _mm_store_ps(test,junk);
-
+int main(int argc,char *argv[]) 
+{
   // Read the command line parameters
   string sInitFile("mspline.ini"), sScriptFile;
 

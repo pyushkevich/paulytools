@@ -9,6 +9,7 @@
 #include <vtkRenderWindow.h>
 #include <vtkRenderWindowInteractor.h>
 #include <vtkPolyDataMapper.h>
+#include <vtkBYUReader.h>
 #include <vtkSTLReader.h>
 #include <vtkTriangleFilter.h>
 
@@ -22,9 +23,9 @@ using namespace itk;
 
 int usage()
 {
-  cout << "stltoimg - fill in an STL mesh, producing a binary image" << endl;
+  cout << "meshtoimg - fill in a 3D mesh, producing a binary image" << endl;
   cout << "description:" << endl;
-  cout << "        Given an STL mesh, this command fill scan-convert the faces in " << endl;
+  cout << "        Given an 3D mesh, this command fill scan-convert the faces in " << endl;
   cout << "   the mesh to a 3D image, optionally filling the interior (-f option)"  << endl;
   cout << "   The user must specify the corners of the image in the coordinate"  << endl;
   cout << "   space of the mesh using the -o and -s options, as well as the resolution"  << endl;
@@ -32,8 +33,10 @@ int usage()
   cout << "        To find out the spatial extent of the mesh, call the program without" << endl;
   cout << "   the -o and -s parameters. The extent will be printed out." << endl;
   cout << "usage: " << endl;
-  cout << "   stltoimg [options] input.stl output.img" << endl;
+  cout << "   stltoimg [options] output.img" << endl;
   cout << "options: " << endl;
+  cout << "   -stl file                   Specify input as an STL mesh" << endl;
+  cout << "   -byu file                   Specify input as a BYU mesh" << endl;
   cout << "   -f                          Fill the interior of the mesh also" << endl;
   cout << "   -o NN NN NN                 Image origin in x,y,z in mesh space" << endl;
   cout << "   -s NN NN NN                 Image size in x,y,z in mesh space" << endl;
@@ -75,16 +78,18 @@ void drawPolyData(vtkPolyData *poly)
 int main(int argc, char **argv)
 {
   // Parameter values
-  string fnInput, fnOutput;
   double bb[2][3] = {{0.,0.,0.},{128.,128.,128.}};
   int res[3] = {128,128,128};
-  bool doRender = false, doFloodFill = false;
-    
+  bool doRender = false, doFloodFill = false, flagInputGiven = false;
+
+  // Input specifications
+  enum MeshType {NONE, BYU, STL} iMeshType = NONE;
+  string fnOutput, fnInput;
+
   // Check the parameters
-  if(argc < 3) return usage();
+  if(argc < 2) return usage();
 
   // Get the file names
-  fnInput = argv[argc-2];
   fnOutput = argv[argc-1];
 
   // Parse the optional parameters
@@ -93,7 +98,17 @@ int main(int argc, char **argv)
     for(unsigned int i=1;i<argc-2;i++)
       {
       string arg = argv[i];
-      if(arg == "-o")
+      if(arg == "-stl")
+        {
+        fnInput = argv[++i];
+        iMeshType = STL;
+        }
+      else if(arg == "-byu")
+        {
+        fnInput = argv[++i];
+        iMeshType = BYU;
+        }
+      else if(arg == "-o")
         {
         bb[0][0] = atof(argv[++i]);
         bb[0][1] = atof(argv[++i]);
@@ -130,7 +145,14 @@ int main(int argc, char **argv)
     {
     cout << "Error parsing command line options!" << endl;
     return usage();
-  }
+    }
+
+  // If no file given, return
+  if(iMeshType == NONE)
+    {
+    cerr << "No input mesh specified!" << endl;
+    return usage();
+    }    	
 
   // Print the parameters
   cout << endl << "Parameters:" << endl;
@@ -142,15 +164,34 @@ int main(int argc, char **argv)
 
   // The real program begins here
 
-  // Create an STL file reader
-  vtkSTLReader *reader = vtkSTLReader::New();
-  reader->SetFileName(fnInput.c_str());
-  cout << "Reading the STL file ..." << endl;
-  reader->Update();
+  // Read the appropriate mesh type
+  vtkPolyData *polyInput = NULL;
+  vtkObject *fltGenericReader = NULL;
+
+  if(iMeshType == BYU)
+    {
+    vtkBYUReader *reader = vtkBYUReader::New();
+    reader->SetFileName(fnInput.c_str());
+    cout << "Reading the BYU file ..." << endl;
+    reader->Update();
+
+    fltGenericReader = reader;
+    polyInput = reader->GetOutput();
+    }
+  else if(iMeshType == STL)
+    {
+    vtkSTLReader *reader = vtkSTLReader::New();
+    reader->SetFileName(fnInput.c_str());
+    cout << "Reading the STL file ..." << endl;
+    reader->Update();
+
+    fltGenericReader = reader;
+    polyInput = reader->GetOutput();
+    }
 
   // Convert the model to triangles
   vtkTriangleFilter *tri = vtkTriangleFilter::New();
-  tri->SetInput(reader->GetOutput());
+  tri->SetInput(polyInput);
   cout << "Converting to triangles ..." << endl;
   tri->Update();
   vtkPolyData *pd = tri->GetOutput();
@@ -161,15 +202,15 @@ int main(int argc, char **argv)
 
   // Get the extents of the data
   double *bounds = pd->GetBounds();  
-  
+
   cout << "STL mesh bounds: " << endl;
   cout << "   X : " << bounds[0] << " to " << bounds[1] << endl;
   cout << "   Y : " << bounds[2] << " to " << bounds[3] << endl;
   cout << "   Z : " << bounds[4] << " to " << bounds[5] << endl;
-    
+
   if(bounds[0] < bb[0][0] || bounds[1] > bb[0][0] + bb[1][0] ||
-     bounds[2] < bb[0][1] || bounds[3] > bb[0][1] + bb[1][1] ||
-     bounds[4] < bb[0][2] || bounds[5] > bb[0][2] + bb[1][2])
+    bounds[2] < bb[0][1] || bounds[3] > bb[0][1] + bb[1][1] ||
+    bounds[4] < bb[0][2] || bounds[5] > bb[0][2] + bb[1][2])
     {
     cout << "User specified bounds (-o -s) are out of range! Can't continue!" << endl;
     return -1;
@@ -178,7 +219,7 @@ int main(int argc, char **argv)
   // Create a vertex table from the polydata
   unsigned int nt = pd->GetNumberOfPolys(), it = 0;
   double **vtx = new double*[nt*3];  
-  
+
   vtkCellArray *poly = pd->GetPolys();
   vtkIdType npts;
   vtkIdType *pts;
@@ -192,14 +233,14 @@ int main(int argc, char **argv)
         {
         vtx[it][j] = res[j] * (x[j] - bb[0][j]) / bb[1][j];
         }
-      
+
       ++it;
       }      
     }
 
   // Clean up
-  reader->Delete();
-  
+  fltGenericReader->Delete();
+
   // Create a ITK image to store the results
   typedef Image<unsigned char,3> ImageType;
   ImageType::Pointer img = ImageType::New();
@@ -208,7 +249,7 @@ int main(int argc, char **argv)
   img->SetRegions(region);
   img->Allocate();
   img->FillBuffer(0);
-    
+
   // Convert the polydata to an image
   if(doFloodFill)
     {

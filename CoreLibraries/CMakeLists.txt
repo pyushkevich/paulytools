@@ -1,7 +1,7 @@
 PROJECT(MYLIBS)
 
 # Set a single directory for outputting all libraries
-SET (LIBRARY_OUTPUT_PATH ${MYLIBS_BINARY_DIR}/bin CACHE INTERNAL "Single output directory for building all libraries.")
+# SET (LIBRARY_OUTPUT_PATH ${MYLIBS_BINARY_DIR}/bin CACHE INTERNAL "Single output directory for building all libraries.")
 
 # Set up the subdirectories as the include directories
 SET(MYLIBS_INCLUDE_DIRS 

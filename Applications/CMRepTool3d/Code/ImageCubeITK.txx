@@ -12,6 +12,9 @@ ImageCubeITK<TPixel>
   typename ImageType::IndexType idx = imgSource->GetBufferedRegion().GetIndex();
   typename ImageType::SizeType size = imgSource->GetBufferedRegion().GetSize();
 
+  // Copy the background
+  xBackgroundValue = xBackground;
+
   // Allocate the appropriate number of cubes
   for(unsigned int d = 0; d < 3; d++)
     {
@@ -38,7 +41,7 @@ ImageCubeITK<TPixel>
     unsigned int iz = (unsigned int) (it.GetIndex()[2] - idx[2]);
 
     cube(ix >> LDCUBE, iy >> LDCUBE, iz >> LDCUBE)
-      (ix % LDCUBE, iy % LDCUBE, iz % LDCUBE) = it.Value();
+      (ix % res, iy % res, iz % res) = it.Get();
     
     ++it;
     }
@@ -64,13 +67,23 @@ ImageCubeITK<TPixel>
         dc(res, res, res) = cube(cx+1, cy+1, cz+1)(0, 0, 0);
         }
 
-  // Set the voxel size
-  SMLVec3f xVoxel(imgSource->GetSpacing()[0],
-    imgSource->GetSpacing()[1],
-    imgSource->GetSpacing()[2]);
+  // Initialize the transform to identity
+  SI.set_identity();
+  for (unsigned int i=0; i<3; i++)
+    {
+    vd[i] = imgSource->GetSpacing()[i];
+    mmData[i] = 1.0 / vd[i];
+    mmData[i+4] = imgSource->GetOrigin()[i];
+    mmData[i+8] = size[i] - 1.0f;
+    mmData[i+12] = 1.0 / mmData[i];
 
-  // Compute the default transform
-  makeDefaultTransform(xVoxel);
+    SI.put(i,i,mmData[i]);
+    SI.put(i,3,mmData[i+4]);
+    }   
+  mmData[3]=mmData[7]=mmData[11]=mmData[15]=0.0f;
+
+  // Invert the matrix
+  IS = vnl_matrix_inverse<float>(SI);
 }
 
 #endif // __ImageCubeITK_txx_

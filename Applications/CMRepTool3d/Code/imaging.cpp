@@ -1,8 +1,5 @@
-// #include <RAWImageFile.h>
 #include "Danielsson.h"
 #include <mmintrin.h>
-// #include <ivec.h>
-// #include <fvec.h>
 #include "imaging.h"
 #include "DrawTriangles.h"
 #include "DrawFillInside.h"
@@ -12,24 +9,21 @@
 #include <iostream>
 #include <sstream>
 
-using namespace std;
-using namespace itk;
+#include "imaging.txx"
 
-/*
+using namespace std;
+
 template class DataCube<unsigned char>;
-template class DataCube<unsigned short>;
-template class DataCube<char>;
-template class DataCube<short>;
+// template class DataCube<unsigned short>;
+// template class DataCube<char>;
+// template class DataCube<short>;
 template class DataCube<float>;
-template class DataCube<double>;
 
 template class ImageCube<unsigned char>;
-template class ImageCube<unsigned short>;
-template class ImageCube<char>;
-template class ImageCube<short>;
+// template class ImageCube<unsigned short>;
+// template class ImageCube<char>;
+// template class ImageCube<short>;
 template class ImageCube<float>;
-template class ImageCube<double>;
-*/
 
 #ifndef M_PI
 extern const double M_PI;
@@ -37,7 +31,8 @@ extern const double M_PI;
 
 // If intel is not available, define the f32Vec4
 
-void AbstractImage3D::makeDefaultTransform(SMLVec3f vd) {
+void AbstractImage3D::makeDefaultTransform(SMLVec3f vd) 
+{  
   // Save the transform
   this->vd = vd;
 

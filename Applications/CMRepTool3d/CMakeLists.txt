@@ -2,6 +2,7 @@ PROJECT(CMREPS)
 
 # Option to build the new PDE code
 OPTION(BUILD_PDE "Build the PDE CM-Reps code" OFF)
+VARIABLE_REQUIRES(BUILD_PDE DO_BUILD_PDE USE_SWIG) 
 
 # Don't build anything unless the version of CMake is high enough.
 # The matching ELSE/ENDIF should be the last lines in the file.
@@ -15,6 +16,11 @@ ELSE(ITK_FOUND)
   MESSAGE(FATAL_ERROR
           "Cannot build CMReps without ITK.  Please set ITK_DIR.")
 ENDIF(ITK_FOUND)
+
+# Set the compiler flags on GCC
+IF(CMAKE_COMPILER_IS_GNUCXX)
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -mmmx")
+ENDIF(CMAKE_COMPILER_IS_GNUCXX)
 
 # Find MyLibs (for matrix code)
 FIND_PATH(MYLIBS_BINARY_PATH Config.cmake)
@@ -36,7 +42,7 @@ INCLUDE (${CMAKE_ROOT}/Modules/FindOpenGL.cmake)
 # Include the various directories
 INCLUDE_DIRECTORIES(
   ${CMREPS_SOURCE_DIR}/Code 
-#  ${SML_INLCUDE_PATH} 
+  ${CMREPS_SOURCE_DIR}/Code/PDE
   ${GLUT_INCLUDE_DIR})
 
 # Create a source listing 
@@ -45,18 +51,18 @@ SET(CMREPS_SOURCES
   Code/Danielsson.cpp
   Code/DrawFillInside.cpp
   Code/DrawTriangles.cpp
-  Code/fracviewer.cpp
+  Code/main.cpp
   Code/geodesic.cpp
   Code/glengine.cpp
   Code/imaging.cpp
   Code/imatch.cpp
   Code/implicit.c
-  Code/main.cpp
   Code/mspline.cpp
   Code/optimization.cpp
   Code/optmodes.cpp
   Code/splgeo.cpp
   Code/uimodes.cpp
+  Code/fracviewer.cpp
 )
 
 # Create the include files
@@ -96,26 +102,43 @@ TARGET_LINK_LIBRARIES(cmreps
 
 TARGET_LINK_LIBRARIES(testglut ${GLUT_LIBRARY})
 
-# Sources for the PDE executable
-SET(PDE_SRCS 
-  Code/PDE/MedialPDESolver.cxx 
-  Code/PDE/MedialPDETest.cxx
-  Code/PDE/FourierSurface.cxx
-  Code/Danielsson.cpp
-  Code/DrawFillInside.cpp
-  Code/DrawTriangles.cpp
-  Code/glengine.cpp
-  Code/imaging.cpp
-  Code/ImageCubeITK.cxx
-  Code/mspline.cpp
-  Code/fracviewer.cpp
-  )
-
-
 # Building the PDE executable
 IF(BUILD_PDE)
+
+  # Sources for the PDE executable
+  SET(PDE_COMMON_SRCS 
+    Code/PDE/MedialPDESolver.cxx 
+    Code/PDE/FourierSurface.cxx
+    Code/PDE/ScriptInterface.cxx
+    Code/Danielsson.cpp
+    Code/DrawFillInside.cpp
+    Code/DrawTriangles.cpp
+    Code/glengine.cpp
+    Code/imaging.cpp
+    Code/ImageCubeITK.cxx
+    Code/mspline.cpp
+    Code/fracviewer.cpp)
+
+  # Apply SWIG to the .i file
+  SWIG_WRAP_PYTHON_SHADOW(
+    ${CMREPS_SOURCE_DIR}/Code/PDE/medialpde.i
+    ${CMREPS_BINARY_DIR}/Code/PDE/ScriptInterface_wrap.cxx
+    ${CMREPS_BINARY_DIR}
+    medialpde)
+
+  # Add python to the includes
+  INCLUDE_DIRECTORIES(${PYTHON_INCLUDE_PATH})
+
+  # The sources for the script-wrapped library
+  SET(PDE_LIB_SRCS ${PDE_COMMON_SRCS}
+    ${CMREPS_BINARY_DIR}/Code/PDE/ScriptInterface_wrap.cxx)
+
   # Create the executable
-  ADD_EXECUTABLE(testpde ${PDE_SRCS})
+  ADD_EXECUTABLE(testpde ${PDE_COMMON_SRCS} Code/PDE/MedialPDETest.cxx)
+
+  # Create the shared library
+  ADD_LIBRARY("_medialpdemodule" SHARED ${PDE_LIB_SRCS})
+  SET_TARGET_PROPERTIES("_medialpdemodule" PROPERTIES PREFIX "")
 
   # Find and read the MKL package
   INCLUDE(${PAULY_SOURCE_DIR}/CMake/FindMKL.cmake)
@@ -124,8 +147,8 @@ IF(BUILD_PDE)
   FIND_LIBRARY(PARDISO_LIBRARY NAMES pardiso DOC "Location of the PARDISO library")
   FIND_LIBRARY(INTEL_FORTRAN_LIB ifcore /opt/intel_fc_80/lib DOC "Location of Intel FC library")
 
-  # Create the executable
-  TARGET_LINK_LIBRARIES(testpde 
+  # Set the library set
+  SET(PDE_LIBS
     ${PARDISO_LIBRARY} 
     mkl_lapack mkl_def 
     ${INTEL_FORTRAN_LIB} 
@@ -133,8 +156,20 @@ IF(BUILD_PDE)
     ITKIO
     ITKCommon
     ITKBasicFilters
-    ${GLUT_LIBRARY}
-    )
+    ${GLUT_LIBRARY})
+
+  # Create the executable
+  TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS})
+  TARGET_LINK_LIBRARIES("_medialpdemodule" ${PDE_LIBS})
+  
+  # Copy the script files
+  SET(SCRIPT_FILES example.py)
+  FOREACH(FILE ${SCRIPT_FILES})  
+ 	CONFIGURE_FILE(
+ 		${CMREPS_SOURCE_DIR}/Code/PDE/Python/${FILE}
+ 		${CMREPS_BINARY_DIR}/${FILE} COPY_ONLY)
+  ENDFOREACH(FILE ${SCRIPT_FILES})  
+  
 ENDIF(BUILD_PDE)
 
 # All of this contigent on CMake version

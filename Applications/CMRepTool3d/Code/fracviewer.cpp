@@ -16,7 +16,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <glut.h>
+#include <GL/glut.h>
 #include <math.h>
 
 #include "fracviewer.h"

@@ -7,7 +7,7 @@
 // #include <GL\gl.h>
 // #include <GL\glu.h>
 #include <stdlib.h>
-#include <glut.h>
+#include <GL/glut.h>
 #include <smlmath.h>
 
 #include <vector>

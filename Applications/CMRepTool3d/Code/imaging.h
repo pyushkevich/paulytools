@@ -1,5 +1,5 @@
-#ifndef _IMAGING_CPP_
-#define _IMAGING_CPP_
+#ifndef _IMAGING_H_
+#define _IMAGING_H_
 
 #include <smlmath.h>
 #include "array2d.h"
@@ -28,6 +28,9 @@ private:
   // Sizes
   int szCube,szSlice,szRow;
 
+  // Eight-voxel offsets for interpolation
+  int i011, i101, i110, i111;
+
   // Allocation operator
   void alloc(int x,int y,int z) {
     // Initialize the dimensions
@@ -39,6 +42,12 @@ private:
     szRow = x;
     szSlice = y * szRow;
     szCube = z * szSlice;
+
+    // Initialize the 8 offsets
+    i011 = szRow + 1;
+    i101 = szSlice + 1;
+    i110 = szSlice + szRow;
+    i111 = szSlice + szRow + 1;
 
     // Allocate the array (use 16 bit allocation)
     // voxels = (T*) _mm_malloc(szCube * sizeof(T),16);
@@ -96,20 +105,18 @@ public:
 
   /** This method rapidly loads eight adjacent voxels at indices
    x,y,z,x+1,y+1,z+1 */
-  void getEightVoxelCube(int x, int y, int z, float *voxels)
+  void getEightVoxelCube(int x, int y, int z, float *out)
     {
-    // Traverse the voxels in a pattern that minimizes the number of 
-    // pointer addition operations
-    T* root = voxel(x,y,z);                           // x:0  y:0  z:0
-    voxels[0] = (float) *root; root += 1;             // x:1  y:0  z:0
-    voxels[3] = (float) *root; root += szRow;         // x:1  y:1  z:0
-    voxels[6] = (float) *root; root -= 1;             // x:0  y:1  z:0
-    voxels[2] = (float) *root; root += szSlice;       // x:0  y:1  z:1
-
-    voxels[4] = (float) *root; root += 1;             // x:1  y:1  z:1
-    voxels[7] = (float) *root; root -= szRow;         // x:1  y:0  z:1
-    voxels[5] = (float) *root; root -= 1;             // x:0  y:0  z:1
-    voxels[1] = (float) *root;   
+    // Get the eight voxels (compiler should optimize this well)
+    T *root = voxels + offSlice[z] + offRow[y] + x;
+    out[0] = (float) root[0];
+    out[3] = (float) root[1];
+    out[2] = (float) root[szRow];
+    out[6] = (float) root[i011];
+    out[1] = (float) root[szSlice];
+    out[5] = (float) root[i101];
+    out[4] = (float) root[i110];
+    out[7] = (float) root[i111];
     }
 
 
@@ -415,7 +422,5 @@ SMLVec3f convertDistanceToRGB(float pixel);
 
 // Convert a t-score to RGB color 
 void convertTScoreToRGB(float pixel, float &r, float &g, float &b);
-
-#include "imaging.txx"
 
 #endif 

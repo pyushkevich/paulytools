@@ -10,6 +10,7 @@ OPTION(USE_FLTK "Use FLTK Libraries" OFF)
 OPTION(USE_OPENGL "Use OpenGL Libraries" OFF)
 OPTION(USE_MMA "Use Mathematica MathLink Libraries" OFF)
 OPTION(USE_CLUTO "Use Cluto Clustering Libraries" OFF)
+OPTION(USE_SWIG "Use the SWIG wrapper" OFF)
 
 # Define the optional inclusion (BUILD) variables 
 OPTION(BUILD_APPLICATIONS "Should I build standalone applications?" ON)
@@ -80,6 +81,10 @@ IF(USE_CLUTO)
   INCLUDE(${PAULY_CMAKE_DIR}/FindCluto.cmake)
   INCLUDE_DIRECTORIES(${CLUTO_INCLUDE_DIR})
 ENDIF(USE_CLUTO)
+
+IF(USE_SWIG)
+  INCLUDE(${PAULY_CMAKE_DIR}/FindSWIG.cmake)
+ENDIF(USE_SWIG)
 
 
 # Set up the includes 

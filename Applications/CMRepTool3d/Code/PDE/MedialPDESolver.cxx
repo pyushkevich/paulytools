@@ -489,7 +489,7 @@ MedialPDESolver
     // DumpSparseMatrix(nSites, xRowIndex, xColIndex, xSparseValues);
 
     // Solve the equation for X
-    int MAXFCT = 1, MNUM = 1, PHASE = 11, N = nSites, NRHS = 1, MSGLVL = 1, ERROR = 0; 
+    int MAXFCT = 1, MNUM = 1, PHASE = 11, N = nSites, NRHS = 1, MSGLVL = 0, ERROR = 0; 
     if(iIter == 0) 
       {
       pardiso_(PT, &MAXFCT, &MNUM, &MTYPE, &PHASE, &N, 
@@ -671,9 +671,14 @@ float MedialPDESolver
 
   // Scale the measure by three
   xMeasure /= 3.0;
+  cout << "Area: " << xArea << " Measure: " << xMeasure << endl;
 
   // Clean up
   delete xAreas;
   delete bndValues[0];
   delete bndValues[1];
+
+  // Return the result
+  area = xArea;
+  return xMeasure;
 }
