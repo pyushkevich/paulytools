@@ -49,9 +49,10 @@ class IBasisRepresentation2D : virtual public IHyperSurface2D
 {
 public:
   /** Get the coefficients as an array of real values */
-  virtual size_t GetNumberOfRawCoefficients() = 0;
+  virtual size_t GetNumberOfRawCoefficients() const = 0;
   virtual double *GetRawCoefficientArray() = 0;
-  virtual double GetRawCoefficient(size_t iCoeff) = 0;
+  virtual const double *GetRawCoefficientArray() const = 0;
+  virtual double GetRawCoefficient(size_t iCoeff) const = 0;
 
   /** Set the coefficient array */
   virtual void SetRawCoefficientArray(const double *array) = 0;
@@ -98,6 +99,9 @@ public:
   double *GetPointer()
     { return &((*this)[0]); }
 
+  const double *GetPointer() const
+    { return &((*this)[0]); }
+
 private:
   size_t stride_z, stride_y;
 };
@@ -142,11 +146,15 @@ public:
     { return NComponents; }
 
   /** Get number of raw coefficients */
-  size_t GetNumberOfRawCoefficients()
+  size_t GetNumberOfRawCoefficients() const
     { return C.size(); }
 
   /** Get the coefficients as an array of real values */
-  double *GetRawCoefficientArray()
+  double *GetRawCoefficientArray() 
+    { return C.GetPointer(); }
+  
+  /** Get the coefficients as an array of real values */
+  const double *GetRawCoefficientArray() const
     { return C.GetPointer(); }
 
   /** Set the array of coefficients */
@@ -154,7 +162,7 @@ public:
     { for(size_t i = 0; i < C.size(); i++) C[i] = data[i]; }
 
   // Direct coefficient access
-  double GetRawCoefficient(size_t iCoeff) 
+  double GetRawCoefficient(size_t iCoeff) const
     { return C[iCoeff]; }
   
   void SetRawCoefficient(size_t iCoeff, double xValue) 
@@ -168,6 +176,10 @@ public:
 
   /** Read the coefficients from a registry */
   bool ReadFromRegistry(Registry &R);
+
+  /** Get the number of coefficients in U and V */
+  void GetNumberOfCoefficientsUV(size_t &ncu, size_t &ncv)
+    { ncu = this->ncu; ncv = this->ncv; }
 
 protected:
   // The raw array of coefficients (without pointers)
@@ -210,6 +222,9 @@ class FourierSurface : public FourierSurfaceBase
 public:
   // Constructor
   FourierSurface(size_t ncu, size_t ncv) : FourierSurfaceBase(ncu, ncv) {}
+
+  // Copy constructor
+  FourierSurface(const FourierSurface &source); 
 
   /** Find the center of the surface (for rotations) */
   vnl_vector<double> GetCenterOfRotation();

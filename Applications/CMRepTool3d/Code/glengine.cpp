@@ -629,9 +629,9 @@ unsigned int loadMipMap(const char *name,int startRes,int endRes,GLuint intForma
 
     // Create a bitmap
     if (frame==0)
-      gluBuild2DMipmaps(GL_TEXTURE_2D,intFormat,r,r,GL_BGR_EXT,GL_UNSIGNED_BYTE,array);
+      gluBuild2DMipmaps(GL_TEXTURE_2D,intFormat,r,r,GL_RGB,GL_UNSIGNED_BYTE,array);
     else
-      glTexImage2D(GL_TEXTURE_2D,frame,intFormat,r,r,0,GL_BGR_EXT,GL_UNSIGNED_BYTE,array);
+      glTexImage2D(GL_TEXTURE_2D,frame,intFormat,r,r,0,GL_RGB,GL_UNSIGNED_BYTE,array);
     delete array;
 
     frame++;

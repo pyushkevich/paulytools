@@ -2,6 +2,7 @@
 #define __ScriptInterface_h_
 
 #include <string>
+#include <vector>
 #include <smlmath.h>
 
 class MedialPDESolver;
@@ -216,6 +217,30 @@ private:
   void ConjugateGradientOptimization(MedialOptimizationProblem *xProblem, 
     vnl_vector<double> &xSolution, unsigned int nSteps, double xStep);
   friend void RenderMedialPDE(MedialPDE *);
+  friend class MedialPCA;
+};
+
+class MedialPCA
+{
+public:
+  // Add a sample to the PCA
+  void AddSample(MedialPDE *pde);
+  
+  // Compute the PCA
+  void ComputePCA();
+  
+  // Move current sample location to the mean
+  void SetFSLocationToMean() {};
+  
+  // Move along a given mode a certain number of S.D.
+  void SetFSLocation(unsigned int iMode, double xSigma);
+  
+  // Generate a sample at the current location
+  MedialPDE *GetShapeAtFSLocation();
+
+private:
+  std::vector< FourierSurface* > xSurfaces;
+  vnl_vector<double> xPCALocation;  
 };
 
 /** Function to visualize the medial PDE result */

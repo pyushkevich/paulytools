@@ -4,6 +4,7 @@
 #include "ITKImageWrapper.h"
 #include "MedialPDERenderer.h"
 #include "OptimizationTerms.h"
+#include "Procrustes.h"
 #include "Registry.h"
 
 #include "itkImageRegionConstIteratorWithIndex.h"
@@ -917,6 +918,117 @@ void MedialPDE::SaveBYUMesh(const char *file)
   // Close the file
   fout.close();
 }
+
+
+void MedialPCA::AddSample(MedialPDE *pde)
+{
+  // Make sure that the number of coefficients matches
+  if(xSurfaces.size())
+    assert(xSurfaces.front()->GetNumberOfRawCoefficients()
+      == pde->xSurface->GetNumberOfRawCoefficients());
+
+  // Get the coefficients from this medial PDE
+  FourierSurface *xNew = new FourierSurface(*(pde->xSurface));
+  xSurfaces.push_back(xNew);
+}
+
+
+void MedialPCA::ComputePCA()
+{
+  // The non-shape information must be cleaned from the data using
+  // something like the generalized Procrustes method. We begin by
+  // interpolating each mpde
+  typedef vnl_matrix<double> Mat;
+  typedef vnl_vector<double> Vec;
+
+  // These are the parameters to the GPA method
+  Mat *A = new Mat[xSurfaces.size()];
+  Mat *R = new Mat[xSurfaces.size()];
+  Vec *t = new Vec[xSurfaces.size()];
+  double *s = new double[xSurfaces.size()];
+  size_t i;
+  
+  // Populate the input matrices
+  MedialPDESolver xSolver(20, 20);
+  for(i = 0; i < xSurfaces.size(); i++)
+    {
+    // Solve the medial PDE
+    xSolver.SetMedialSurface(xSurfaces[i]);
+    xSolver.Solve();
+
+    // Initialize the A matrix
+    A[i].set_size(xSolver.GetAtomGrid()->GetNumberOfBoundaryPoints(), 3);
+    R[i].set_size(3,3);
+    t[i].set_size(3);
+
+    // Parse over all the boundary sites
+    MedialBoundaryPointIterator *it = 
+      xSolver.GetAtomGrid()->NewBoundaryPointIterator();
+    size_t j = 0;
+    while(!it->IsAtEnd())
+      {
+      BoundaryAtom &ba = GetBoundaryPoint(it, xSolver.GetAtomArray());
+      A[i][j][0] = ba.X[0];
+      A[i][j][1] = ba.X[1];
+      A[i][j][2] = ba.X[2];
+      ++it; ++j;
+      }
+    }
+  
+  // Run the procrustes method
+  cout << "Procrustenating..." << endl;
+  GeneralizedProcrustesAnalysis(xSurfaces.size(), A, R, t, s);
+
+  // Rotate each of the models into the common coordinate frame
+  for(i = 0; i < xSurfaces.size(); i++)
+    {
+    xSurfaces[i]->ApplyAffineTransform(s[i] * R[i], t[i], Vec(3, 0.0));
+    MedialPDE xJunk(4,4,80,80);
+    xJunk.xSurface = new FourierSurface(*xSurfaces[i]);
+    xJunk.Solve();
+    
+    ostringstream sJunk1, sJunk2;
+    sJunk1 << "/tmp/pcamed_" << (i / 10) << (i % 10);
+    sJunk2 << "/tmp/pcabnd_" << (i / 10) << (i % 10);
+    
+    xJunk.SaveVTKMesh(sJunk1.str().c_str(), sJunk2.str().c_str());
+    }
+  
+
+}
+
+
+
+// Move along a given mode a certain number of S.D.
+void MedialPCA::SetFSLocation(unsigned int iMode, double xSigma)
+{
+
+}
+
+// Generate a sample at the current location
+MedialPDE *MedialPCA::GetShapeAtFSLocation()
+{
+  return NULL;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 void RenderMedialPDE(MedialPDE *model)
 {

@@ -123,6 +123,7 @@ IF(BUILD_PDE)
     Code/PDE/MedialPDERenderer.cxx
     Code/PDE/MedialPDESolver.cxx 
     Code/PDE/OptimizationTerms.cxx
+    Code/PDE/Procrustes.cxx
     Code/PDE/Registry.cxx
     Code/PDE/ScriptImaging.cxx
     Code/PDE/ScriptInterface.cxx

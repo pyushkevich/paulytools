@@ -23,6 +23,13 @@ double CosineBasisFunction::Evaluate(double u, size_t k, size_t d)
     }
 }
 
+FourierSurface::FourierSurface(const FourierSurface &source)
+  : FourierSurfaceBase(source.ncu, source.ncv)
+{
+  // Copy the raw coefficients
+  this->SetRawCoefficientArray(source.GetRawCoefficientArray());
+}
+
 vnl_vector<double> FourierSurface::GetCenterOfRotation()
 {
   vnl_vector<double> xCtr(4);
