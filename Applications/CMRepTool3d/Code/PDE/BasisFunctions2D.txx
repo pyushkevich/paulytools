@@ -30,7 +30,7 @@ GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV
 template< size_t NComponents, size_t NOrder, typename BasisFunctionU, typename BasisFunctionV >
 void
 GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV>
-::EvaluateDerivative(double u, double v, size_t ou, size_t ov, double *x)
+::EvaluateDerivative(double u, double v, size_t ou, size_t ov, size_t c0, size_t nc, double *x)
 {
   // No grid is available - must evaluate each basis function
   size_t iu, iv, k;
@@ -38,7 +38,7 @@ GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV
   for(iv = 0; iv < ncv; iv++) vEval[iv] = fv.Evaluate(v, iv, ov);
 
   // Clear the output array
-  for(k = 0; k < NComponents; k++) x[k] = 0.0;
+  for(k = 0; k < nc; k++) x[k] = 0.0;
 
   // Compute the cross product of the bases
   unsigned int iOffset = 0;
@@ -47,9 +47,11 @@ GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV
     // Compute the product of the basis functions
     double Fuv = uEval[iu] * vEval[iv];
 
-    // Get the coefficient corresponding to iu and iv
-    for(k = 0; k < NComponents; k++)
-      x[k] += C[iOffset++] * Fuv;
+    // Get the coefficient corresponding to iu and iv    
+    for(k = 0; k < nc; k++)
+      x[k] += C[iOffset + k + c0] * Fuv;
+    
+    iOffset += NComponents;
     }
 }
 
@@ -88,7 +90,7 @@ GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV
 template< size_t NComponents, size_t NOrder, typename BasisFunctionU, typename BasisFunctionV >
 void
 GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV>
-::EvaluateAtGridIndex(size_t iu, size_t iv, size_t ou, size_t ov, double *x)
+::EvaluateAtGridIndex(size_t iu, size_t iv, size_t ou, size_t ov, size_t c0, size_t nc, double *x)
 {
   // Get a slice into the U grid. Indexing over this slice gets consecutive
   // basis functions of order ou at site iu
@@ -98,7 +100,7 @@ GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV
 
   // Clear the output array
   size_t icu, icv, k;
-  for(k = 0; k < NComponents; k++) x[k] = 0.0;
+  for(k = 0; k < nc; k++) x[k] = 0.0;
 
   // Compute the cross product of the bases
   size_t iOffset = 0;
@@ -108,8 +110,10 @@ GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV
     double Fuv = sGridU[icu] * sGridV[icv];
 
     // Get the coefficient corresponding to iu and iv
-    for(k = 0; k < NComponents; k++)
-      x[k] += C[iOffset++] * Fuv;
+    for(k = 0; k < nc; k++)
+      x[k] += C[iOffset + k + c0] * Fuv;
+
+    iOffset += NComponents;
     }
 }
 

@@ -14,15 +14,18 @@ public:
    * is a vector of doubles */
   virtual void Evaluate(double u, double v, double *x) = 0;
  
-  /** Evaluate a partial derivative of the function at the u, v coordinate */
-  virtual void EvaluateDerivative(double u, double v, size_t ou, size_t ov, double *x) = 0;
+  /** Evaluate a partial derivative of the function at the u, v coordinate.
+   * The first component is c0, number of components nc */
+  virtual void EvaluateDerivative(
+    double u, double v, size_t ou, size_t ov, size_t c0, size_t nc, double *x) = 0;
 
   /** Specify a grid of values along which the function will need to be
    * evaluated repeatedly. */
   virtual void SetEvaluationGrid(size_t nu, size_t nv, double *uu, double *vv) = 0;
 
   /** Evaluate the function at a grid point */
-  virtual void EvaluateAtGridIndex(size_t iu, size_t iv, size_t ou, size_t ov, double *x) = 0;
+  virtual void EvaluateAtGridIndex(
+    size_t iu, size_t iv, size_t ou, size_t ov, size_t c0, size_t nc, double *x) = 0;
 };
 
 /** This is an interface that should be implemented by any 2D basis function
@@ -95,10 +98,10 @@ public:
   /** Evaluate the function at a particular u, v coordinate. The return value
    * is a vector of doubles */
   void Evaluate(double u, double v, double *x)
-    { return EvaluateDerivative(u, v, 0, 0, x); } 
+    { return EvaluateDerivative(u, v, 0, 0, 0, NComponents, x); } 
  
   /** Evaluate a partial derivative of the function at the u, v coordinate */
-  void EvaluateDerivative(double u, double v, size_t ou, size_t ov, double *x); 
+  void EvaluateDerivative(double u, double v, size_t ou, size_t ov, size_t c0, size_t nc, double *x); 
 
   /** Specify a grid of values along which the function will need to be
    * evaluated repeatedly. Call PrecomputeGrid() before evaluating at grid and
@@ -106,7 +109,7 @@ public:
   void SetEvaluationGrid(size_t nu, size_t nv, double *uu, double *vv); 
 
   /** Evaluate the function at a grid point */
-  void EvaluateAtGridIndex(size_t iu, size_t iv, size_t ou, size_t ov, double *x); 
+  void EvaluateAtGridIndex(size_t iu, size_t iv, size_t ou, size_t ov, size_t c0, size_t nc, double *x); 
 
   /** Get number of raw coefficients */
   size_t GetNumberOfRawCoefficients()
@@ -169,7 +172,7 @@ public:
 
 /** Declare the Fourier surface class */
 typedef 
-GenericBasisRepresentation2D <3, 3, CosineBasisFunction, CosineBasisFunction>
+GenericBasisRepresentation2D <4, 3, CosineBasisFunction, CosineBasisFunction>
 FourierSurfaceBase;
 
 class FourierSurface : public FourierSurfaceBase

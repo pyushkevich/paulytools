@@ -17,160 +17,6 @@ extern "C" {
 
 using namespace std;
 
-void
-GeometryDescriptor
-::SetJet(double *X, double *Xu, double *Xv, double *Xuu, double *Xuv, double *Xvv)
-{
-  // Compute the covariant tensor
-  xCovariantTensor[0][0] = Xu[0] * Xu[0] + Xu[1] * Xu[1] + Xu[2] * Xu[2];
-  xCovariantTensor[1][1] = Xv[0] * Xv[0] + Xv[1] * Xv[1] + Xv[2] * Xv[2];
-  xCovariantTensor[1][0] = Xu[0] * Xv[0] + Xu[1] * Xv[1] + Xu[2] * Xv[2];
-  xCovariantTensor[0][1] = xCovariantTensor[1][0];
-
-  // Compute the determinant of the covariant tensor
-  g = xCovariantTensor[0][0] * xCovariantTensor[1][1] 
-    - xCovariantTensor[0][1] * xCovariantTensor[0][1];
-  gInv = 1.0 / g;
-
-  // Compute the contravariant tensor
-  xContravariantTensor[0][0] = gInv * xCovariantTensor[1][1];
-  xContravariantTensor[1][1] = gInv * xCovariantTensor[0][0];
-  xContravariantTensor[0][1] = - gInv * xCovariantTensor[1][0];
-  xContravariantTensor[1][0] = xContravariantTensor[0][1];
-
-  // Compute the Christoffel symbols of the first kind
-  xChristoffelFirst[0][0][0] = Xuu[0] * Xu[0] + Xuu[1] * Xu[1] + Xuu[2] * Xu[2];
-  xChristoffelFirst[0][0][1] = Xuu[0] * Xv[0] + Xuu[1] * Xv[1] + Xuu[2] * Xv[2];
-  xChristoffelFirst[0][1][0] = Xuv[0] * Xu[0] + Xuv[1] * Xu[1] + Xuv[2] * Xu[2];
-  xChristoffelFirst[0][1][1] = Xuv[0] * Xv[0] + Xuv[1] * Xv[1] + Xuv[2] * Xv[2];
-  xChristoffelFirst[1][1][0] = Xvv[0] * Xu[0] + Xvv[1] * Xu[1] + Xvv[2] * Xu[2];
-  xChristoffelFirst[1][1][1] = Xvv[0] * Xv[0] + Xvv[1] * Xv[1] + Xvv[2] * Xv[2];
-  xChristoffelFirst[1][0][0] = xChristoffelFirst[0][1][0];
-  xChristoffelFirst[1][0][1] = xChristoffelFirst[0][1][1];
-
-  // Compute the Christoffel symbols of the second kind
-  xChristoffelSecond[0][0][0] = xContravariantTensor[0][0] * xChristoffelFirst[0][0][0] + 
-    xContravariantTensor[1][0] * xChristoffelFirst[0][0][1];
-  xChristoffelSecond[0][0][1] = xContravariantTensor[0][1] * xChristoffelFirst[0][0][0] + 
-    xContravariantTensor[1][1] * xChristoffelFirst[0][0][1];
-  
-  xChristoffelSecond[0][1][0] = xContravariantTensor[0][0] * xChristoffelFirst[0][1][0] + 
-    xContravariantTensor[1][0] * xChristoffelFirst[0][1][1];
-  xChristoffelSecond[0][1][1] = xContravariantTensor[0][1] * xChristoffelFirst[0][1][0] + 
-    xContravariantTensor[1][1] * xChristoffelFirst[0][1][1];
-
-  xChristoffelSecond[1][1][0] = xContravariantTensor[0][0] * xChristoffelFirst[1][1][0] + 
-    xContravariantTensor[1][0] * xChristoffelFirst[1][1][1];
-  xChristoffelSecond[1][1][1] = xContravariantTensor[0][1] * xChristoffelFirst[1][1][0] + 
-    xContravariantTensor[1][1] * xChristoffelFirst[1][1][1];
-
-  xChristoffelSecond[1][0][0] = xChristoffelSecond[0][1][0];
-  xChristoffelSecond[1][0][1] = xChristoffelSecond[0][1][1];
-}
-
-void 
-GeometryDescriptor
-::PrintSelf(ostream &str)
-{
-  str << "CovariantTensor : {{" 
-    << xCovariantTensor[0][0] << "," 
-    << xCovariantTensor[0][1] << "}, {"
-    << xCovariantTensor[1][0] << "," 
-    << xCovariantTensor[1][1] << "}}" << endl;
-  
-  str << "ContravariantTensor : {{" 
-    << xContravariantTensor[0][0] << "," 
-    << xContravariantTensor[0][1] << "}, {"
-    << xContravariantTensor[1][0] << "," 
-    << xContravariantTensor[1][1] << "}}" << endl;
-
-  str << "ChristoffelFirst : {{{" 
-    << xChristoffelFirst[0][0][0] << ","
-    << xChristoffelFirst[0][0][1] << "}, {"
-    << xChristoffelFirst[0][1][0] << ","
-    << xChristoffelFirst[0][1][1] << "}}, {{"
-    << xChristoffelFirst[1][0][0] << ","
-    << xChristoffelFirst[1][0][1] << "}, {"
-    << xChristoffelFirst[1][1][0] << ","
-    << xChristoffelFirst[1][1][1] << "}}}" << endl;
-
-  str << "ChristoffelSecond : {{{" 
-    << xChristoffelSecond[0][0][0] << ","
-    << xChristoffelSecond[0][0][1] << "}, {"
-    << xChristoffelSecond[0][1][0] << ","
-    << xChristoffelSecond[0][1][1] << "}}, {{"
-    << xChristoffelSecond[1][0][0] << ","
-    << xChristoffelSecond[1][0][1] << "}, {"
-    << xChristoffelSecond[1][1][0] << ","
-    << xChristoffelSecond[1][1][1] << "}}}" << endl;
-}
-
-void
-MedialAtom
-::ComputeDifferentialGeometry()
-{
-  G.SetJet( X.data_block(), Xu.data_block(), Xv.data_block(),
-    Xuu.data_block(), Xuv.data_block(), Xvv.data_block());
-}
-
-void MedialAtom ::ComputeNormalVector()
-{
-  N = cross_3d(Xu, Xv) * sqrt(G.gInv);
-}
-
-bool MedialAtom::ComputeBoundaryAtoms()
-{
-  // Terms going into gradR
-  double CXu = 
-    Ru * G.xContravariantTensor[0][0] + Rv * G.xContravariantTensor[0][1]; 
-  double CXv = 
-    Ru * G.xContravariantTensor[0][1] + Rv * G.xContravariantTensor[1][1];
-    
-  // Compute Grad R
-  xGradR[0] = Xv[0] * CXv + Xu[0] * CXu;
-  xGradR[1] = Xv[1] * CXv + Xu[1] * CXu;
-  xGradR[2] = Xv[2] * CXv + Xu[2] * CXu;
-
-  // Compute squared length of GradR
-  double xMagGradR2 = Ru * CXu + Rv * CXv;
-  double sinTheta2 = 1.0f - xMagGradR2;
-  
-  // Correct the floating point / solver error
-  if(fabs(sinTheta2) < 1e-8) sinTheta2 = 0.0;
-  
-  // Compute the boundary sites
-  if (sinTheta2 > 0.0)
-    {
-    // We are not at a crest, valid atom
-    flagCrest = false; flagValid = true;
-    
-    // Compute the normal and tangent components of the boundaries
-    SMLVec3d CN = N * sqrt(sinTheta2);
-
-    // Compute the position and normals of boundary points
-    xBnd[0].N = - xGradR - CN;
-    xBnd[1].N = - xGradR + CN;
-    xBnd[0].X = X + xBnd[0].N * R;
-    xBnd[1].X = X + xBnd[1].N * R;
-    }
-  else if (sinTheta2 < 0.0)
-    { 
-    flagValid = false; 
-    // cerr << "Bad atom ("<< R << ", " << sinTheta2 << ") at " << u << ", " << v << endl;
-    cout << "x" << flush;
-    }
-  else
-    { 
-    // We are at a crest, valid atom
-    flagValid = true; flagCrest = true;
-
-    // Simpler geometry, save a square root!
-    xBnd[0].N = xBnd[1].N = -xGradR;
-    xBnd[0].X = xBnd[1].X = X - xGradR * R;
-    }
-
-  return flagValid;
-}
 
 FDAbstractSite::FDAbstractSite(unsigned int m, unsigned int n, unsigned int i, unsigned int j)
 {
@@ -716,12 +562,12 @@ void MedialPDESolver::InitializeSiteGeometry()
     xAtom.u = xGridU[i]; xAtom.v = xGridV[j];
 
     // Compute the surface jet and the laplacian
-    xSurface->EvaluateAtGridIndex(i, j, 0, 0, xAtom.X.data_block());
-    xSurface->EvaluateAtGridIndex(i, j, 1, 0, xAtom.Xu.data_block());
-    xSurface->EvaluateAtGridIndex(i, j, 0, 1, xAtom.Xv.data_block());
-    xSurface->EvaluateAtGridIndex(i, j, 2, 0, xAtom.Xuu.data_block());
-    xSurface->EvaluateAtGridIndex(i, j, 1, 1, xAtom.Xuv.data_block());
-    xSurface->EvaluateAtGridIndex(i, j, 0, 2, xAtom.Xvv.data_block());
+    xSurface->EvaluateAtGridIndex(i, j, 0, 0, 0, 3, xAtom.X.data_block());
+    xSurface->EvaluateAtGridIndex(i, j, 1, 0, 0, 3, xAtom.Xu.data_block());
+    xSurface->EvaluateAtGridIndex(i, j, 0, 1, 0, 3, xAtom.Xv.data_block());
+    xSurface->EvaluateAtGridIndex(i, j, 2, 0, 0, 3, xAtom.Xuu.data_block());
+    xSurface->EvaluateAtGridIndex(i, j, 1, 1, 0, 3, xAtom.Xuv.data_block());
+    xSurface->EvaluateAtGridIndex(i, j, 0, 2, 0, 3, xAtom.Xvv.data_block());
 
     // Compute the differential geometric tensors
     xAtom.ComputeDifferentialGeometry();
@@ -729,8 +575,8 @@ void MedialPDESolver::InitializeSiteGeometry()
     // Compute the normal vector
     xAtom.ComputeNormalVector();
 
-    // Compute the laplacian of R (TODO!)
-    xAtom.xLapR = -0.25;
+    // Compute the laplacian of R 
+    xSurface->EvaluateAtGridIndex(i, j, 0, 0, 3, 1, &xAtom.xLapR);
 
     // Compute the solution at this point
     xSites[iSite]->SetGeometry( &xAtom.G, xAtom.xLapR);
@@ -854,6 +700,9 @@ MedialPDESolver
     }
   cout << "Lowest g = " << gMin << endl;
   */
+
+  if(!flagComplete)
+    { cerr << "*** PDE Solver Convergence Failure! ***" << endl; }
   
   // Reconstruct the medial atoms
   ReconstructAtoms(y);

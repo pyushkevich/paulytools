@@ -18,6 +18,9 @@ public:
   virtual void build();
 
 private:
+  // INternal methods
+  void DrawInternalPoints( size_t nCuts );
+
   MedialPDESolver *solver;
   GLMaterial *matMedial, *matBoundary;
 };

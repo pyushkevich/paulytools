@@ -1,6 +1,10 @@
 #include "ScriptInterface.h"
 #include "FourierSurface.h"
 #include "BasisFunctions2D.h"
+#include "MedialAtom.h"
+#include "MedialPDESolver.h"
+#include "CartesianMedialAtomGrid.h"
+#include "OptimizationTerms.h"
 
 #include <string>
 #include <iostream>
@@ -10,11 +14,82 @@ using namespace medialpde;
 
 string dirWork = "/home/pauly/data2005/Stanley/data/";
 
+class TestFunction01 : public EuclideanFunction
+{
+public:
+  double Evaluate(const SMLVec3d &x)
+    { return 1; }
+};
+
+// Test volume computations
+void TestAreaAndVolume(MedialPDESolver *xSolver)
+{
+  unsigned int nCuts = 6;
+
+  // Compute the area 
+  MedialAtomGrid *xGrid = xSolver->GetAtomGrid();
+  double xArea, *xAreaWeights = new double[xGrid->GetNumberOfBoundaryPoints()];
+  xArea = ComputeMedialBoundaryAreaWeights(xGrid, xSolver->GetAtomArray(), xAreaWeights);
+
+  cout << "Area : " << xArea << endl;
+  TestFunction01 fn1;
+  cout << "Verification " << 
+    IntegrateFunctionOverBoundary(xGrid, xSolver->GetAtomArray(), 
+      xAreaWeights, &fn1) << endl;
+  
+  // Compute the volume
+  double xVol, *xVolWeights = new double[xGrid->GetNumberOfInternalPoints(nCuts)];
+  SMLVec3d *xInternal = new SMLVec3d[xGrid->GetNumberOfInternalPoints(nCuts)];
+  ComputeMedialInternalPoints(
+    xGrid, xSolver->GetAtomArray(), nCuts, xInternal);
+  
+  xVol = ComputeMedialInternalVolumeWeights(
+    xGrid, xInternal, nCuts, xVolWeights);
+
+  cout << "Volume : " << xVol << endl;
+  cout << "Verification " << 
+    IntegrateFunctionOverInterior(
+      xGrid, xInternal, xVolWeights, nCuts, &fn1) << endl;
+
+  // Volume accumulator
+  xVol = 0.0;
+  
+  // Create an internal point iterator
+  MedialBoundaryPointIterator *it = xGrid->NewBoundaryPointIterator();
+  while(!it->IsAtEnd())
+    {
+    // Evaluate the image at this location
+    BoundaryAtom &B = GetBoundaryPoint(it, xSolver->GetAtomArray()); 
+    xVol += dot_product(B.X , B.N) * xAreaWeights[it->GetIndex()] / 3.0; 
+
+    // On to the next point
+    ++(*it); 
+    }
+
+  // Clean up
+  delete it;
+  
+  // Check the Jacobian
+  SolutionData S(xSolver, false);
+  BoundaryJacobianEnergyTerm termJac;
+  termJac.ComputeEnergy(&S);
+  termJac.PrintReport(cout);
+
+  // Return match scaled by total weight
+  cout << "Verification " << xVol << endl;
+}
+
 void Test01()
 {
-  MedialPDE *mp = new MedialPDE(5, 5, 10);
-  mp->LoadFromParameterFile("iter.mrep");
+  string fMrep = dirWork + "avg/average_mrepL_01.mpde";
+  
+  MedialPDE *mp = new MedialPDE(3, 5, 24);
+  mp->LoadFromParameterFile(fMrep.c_str());
   mp->Solve();
+
+  // Make sure areas and volumes add up
+  TestAreaAndVolume(mp->GetSolver());
+  
   RenderMedialPDE(mp);
 }
 
@@ -61,7 +136,7 @@ void Test02()
       T1[0] = s1.Evaluate(u, v, 1, 0, 0);
       T1[1] = s1.Evaluate(u, v, 1, 0, 1);
       T1[2] = s1.Evaluate(u, v, 1, 0, 2);
-      s2.EvaluateDerivative(u, v, 1, 0, T2.data_block());
+      s2.EvaluateDerivative(u, v, 1, 0, 0, 3, T2.data_block());
       cout << T1 - T2 << endl;
       }
   
@@ -89,9 +164,24 @@ void Test03()
   mp->SaveBYUMesh((dirWork + "avg/average_mrepL_02.byu").c_str());
 }
 
+void TestCellVolume()
+{
+  // Compute the volume of a unit cube
+  cout << "Unit Cube Volume: " << CellVolume(
+    SMLVec3d(0,0,0),SMLVec3d(0,0,1),SMLVec3d(0,1,0),SMLVec3d(0,1,1),
+    SMLVec3d(1,0,0),SMLVec3d(1,0,1),SMLVec3d(1,1,0),SMLVec3d(1,1,1)) << endl;
+
+  // Compute the volume of an elongated cube
+  cout << "123 Cube Volume : " << CellVolume(
+    SMLVec3d(0,0,0),SMLVec3d(0,0,3),SMLVec3d(0,2,0),SMLVec3d(0,2,3),
+    SMLVec3d(1,0,0),SMLVec3d(1,0,3),SMLVec3d(1,2,0),SMLVec3d(1,2,3)) << endl;
+}
+
 int main(int argc, char *argv[])
 {
-  Test03();
+  // TestCellVolume();
+  // TestCartesianGrid();
+  Test01();
   
   return 0;
 }

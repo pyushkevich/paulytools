@@ -7,6 +7,10 @@
 #include <itkUnaryFunctorImageFilter.h>
 #include <itkDerivativeImageFilter.h>
 
+#include <string>
+
+using namespace std;
+
 namespace medialpde {
 
 FloatImage::FloatImage()
@@ -41,6 +45,20 @@ void FloatImage::LoadGradientFromFile(unsigned int iComponent, const char *file)
   xGradient[iComponent]->LoadFromFile(file);
 }
 
+// Load the image and the gradient from a path
+void FloatImage::LoadFromPath(const char *filebase, const char *ext)
+{
+  string fMain = string(filebase) + "." + string(ext);
+  string fGradX = string(filebase) + ".dx." + string(ext);
+  string fGradY = string(filebase) + ".dy." + string(ext);
+  string fGradZ = string(filebase) + ".dz." + string(ext);
+
+  LoadFromFile(fMain.c_str());
+  LoadGradientFromFile(0, fGradX.c_str());
+  LoadGradientFromFile(1, fGradY.c_str());
+  LoadGradientFromFile(2, fGradZ.c_str());
+}
+
 void FloatImage::SaveToFile(const char *file)
 {
   // Save the ITK image
@@ -51,6 +69,20 @@ void FloatImage::SaveGradientToFile(unsigned int iComponent, const char *file)
 {
   // Save the ITK image
   xGradient[iComponent]->SaveToFile(file);
+}
+
+  // Load the image and the gradient from a path
+void FloatImage::SaveToPath(const char *filebase, const char *ext)
+{
+  string fMain = string(filebase) + "." + string(ext);
+  string fGradX = string(filebase) + ".dx." + string(ext);
+  string fGradY = string(filebase) + ".dy." + string(ext);
+  string fGradZ = string(filebase) + ".dz." + string(ext);
+
+  SaveToFile(fMain.c_str());
+  SaveGradientToFile(0, fGradX.c_str());
+  SaveGradientToFile(1, fGradY.c_str());
+  SaveGradientToFile(2, fGradZ.c_str());
 }
 
 void FloatImage::SetToGradientMagnitude(BinaryImage *imgSource, double xSigma)
@@ -133,6 +165,34 @@ void FloatImage
     fltDerivative->Update();
     xGradient[d]->SetInternalImage(fltDerivative->GetOutput());
     }
+}
+
+double FloatImage::ComputeObjectVolume()
+{
+  // Create an iterator
+  typedef itk::Image<float, 3> FloatImageType;
+  typedef itk::ImageRegionConstIterator<FloatImageType> IteratorType;
+
+  // Create the volume accumulator
+  double xVolume = 0.0;
+
+  // Add each voxel to the accumulator
+  FloatImageType::Pointer img = xImage->GetInternalImage();
+  IteratorType it(img, img->GetBufferedRegion());
+  while(!it.IsAtEnd())
+    {
+    xVolume += it.Get();
+    ++it;
+    }
+
+  // Correct for outside pixels being -1.0
+  unsigned long nPixels = img->GetBufferedRegion().GetNumberOfPixels();
+  xVolume = (1.0 * nPixels + xVolume) * 0.5;
+
+  // Scale by the voxel's spacing
+  double xVoxelVolume = 
+    img->GetSpacing()[0] * img->GetSpacing()[1] * img->GetSpacing()[2];
+  return xVoxelVolume * xVolume;
 }
 
 BinaryImage::BinaryImage()

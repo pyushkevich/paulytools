@@ -21,8 +21,14 @@ public:
   // Load the image from a file
   void LoadFromFile(const char *file);
 
+  // Load the image and the gradient from a path
+  void LoadFromPath(const char *filebase, const char *ext);
+
   // Save the image to a file
   void SaveToFile(const char *file);
+
+  // Load the image and the gradient from a path
+  void SaveToPath(const char *filebase, const char *ext);
 
   // Load the image from a file
   void LoadGradientFromFile(unsigned int iComponent, const char *file);
@@ -36,6 +42,10 @@ public:
   // Compute the image by blurring a binary image. The surface is represented
   // by the 0.0 level set, 1.0 is inside, -1.0 is outside of the object
   void SetToBlurredBinary(BinaryImage *imgSource, double xSigma);
+
+  // Compute the volume of the interior of the image. The image must represent
+  // an follows: internal points near 1.0, external near -1.0, interface 0.0
+  double ComputeObjectVolume();
 
   // Check whether the gradient information is available
   bool IsGradientAvailable();
@@ -87,7 +97,8 @@ public:
   ~MedialPDE();
   
   /** Initialize the surface using a discrete m-rep */
-  void LoadFromDiscreteMRep(const char *file, unsigned int xResolution);
+  void LoadFromDiscreteMRep(
+    const char *file, double xInitRho, unsigned int xResolution);
 
   /** Save to a parameter file */
   void SaveToParameterFile(const char *file);
@@ -102,18 +113,25 @@ public:
   double ComputeImageMatch(FloatImage *image);
   
   /** Perform gradient descent */
-  void GradientDescentOptimization(FloatImage *image, unsigned int nSteps, double xStep);
-  void ConjugateGradientOptimization(FloatImage *image, unsigned int nSteps);
+  void GradientDescentOptimization(
+    FloatImage *image, unsigned int nSteps, double xStep);
+  
+  void ConjugateGradientOptimization(
+    FloatImage *image, unsigned int nSteps, double xStep);
+  
   void EvolutionaryOptimization(FloatImage *image, unsigned int nSteps);
   
   /** Fit the model to the binary image by matching moments of inertia */
-  void MatchImageByMoments(BinaryImage *image);
+  void MatchImageByMoments(FloatImage *image, unsigned int nCuts);
 
   /** Save the model as a BYU mesh */
   void SaveBYUMesh(const char *file);
 
   /** Compute the radius function after surface/pho update */
   void Solve();
+
+  /** Should not be here! */
+  MedialPDESolver *GetSolver() { return xSolver; }
 
 private:
   MedialPDESolver *xSolver;

@@ -357,8 +357,8 @@ void BrentLinearMethod::performIteration() {
 	}
 	else if(linmin == NULL) {
 		// printf("Brent\n");
-		// linmin = new BrentRoutine(&f1d,mnbrak->ax,mnbrak->bx,mnbrak->cx,TOL);
-		linmin = new GoldenRoutine(&f1d,mnbrak->ax,mnbrak->bx,mnbrak->cx,TOL);
+		linmin = new BrentRoutine(&f1d,mnbrak->ax,mnbrak->bx,mnbrak->cx,xTolerance);
+		// linmin = new GoldenRoutine(&f1d,mnbrak->ax,mnbrak->bx,mnbrak->cx,TOL);
 		//printf("%16.12g\t%16.12g\n",mnbrak->ax,mnbrak->fa);
 		//printf("%16.12g\t%16.12g\n",mnbrak->cx,mnbrak->fc);
 		//printf("%16.12g\t%16.12g\n",brent->x,brent->fx);
@@ -380,6 +380,7 @@ BrentLinearMethod::BrentLinearMethod(Function *problem,const Vector &x,const Vec
 	mnbrak = new MinBrakRoutine(&f1d,0.0,1.0);
 	linmin = NULL;
 	done = false;
+  xTolerance = TOL;
 /*
 	double xx = 1.0,xmin,fx,fb,fa,bx,ax = 0.0;
 	mnbrak(&ax,&xx,&bx,&fa,&fx,&fb);

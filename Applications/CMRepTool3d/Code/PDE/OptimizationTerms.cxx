@@ -31,6 +31,23 @@ protected:
   float xBackground;
 };
 
+/** An image adapter used for volume computations. For images in the -1.0 to
+ * 1.0 range, this adapter shifts it into a 0.0 to 1.0 range */
+class FloatImageVolumeElementFunctionAdapter :
+  public FloatImageEuclideanFunctionAdapter
+{
+public:
+  FloatImageVolumeElementFunctionAdapter(FloatImage *image) :
+    FloatImageEuclideanFunctionAdapter(image) {}
+
+  // Y = 0.5 (X + 1)
+  double Evaluate(const SMLVec3d &X)
+    { return 0.5 * (1.0 + FloatImageEuclideanFunctionAdapter::Evaluate(X)); }
+
+  SMLVec3d ComputeGradient(const SMLVec3d &X)
+    { return 0.5 * FloatImageEuclideanFunctionAdapter::ComputeGradient(X); }
+};
+
 /** A function that computes the match as (I(x) - I0)^2, where I0 is some
  * level set in the image. Used for blurred binary images */
 class FloatImageLevelSetFunctionAdapter : 
@@ -66,112 +83,9 @@ using namespace medialpde;
 
 
 
-/**
- * This function computes the area associated with each triangle on the
- * boundary of the object and assigns a third of this area to each of the 
- * vertices of the triangle. Thus for each vertex on the boundary a weight
- * is generated. The total of these weights, equal to the area of the boundary
- * surface is the return value 
- */
-double ComputeMedialBoundaryAreaWeights( MedialAtomGrid *xGrid, 
-  MedialAtom *xAtoms, double *xWeights)
-{
-  // A constant to hold 1/3
-  const static double THIRD = 1.0f / 3.0f;
-  double xTotalArea = 0.0f;
-
-  // Clear the content of the weights
-  memset(xWeights, 0, sizeof(double) * xGrid->GetNumberOfBoundaryPoints());
-  
-  // Create a quad-based iterator
-  MedialBoundaryQuadIterator *itQuad = xGrid->NewBoundaryQuadIterator();
-
-  // For each quad, compute the area associated with it
-  while(!itQuad->IsAtEnd())
-    {
-    // Access the four medial points
-    SMLVec3d X00 = GetBoundaryPoint(itQuad, xAtoms, 0, 0).X;
-    SMLVec3d X01 = GetBoundaryPoint(itQuad, xAtoms, 0, 1).X;
-    SMLVec3d X11 = GetBoundaryPoint(itQuad, xAtoms, 1, 1).X;
-    SMLVec3d X10 = GetBoundaryPoint(itQuad, xAtoms, 1, 0).X;
-
-    // Compute the areas of the two triangles involved
-    double A1 = THIRD * TriangleArea( X00, X01, X11 );
-    double A2 = THIRD * TriangleArea( X00, X11, X10 );
-    xTotalArea += (A1 + A2);
-
-    // Assign a third of each weight to each corner
-    xWeights[itQuad->GetBoundaryIndex(0, 0)] += A1 + A2;
-    xWeights[itQuad->GetBoundaryIndex(1, 1)] += A1 + A2;
-    xWeights[itQuad->GetBoundaryIndex(0, 1)] += A1;
-    xWeights[itQuad->GetBoundaryIndex(1, 0)] += A2;
-
-    // Go to the next boundary quad
-    ++(*itQuad);
-    }
-
-  // Delete the iterator object
-  delete itQuad;
-
-  // Return the total area
-  return 3.0f * xTotalArea;
-}
-
-double IntegrateFunctionOverBoundary(
-  MedialAtomGrid *xGrid, MedialAtom *xAtoms, double *xWeights, 
-  EuclideanFunction *fMatch) 
-{
-  // Match accumulator
-  double xMatch = 0.0;
-  
-  // Create a boundary point iterator
-  MedialBoundaryPointIterator *itBoundary = xGrid->NewBoundaryPointIterator();
-
-  // Iterate through all boundary points
-  while(!itBoundary->IsAtEnd())
-    {
-    // Evaluate the image at this location
-    double xLocal = fMatch->Evaluate(GetBoundaryPoint(itBoundary, xAtoms).X);
-    xMatch += xLocal * xWeights[itBoundary->GetIndex()];
-
-    // On to the next point
-    ++(*itBoundary); 
-    }
-
-  // Clean up
-  delete itBoundary;
-
-  // Return match scaled by total weight
-  return xMatch;
-}
-
-/** Compute gradient of a function over the boundary */
-double ComputeFunctionJetOverBoundary(
-  MedialAtomGrid *xGrid, MedialAtom *xAtoms, 
-  double *xWeights, EuclideanFunction *fMatch, SMLVec3d *xOutGradient) 
-{
-  // Compute the image match
-  double xMatch = IntegrateFunctionOverBoundary(xGrid, xAtoms, xWeights, fMatch);
-  
-  // Create a boundary point iterator and iterate over all points
-  MedialBoundaryPointIterator *itBoundary = xGrid->NewBoundaryPointIterator();
-
-  // Iterate through all boundary points
-  while(!itBoundary->IsAtEnd())
-    {
-    // Evaluate the image gradient at this point
-    unsigned int iBnd = itBoundary->GetIndex();
-    SMLVec3d X = GetBoundaryPoint(itBoundary, xAtoms).X;
-    xOutGradient[iBnd] = xWeights[iBnd] * fMatch->ComputeGradient(X);
-
-    // On to the next point
-    ++(*itBoundary);
-    }
-
-  // Return match scaled by total weight
-  return xMatch;
-}
-
+/*********************************************************************************
+ * SOLUTION DATA                  
+ ********************************************************************************/
 SolutionData::SolutionData(MedialPDESolver *xSolver, bool flagCopyAtoms)
 {
   // Point to the atom grid
@@ -187,21 +101,66 @@ SolutionData::SolutionData(MedialPDESolver *xSolver, bool flagCopyAtoms)
     }
   else
     xAtoms = xSolver->GetAtomArray();
+
+  // Set the flags
+  flagInternalWeights = false;
+  flagBoundaryWeights = false;
     
   // Create and compute boundary weights
-  xBoundaryWeights= new double[xAtomGrid->GetNumberOfBoundaryPoints()];
+  UpdateBoundaryWeights();
+}
+
+void SolutionData::UpdateBoundaryWeights()
+{
+  // Only run this method once
+  if(flagBoundaryWeights) return;
+  
+  // Create and compute boundary weights
+  xBoundaryWeights = new double[xAtomGrid->GetNumberOfBoundaryPoints()];
   xBoundaryArea = 
     ComputeMedialBoundaryAreaWeights(xAtomGrid, xAtoms, xBoundaryWeights);
+
+  // Set the flag
+  flagBoundaryWeights = true;
+}
+
+void SolutionData::UpdateInternalWeights(size_t nCuts)
+{
+  // Only run this method once
+  if(flagInternalWeights && nCuts == nInternalCuts) return;
+
+  // Delete the old data if necessary
+  if(flagInternalWeights) 
+    { delete xInternalWeights; delete xInternalPoints; }
+  
+  // Allocate the internal points and weights
+  nInternalPoints = xAtomGrid->GetNumberOfInternalPoints(nCuts);
+  xInternalPoints = new SMLVec3d[nInternalPoints];
+  xInternalWeights = new double[nInternalPoints];
+
+  // Interpolate the internal points
+  ComputeMedialInternalPoints(xAtomGrid, xAtoms, nCuts, xInternalPoints);
+  xInternalVolume = ComputeMedialInternalVolumeWeights(
+    xAtomGrid, xInternalPoints, nCuts, xInternalWeights);
+
+  // Set the flag and store the nCuts
+  flagInternalWeights = true;
+  nInternalCuts = nCuts;
 }
 
 SolutionData::~SolutionData()
 {
-  delete xBoundaryWeights;
+  if(flagBoundaryWeights)
+    delete xBoundaryWeights;
+  if(flagInternalWeights)
+    { delete xInternalWeights; delete xInternalPoints; }
   if(flagOwnAtoms)
     delete xAtoms;
 }
 
-
+/*********************************************************************************
+ * ENERGY TERM
+ ********************************************************************************/
 double EnergyTerm::ComputeGradient(
   SolutionData *S0, SolutionData **SGrad, 
   double xEpsilon, vnl_vector<double> &xOutGradient)
@@ -219,7 +178,9 @@ double EnergyTerm::ComputeGradient(
   return xSolution;
 }
 
-
+/*********************************************************************************
+ * BOUNDARY IMAGE MATCH TERM
+ ********************************************************************************/
 double 
 BoundaryImageMatchTerm
 ::ComputeEnergy(SolutionData *S) 
@@ -228,22 +189,26 @@ BoundaryImageMatchTerm
   FloatImageLevelSetFunctionAdapter fImage(xImage);
 
   // Integrate the image match
-  double xMatch = IntegrateFunctionOverBoundary(
+  xImageMatch = IntegrateFunctionOverBoundary(
     S->xAtomGrid, S->xAtoms, 
     S->xBoundaryWeights, &fImage);
 
+  xBoundaryArea = S->xBoundaryArea;
+  xFinalMatch = xImageMatch / xBoundaryArea;
+
   // Scale by area
-  return xMatch / S->xBoundaryArea;
+  return xFinalMatch;
 }
   
 // Print a verbose report
 void 
 BoundaryImageMatchTerm
-::PrintReport(ostream &sout, SolutionData *data)
+::PrintReport(ostream &sout)
 {
-  double x = ComputeEnergy(data);
   sout << "  Boundary Image Match Term " << endl;
-  sout << "    total match  : " << x << endl;
+  sout << "    image match   : " << xImageMatch << endl;
+  sout << "    boundary area : " << xBoundaryArea << endl;
+  sout << "    ratio         : " << xFinalMatch << endl;
 }
 
 double
@@ -322,11 +287,14 @@ BoundaryImageMatchTerm::ComputeGradient(
   return xMatch / A0;
 }
 
+/*********************************************************************************
+ * BOUNDARY JACOBIAN TERM
+ ********************************************************************************/
 double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionData *S)
 {
   // Place to store the Jacobian
-  double xTotalPenalty = 0.0;
-  xMaxJacobian = 1.0, xMinJacobian = 1.0;
+  xTotalPenalty = 0.0;
+  xMaxJacobian = 1.0, xMinJacobian = 1.0, xAvgJacobian = 0.0;
   
   // Create a Quad-iterator through the atoms
   MedialQuadIterator *itQuad = S->xAtomGrid->NewQuadIterator();
@@ -361,6 +329,9 @@ double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionData *S)
       if(J11 < xMinJacobian) xMinJacobian = J11;
       if(J00 > xMaxJacobian) xMaxJacobian = J00;
       if(J11 > xMaxJacobian) xMaxJacobian = J11;
+
+      // Add to the average Jacobian
+      xAvgJacobian += J00 + J11;
         
       // Compute the penalty function
       xTotalPenalty += PenaltyFunction(J00, 10, 40);
@@ -370,6 +341,9 @@ double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionData *S)
     ++(*itQuad);
     }
 
+  // Scale the average jacobian
+  xAvgJacobian /= 2.0 * S->xAtomGrid->GetNumberOfBoundaryQuads();
+
   // Return the total value
   return xTotalPenalty;
 }
@@ -377,16 +351,137 @@ double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionData *S)
 // Print a verbose report
 void 
 BoundaryJacobianEnergyTerm
-::PrintReport(ostream &sout, SolutionData *data)
+::PrintReport(ostream &sout)
 {
-  double x = ComputeEnergy(data);
   sout << "  Boundary Jacobian Term " << endl;
-  sout << "    total match  : " << x << endl;
+  sout << "    total match  : " << xTotalPenalty << endl;
   sout << "    min jacobian : " << xMinJacobian << endl;  
   sout << "    max jacobian : " << xMaxJacobian << endl;  
+  sout << "    avg jacobian : " << xAvgJacobian << endl;  
 }
 
-// Constants
+/*********************************************************************************
+ * VOLUME OVERLAP IMAGE MATCH TERM
+ ********************************************************************************/
+VolumeOverlapEnergyTerm::VolumeOverlapEnergyTerm( FloatImage *xImage, size_t nCuts)
+{
+  // Store the inputs
+  this->nCuts = nCuts;
+  this->xImage = xImage;
+
+  // Compute the image volume (it remains a constant throughout)
+  xImageVolume = xImage->ComputeObjectVolume();
+}
+
+double VolumeOverlapEnergyTerm::ComputeEnergy(SolutionData *data)
+{
+  // Make sure that the solution data has internal weights and points
+  data->UpdateInternalWeights(nCuts);
+
+  // Compute the match with the image function
+  FloatImageVolumeElementFunctionAdapter fImage(xImage);
+  
+  // Compute the intersection between the image and m-rep
+  xIntersect = IntegrateFunctionOverInterior(
+    data->xAtomGrid, data->xInternalPoints, 
+    data->xInternalWeights, nCuts, &fImage);
+
+  // Get (remember) the object volume 
+  xObjectVolume = data->xInternalVolume;
+
+  // Compute the volume overlap measure
+  xOverlap = xIntersect / (xImageVolume + xObjectVolume - xIntersect); 
+
+  // Return a value that can be minimized
+  return 1.0 - xOverlap;
+}
+
+double
+VolumeOverlapEnergyTerm::ComputeGradient(
+  SolutionData *S0, SolutionData **SGrad, 
+  double xEpsilon, vnl_vector<double> &xOutGradient)
+{
+  // Get info about the problem
+  MedialAtomGrid *xGrid = S0->xAtomGrid;
+  size_t nPoints = xGrid->GetNumberOfBoundaryPoints();
+
+  // Compute the raw image match at this point (we will use the stored terms)
+  ComputeEnergy(S0);
+
+  // Create the image adapter for image interpolation at the boundary
+  FloatImageVolumeElementFunctionAdapter fImage(xImage);
+
+  // Interpolate the image at each sample point on the surface
+  double *xImageVal = new double[xGrid->GetNumberOfBoundaryPoints()];
+  MedialBoundaryPointIterator *itBnd = xGrid->NewBoundaryPointIterator();
+  for( ; !itBnd->IsAtEnd() ; ++(*itBnd) )
+    {
+    // Compute and store the image value at the sample point
+    SMLVec3d &X = GetBoundaryPoint(itBnd, S0->xAtoms).X;
+    xImageVal[itBnd->GetIndex()] = fImage.Evaluate(X);
+    }
+  
+  // Clear the gradient vector
+  xOutGradient.fill(0.0);
+
+  // Repeat for each coefficient
+  for(size_t iCoeff = 0; iCoeff < xOutGradient.size(); iCoeff++)
+    {
+    // We will compute the partial derivative of the absolute overlap and the
+    // partial derivative of the m-rep volume with respect to the coeff
+    double dOverlap = 0.0, dVolume = 0.0;
+    
+    // Compute the partial derivative for this coefficient
+    for(itBnd->GoToBegin(); !itBnd->IsAtEnd(); ++(*itBnd))
+      {
+      // Get the index of this boundary point
+      size_t iPoint = itBnd->GetIndex();
+      
+      // Get the boundary point before and after small deformation
+      BoundaryAtom &B = GetBoundaryPoint(itBnd, S0->xAtoms);
+      SMLVec3d X1 = GetBoundaryPoint(itBnd, SGrad[iCoeff]->xAtoms).X;
+
+      // Get the area weights for this point
+      double w = S0->xBoundaryWeights[ iPoint ];
+
+      // Compute the common term between the two
+      double z = dot_product(X1 - B.X, B.N) * w;
+
+      // Compute the two partials
+      dOverlap += z * xImageVal[iPoint];
+      dVolume += z;
+      }
+
+    // Scale the partials by epsilon to get the derivative
+    dOverlap /= xEpsilon; dVolume /= xEpsilon;
+
+    // Compute the partial derivative of relative overlap match
+    double xUnion = (xImageVolume + xObjectVolume - xIntersect);        
+    xOutGradient[iCoeff] = 
+      (dVolume * xIntersect - dOverlap * (xImageVolume + xObjectVolume));
+    xOutGradient[iCoeff] /= xUnion * xUnion;
+    }
+
+  // Clean up
+  delete xImageVal;
+  delete itBnd;
+
+  // Return the solution
+  return 1.0 - xOverlap;
+}
+
+void VolumeOverlapEnergyTerm::PrintReport(ostream &sout)
+{
+  sout << "  Volume Overlap Term: " << endl;
+  sout << "    image volume   : " << xImageVolume << endl;
+  sout << "    object volume  : " << xObjectVolume << endl;
+  sout << "    intersection   : " << xIntersect << endl;
+  sout << "    overlap ratio  : " << xOverlap << endl;
+}
+  
+/*********************************************************************************
+ * MEDIAL OPTIMIZATION PROBLEM
+ ********************************************************************************/
 const double MedialOptimizationProblem::xPrecision = 1.0e-12;
 const double MedialOptimizationProblem::xEpsilon = 1.0e-6;
 
@@ -410,17 +505,14 @@ double MedialOptimizationProblem::Evaluate(double *X)
   // cout << "REPORT:" << endl;
 
   // Compute the solution for each term
-  double xValue = 0.0;
+  xSolution = 0.0;
   for(size_t iTerm = 0; iTerm < xTerms.size(); iTerm++)
-    { 
-    xValue += xTerms[iTerm]->ComputeEnergy(&S0) * xWeights[iTerm]; 
-    // xTerms[iTerm]->PrintReport(cout, &S0);
-    }
+    { xSolution += xTerms[iTerm]->ComputeEnergy(&S0) * xWeights[iTerm]; }
 
   // cout << "RESULT:" << xValue << endl;
 
   // Return the result
-  return xValue;
+  return xSolution;
 }
 
 double 
@@ -465,19 +557,17 @@ MedialOptimizationProblem
   // At this point, we have computed the solution at current X and at a set of 
   // X + eps positions. We can use this to compute the gradient of each of the
   // terms involved in the optimization
-  double xSolution = 0.0; 
+  xSolution = 0.0; 
   vnl_vector<double> xGradTotal(nCoeff, 0.0), xGradTerm(nCoeff, 0.0);
 
   // Add up all the terms and all the gradients
-  cout << endl << "REPORT" << endl;
+  cout << endl;
   for(size_t iTerm = 0; iTerm < xTerms.size(); iTerm++)
     {
     double xValue = xTerms[iTerm]->ComputeGradient(S0, SGrad, xEpsilon, xGradTerm);
-    cout << xGradTerm << endl;
+    // cout << xGradTerm << endl;
     xSolution += xWeights[iTerm] * xValue;
     xGradTotal += xWeights[iTerm] * xGradTerm;
-    
-    xTerms[iTerm]->PrintReport(cout, S0);
     }
 
   // Finish timing
@@ -496,5 +586,16 @@ MedialOptimizationProblem
   // Return the solution value
   for(size_t j = 0; j < nCoeff; j++) XGradient[j] = xGradTotal[j];
   return xSolution;
+}
+
+void MedialOptimizationProblem::PrintReport(ostream &sout)
+{
+  sout << "Optimization Summary: " << endl;
+  sout << "  energy value   :  " << xSolution << endl; 
+  sout << "  evaluation cost: " << this->getEvaluationCost() << endl;
+  sout << "Per-Term Report:" << endl;
+
+  for(size_t iTerm = 0; iTerm < xTerms.size(); iTerm++)
+    xTerms[iTerm]->PrintReport(sout);
 }
 

@@ -479,7 +479,7 @@ void StarfieldRenderer::buildList() {
 
   glNewList(dl,GL_COMPILE);
 
-  glPushAttrib(GL_LIGHTING_BIT);
+  glPushAttrib(GL_LIGHTING_BIT | GL_POINT_BIT);
   glDisable(GL_LIGHTING);
 
   for (i=0;i<d;i++)

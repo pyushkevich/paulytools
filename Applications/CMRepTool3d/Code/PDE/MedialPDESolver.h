@@ -3,96 +3,11 @@
 
 #include <iostream>
 #include <smlmath.h>
-#include "MedialAtomGrid.h"
-
+#include "MedialAtom.h"
+#include "CartesianMedialAtomGrid.h"
 #include "BasisFunctions2D.h"
 
 using namespace std;
-
-struct GeometryDescriptor
-{
-  double xCovariantTensor[2][2];
-  double xContravariantTensor[2][2];
-  double xChristoffelFirst[2][2][2];
-  double xChristoffelSecond[2][2][2];
-
-  // The determinant of the covariant tensor and its inverse
-  double g, gInv;
-
-  // Initialize the descriptor using a Jet
-  void SetJet(double *X, double *Xu, double *Xv, double *Xuu, double *Xuv, double *Xvv);
-
-  // Dump information out
-  void PrintSelf(ostream &str);
-};
-
-/** 
- * A Boundary atom
- */
-struct BoundaryAtom 
-{
-  SMLVec3d X, N;
-};
-
-/**
- * The new medial atom representation
- */
-struct MedialAtom
-{
-  // The coordinates of the atom in the domain
-  double u, v;
-  
-  // The position on the medial surface and corresponding partial derivatives
-  SMLVec3d X, Xu, Xv, Xuu, Xuv, Xvv;
-
-  // The differential geometry descriptor of the medial surface
-  GeometryDescriptor G;
-
-  // The radius function and its partial derivatives
-  double R, Ru, Rv, Ruu, Ruv, Rvv;
-
-  // The normal vector and the Riemannian gradient of R on the surface
-  SMLVec3d N, xGradR;
-
-  // The Riemannian laplacian of R
-  double xLapR;
-
-  // Whether this is a 'crest' atom, and whether it's valid at all
-  bool flagCrest, flagValid;
-
-  // The two associated boundary 'atoms'
-  BoundaryAtom xBnd[2];
-
-  /** Compute the differential geometric quantities from X and its 1st and 2nd
-   * derivatives. This does not compute the normal vector */
-  void ComputeDifferentialGeometry();
-
-  /** Compute the normal vector */
-  void ComputeNormalVector();
-
-  /** Given the differential geometry and the normal vector are computed,
-   * compute GradR and the boundary sites. */
-  bool ComputeBoundaryAtoms();
-};
-
-/** Helper function to access a boundary site in an atom array using a
- * boundary point iterator */
-inline BoundaryAtom &
-GetBoundaryPoint(MedialBoundaryPointIterator *itBoundary, MedialAtom *xAtoms)
-{
-  return 
-    xAtoms[itBoundary->GetAtomIndex()].xBnd[itBoundary->GetBoundarySide()];
-}
-
-/** Helper function to access a boundary site in an atom array using a
- * boundary point iterator */
-inline BoundaryAtom &
-GetBoundaryPoint(MedialBoundaryQuadIterator *itBQuad, MedialAtom *xAtoms, 
-  unsigned int i, unsigned int j)
-{
-  return 
-    xAtoms[itBQuad->GetAtomIndex(i,j)].xBnd[itBQuad->GetBoundarySide()];
-}
 
 class FDAbstractSite
 {
@@ -232,14 +147,6 @@ protected:
   double wu, wv;
 };
 
-// This is a measure that can be computed over a volume (just a R3 function)
-class EuclideanFunction {
-public:
-  virtual double Evaluate(const SMLVec3d &x) = 0;
-  virtual SMLVec3d ComputeGradient(const SMLVec3d &x)
-    { return SMLVec3d(0.0); }
-};
-
 class MedialPDESolver
 {
 public:
@@ -346,27 +253,6 @@ private:
 };
 
 /* *********************** Template Code ************************** */
-
-/**
- * Compute an area of a triangle
- */
-inline double TriangleArea(const SMLVec3d &A, const SMLVec3d &B, const SMLVec3d &C)
-{
-  return cross_3d(B - A, C - A).magnitude();
-}
-
-/**
- * Compute the volume of a prism formed by two triangles
- */
-inline double PrismVolume( SMLVec3d A1, SMLVec3d B1, SMLVec3d C1, 
-  SMLVec3d A2, SMLVec3d B2, SMLVec3d C2) 
-{
-  // TODO: Get/derive the correct formula!!!
-  double xArea1 = TriangleArea(A1, B1, C1);
-  double xArea2 = TriangleArea(A2, B2, C2);
-  double d = ((A1 + B1 + C1) - (A2 + B2 + C2)).magnitude() / 3.0;
-  return d * 0.5 * (xArea1 + xArea2);
-}
 
 
 #endif // _MedialPDESolver_h_

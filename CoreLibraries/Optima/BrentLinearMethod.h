@@ -186,6 +186,9 @@ protected:
 	// BrentRoutine *brent;
 	LineMinRoutine *linmin;
 
+  // Tolerance for termination: default is 2.0e-4
+  double xTolerance;
+
 	bool done;
 
 public:
@@ -199,6 +202,12 @@ public:
 	
 	// Runs the method until optimum is found.
 	bool isFinished();
+
+  // Set the tolerance for the termination of Brent's bracketing routine. This
+  // may be useful when the routine is used inside a gradient descent method
+  // and it is not critical that the exact minimum is reached. Dflt: 2.0e-4
+  void setTolerance(double tol)
+    { xTolerance = tol; }
 
 	// Get the minimum if the method is finished
 	Vector getMinimum();

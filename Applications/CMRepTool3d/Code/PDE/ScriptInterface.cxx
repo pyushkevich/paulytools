@@ -42,7 +42,7 @@ MedialPDE::~MedialPDE()
   delete xSurface;
 }
 
-void MedialPDE::LoadFromDiscreteMRep(const char *file, unsigned int xResolution)
+void MedialPDE::LoadFromDiscreteMRep(const char *file, double xRhoInit, unsigned int xResolution)
 {
   ifstream fin(file, ios_base::in);
   int iu, iv, iend;
@@ -88,6 +88,7 @@ void MedialPDE::LoadFromDiscreteMRep(const char *file, unsigned int xResolution)
   double *zz = new double[xAtoms.size()];
   double *uu = new double[xAtoms.size()];
   double *vv = new double[xAtoms.size()];
+  double *rr = new double[xAtoms.size()];
 
   for(unsigned int i = 0; i < xAtoms.size(); i++)
     {
@@ -96,6 +97,7 @@ void MedialPDE::LoadFromDiscreteMRep(const char *file, unsigned int xResolution)
     zz[i] = xAtoms[i].z;
     uu[i] = xAtoms[i].u;
     vv[i] = xAtoms[i].v;
+    rr[i] = xRhoInit;
     }
 
   // Perform the fitting on x, y and z
@@ -103,8 +105,11 @@ void MedialPDE::LoadFromDiscreteMRep(const char *file, unsigned int xResolution)
   xSurface->FitToData(xAtoms.size(), 1, uu, vv, yy);
   xSurface->FitToData(xAtoms.size(), 2, uu, vv, zz);
 
+  // Fit the rho function to a constant
+  xSurface->FitToData(xAtoms.size(), 3, uu, vv, rr);
+
   // Clean up
-  delete xx; delete yy; delete zz; delete uu; delete vv;
+  delete xx; delete yy; delete zz; delete uu; delete vv; delete rr;
 }
 
 void MedialPDE::SaveToParameterFile(const char *file)
@@ -275,7 +280,13 @@ double MedialPDE::ComputeImageMatch(FloatImage *image)
   BoundaryImageMatchTerm termImage(image);
 
   // Compute the energy
-  return termImage.ComputeEnergy(&S);
+  double xMatch = termImage.ComputeEnergy(&S);
+  
+  // Print a report
+  cout << "REPORT: " << endl;
+  termImage.PrintReport(cout);
+
+  return xMatch;
 }
   
 void MedialPDE
@@ -285,7 +296,7 @@ void MedialPDE
   MedialOptimizationProblem xProblem(xSolver, xSurface);
 
   // Create an image match term and a jacobian term
-  BoundaryImageMatchTerm xTermImage(image);
+  VolumeOverlapEnergyTerm xTermImage(image);
   BoundaryJacobianEnergyTerm xTermJacobian;
 
   // Add the terms to the problem
@@ -308,7 +319,7 @@ void MedialPDE
     xSolution -= xStep * xGradient;
 
     // Report the current state
-    cout << "Iteration " << p << "; Match = " << xMatch << endl;
+    xProblem.PrintReport(cout);
     }
 
   // Store the last solution
@@ -318,13 +329,13 @@ void MedialPDE
 
 
 void MedialPDE
-::ConjugateGradientOptimization(FloatImage *image, unsigned int nSteps)
+::ConjugateGradientOptimization(FloatImage *image, unsigned int nSteps, double xStep)
 {
   // Create the optimization problem
   MedialOptimizationProblem xProblem(xSolver, xSurface);
 
   // Create an image match term and a jacobian term
-  BoundaryImageMatchTerm xTermImage(image);
+  VolumeOverlapEnergyTerm xTermImage(image, 5);
   BoundaryJacobianEnergyTerm xTermJacobian;
 
   // Add the terms to the problem
@@ -337,12 +348,26 @@ void MedialPDE
   
   // Construct the conjugate gradient optimizer
   ConjugateGradientMethod xMethod(xProblem, Vector(nCoeff, xSolution.data_block()));
+  xMethod.setStepSize(xStep);
+  xMethod.setBrentStepTolerance(2.0e-3);
+
+  // Debugging info
+  ofstream fdump("conjgrad.txt",ios_base::out);
+  fdump << "CONJUGATE GRADIENT OPTIMIZER DUMP" << endl;
+  
   for(size_t p = 0; p < nSteps; p++)
     {
     if(xMethod.isFinished())
       break;
     xMethod.performIteration();
+
+    fdump << "STEP " << p << endl;
+    xProblem.PrintReport(fdump);
+
+    cout << "Step " << p << ", best value: " << xMethod.getBestEverValue() << endl;
     }
+
+  fdump.close();
 
   // Store the best result
   xSurface->SetRawCoefficientArray(xMethod.getBestEverX().getDataArray());
@@ -446,6 +471,178 @@ private:
   ITKImageWrapper<TPixel> *xWrapper;
 };
 
+/** Match an mrep to a floating point (level set) image using moments. */
+void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
+{
+  // Typedefs
+  typedef vnl_matrix_fixed<double,3,3> Mat;
+  typedef SMLVec3d Vec;
+
+  // Compute the mean and covariance matrix of the non-zero voxels in the
+  // image.
+  Mat xCov(0.0f); Vec xMean(0.0f); double xVolume = 0.0;
+  size_t i, j, k, f;
+
+  // Iterate over all voxels in the image
+  typedef FloatImage::WrapperType::ImageType ImageType;
+  typedef itk::ImageRegionConstIteratorWithIndex<ImageType> IteratorType;
+  ImageType::Pointer xImage = image->xImage->GetInternalImage();
+  IteratorType it(xImage, xImage->GetBufferedRegion());
+  for( ; !it.IsAtEnd(); ++it)
+    {
+    // Get the volume of this voxel
+    double xVoxVol = 0.5 * (it.Get() + 1.0);
+
+    // Get the spatial position of the point
+    itk::ContinuousIndex<double, 3> iRaw(it.GetIndex());
+    itk::Point<double, 3> ptPosition;
+    xImage->TransformContinuousIndexToPhysicalPoint(iRaw, ptPosition);
+    SMLVec3d xPosition(ptPosition.GetDataPointer());
+
+    // Add to the mean and 'covariance'
+    xVolume += xVoxVol;
+    xMean += xVoxVol * xPosition;
+    xCov += xVoxVol * outer_product(xPosition, xPosition);
+    }
+  
+  // Compute the actual volume of the image 
+  double xPhysicalVolume = xVolume * 
+    xImage->GetSpacing()[0] * xImage->GetSpacing()[1] * xImage->GetSpacing()[2];
+
+  // Scale the mean and covariance by accumulated weights
+  xMean = xMean / xVolume;
+  xCov = (xCov - xVolume *  outer_product(xMean, xMean)) / xVolume;
+ 
+  // Compute the mean and covariance of the image
+  cout << "--- MATCHING BY MOMENTS ---" << endl;
+  cout << "Image Volume: " << xPhysicalVolume << endl;
+  cout << "Image Mean: " << xMean << endl;
+  cout << "Image Covariance: " << endl << xCov << endl;
+
+  // Now compute the same statistics for the m-rep (compute coordinates)
+  Mat yCov(0.0); Vec yMean(0.0); double yVolume = 0.0;
+
+  // Create a solution data object to speed up computations
+  SolutionData S0(xSolver, false);
+  S0.UpdateInternalWeights(nCuts);
+  
+  for(i = 0; i < 3; i++)
+    {
+    // Compute the first moment in i-th direction
+    FirstMomentComputer fmc(i);
+    yMean[i] = IntegrateFunctionOverInterior(
+      S0.xAtomGrid, S0.xInternalPoints, S0.xInternalWeights, nCuts, &fmc);
+
+    for(j = 0; j <= i; j++)
+      {
+      // Compute the second moment in i-th and j-th directions
+      SecondMomentComputer smc(i,j);
+      yCov[i][j] = yCov[j][i] = IntegrateFunctionOverInterior(
+        S0.xAtomGrid, S0.xInternalPoints, S0.xInternalWeights, nCuts, &smc);
+      }
+    }
+
+  // Compute the actual mean and covariance
+  yVolume = S0.xInternalVolume;
+  yMean /= yVolume;
+  yCov = (yCov - yVolume * outer_product(yMean, yMean)) / yVolume;
+  
+  cout << "Model Volume: " << yVolume << endl;
+  cout << "Model Mean: " << yMean << endl;
+  cout << "Model Covariance: " << endl << yCov << endl;
+
+  // Now, compute the alignment that will line up the moments
+  // Decompose xCov and yCov into eigenvalues
+  vnl_vector<double> Dx(3), Dy(3);
+  vnl_matrix<double> Vx(3,3), Vy(3,3);
+  vnl_symmetric_eigensystem_compute(xCov, Vx, Dx);
+  vnl_symmetric_eigensystem_compute(yCov, Vy, Dy);
+
+  // Compute the scale factor
+  double s = sqrt(dot_product(Dx,Dy) / dot_product(Dy,Dy));
+
+  // The best set of coefficients and the associated match value
+  size_t iBestSurface; double xBestMatch;
+
+  // Get the numbers of coefficients
+  size_t nCoeff = xSurface->GetNumberOfRawCoefficients();
+  vnl_vector<double> xRotatedCoeff[8], 
+    xInitCoeff(xSurface->GetRawCoefficientArray(), nCoeff);
+
+  // Create a volume match object
+  VolumeOverlapEnergyTerm tVolumeMatch(image, nCuts);
+
+  // Compute the best image match over all possible flips of the eigenvalues
+  // (there are 8 possible matches, including mirroring)
+  for(f = 0; f < 8; f++)
+    {
+    // Set the flip/scale matrix
+    vnl_matrix<double> F(3, 3, 0.0);
+    // F(0,0) = (f & 1) ? -s : s;
+    // F(1,1) = (f & 2) ? -s : s;
+    // F(2,2) = (f & 4) ? -s : s;
+    F(0,0) = (f & 1) ? -sqrt(Dx(0) / Dy(0)) : sqrt(Dx(0) / Dy(0));
+    F(1,1) = (f & 2) ? -sqrt(Dx(1) / Dy(1)) : sqrt(Dx(1) / Dy(1));
+    F(2,2) = (f & 4) ? -sqrt(Dx(2) / Dy(2)) : sqrt(Dx(2) / Dy(2));
+
+    // Compute the rotation+flip matrix
+    vnl_matrix<double> R = Vx * F * Vy.transpose();
+
+    // Rotate the surface by matrix R and shift to yMean
+    xSurface->SetRawCoefficientArray(xInitCoeff.data_block());
+    xSurface->ApplyAffineTransform(R, xMean, yMean);
+    xRotatedCoeff[f] = vnl_vector<double>(xSurface->GetRawCoefficientArray(), nCoeff);
+
+    // Compute the boundary
+    xSolver->Solve();
+
+    // Create a solution object and a volume match term
+    SolutionData SRot(xSolver, false);
+    double xMatch = tVolumeMatch.ComputeEnergy(&SRot);
+    
+    // Record the best match ever
+    if(f == 0 || xMatch < xBestMatch)
+      { xBestMatch = xMatch; iBestSurface = f; }
+
+    // Report the match quality
+    cout << "ROTATION " << f << " :" << endl;
+    tVolumeMatch.PrintReport(cout);
+    }
+
+  // Use the best surface as the new surface
+  xSurface->SetRawCoefficientArray(xRotatedCoeff[iBestSurface].data_block());
+  xSolver->Solve();
+
+  // Test the results
+  SolutionData S1(xSolver, false);
+  S1.UpdateInternalWeights( nCuts );
+  for(i = 0; i < 3; i++)
+    {
+    // Compute the first moment in i-th direction
+    FirstMomentComputer fmc(i);
+    yMean[i] = IntegrateFunctionOverInterior(
+      S1.xAtomGrid, S1.xInternalPoints, S1.xInternalWeights, nCuts, &fmc);
+
+    for(j = 0; j <= i; j++)
+      {
+      // Compute the second moment in i-th and j-th directions
+      SecondMomentComputer smc(i,j);
+      yCov[i][j] = yCov[j][i] = IntegrateFunctionOverInterior(
+        S1.xAtomGrid, S1.xInternalPoints, S1.xInternalWeights, nCuts, &smc);
+      }
+    }
+
+  // Compute the actual mean and covariance
+  yVolume = S1.xInternalVolume;
+  yMean /= yVolume;
+  yCov = (yCov - yVolume * outer_product(yMean, yMean)) / yVolume;
+  
+  cout << "Model Volume: " << yVolume << endl;
+  cout << "Model Mean: " << yMean << endl;
+  cout << "Model Covariance: " << endl << yCov << endl;
+}
+
+/** 
 void MedialPDE::MatchImageByMoments(BinaryImage *image)
 {
   // Compute the mean and covariance matrix of the non-zero voxels
@@ -571,6 +768,7 @@ void MedialPDE::MatchImageByMoments(BinaryImage *image)
   xSurface->SetRawCoefficientArray(xRotatedCoeff[iBestSurface].data_block());
   xSolver->Solve();
 }
+*/
 
 void MedialPDE::SaveBYUMesh(const char *file)
 {

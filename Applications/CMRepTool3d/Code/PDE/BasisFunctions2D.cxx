@@ -49,8 +49,5 @@ FourierSurface
 
 }
 
-
-
-
-template class GenericBasisRepresentation2D< 3, 3, 
+template class GenericBasisRepresentation2D< 4, 3, 
          CosineBasisFunction, CosineBasisFunction>;

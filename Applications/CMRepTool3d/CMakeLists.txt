@@ -107,21 +107,25 @@ IF(BUILD_PDE)
 
   # Sources for the PDE executable
   SET(PDE_COMMON_SRCS 
-    Code/PDE/BasisFunctions2D.cxx
-    Code/PDE/MedialPDESolver.cxx 
-    Code/PDE/FourierSurface.cxx
-    Code/PDE/ScriptInterface.cxx
-    Code/PDE/ScriptImaging.cxx
-    Code/PDE/ITKImageWrapper.cxx
-    Code/PDE/MedialPDERenderer.cxx
-    Code/PDE/MedialAtomGrid.cxx
-    Code/PDE/OptimizationTerms.cxx
-    Code/PDE/Registry.cxx
     Code/Danielsson.cpp
     Code/DrawFillInside.cpp
     Code/DrawTriangles.cpp
+    Code/fracviewer.cpp
     Code/glengine.cpp
-    Code/fracviewer.cpp)
+    Code/PDE/BasisFunctions2D.cxx
+    Code/PDE/CartesianMedialAtomGrid.cxx
+    Code/PDE/FourierSurface.cxx
+    Code/PDE/GeometryDescriptor.cxx
+    Code/PDE/ITKImageWrapper.cxx
+    Code/PDE/MedialAtom.cxx
+    Code/PDE/MedialAtomGrid.cxx
+    Code/PDE/MedialPDERenderer.cxx
+    Code/PDE/MedialPDESolver.cxx 
+    Code/PDE/OptimizationTerms.cxx
+    Code/PDE/Registry.cxx
+    Code/PDE/ScriptImaging.cxx
+    Code/PDE/ScriptInterface.cxx
+    )
 
   # Apply SWIG to the .i file
   SET(SWIG_SOURCE ${CMREPS_SOURCE_DIR}/Code/PDE/medialpde.i)
@@ -175,7 +179,7 @@ IF(BUILD_PDE)
   TARGET_LINK_LIBRARIES("testpde" ${PDE_LIBS})
   
   # Copy the script files
-  SET(SCRIPT_FILES example.py example2.py)
+  SET(SCRIPT_FILES example.py example2.py common.py imageprep.py)
   FOREACH(FILE ${SCRIPT_FILES})  
  	CONFIGURE_FILE(
  		${CMREPS_SOURCE_DIR}/Code/PDE/Python/${FILE}

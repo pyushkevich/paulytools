@@ -21,10 +21,13 @@
  ******************************************************************/
 #include <stdlib.h>
 #include <memory.h>
+#include <iostream>
 
 #include <support.h>
 #include <ConjugateGradientMethod.h>
 #include <BrentLinearMethod.h>
+
+using namespace std;
 
 // Begin namespace
 NAMESPACE_PAULY_START
@@ -36,6 +39,11 @@ ConjugateGradientMethod::ConjugateGradientMethod(DifferentiableFunction &problem
 p(problem),current(v),xi(v.size()),fTolerance(1.0e-5),bestEver(v)
 {
 	brent = NULL;
+
+  // Set the step size to a default
+  xStepSize = 1.0;
+  xBrentTolerance = 2.0e-4;
+  flagAdaptStepSize = false;
 	
 	// Since no optional parameters affect initialization, we perform
 	// initialization right here and now.
@@ -49,7 +57,8 @@ ConjugateGradientMethod::~ConjugateGradientMethod() {
 	}
 }
 
-void ConjugateGradientMethod::initialize() {
+void ConjugateGradientMethod::initialize() 
+{
 	// Compute gradient and function
 	current.setValue(p.computeOneJet(current.x,xi));
    
@@ -58,6 +67,9 @@ void ConjugateGradientMethod::initialize() {
 
 	// Set best ever
 	bestEver = current;
+
+  // Set the working step size to the initial value
+  xWorkingStepSize = xStepSize;
 
 	finished = false;
 
@@ -70,21 +82,28 @@ void ConjugateGradientMethod::initialize() {
 void ConjugateGradientMethod::performIteration() {
 	// Are we in the brent loop?
 	if(brent) {
+    
+    // Check the current state of the linear minimizer
+    NumericalSolution sol(brent->getMinimum());
+    sol.setValue(brent->getFAtMinimum());
+
+    // Update the best ever solution
+    if(bestEver.getValue() > sol.getValue())
+      bestEver = sol;
+
+    // If Brent is done, delete it and check for convergence
 		if(brent->isFinished()) {
-			NumericalSolution next(brent->getMinimum());
-			next.setValue(brent->getFAtMinimum());
+
+      // Determine the 'guess' step size for the next iteration
+      xWorkingStepSize = xi.dotProduct( brent->getMinDirection() ) / xi.dotProduct(xi);
 			xi = brent->getMinDirection();
 
 			delete brent;
 			brent = NULL;
 
-			// Update the best ever solution
-			if(bestEver.getValue() > next.getValue())
-				bestEver = next;
-
 			// Check for normal return
-			if(2.0 * fabs(next.getValue() - current.getValue()) <=
-				fTolerance*(fabs(next.getValue())+fabs(current.getValue())+1.0e-10))
+			if(2.0 * fabs(sol.getValue() - current.getValue()) <=
+				fTolerance*(fabs(sol.getValue())+fabs(current.getValue())+1.0e-10))
 			{
 				// The solution is equally good at current point and next point...
 				finished = true;
@@ -92,9 +111,8 @@ void ConjugateGradientMethod::performIteration() {
 			}
 
 			// Update the current solution
-			current = next;
+			current = sol;
 			current.setValue(p.computeOneJet(current.x,xi));
-			//xi.normalize();
 
 			// Compute gg, dgg
 			double gg = g.dotProduct(g);
@@ -118,7 +136,12 @@ void ConjugateGradientMethod::performIteration() {
 		}
 	}
 	else {
-		brent = new BrentLinearMethod(&p,current.x,0.001 * xi);
+    // Choose which step size to use
+    double xStep = (flagAdaptStepSize) ? xWorkingStepSize : xStepSize;
+    
+    // Scale the gradient by the step size before entering Brent's method.
+		brent = new BrentLinearMethod(&p,current.x, xStep * xi);
+    brent->setTolerance(xBrentTolerance);
 	}
 }
 

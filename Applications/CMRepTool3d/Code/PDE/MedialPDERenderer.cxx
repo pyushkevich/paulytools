@@ -1,5 +1,6 @@
 #include "MedialPDESolver.h"
 #include "MedialPDERenderer.h"
+#include "OptimizationTerms.h"
 
 void glDrawQuadStripElements(unsigned short width,unsigned short height) 
 {
@@ -84,6 +85,39 @@ PDESplineRenderer
     GLColor(0.1), GLColor(0.4));
 }
 
+void PDESplineRenderer::DrawInternalPoints( size_t nCuts )
+{
+  // Generate the internal points using solutiondata
+  SolutionData S(solver, false);
+  S.UpdateInternalWeights( nCuts );
+
+  // Pass the points as vertex pointers
+  // glVertexPointer(3, GL_DOUBLE, sizeof(SMLVec3d), 
+  //  S.xInternalPoints[0].data_block());
+
+  // Start point rendering
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+  glDisable(GL_LIGHTING);
+  glBegin(GL_POINTS);
+
+  // Draw all the points
+  MedialInternalPointIterator *it = 
+    S.xAtomGrid->NewInternalPointIterator( nCuts );
+  
+  for( ; !it->IsAtEnd(); ++(*it))
+    {
+    double d = it->GetRelativeDistanceToMedialAxis();
+    glColor3d(0.8, 0.2, 1 - d);
+    glVertex3dv( S.xInternalPoints[it->GetIndex()].data_block() );
+    }
+    //glArrayElement(it->GetIndex());
+
+  delete it;
+  
+  glEnd();
+  glPopAttrib();
+}
+
 void
 PDESplineRenderer
 ::build()
@@ -116,6 +150,8 @@ PDESplineRenderer
   // Build the quad array
   glDrawWireframeElements(m, n);
   // glDrawQuadElements(solver->GetAtomGrid());
+  
+  DrawInternalPoints( 5 );
 
   // Display the boundary
   matBoundary->apply();
