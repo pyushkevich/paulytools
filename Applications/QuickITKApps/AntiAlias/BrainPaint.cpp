@@ -379,7 +379,7 @@ public:
 
     // Generate a standard deviation vector
     OptVec sd(mean.size());
-    sd.setAll(0.001);
+    sd.setAll(0.01);
    
     // Return a Gaussian solution space
     *space = new GaussianSS(mean,sd);
@@ -609,7 +609,7 @@ int main(int argc, char *argv[])
   // This is the most interesting part of the program. We attempt to 
   // improve the ribbons by making their free side pass entirely through
   // the white matter
-  for(iCurve=0;iCurve< 3 /*vCurves.size()*/;iCurve++)
+  for(iCurve=0; iCurve < vCurves.size() ;iCurve++)
     {
     // Create a curve
     CurveType &curve = vCurves[iCurve];
@@ -635,7 +635,7 @@ int main(int argc, char *argv[])
       }
     
     // Iteratevely optimize over ribbon segments
-    for(unsigned int iIteration = 0;iIteration < 40;iIteration++)
+    for(unsigned int iIteration = 0;iIteration < 200;iIteration++)
       {
       // drawRibbons(vCurves,iCurve);
        
@@ -710,7 +710,7 @@ int main(int argc, char *argv[])
         << "\t obj : " << pbFinal.evaluate(pbFinal.GetVectorRepresentation()) << endl;
       }
 
-      drawRibbons(vCurves,iCurve);
+      // drawRibbons(vCurves,iCurve);
 
     }
     
@@ -719,13 +719,16 @@ int main(int argc, char *argv[])
   
   // Compute the number of triangles in the ribbons
   unsigned int nTriangles = 0, iTriangle = 0;
+  unsigned int nTotalPoints = 0, iTotalPoints = 0;
   for(iCurve=0;iCurve<vCurves.size();iCurve++)
     {
     unsigned int nPoints = vCurves[iCurve].gridWhite.size();
     nTriangles += nPoints * 2 - 2;
+    nTotalPoints += nPoints;
     }
 
   // Allocate the ribbon array
+  SplineType::Point *xPoints = new SplineType::Point[nTotalPoints * 2];
   double **xTriangles = new double*[nTriangles * 3];
   
   // Allocate and form the triangles
@@ -733,19 +736,24 @@ int main(int argc, char *argv[])
     {
     CurveType &curve = vCurves[iCurve];
     unsigned int nPoints = curve.gridWhite.size();
-    for(iPoint=0;iPoint<nPoints - 1;iPoint++)
-      {
-      SplineType::Point g1 = curve.splGrey.EvaluateGridPoint(curve.gridGrey,iPoint,0);
-      SplineType::Point w1 = curve.splWhite.EvaluateGridPoint(curve.gridWhite,iPoint,0);
-      SplineType::Point g2 = curve.splGrey.EvaluateGridPoint(curve.gridGrey,iPoint+1,0);
-      SplineType::Point w2 = curve.splWhite.EvaluateGridPoint(curve.gridWhite,iPoint+1,0);
 
-      xTriangles[iTriangle++] = (double *)(g1.data_block());
-      xTriangles[iTriangle++] = (double *)(w1.data_block());
-      xTriangles[iTriangle++] = (double *)(g2.data_block());
-      xTriangles[iTriangle++] = (double *)(w1.data_block());
-      xTriangles[iTriangle++] = (double *)(w2.data_block());
-      xTriangles[iTriangle++] = (double *)(g2.data_block());
+    xPoints[iTotalPoints++] = curve.splGrey.EvaluateGridPoint(curve.gridGrey,0,0);
+    xPoints[iTotalPoints++] = curve.splWhite.EvaluateGridPoint(curve.gridWhite,0,0);
+    for(iPoint=1;iPoint<nPoints;iPoint++)
+      {
+      SplineType::Point &g1 = xPoints[iTotalPoints-2];
+      SplineType::Point &w1 = xPoints[iTotalPoints-1];
+      SplineType::Point &g2 = xPoints[iTotalPoints++] 
+        = curve.splGrey.EvaluateGridPoint(curve.gridGrey,iPoint,0);
+      SplineType::Point &w2 =xPoints[iTotalPoints++] 
+        = curve.splWhite.EvaluateGridPoint(curve.gridWhite,iPoint,0);
+
+      xTriangles[iTriangle++] = g1.data_block();
+      xTriangles[iTriangle++] = w1.data_block();
+      xTriangles[iTriangle++] = g2.data_block();
+      xTriangles[iTriangle++] = w1.data_block();
+      xTriangles[iTriangle++] = w2.data_block();
+      xTriangles[iTriangle++] = g2.data_block();
       }
     }
 
