@@ -2,10 +2,6 @@
 #define _MedialPDESolver_h_
 
 #include <iostream>
-extern "C" {  
-  #include <laspack/qmatrix.h> 
-  #include <laspack/vector.h> 
-}
 
 using namespace std;
 
@@ -111,7 +107,7 @@ public:
   
   // This site touches one or two boundaries
   bool IsBorderSite(unsigned int dim) 
-    { return (dim == 0) ? (wu == 1) : (wv == 1); }
+    { return (dim == 0) ? (wu > 0.75) : (wv > 0.75); }
 
   // Number of non-zero columns in newton's matrix
   unsigned int GetNumberOfNetwonColumns() 
@@ -190,7 +186,10 @@ private:
   unsigned int *xRowIndex, *xColIndex, nSparseEntries;
 
   /** Three vectors used in the iteration */
-  double *eps, *b, *y;
+  double *eps, *b, *y, *zTest;
+
+  /** Internal data for PARDISO */
+  int PT[64], MTYPE, IPARM[64];
 };
 
 

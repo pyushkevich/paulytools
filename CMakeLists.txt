@@ -21,8 +21,10 @@ FIND_PATH(PAULY_CMAKE_DIR "FindMathematica.cmake" PATHS ${PAULY_SOURCE_DIR}/CMak
 MARK_AS_ADVANCED(PAULY_CMAKE_DIR)
 
 # By default, include the core libraries
-SUBDIRS( CoreLibraries )
-
+IF(USE_ITK)
+  SUBDIRS( CoreLibraries )
+ENDIF(USE_ITK)
+  
 # Optionally, include the external libraries
 IF(BUILD_EXTERNAL)
   SUBDIRS(ExternalLibraries)
@@ -51,9 +53,9 @@ IF(USE_ITK)
   FIND_PACKAGE(ITK)
   IF(ITK_FOUND)
     INCLUDE(${ITK_USE_FILE})
-  ELSE(ITK_FOUND)
-    MESSAGE(FATAL_ERROR
-      "Cannot build without ITK.  Please set ITK_DIR.")
+# ELSE(ITK_FOUND)
+#   MESSAGE(FATAL_ERROR
+#     "Cannot build without ITK.  Please set ITK_DIR.")
   ENDIF(ITK_FOUND)
 ENDIF(USE_ITK)
 

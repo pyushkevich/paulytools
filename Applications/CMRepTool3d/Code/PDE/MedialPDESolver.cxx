@@ -2,14 +2,19 @@
 #include <cmath>
 #include <algorithm>
 
-using namespace std;
-
+// BLAS/PARDISO references
 extern "C" {
-  #include <laspack/itersolv.h> 
-  #include <laspack/operats.h> 
-  #include <laspack/precond.h> 
-  #include <laspack/rtc.h> 
+  typedef unsigned int CBLAS_INDEX;
+  void cblas_dcopy(const int N, const double *X, const int incX, double *Y, const int incY);
+  void cblas_daxpy(const int N, const double alpha, const double *X, const int incX, double *Y, const int incY);
+  CBLAS_INDEX cblas_idamax(const int N, const double *X, const int incX);
+
+  void pardisoinit_(int *, int *, int *);
+  void pardiso_(int *, int *, int *, int *, int *, int *, double *, int *, int *, 
+    int *, int *, int *, int *, double *, double *, int*);
 }
+
+using namespace std;
 
 GeometryDescriptor
 ::GeometryDescriptor(double *X, double *Xu, double *Xv, double *Xuu, double *Xuv, double *Xvv)
@@ -152,9 +157,9 @@ FDInternalSite::FDInternalSite(
     }
   else
     {
-    xColumns[0] = i6; xEntry[5] = 0;
-    xColumns[1] = i5; xEntry[4] = 1;
-    xColumns[2] = i4; xEntry[3] = 2;
+    xColumns[0] = i6; xEntry[6] = 0;
+    xColumns[1] = i5; xEntry[5] = 1;
+    xColumns[2] = i4; xEntry[4] = 2;
     xColumns[3] = i7; xEntry[7] = 3;
     xColumns[4] = i0; xEntry[0] = 4;
     xColumns[5] = i3; xEntry[3] = 5;
@@ -182,21 +187,21 @@ FDBorderSite::FDBorderSite(
 
   // Initialize the weights in u and v
   wu = 0.5; wv = 0.5;
+  nDistinctSites = 5;
 
   // Now, depending on which border we are on, correct the index and weights of finite
   // differences in u and v directions
   if(i == 0)
-    { xNeighbor[3] = iNode; wu = 1; }
+    { xNeighbor[3] = iNode; wu = 1; nDistinctSites--; }
   else if(i == m - 1)
-    { xNeighbor[1] = iNode; wu = 1; }
+    { xNeighbor[1] = iNode; wu = 1; nDistinctSites--; }
   if(j == 0)
-    { xNeighbor[4] = iNode; wv = 1; }
+    { xNeighbor[4] = iNode; wv = 1; nDistinctSites--; }
   else if(j == n - 1)
-    { xNeighbor[2] = iNode; wv = 1; }
+    { xNeighbor[2] = iNode; wv = 1; nDistinctSites--; }
 
   // Check whether we are at a corner
-  corner = (wu == 1.0 && wv == 1.0);
-  nDistinctSites = corner ? 3 : 4;
+  corner = (nDistinctSites == 3);
 
   // Now, sort the entries in xNeighbor
   unsigned int k, p;
@@ -341,22 +346,43 @@ void FDBorderSite::SetGeometry(GeometryDescriptor *g, double)
   C0 = 4.0;
 }
 
-void DumpQMatrix(QMatrix *q)
+void SparseMultiply(unsigned int n, unsigned int *rowIndex, unsigned int *colIndex, 
+	double *values, double *x, double *y)
+{
+	for(unsigned int r = 1; r <=n ; r++)
+    	{
+        y[r-1] = 0;
+    	for(unsigned int k = rowIndex[r-1]; k < rowIndex[r]; k++) 
+      		{
+      		// r and c are 1-based
+      		int c = colIndex[k - 1] ;	
+      		double v = values[k - 1];
+      		y[r-1] += v * x[c - 1];
+      		}
+    	}	
+}
+
+void SparseLinearTest(unsigned int n, unsigned int *rowIndex, unsigned int *colIndex, 
+	double *values, double *x, double *y,double *b)
+{
+	SparseMultiply(n, rowIndex, colIndex, values, x, y);
+	cblas_daxpy(n, -1.0, b, 1, y, 1);
+}
+
+void DumpSparseMatrix(unsigned int n, unsigned int *rowIndex, unsigned int *colIndex, double *values)
 {
   char ch = '{';
-  unsigned int n = Q_GetDim(q);
   cout << "SparseArray[";
-  for(unsigned int r = 1; r <= n; r++)
+  for(unsigned int r = 1; r <=n ; r++)
     {
-    unsigned int k = Q_GetLen(q, r);
-    for(unsigned int p = 0; p < k; p++)
+    for(unsigned int c = rowIndex[r-1]; c < rowIndex[r]; c++) 
       {
-      unsigned int c = Q_GetPos(q, r, p);
-      double v = Q_GetVal(q, r, p);
+      double v = values[c - 1];
       if(v < 0.000001 && v > -0.000001) v = 0;
-      cout << ch << " {" << r << "," << c << "}->" << v;
+      cout << ch << " {" << r << "," << colIndex[c-1] << "}->" << v;
       ch = ',';
       }
+      cout << endl;
     }
   cout << "}]" << endl;
 }
@@ -446,13 +472,13 @@ MedialPDESolver
   b = new double[nSites];
   y = new double[nSites];
   eps = new double[nSites];
-}
+  zTest = new double[nSites];
 
-extern "C" {
-  typedef unsigned int CBLAS_INDEX;
-  void cblas_dcopy(const int N, const double *X, const int incX, double *Y, const int incY);
-  void cblas_daxpy(const int N, const double alpha, const double *X, const int incX, double *Y, const int incY);
-  CBLAS_INDEX cblas_idamax(const int N, const double *X, const int incX);
+  // Initialize the PARDISO solver
+  MTYPE = 11; // Nonsymmetric real
+  memset(IPARM, 0, sizeof(int) * 64);
+  pardisoinit_(PT,&MTYPE,IPARM);
+  IPARM[2] = 1;
 }
 
 void
@@ -500,21 +526,43 @@ MedialPDESolver
       xSites[k]->ComputeDerivative(y, xSparseValues + xRowIndex[k] - 1, k+1);
 
       // Compute the value of b
-      b[k] = - xSites[k]->ComputeEquation(y);
+      b[k] = -xSites[k]->ComputeEquation(y);
       }
+      
+    // Debug 
+    // DumpSparseMatrix(nSites, xRowIndex, xColIndex, xSparseValues);
 
     // Solve the equation for X
-    // BiCGIter(&A, &eps, &b, nSites, NULL, 1.0);
+    int MAXFCT = 1, MNUM = 1, PHASE = 11, N = nSites, NRHS = 1, MSGLVL = 1, ERROR = 0; 
+    if(iIter == 0) 
+      {
+      pardiso_(PT, &MAXFCT, &MNUM, &MTYPE, &PHASE, &N, 
+        xSparseValues, (int *) xRowIndex, (int *) xColIndex, 
+        NULL, &NRHS, IPARM, &MSGLVL, 
+        b, eps, &ERROR);
 
+      }
+    
+    // Only perform the solution step
+    PHASE=23;
+    pardiso_(PT, &MAXFCT, &MNUM, &MTYPE, &PHASE, &N, 
+      xSparseValues, (int *) xRowIndex, (int *) xColIndex, 
+      NULL, &NRHS, IPARM, &MSGLVL, 
+      b, eps, &ERROR);
+    
     /*
     cout << "A = "; DumpQMatrix(&A);
     cout << "b = "; DumpVector(&b);
     cout << "eps = "; DumpVector(&eps);
     */
+    
+    // Test the matrix result
+    SparseLinearTest(nSites, xRowIndex, xColIndex, xSparseValues, eps, zTest, b);
 
     // Get the largest error (eps)
-    double epsMax = eps[cblas_idamax(nSites, eps, 1)];
-    double bMax = b[cblas_idamax(nSites, b, 1)];
+    double epsMax = fabs(eps[cblas_idamax(nSites, eps, 1)]);
+    double bMax = fabs(b[cblas_idamax(nSites, b, 1)]);
+    double zMax = fabs(zTest[cblas_idamax(nSites, zTest, 1)]);
 
     // Append the epsilon vector to the result
     cblas_daxpy(nSites, 1.0, eps, 1, y, 1);
@@ -524,6 +572,7 @@ MedialPDESolver
     cout << "Step " << iIter << ": " << endl;
     cout << "  Largest Epsilon: " << epsMax << endl;
     cout << "  Largest Eqn Error: " << bMax << endl;
+    cout << "  Largest Solver Error: " << zMax << endl;
 
     // Convergence is defined when epsilon is smaller than some threshold
     flagComplete = (epsMax < delta);

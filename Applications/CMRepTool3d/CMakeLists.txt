@@ -31,7 +31,7 @@ INCLUDE (${CMAKE_ROOT}/Modules/FindGLU.cmake)
 INCLUDE (${CMAKE_ROOT}/Modules/FindOpenGL.cmake)
 
 # Include the PDE code
-SUBDIRS(Code/PDE)
+# SUBDIRS(Code/PDE)
 
 # Include the various directories
 INCLUDE_DIRECTORIES(
@@ -93,6 +93,8 @@ TARGET_LINK_LIBRARIES(cmreps
   ITKCommon
   ITKBasicFilters
 )
+
+TARGET_LINK_LIBRARIES(testglut ${GLUT_LIBRARY})
 
 # All of this contigent on CMake version
 ENDIF("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" GREATER 1.5)
