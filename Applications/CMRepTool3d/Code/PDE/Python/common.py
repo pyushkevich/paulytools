@@ -2,7 +2,7 @@
 from medialpde import *
 
 # Set the working directory
-dirWork = "/home/pauly/data2005/Stanley/data/"
+dirWork = "${MPDE_DATA_ROOT}/"
 
 # Function to generate working images
 def MakeImages(dirWork, id):

@@ -6,14 +6,25 @@
 // BLAS/PARDISO references
 extern "C" {
   typedef unsigned int CBLAS_INDEX;
-  void cblas_dcopy(const int N, const double *X, const int incX, double *Y, const int incY);
-  void cblas_daxpy(const int N, const double alpha, const double *X, const int incX, double *Y, const int incY);
-  CBLAS_INDEX cblas_idamax(const int N, const double *X, const int incX);
+  void dcopy_(const int *N, const double *X, const int *incX, double *Y, const int *incY);
+  void daxpy_(const int *N, const double *alpha, const double *X, 
+    const int *incX, double *Y, const int *incY);
+  CBLAS_INDEX idamax_(const int *N, const double *X, const int *incX);
 
   void pardisoinit_(int *, int *, int *);
   void pardiso_(int *, int *, int *, int *, int *, int *, double *, int *, int *, 
     int *, int *, int *, int *, double *, double *, int*);
 }
+
+void mydcopy(const int N, const double *X, const int incX, double *Y, const int incY)
+  { dcopy_(&N, X, &incX, Y, &incY); }
+
+void mydaxpy(const int N, const double alpha, const double *X, 
+  const int incX, double *Y, const int incY)
+  { daxpy_(&N, &alpha, X, &incX, Y, &incY); }
+  
+CBLAS_INDEX myidamax(const int N, const double *X, const int incX)
+  { return idamax_(&N, X, &incX); }
 
 using namespace std;
 
@@ -372,7 +383,7 @@ void SparseLinearTest(unsigned int n, unsigned int *rowIndex, unsigned int *colI
 	double *values, double *x, double *y,double *b)
 {
 	SparseMultiply(n, rowIndex, colIndex, values, x, y);
-	cblas_daxpy(n, -1.0, b, 1, y, 1);
+	mydaxpy(n, -1.0, b, 1, y, 1);
 }
 
 void DumpSparseMatrix(unsigned int n, unsigned int *rowIndex, unsigned int *colIndex, double *values)
@@ -573,7 +584,7 @@ void MedialPDESolver
     }
 
   // Compute the max update value
-  double bMax = fabs(b[cblas_idamax(nSites, b, 1)]);
+  double bMax = fabs(b[myidamax(nSites, b, 1)]);
   cout << "Jacobi Update: Max Differenece is " << bMax << endl;
 }
 
@@ -668,7 +679,7 @@ double MedialPDESolver::SolveOnce(double delta)
   memset(eps, 0, sizeof(double) * nSites);
   
   // Copy the initial solution to the current solution
-  cblas_dcopy(nSites, xInitSoln, 1, y, 1);
+  mydcopy(nSites, xInitSoln, 1, y, 1);
 
   // We are now ready to perform the Newton loop
   bool flagComplete = false;
@@ -705,12 +716,12 @@ double MedialPDESolver::SolveOnce(double delta)
       b, eps, &ERROR);
 
     // Get the largest error (eps)
-    epsMax = fabs(eps[cblas_idamax(nSites, eps, 1)]);
-    bMax = fabs(b[cblas_idamax(nSites, b, 1)]);
-    // double zMax = fabs(zTest[cblas_idamax(nSites, zTest, 1)]);
+    epsMax = fabs(eps[myidamax(nSites, eps, 1)]);
+    bMax = fabs(b[myidamax(nSites, b, 1)]);
+    // double zMax = fabs(zTest[myidamax(nSites, zTest, 1)]);
 
     // Append the epsilon vector to the result
-    cblas_daxpy(nSites, 1.0, eps, 1, y, 1);
+    mydaxpy(nSites, 1.0, eps, 1, y, 1);
 
     // Print the statistics
     /* cout << "-----------" << endl;
@@ -789,7 +800,7 @@ MedialPDESolver
 ::SolveByJacobiMethod(double delta)
 {
   // Copy the initial solution to the current solution
-  cblas_dcopy(nSites, xInitSoln, 1, y, 1);
+  mydcopy(nSites, xInitSoln, 1, y, 1);
 
   // Initialize the geometry
   InitializeSiteGeometry();
@@ -812,11 +823,11 @@ MedialPDESolver
       }
 
     // Copy the result into y
-    cblas_dcopy(nSites, b, 1, y, 1);
+    mydcopy(nSites, b, 1, y, 1);
 
     // Check the maximum update difference - should be 0 if we have the true solution
-    double epsMax = fabs(eps[cblas_idamax(nSites, eps, 1)]);
-    double zMax = fabs(eps[cblas_idamax(nSites, zTest, 1)]);
+    double epsMax = fabs(eps[myidamax(nSites, eps, 1)]);
+    double zMax = fabs(eps[myidamax(nSites, zTest, 1)]);
     if(epsMax < delta)
       flagComplete = true;
 

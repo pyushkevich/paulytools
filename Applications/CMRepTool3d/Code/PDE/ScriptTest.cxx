@@ -93,7 +93,8 @@ void Test01()
   MedialPDE *mp = new MedialPDE(3, 5, 40, 80);
   //mp->LoadFromParameterFile(fMrep.c_str());
   
-  mp->LoadFromDiscreteMRep("/tmp/surf01.txt",-0.5);
+  // mp->LoadFromDiscreteMRep("/tmp/surf01.txt",-0.5);
+  mp->GenerateSampleModel();
   mp->Solve();
   mp->SaveBYUMesh("temp.byu");
 
@@ -101,15 +102,15 @@ void Test01()
   TestAreaAndVolume(mp->GetSolver());
   
   // Load the image and gradients
-  FloatImage img;
-  img.LoadFromFile((dirWork + "avg/average_hippo_blurred_hi.mha").c_str());
+  // FloatImage img;
+  // img.LoadFromFile((dirWork + "avg/average_hippo_blurred_hi.mha").c_str());
 
   // Match the volume to the image
-  mp->MatchImageByMoments(&img, 5);
+  // mp->MatchImageByMoments(&img, 5);
 
   
   
-  RenderMedialPDE(mp);
+  // RenderMedialPDE(mp);
 }
 
 void Test02()

@@ -157,18 +157,23 @@ IF(BUILD_PDE)
   SET_TARGET_PROPERTIES("_medialpdemodule" PROPERTIES PREFIX "")
 
   # Find and read the MKL package
-  INCLUDE(${PAULY_SOURCE_DIR}/CMake/FindMKL.cmake)
+  OPTION(USE_INTEL_NUMERICS "Whether to use Intel MKL or Lapack" OFF)
+  IF(USE_INTEL_NUMERICS)
+    INCLUDE(${PAULY_SOURCE_DIR}/CMake/FindMKL.cmake)
+    FIND_LIBRARY(INTEL_FORTRAN_LIB ifcore /opt/intel_fc_80/lib DOC "Location of Intel FC library")
+    SET(NUMERIC_LIBS mkl_lapack mkl_def ${INTEL_FORTRAN_LIB})
+  ELSE(USE_INTEL_NUMERICS)
+    INCLUDE(${PAULY_SOURCE_DIR}/CMake/FindLapack.cmake)
+    SET(NUMERIC_LIBS ${LAPACK_LIBS})
+  ENDIF(USE_INTEL_NUMERICS)
 
   # Load Intel MKL libraries, etc
   FIND_LIBRARY(PARDISO_LIBRARY NAMES pardiso DOC "Location of the PARDISO library")
-  FIND_LIBRARY(INTEL_FORTRAN_LIB ifcore /opt/intel_fc_80/lib DOC "Location of Intel FC library")
 
   # Set the library set
   SET(PDE_LIBS
     ${PAULY_CORE_LIBS}
     ${PARDISO_LIBRARY} 
-    mkl_lapack mkl_def 
-    ${INTEL_FORTRAN_LIB} 
     ITKNumerics
     ITKIO
     ITKCommon
@@ -176,12 +181,16 @@ IF(BUILD_PDE)
     ${GLUT_LIBRARY}
     vtkCommon
     vtkIO
+    ${NUMERIC_LIBS}
     )
 
   # Create the executable
   # TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS})
   TARGET_LINK_LIBRARIES("_medialpdemodule" ${PDE_LIBS})
   TARGET_LINK_LIBRARIES("testpde" ${PDE_LIBS})
+
+  # Specify the data root
+  FIND_PATH(MPDE_DATA_ROOT "data/init/surf01.txt")
   
   # Copy the script files
   SET(SCRIPT_FILES 
@@ -199,7 +208,7 @@ IF(BUILD_PDE)
   FOREACH(FILE ${SCRIPT_FILES})  
  	CONFIGURE_FILE(
  		${CMREPS_SOURCE_DIR}/Code/PDE/Python/${FILE}
- 		${CMREPS_BINARY_DIR}/${FILE} COPY_ONLY)
+ 		${CMREPS_BINARY_DIR}/${FILE} )
   ENDFOREACH(FILE ${SCRIPT_FILES})  
   
 ENDIF(BUILD_PDE)

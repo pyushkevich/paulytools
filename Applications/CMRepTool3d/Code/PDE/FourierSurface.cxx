@@ -8,8 +8,8 @@ using namespace std;
 
 // Lapack definitions
 extern "C" {
-  void dgetrf(int *m,int *n,double *a,int *lda,int *ipiv,int *info);
-  void dgetrs(char *trans,int *n,int *nrhs,double *a,int *lda,int *ipiv,double *b,int *ldb,int *info);
+  void dgetrf_(int *m,int *n,double *a,int *lda,int *ipiv,int *info);
+  void dgetrs_(char *trans,int *n,int *nrhs,double *a,int *lda,int *ipiv,double *b,int *ldb,int *info);
 }
 
 FourierSurfaceOld
@@ -131,18 +131,18 @@ void FourierSurfaceOld
 
   // Solve the system Ax = b (LU decomposition)
   int *iPivot = new int[nUnkowns], iInfo, nRows = nUnkowns;
-  dgetrf( &nRows, &nRows, A, &nRows, iPivot, &iInfo);  
+  dgetrf_( &nRows, &nRows, A, &nRows, iPivot, &iInfo);  
   if(iInfo < 0)
-    { cerr << "Error calling dgetrf" << endl; return; }
+    { cerr << "Error calling dgetrf_" << endl; return; }
   else if(iInfo > 0)
-    { cerr << "dgetrf: Matrix is singular" << endl; return; }
+    { cerr << "dgetrf_: Matrix is singular" << endl; return; }
 
   // Solve the system
   char cTrans = 'N';
   int nRhs = 1; 
-  dgetrs(&cTrans, &nRows, &nRhs, A, &nRows, iPivot, b, &nRows, &iInfo);
+  dgetrs_(&cTrans, &nRows, &nRhs, A, &nRows, iPivot, b, &nRows, &iInfo);
   if(iInfo < 0)
-    { cerr << "Error calling dgetrs" << endl; return; }
+    { cerr << "Error calling dgetrs_" << endl; return; }
 
   // Clear the coefficients
   for(iu = 0; iu < nBasesU; iu++) for(iv = 0; iv < nBasesV; iv++)

@@ -182,7 +182,7 @@ void MedialPDE::GenerateSampleModel()
   double uStep = 1.0 / (nSide - 1);
 
   // Allocate arrays of points and coordinates
-  double xPoints[nPoints], yPoints[nPoints], zPoints[nPoints];
+  double xPoints[nPoints], yPoints[nPoints], zPoints[nPoints], rhoPoints[nPoints];
   double uPoints[nPoints], vPoints[nPoints];
 
   // Create an array of points
@@ -197,6 +197,7 @@ void MedialPDE::GenerateSampleModel()
       xPoints[i] = 0.5 * uu + 0.25;
       yPoints[i] = vv;
       zPoints[i] = ((uu - 0.5) * (uu - 0.5) + (vv - 0.5) * (vv - 0.5)) * 0.25;
+      rhoPoints[i] = -0.35;
       ++i;
       }
 
@@ -204,6 +205,7 @@ void MedialPDE::GenerateSampleModel()
   xSurface->FitToData(nPoints, 0, uPoints, vPoints, xPoints);
   xSurface->FitToData(nPoints, 1, uPoints, vPoints, yPoints);
   xSurface->FitToData(nPoints, 2, uPoints, vPoints, zPoints);
+  xSurface->FitToData(nPoints, 3, uPoints, vPoints, rhoPoints);
 }
 
 /*
