@@ -8,16 +8,20 @@ OPTION(USE_ITK "Use ITK Libraries" OFF)
 OPTION(USE_VTK "Use VTK Libraries" OFF)
 OPTION(USE_FLTK "Use FLTK Libraries" OFF)
 OPTION(USE_OPENGL "Use OpenGL Libraries" OFF)
+OPTION(USE_MMA "Use Mathematica MathLink Libraries" OFF)
+OPTION(USE_CLUTO "Use Cluto Clustering Libraries" OFF)
 
 # Define the optional inclusion (BUILD) variables 
 OPTION(BUILD_APPLICATIONS "Should I build standalone applications?" ON)
 OPTION(BUILD_EXTERNAL "Should I build external libraries?" OFF)
 OPTION(BUILD_TESTING "Should I build the test code?" ON)
 
+# Set the path for the CMake modules
+FIND_PATH(PAULY_CMAKE_DIR "FindMathematica.cmake" PATHS ${PAULY_SOURCE_DIR}/CMake)
+MARK_AS_ADVANCED(PAULY_CMAKE_DIR)
+
 # By default, include the core libraries
-SUBDIRS(
-  CoreLibraries
-)
+SUBDIRS( CoreLibraries )
 
 # Optionally, include the external libraries
 IF(BUILD_EXTERNAL)
@@ -63,6 +67,18 @@ IF(USE_VTK)
       "Cannot build without VTK.  Please set VTK_DIR.")
   ENDIF(VTK_FOUND)
 ENDIF(USE_VTK)  
+
+# Set up Mathematica
+IF(USE_MMA)
+  INCLUDE(${PAULY_CMAKE_DIR}/FindMathematica.cmake)
+  INCLUDE_DIRECTORIES(${MMA_INCLUDE_DIR})
+ENDIF(USE_MMA)
+
+IF(USE_CLUTO)
+  INCLUDE(${PAULY_CMAKE_DIR}/FindCluto.cmake)
+  INCLUDE_DIRECTORIES(${CLUTO_INCLUDE_DIR})
+ENDIF(USE_CLUTO)
+
 
 # Set up the includes 
 SET(PAULY_INCLUDE_DIRS

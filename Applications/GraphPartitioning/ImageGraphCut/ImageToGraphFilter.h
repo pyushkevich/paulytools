@@ -277,10 +277,11 @@ public:
         // Add all the edges of the pixel 
         for(unsigned int i=0;i<(ImageDimension << 1);i++)
           {
-          if(it.GetPixel(iIndex[i]) != 0)
+          int idxNbr = imgIndex->GetPixel(it.GetIndex(iIndex[i]));
+          if(idxNbr >= 0)
             {
             // Add the edge to the adjacency list
-            m_Adjacency[iEdge] = imgIndex->GetPixel(it.GetIndex(iIndex[i]));
+            m_Adjacency[iEdge] = idxNbr;
 
             // Compute the weight of the edge
             m_EdgeWeights[iEdge++] = GetEdgeWeight(it, iCenter, iIndex[i]);

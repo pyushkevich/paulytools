@@ -27,6 +27,7 @@ MetisPartitionProblem
   wgt[x.size()] = 1.0f - sum;
 
   // Run the METIS code
+  cout << " Running METIS iteration [ x = " << x << "] " << endl;
   int edgecut = 
     RunMETISPartition(m_Graph, wgt.size(), wgt.data_block(), m_Partition); 
 

@@ -1,8 +1,12 @@
 ADD_LIBRARY(BasicImaging
+  BinaryHeap.cxx
+  BinaryHeap.h
   Danielsson.cpp
   Danielsson.h
   DrawFillInside.cpp
   DrawFillInside.h
   DrawTriangles.cpp
   DrawTriangles.h
+  ShortestPath.cxx
+  ShortestPath.h
 )

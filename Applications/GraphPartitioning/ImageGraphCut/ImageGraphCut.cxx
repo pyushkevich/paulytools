@@ -61,22 +61,26 @@ public:
   /** Check inclusion */
   virtual bool IsPixelAVertex(short i1)
     {
-    return i1 != 0;
+    // return i1 != 0;
+    return i1 == 2;
     }
   
   /** Compute edge weight */
   virtual int GetEdgeWeight(short i1, short i2)
     {
-    if(i1 == 1 || i2 == 1) return 0;
-    else return 1;
+    // if(i1 == 1 || i2 == 1) return 0;
+    // else return 1;
+    return 1;
     }
       
   /** Compute vertex weight */
   virtual int GetVertexWeight(short i1)
     {
-    if(i1 == 1) 
-      return 5 + (rand() * 10) / RAND_MAX;
-    else return 10;
+    // if(i1 == 1)
+    //   return 10;
+    //  return 100 + (rand() * 100) / RAND_MAX;
+    //else return 1;
+    return 1;
     }
 };
 
@@ -133,7 +137,7 @@ Vec OptimizeMETISPartition(GraphFilter *fltGraph, const Vec &xWeights)
 
   opt->SetCostFunction(mp);
   opt->SetInitialPosition(x);
-  opt->SetInitialRadius(0.001);
+  opt->SetInitialRadius(0.005);
   opt->SetMaximumIteration(100);
   opt->SetNormalVariateGenerator(generator);
   opt->StartOptimization();
@@ -188,6 +192,10 @@ int main(int argc, char *argv[])
     else if(!strcmp(argv[iArg],"-o"))
       {
       flagOptimize = true;
+      }
+    else if(!strcmp(argv[iArg],"-seed"))
+      {
+      srand(atoi(argv[++iArg]));
       }
     else
       {
