@@ -4,7 +4,7 @@ PROJECT(MedialPDE)
 INCLUDE(${PAULY_SOURCE_DIR}/CMake/FindMKL.cmake)
 
 # Load Intel MKL libraries, etc
-FIND_LIBRARY(PARDISO_LIBRARY NAMeS pardiso DOC "Location of the PARDISO library")
+FIND_LIBRARY(PARDISO_LIBRARY NAMES pardiso DOC "Location of the PARDISO library")
 FIND_LIBRARY(INTEL_FORTRAN_LIB ifcore /opt/intel_fc_80/lib DOC "Location of Intel FC library")
 
 # Create the executable

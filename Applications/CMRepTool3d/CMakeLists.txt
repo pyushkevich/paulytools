@@ -1,5 +1,8 @@
 PROJECT(CMREPS)
 
+# Option to build the new PDE code
+OPTION(BUILD_PDE "Build the PDE CM-Reps code" OFF)
+
 # Don't build anything unless the version of CMake is high enough.
 # The matching ELSE/ENDIF should be the last lines in the file.
 IF("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" GREATER 1.5)
@@ -29,9 +32,6 @@ ENDIF(MYLIBS_BINARY_PATH)
 INCLUDE (${CMAKE_ROOT}/Modules/FindGLUT.cmake)
 INCLUDE (${CMAKE_ROOT}/Modules/FindGLU.cmake)
 INCLUDE (${CMAKE_ROOT}/Modules/FindOpenGL.cmake)
-
-# Include the PDE code
-# SUBDIRS(Code/PDE)
 
 # Include the various directories
 INCLUDE_DIRECTORIES(
@@ -95,6 +95,47 @@ TARGET_LINK_LIBRARIES(cmreps
 )
 
 TARGET_LINK_LIBRARIES(testglut ${GLUT_LIBRARY})
+
+# Sources for the PDE executable
+SET(PDE_SRCS 
+  Code/PDE/MedialPDESolver.cxx 
+  Code/PDE/MedialPDETest.cxx
+  Code/PDE/FourierSurface.cxx
+  Code/Danielsson.cpp
+  Code/DrawFillInside.cpp
+  Code/DrawTriangles.cpp
+  Code/glengine.cpp
+  Code/imaging.cpp
+  Code/ImageCubeITK.cxx
+  Code/mspline.cpp
+  Code/fracviewer.cpp
+  )
+
+
+# Building the PDE executable
+IF(BUILD_PDE)
+  # Create the executable
+  ADD_EXECUTABLE(testpde ${PDE_SRCS})
+
+  # Find and read the MKL package
+  INCLUDE(${PAULY_SOURCE_DIR}/CMake/FindMKL.cmake)
+
+  # Load Intel MKL libraries, etc
+  FIND_LIBRARY(PARDISO_LIBRARY NAMES pardiso DOC "Location of the PARDISO library")
+  FIND_LIBRARY(INTEL_FORTRAN_LIB ifcore /opt/intel_fc_80/lib DOC "Location of Intel FC library")
+
+  # Create the executable
+  TARGET_LINK_LIBRARIES(testpde 
+    ${PARDISO_LIBRARY} 
+    mkl_lapack mkl_def 
+    ${INTEL_FORTRAN_LIB} 
+    ITKNumerics
+    ITKIO
+    ITKCommon
+    ITKBasicFilters
+    ${GLUT_LIBRARY}
+    )
+ENDIF(BUILD_PDE)
 
 # All of this contigent on CMake version
 ENDIF("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" GREATER 1.5)

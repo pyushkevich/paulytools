@@ -336,7 +336,7 @@ protected:
 
 class BinaryImage;
 class GrayImage : public ImageCube<unsigned short>
-  {
+{
 public:
   // Threshold the image
   void threshold(unsigned short intensity);
@@ -357,13 +357,12 @@ protected:
   // Override the parent's method to compute the shift value
   void loadFromPaddedCube(const unsigned short *pixels, const int *size);
 
-  unsigned char genSlicePixel(const unsigned short& pixel) {
-    return(unsigned char) (pixel >> charShift);
-  }
-  };
+  unsigned char genSlicePixel(const unsigned short& pixel) 
+    { return(unsigned char) (pixel >> charShift); }
+};
 
 class BinaryImage : public ImageCube<unsigned char>
-  {
+{
 public:
 
   // Load from a boundary which is a triangle mesh
@@ -382,12 +381,10 @@ protected:
   unsigned char genSlicePixel(const unsigned char& pixel) {
     return pixel;
   }
-  };
-
-
+};
 
 class DistanceTransform : public ImageCube<float>
-  {
+{
 public:
 
   // Generate the distance transform from a binary image file
@@ -411,7 +408,7 @@ private:
 
   float vlen(int x,int y,int z);
 
-  };
+};
 
 // Convert a distance map value to an RGB color
 SMLVec3f convertDistanceToRGB(float pixel);
@@ -419,8 +416,6 @@ SMLVec3f convertDistanceToRGB(float pixel);
 // Convert a t-score to RGB color 
 void convertTScoreToRGB(float pixel, float &r, float &g, float &b);
 
-
-
-
+#include "imaging.txx"
 
 #endif 

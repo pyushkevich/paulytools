@@ -289,6 +289,13 @@ class StarfieldRenderer : public GLDisplayListRenderer {
     void buildList();
 };
 
+/*********************************************************
+ Light Definition
+  *******************************************************/
+class DefaultLightRenderer : public GLRenderer {
+    void onDraw();
+};
+
 // Frame rate counter
 class FrameRateCountRenderer : public GLRenderer {
 private:
@@ -374,6 +381,15 @@ public:
     }
 };
 
+
+/******************************************************************************
+    Small Functions
+ ******************************************************************************/
+inline void glNormal(const SMLVec3f &v) 
+  { glNormal3f(v[0],v[1],v[2]); }
+
+inline void glVertex(const SMLVec3f &v) 
+  { glVertex3f(v[0],v[1],v[2]); }
 
 #endif //GL_ENGINE
 

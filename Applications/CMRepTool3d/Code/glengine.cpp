@@ -836,6 +836,22 @@ void FrameRateCountRenderer::onDraw() {
   tIndex = (tIndex+1)%SPAN;
 }
 
+void DefaultLightRenderer::onDraw() {
+
+  // Transform the view into eye coordinates
+  glPushMatrix();
+
+  glRotatef(-EyeAz, 0, 1, 0);
+  glRotatef(-EyeEl, 1, 0, 0);
+  glTranslatef(0, 0, EyeDist);
+
+  // Run GL initialization code - establish a scene
+  GLfloat light_position[] = { 0.0f, 0.0f, 1.0f, 0.0f};
+  glLightfv(GL_LIGHT0, GL_POSITION, light_position);
+
+  glPopMatrix();
+}
+
 const GLColor clrWhite(1);
 const GLColor clrBlack(0);
 const GLColor clrLightGray(0.75);

@@ -26,13 +26,6 @@ class BSplineRenderer;
 class SplineOptDriver;
 class SplineImageMatcher;
 
-/*********************************************************
- Light Definition
-  *******************************************************/
-class LightRenderer : public GLRenderer {
-    void onDraw();
-};
-
 /**
  * A collection of index arrays at a specific level
  */
