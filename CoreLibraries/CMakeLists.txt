@@ -26,7 +26,7 @@ SUBDIRS(
   Registry
 )
 
-OPTION(USE_INTRINSICS "Use Intel intrinsics?  This option lets you use mreps and creps" ON)
+OPTION(USE_INTRINSICS "Use Intel intrinsics?  This option lets you use mreps and creps" OFF)
 IF(USE_INTRINSICS)
   SUBDIRS(
     MReps2d

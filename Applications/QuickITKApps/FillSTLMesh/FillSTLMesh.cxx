@@ -107,9 +107,9 @@ int main(int argc, char **argv)
         }
       else if(arg == "-r")
         {
-        res[0] = atof(argv[++i]);
-        res[1] = atof(argv[++i]);
-        res[2] = atof(argv[++i]);
+        res[0] = atoi(argv[++i]);
+        res[1] = atoi(argv[++i]);
+        res[2] = atoi(argv[++i]);
         }      
       else if(arg == "-v")
         {
@@ -160,7 +160,7 @@ int main(int argc, char **argv)
     drawPolyData(pd);
 
   // Get the extents of the data
-  float *bounds = pd->GetBounds();  
+  double *bounds = pd->GetBounds();  
   
   cout << "STL mesh bounds: " << endl;
   cout << "   X : " << bounds[0] << " to " << bounds[1] << endl;
@@ -186,7 +186,7 @@ int main(int argc, char **argv)
     {
     for(unsigned int i=0;i<3;i++)
       {
-      float *x = pd->GetPoints()->GetPoint(pts[i]);
+      double *x = pd->GetPoints()->GetPoint(pts[i]);
       vtx[it] = (double *) malloc(3*sizeof(double));
       for(unsigned int j=0;j<3;j++)
         {
