@@ -1,6 +1,8 @@
 #include "TracerMainWindow.h"
 #include <FL/gl.h>
+#include <GL/glu.h>
 #include <Fl/Fl.H>
+#include <Fl/fl_draw.H>
 
 #include <vtkPointData.h>
 #include <vtkDataArray.h>
@@ -155,23 +157,43 @@ TracerMainWindow
     if(m_DisplayListDirty) ComputeDisplayList();
     else glCallList(m_DisplayList);
 
+    // Set the attributes for line drawing
+    glPushAttrib(GL_LIGHTING_BIT);
+    glDisable(GL_LIGHTING);
+
+    // Display the existing curves
+    for(unsigned int iCurve = 0; iCurve<m_Data->GetNumberOfCurves();iCurve++)
+      {
+      // Choose a color for the curve
+      if(iCurve == m_Data->GetCurrentCurve()) glColor3d(1,0.5,0.5);
+      else glColor3d(0.5,0,0);
+
+      // Draw the curve
+      glBegin(GL_POINTS);
+      for(unsigned int iPoint = 0;
+        iPoint < m_Data->GetNumberOfCurvePoints(iCurve);iPoint++)
+        {
+        TracerData::Vec x = m_Data->GetCurvePoint(iCurve,iPoint);
+        glVertex3dv(x.data_block());
+        }
+      glEnd();
+      }
+
     // Display the current point
     if(m_CurrentPoint != -1)
       {
       // Get the coordinates of the point
       TracerData::Vec x = m_Data->GetPointCoordinate(m_CurrentPoint);
 
-      // Draw something around the point
-      glDisable(GL_LIGHTING);
-
-      glColor3d(1,0,0);
+      glColor3d(1,1,0);
       glPointSize(4.0);
       glBegin(GL_POINTS);
       glVertex3d(x[0],x[1],x[2]);
       glEnd();
-
-      glEnable(GL_LIGHTING);
       }
+
+    // Restore the attributes
+    glPopAttrib();
 
     // Pop the matrix
     glPopMatrix();
@@ -201,7 +223,7 @@ TracerMainWindow
   glTranslated(-xCenter[0],-xCenter[1],-xCenter[2]);
 }
 
-vtkIdType 
+void 
 TracerMainWindow
 ::FindPointUnderCursor()
 {
@@ -228,29 +250,31 @@ TracerMainWindow
 
   // Get the event state
   int x = Fl::event_x();
-  int y = viewport[3] - event_y() - 1;
+  int y = viewport[3] - Fl::event_y() - 1;
 
   // Vectors for the starting and ending points
   TracerData::Vec xStart, xEnd;
 
   // Perform the unprojection
-  int val;
-  val = gluUnProject( (GLdouble) x, (GLdouble) y, 0.0,
+  gluUnProject( (GLdouble) x, (GLdouble) y, 1.0,
     mvmatrix, projmatrix, viewport,
     &(xStart[0]), &(xStart[1]), &(xStart[2]) );
-  if ( val == GL_FALSE ) cerr << "gluUnProject #1 FAILED!!!!!" << endl;
 
-  val = gluUnProject( (GLdouble) x, (GLdouble) y, 1.0,
+  gluUnProject( (GLdouble) x, (GLdouble) y, -1.0,
     mvmatrix, projmatrix, viewport,
     &(xEnd[0]), &(xEnd[1]), &(xEnd[2]) );
-  if ( val == GL_FALSE ) cerr << "gluUnProject #2 FAILED!!!!!" << endl;
 
   // Find the point corresponding to the intersection
-  return m_Data->PickPoint(xStart,xEnd);
+  vtkIdType iPoint;
+  if(m_Data->PickPoint(xStart,xEnd,iPoint))
+    {
+    // Point has been found
+    m_CurrentPoint = iPoint;
+    }
 }
 
 int
-  TracerMainWindow
+TracerMainWindow
 ::handle(int event)
 {
   // Get the button number
@@ -320,13 +344,34 @@ int
     }
   else if(m_EditMode == TRACER)
     {
-    if(event == FL_PUSH)
+    if(event == FL_ENTER)
+      {
+      Fl::belowmouse(this);
+      fl_cursor(FL_CURSOR_CROSS,FL_BLACK,FL_WHITE);
+      return 1;
+      }
+    if(event == FL_LEAVE)
+      {
+      fl_cursor(FL_CURSOR_DEFAULT);
+      return 1;
+      }
+    if(event == FL_MOVE)
       {
       // Find the point under cursor
-      m_CurrentPoint = FindPointUnderCursor();
+      FindPointUnderCursor();
       redraw();
+
+      // Handled
+      return 1;
       }
-    
+    else if(event == FL_RELEASE)
+      {
+      // Again, find the point under the cursor
+      FindPointUnderCursor();
+
+      // Add the point as to the list
+      m_Data->AddNewPoint(m_CurrentPoint);
+      }
     }
 
   return 0;

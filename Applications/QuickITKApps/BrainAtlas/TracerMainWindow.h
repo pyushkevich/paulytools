@@ -1,9 +1,9 @@
 #ifndef __TracerMainWindow_h_
 #define __TracerMainWindow_h_
 
+#include "Trackball.h"
 #include <FL/Fl_Gl_Window.h>
 #include "TracerData.h"
-#include "Trackball.h"
 
 class TracerMainWindow : public Fl_Gl_Window
 {
@@ -62,7 +62,7 @@ private:
 
   // Display list associated with the brain surface
   int m_DisplayList;
-  
+
   // Whether the display lists requires recomputation
   bool m_DisplayListDirty;
 
@@ -87,8 +87,7 @@ private:
   void SetUpModelMatrix();
 
   // Perform ray intersection to find point under cursor
-  vtkIdType FindPointUnderCursor();
-
+  void FindPointUnderCursor();
 };
 
 

@@ -5,7 +5,7 @@
 #include "vtkPolyDataReader.h"
 #include "vtkStripper.h"
 #include "VTKMeshShortestDistance.h"
-
+#include <list>
 
 
 class TracerData
@@ -13,6 +13,7 @@ class TracerData
 public:
   // Typedef for the 3d vector
   typedef vnl_vector_fixed<double, 3> Vec;
+  typedef vector<Vec> VecArray;
 
   // Structure representing a point on the curve
   struct Vertex {
@@ -53,13 +54,70 @@ public:
     Curve cnew;
     cnew.name = name;
     m_Curves.push_back(cnew);
-    m_FocusCurve = m_Curves.size();
+    m_FocusCurve = m_Curves.size() - 1;
+    }
+
+  unsigned int GetNumberOfCurves() 
+    {
+    return m_Curves.size();
+    }
+
+  const char *GetCurveName(unsigned int iCurve)
+    {
+    return m_Curves[iCurve].name.c_str();
+    }
+
+  int GetCurrentCurve()
+    {
+    return m_FocusCurve;
+    }
+
+  unsigned int GetNumberOfCurvePoints(unsigned int iCurve)
+    {
+    assert(iCurve < m_Curves.size());
+    return m_Curves[iCurve].points.size();
+    }
+
+  Vec GetCurvePoint(unsigned int iCurve, unsigned int iPoint)
+    {
+    assert(iCurve < m_Curves.size());
+    assert(iPoint < m_Curves[iCurve].points.size());
+    return m_Curves[iCurve].points[iPoint].x;
     }
 
   // Given a ray, find a point closest to that ray
-  vtkIdType PickPoint(Vec xStart, Vec xRay)
+  bool PickPoint(Vec xStart, Vec xRay, vtkIdType &iPoint)
     {
-    return m_DistanceMapper->PickPoint(xStart,xRay);
+    return m_DistanceMapper->PickPoint(xStart,xRay,iPoint);
+    }
+
+  // Create a path from the last point on the focused curve (if any)
+  // to the specified point. The path includes the specified point, but
+  // not the last point on the focused curve
+  list<vtkIdType> GetPathToPoint(vtkIdType iPoint)
+    {
+    list<vtkIdType> lPoints;
+
+    if(m_Curves[m_FocusCurve].points.size())
+      {
+      cout << "tracing back points" << endl;
+      cout << "distance to point is " << m_DistanceMapper->GetVertexDistance(iPoint) << endl;
+
+      vtkIdType iLast = m_Curves[m_FocusCurve].points.back().i;
+      vtkIdType iCurrent = iPoint;
+      while(iCurrent != iLast)
+        {
+        lPoints.push_front(iCurrent);
+        iCurrent = m_DistanceMapper->GetVertexPredecessor(iCurrent);
+        cout << iCurrent << endl;
+        }
+      }
+    else
+      {
+      lPoints.push_front(iPoint);
+      }
+
+    return lPoints;
     }
 
   // Add a point to the current curve
@@ -67,12 +125,25 @@ public:
     {
     assert(m_FocusCurve >= 0);
     
-    Vertex p;
-    p.i = iPoint;
-    p.x = GetPointCoordinate(iPoint);
+    // Get the path to the current point
+    list<vtkIdType> lPoints = GetPathToPoint(iPoint);
 
-    m_Curves[m_FocusCurve].points.push_back(p);
- 
+    // Add the points on the list
+    list<vtkIdType>::const_iterator it;
+    for(it = lPoints.begin();it != lPoints.end(); it++)
+      {
+      Vertex p;
+      p.i = *it; p.x = GetPointCoordinate(p.i);
+      m_Curves[m_FocusCurve].points.push_back(p);
+      cout << "adding point " << p.i << endl;
+      }
+
+    // Compute distances from this point
+    cout << "computing distances to point " << iPoint << endl;
+    m_DistanceMapper->ComputeDistances(iPoint);
+    cout << "done" << endl;
+    }
+
 private:
   // Shortest distance computer
   VTKMeshShortestDistance *m_DistanceMapper;

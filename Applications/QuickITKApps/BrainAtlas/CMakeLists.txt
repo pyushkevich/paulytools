@@ -25,6 +25,8 @@ SET(TRACER_SRCS
   TracerUserInterfaceLogic.h
   Trackball.cxx
   Trackball.h
+  VTKMeshShortestDistance.cxx
+  VTKMeshShortestDistance.h
 )
 
 SET(TRACER_FLUIDS TracerUserInterface.fl)

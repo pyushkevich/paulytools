@@ -12,6 +12,7 @@ public:
   void OnButtonModeTrackball();
   void OnButtonModeTracer();
   void OnButtonDeleteCurve();
+  void OnButtonEditCurve();
   void OnButtonStartCurve();
   void OnSelectCurve();
 
@@ -31,6 +32,8 @@ public:
 private:
   // Tracer data
   TracerData *m_Data;
+
+  void RebuildCurveList();
 };
 
 #endif
