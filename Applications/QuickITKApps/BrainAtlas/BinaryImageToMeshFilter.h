@@ -67,16 +67,10 @@ public:
   itkGetMacro(InvertInput,bool);
 
   /** Set the input */
-  void SetInput(TImage *image)
-    {
-    this->SetNthInput(0,image);
-    }
+  void SetInput(TImage *image) { this->SetNthInput(0,image); }
 
   /** Update method (why?) */
-  void Update()
-    {
-    this->GenerateData();
-    }
+  void Update() { this->GenerateData(); }
 
   /** Set the anti-aliasing quality parameter */
   void SetAntiAliasMaxRMSError(double value) 
@@ -85,10 +79,7 @@ public:
     }
 
   /** Get the 'distance image' based on anti-aliasing the binary image */
-  FloatImageType *GetDistanceImage()
-    {
-    return fltAlias->GetOutput();
-    }
+  FloatImageType *GetDistanceImage() { return fltAlias->GetOutput(); }
 
   void PrintMeshStatistics(vtkPolyData *mesh)
     {

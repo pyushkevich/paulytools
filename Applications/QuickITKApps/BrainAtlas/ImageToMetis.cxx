@@ -97,8 +97,11 @@ int main(int argc, char *argv[])
   // Now we have a list of lists representing vertices. Write it to a metis file
   FILE *fout = fopen(argv[2],"wt");
   FILE *fmap = fopen(argv[3],"wt");
-  
-  fprintf(fout,"%d %d 11\n",nVertices,nEdges/2);
+
+  // The number of 'phantom' voxels  
+  unsigned int nPhantom = 0;
+
+  fprintf(fout,"%d %d 11\n",nVertices + nPhantom,nEdges/2 + nPhantom);
   for(VertexList::iterator it = lVertex.begin();it!=lVertex.end();++it)
     {
     // Write the next line out
@@ -111,10 +114,9 @@ int main(int argc, char *argv[])
     }
 
   // Create 'phantom vertices'
-  unsigned int nPhantom = 100000;
   for(unsigned int i=0;i<nPhantom;i++)
     {
-    fprintf(fout,"%d 1 %d 1\n",((i-1) % nPhantom) + nVertices, ((i+1) % nPhantom) + nVertices);
+    fprintf(fout,"1 %d 1 %d 1\n",((i-1) % nPhantom) + nVertices, ((i+1) % nPhantom) + nVertices);
     }
 
   for(unsigned int j=0;j<nVertices;j++)

@@ -17,7 +17,7 @@ $BINDIR/binary2metis \
   $GRAPHDIR/$IMAGE.metis_map.txt
 
 # Partition the image using metis tools into given sizes
-for i in 2 4 10 60
+for i in 2 3
 do
   echo "Partitioning image into " $i " parts..."
 
@@ -27,12 +27,12 @@ do
   # Create an image from output
   $BINDIR/metis2mask \
     $INPDIR/$IMAGE.img \
-    $GRAPHDIR/$IMAGE.metis_mesh.txt."$i" \
+    $GRAPHDIR/$IMAGE.metis_mesh.txt.part."$i" \
     $GRAPHDIR/$IMAGE.metis_map.txt \
     $GRAPHDIR/$IMAGE.metis."$i".img
 
   # Remove temporary files
-  rm -rf $GRAPHDIR/$IMAGE.metis_mesh.txt."$i"
+  rm -rf $GRAPHDIR/$IMAGE.metis_mesh.txt.part."$i"
 
 done
 
