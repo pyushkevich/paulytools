@@ -9,7 +9,7 @@ mp.Solve()
 
 # Load the image and gradients
 img = FloatImage()
-img.LoadFromFile(dirWork + "avg/average_hippo_blurred_hi.mha")
+img.LoadFromFile(dirWork + "avg/average_hippo_blurred_low.mha")
 
 # Match the volume to the image
 mp.MatchImageByMoments(img, 5)

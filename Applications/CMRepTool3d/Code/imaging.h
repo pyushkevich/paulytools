@@ -268,7 +268,7 @@ public:
   virtual void saveToFile(const char *file);
 
   // Load from GIPL file
-  virtual void loadFromITKReadableFile(const char *giplFile,std::ostream &out = cout);
+  virtual void loadFromITKReadableFile(const char *giplFile,std::ostream &out = std::cout);
 
   // Voxel interpolation method for cubed images
   virtual float interpolateVoxel(float x,float y,float z);

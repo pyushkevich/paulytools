@@ -198,25 +198,23 @@ double FloatImage::ComputeObjectVolume()
   typedef itk::ImageRegionConstIterator<FloatImageType> IteratorType;
 
   // Create the volume accumulator
-  double xVolume = 0.0;
+  long nPositiveVoxels = 0;
 
   // Add each voxel to the accumulator
   FloatImageType::Pointer img = xImage->GetInternalImage();
   IteratorType it(img, img->GetBufferedRegion());
   while(!it.IsAtEnd())
     {
-    xVolume += it.Get();
+    if(it.Get() > 0)
+      nPositiveVoxels++;
     ++it;
     }
-
-  // Correct for outside pixels being -1.0
-  unsigned long nPixels = img->GetBufferedRegion().GetNumberOfPixels();
-  xVolume = (1.0 * nPixels + xVolume) * 0.5;
 
   // Scale by the voxel's spacing
   double xVoxelVolume = 
     img->GetSpacing()[0] * img->GetSpacing()[1] * img->GetSpacing()[2];
-  return xVoxelVolume * xVolume;
+  cout << "NPositive = " << nPositiveVoxels << endl;
+  return nPositiveVoxels * xVoxelVolume;
 }
 
 BinaryImage::BinaryImage()

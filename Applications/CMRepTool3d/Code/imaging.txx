@@ -10,6 +10,12 @@
 
 using namespace std;
 
+inline int roundup(int x,int res)  {
+  if (x & (res-1))
+    x += res - (x & (res-1));
+  return x;
+}
+
 /**********************************************************
  IMAGE CUBE
  **********************************************************/
@@ -337,12 +343,6 @@ void ImageCube<T>::allocateSlice() {
 
   // Allocate the slice
   slice.resize(sd,sd);
-}
-
-inline int roundup(int x,int res)  {
-  if (x & (res-1))
-    x += res - (x & (res-1));
-  return x;
 }
 
 template<class T>

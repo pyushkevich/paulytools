@@ -203,6 +203,8 @@ double ComputeMedialInternalVolumeWeights(
   // Set all the weights to zero to begin with
   size_t nPoints = xGrid->GetNumberOfInternalPoints(nCuts);
   memset(xWeights, 0, sizeof(double) * nPoints);
+  memset(xInternalProfileWeights, 0, sizeof(double) 
+    * xGrid->GetNumberOfProfileIntervals(nCuts));
   
   // Create an internal cell iterator
   MedialInternalCellIterator *itCell = xGrid->NewInternalCellIterator(nCuts);

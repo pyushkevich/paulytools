@@ -535,7 +535,7 @@ void TestCartesianGrid()
       cout << i << j << k << ": " << itCell.GetInternalPointIndex(i,j,k) << ";  ";
     cout << "; Profiles: ";
     for(size_t i=0; i<2; i++) for(size_t j=0; j<2; j++) 
-      cout << i << j << itCell.GetProfileIntervalIndex(i, j) << "; ";
+      cout << i << j << ": " << itCell.GetProfileIntervalIndex(i, j) << "; ";
     cout << endl;
     ++itCell;  
     }

@@ -39,12 +39,14 @@ void TestAreaAndVolume(MedialPDESolver *xSolver)
   
   // Compute the volume
   double xVol, *xVolWeights = new double[xGrid->GetNumberOfInternalPoints(nCuts)];
+  double *xProfileWeights = new double[xGrid->GetNumberOfProfileIntervals(nCuts)];
+  
   SMLVec3d *xInternal = new SMLVec3d[xGrid->GetNumberOfInternalPoints(nCuts)];
   ComputeMedialInternalPoints(
     xGrid, xSolver->GetAtomArray(), nCuts, xInternal);
   
   xVol = ComputeMedialInternalVolumeWeights(
-    xGrid, xInternal, nCuts, xVolWeights);
+    xGrid, xInternal, nCuts, xVolWeights, xProfileWeights);
 
   cout << "Volume : " << xVol << endl;
   cout << "Verification " << 
@@ -66,6 +68,16 @@ void TestAreaAndVolume(MedialPDESolver *xSolver)
     ++(*it); 
     }
 
+  // Return match scaled by total weight
+  cout << "Verification " << xVol << endl;
+
+  // One more test
+  xVol = 0.0;
+  MedialProfileIntervalIterator *itProf = xGrid->NewProfileIntervalIterator(nCuts);
+  for(; !itProf->IsAtEnd(); ++(*itProf))
+    xVol += xProfileWeights[itProf->GetIndex()];
+  cout << "Profiles add up to " << xVol << endl;
+
   // Clean up
   delete it;
   
@@ -74,9 +86,6 @@ void TestAreaAndVolume(MedialPDESolver *xSolver)
   BoundaryJacobianEnergyTerm termJac;
   termJac.ComputeEnergy(&S);
   termJac.PrintReport(cout);
-
-  // Return match scaled by total weight
-  cout << "Verification " << xVol << endl;
 }
 
 void Test01()
@@ -90,6 +99,15 @@ void Test01()
 
   // Make sure areas and volumes add up
   TestAreaAndVolume(mp->GetSolver());
+  
+  // Load the image and gradients
+  FloatImage img;
+  img.LoadFromFile((dirWork + "avg/average_hippo_blurred_hi.mha").c_str());
+
+  // Match the volume to the image
+  mp->MatchImageByMoments(&img, 5);
+
+  
   
   RenderMedialPDE(mp);
 }
@@ -183,7 +201,7 @@ void TestCellVolume()
 int main(int argc, char *argv[])
 {
   // TestCellVolume();
-  // TestCartesianGrid();
+  TestCartesianGrid();
   Test01();
   
   return 0;

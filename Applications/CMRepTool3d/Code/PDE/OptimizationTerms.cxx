@@ -43,10 +43,10 @@ public:
 
   // Y = 0.5 (X + 1)
   double Evaluate(const SMLVec3d &X)
-    { return 0.5 * (1.0 + FloatImageEuclideanFunctionAdapter::Evaluate(X)); }
+    { return FloatImageEuclideanFunctionAdapter::Evaluate(X); }
 
   SMLVec3d ComputeGradient(const SMLVec3d &X)
-    { return 0.5 * FloatImageEuclideanFunctionAdapter::ComputeGradient(X); }
+    { return FloatImageEuclideanFunctionAdapter::ComputeGradient(X); }
 };
 
 /** A function that computes the match as (I(x) - I0)^2, where I0 is some
@@ -423,7 +423,7 @@ double VolumeOverlapEnergyTerm::ComputeEnergy(SolutionData *data)
     double xLocal;    
     if(m1 > 0 && m2 > 0)
       xLocal = 1.0;
-    else if(m1 < 0 && m2 < 0)
+    else if(m1 <= 0 && m2 <= 0)
       xLocal = 0.0;
     else if(m1 > 0)
       xLocal = m1 / (m1 - m2);

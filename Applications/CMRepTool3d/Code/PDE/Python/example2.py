@@ -9,7 +9,7 @@ mp.Solve()
 
 # Load the highly blurred image
 img = FloatImage();
-img.LoadFromPath(dirWork + "avg/average_hippo_blurred_hi","mha");
+img.LoadFromPath(dirWork + "avg/average_hippo_blurred_low","mha");
 img.SetOutsideValue(-1.0);
 
 # Compute the affine transform

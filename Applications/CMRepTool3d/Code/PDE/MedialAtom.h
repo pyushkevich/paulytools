@@ -139,7 +139,7 @@ double CellVolume(
  */
 double ComputeMedialInternalVolumeWeights(
   MedialAtomGrid *xGrid, SMLVec3d *xPoints, size_t nCuts, 
-  double *xWeights, double *xProfileIntervalWeights);
+  double *xWeights, double *xProfileIntervalWeights = NULL);
 
 /** This method integrates any given function over the interior of mrep */
 double IntegrateFunctionOverInterior (

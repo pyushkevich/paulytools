@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
   // Add all meshes to the first mesh
   for(unsigned int j = 0; j < xMeshes[0]->GetNumberOfPoints(); j++)
     {
-    float *xTarget = xMeshes[0]->GetPoint(j);
+    double *xTarget = xMeshes[0]->GetPoint(j);
     for(unsigned int d = 0; d < 3; d++)
       {
       for(unsigned int k = 1; k < nMeshes; k++)
