@@ -10,19 +10,21 @@ OPTION(USE_FLTK "Use FLTK Libraries" OFF)
 OPTION(USE_OPENGL "Use OpenGL Libraries" OFF)
 
 # Define the optional inclusion (BUILD) variables 
-OPTION(BUILD_APPLICATIONS "Should I build standalone applications?" OFF)
-OPTION(BUILD_EXTERNAL "Should I build external libraries?" ON)
+OPTION(BUILD_APPLICATIONS "Should I build standalone applications?" ON)
+OPTION(BUILD_EXTERNAL "Should I build external libraries?" OFF)
 OPTION(BUILD_TESTING "Should I build the test code?" ON)
 
-# Define the inclusion path
+# By default, include the core libraries
 SUBDIRS(
   CoreLibraries
 )
 
+# Optionally, include the external libraries
 IF(BUILD_EXTERNAL)
   SUBDIRS(ExternalLibraries)
 ENDIF(BUILD_EXTERNAL)
 
+# Optionally, include the applications
 IF(BUILD_APPLICATIONS)
   SUBDIRS(Applications)
 ENDIF(BUILD_APPLICATIONS)

@@ -2,7 +2,6 @@ OPTION(BUILD_CMRepTool2d "Build the tool for 2D mrep/cmrep fitting" OFF)
 OPTION(BUILD_CMRepTool3d "Build the tool for 3D mrep/cmrep fitting" OFF)
 OPTION(BUILD_FeatureSelection "Build the feature selection toolkit" OFF)
 OPTION(BUILD_QuickITKApps "Build small ITK applications (ITK QuickApps)" OFF)
-OPTION(BUILD_QuickVTKApps "Build small VTK applications (VTK QuickApps)" OFF)
 
 VARIABLE_REQUIRES(BUILD_CMRepTool2d DO_BUILD_CMRepTool2d 
   BUILD_EXTERNAL
@@ -25,10 +24,6 @@ VARIABLE_REQUIRES(BUILD_FeatureSelection DO_BUILD_FeatureSelection
 
 VARIABLE_REQUIRES(BUILD_QuickITKApps DO_BUILD_QuickITKApps
   USE_ITK
-)
-
-VARIABLE_REQUIRES(BUILD_QuickVTKApps DO_BUILD_QuickVTKApps
-  USE_ITK
   USE_VTK
   USE_OPENGL
 )
@@ -49,8 +44,5 @@ IF(BUILD_QuickITKApps)
   SUBDIRS(QuickITKApps)
 ENDIF(BUILD_QuickITKApps)
 
-IF(BUILD_QuickVTKApps)
-  SUBDIRS(QuickVTKApps)
-ENDIF(BUILD_QuickVTKApps)
 
 
