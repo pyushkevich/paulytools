@@ -16,7 +16,11 @@
 
 #include <itkImageFileWriter.h>
 #include <itkImageRegionConstIterator.h>
-#include <itkSignedDanielssonDistanceMapImageFilter.h>
+#include <itkImageRegionIterator.h>
+#include <itkDanielssonDistanceMapImageFilter.h>
+#include <itkSubtractImageFilter.h>
+#include <itkLinearInterpolateImageFunction.h>
+#include <itkCommand.h>
 #include <itkImage.h>
 
 #include "DrawTriangles.h"
@@ -75,16 +79,66 @@ vtkPolyData *ReadVTKData(string fn)
   return pd;
 }
 
+void ProgressCommand(Object *, const EventObject &, void *)
+{ 
+  cout << "." << flush; 
+}
+
 void ComputeDistanceTransform(ByteImageType *binary, FloatImageType::Pointer &dist)
 {
-  typedef SignedDanielssonDistanceMapImageFilter<
+  CStyleCommand::Pointer xCommand = CStyleCommand::New();
+  xCommand->SetCallback(ProgressCommand);
+  
+  // Compute the forward distance transform
+  typedef DanielssonDistanceMapImageFilter<
     ByteImageType, FloatImageType> DistanceMapType;
   DistanceMapType::Pointer fltDistance = DistanceMapType::New();
   fltDistance->SetInput(binary);
-  fltDistance->SetSquaredDistance(float);
+  fltDistance->SetSquaredDistance(false);
   fltDistance->SetInputIsBinary(true);
   fltDistance->SetUseImageSpacing(true);
-  dist = fltDistance->Update();
+  fltDistance->AddObserver(ProgressEvent(),xCommand);
+  fltDistance->Update();
+  FloatImageType::Pointer d1 = fltDistance->GetOutput();
+
+  // Create an inverted image
+  ByteImageType::Pointer imgInvert = ByteImageType::New();
+  imgInvert->SetRegions(binary->GetBufferedRegion());
+  imgInvert->SetSpacing(binary->GetSpacing());
+  imgInvert->SetOrigin(binary->GetOrigin());
+  imgInvert->Allocate();
+  ImageRegionIterator<ByteImageType> it1(imgInvert, binary->GetBufferedRegion());
+  ImageRegionConstIterator<ByteImageType> it2(binary, binary->GetBufferedRegion());
+  for( ; !it1.IsAtEnd(); ++it1, ++it2)
+    it1.Set( it2.Value() > 0 ? 0 : 255 );
+
+  // Compute the inverse distance transform
+  DistanceMapType::Pointer fltDistanceInv = DistanceMapType::New();
+  fltDistanceInv->SetInput(imgInvert);
+  fltDistanceInv->SetSquaredDistance(false);
+  fltDistanceInv->SetInputIsBinary(true);
+  fltDistanceInv->SetUseImageSpacing(true);
+  fltDistanceInv->AddObserver(ProgressEvent(),xCommand);
+  fltDistanceInv->Update();
+  FloatImageType::Pointer d2 = fltDistanceInv->GetOutput();
+  
+  // Compute the Sum of the two images
+  typedef SubtractImageFilter<
+    FloatImageType,FloatImageType,FloatImageType> AdderType;
+  AdderType::Pointer fltAdder = AdderType::New();
+  fltAdder->SetInput1(d1);
+  fltAdder->SetInput2(d2);
+  fltAdder->Update();
+
+  dist = fltAdder->GetOutput();
+
+  /*
+  typedef ImageFileWriter<FloatImageType> Junk;
+  Junk::Pointer junk = Junk::New();
+  junk->SetInput(dist);
+  junk->SetFileName("junk.img.gz");
+  junk->Update();
+  */
 }
 
 void IntegrateDistance(vtkPolyData *pd, FloatImageType *dist, 
@@ -114,7 +168,7 @@ void IntegrateDistance(vtkPolyData *pd, FloatImageType *dist,
   xTwoNorm = sqrt( xTwoNorm / pd->GetNumberOfPoints() );
 }
 
-void ScanConvertPolyData(vtkPolyData *pd, double *b0, double *b1, int *res, ByteImageType *img)
+void ScanConvertPolyData(vtkPolyData *pd, double *b0, double *b1, int *res, double xVox, ByteImageType *img)
 {
   // Create a vertex table from the polydata
   unsigned int nt = pd->GetNumberOfPolys(), it = 0;
@@ -131,7 +185,7 @@ void ScanConvertPolyData(vtkPolyData *pd, double *b0, double *b1, int *res, Byte
       vtx[it] = (double *) malloc(3*sizeof(double));
       for(unsigned int j=0;j<3;j++)
         {
-        vtx[it][j] = res[j] * (x[j] - b0[j]) / b1[j];
+        vtx[it][j] = (x[j] - b0[j]) / xVox;
         }
 
       ++it;
@@ -154,10 +208,25 @@ void ScanConvertPolyData(vtkPolyData *pd, double *b0, double *b1, int *res, Byte
   for(unsigned int d = 0; d < 3; d++)
     {
     xOrigin[d] = b0[d];
-    xSpacing[d] = b1[d] / res[d];
+    xSpacing[d] = xVox;
     }
   img->SetOrigin(xOrigin);
   img->SetSpacing(xSpacing);
+ 
+  /*
+  static int igg = 1;
+  typedef ImageFileWriter<ByteImageType> Junk;
+  Junk::Pointer junk = Junk::New();
+  junk->SetInput(img);
+  if (igg==1)
+    {
+    junk->SetFileName("chunk1.img.gz");
+    igg = 0;
+    }
+  else
+    junk->SetFileName("chunk2.img.gz");
+  junk->Update();
+  */
 }
 
 
@@ -218,8 +287,8 @@ int main(int argc, char **argv)
   // Scan convert the mesh to images
   ByteImageType::Pointer i1 = ByteImageType::New();
   ByteImageType::Pointer i2 = ByteImageType::New();
-  ScanConvertPolyData(p1, bb[0], bb[1], res, i1);
-  ScanConvertPolyData(p2, bb[0], bb[1], res, i2);
+  ScanConvertPolyData(p1, bb[0], bb[1], res, xVox, i1);
+  ScanConvertPolyData(p2, bb[0], bb[1], res, xVox, i2);
 
   // Compute the volume overlap between images
   unsigned long nUnion = 0, nIntersect = 0, nReference = 0, nModel = 0;
@@ -250,9 +319,16 @@ int main(int argc, char **argv)
   IntegrateDistance(p2, d1, xOneNorm[1], xTwoNorm[1], xInfNorm[1]);
 
   // Report our findings
+  cout << endl;
   cout << "Unbiased overlap between meshes is " << nIntersect * 1.0 / nUnion << endl;
   cout << "Biased overlap between meshes is " << nIntersect * 1.0 / nReference << endl;
   cout << "Reverse biased overlap between meshes is " << nIntersect * 1.0 / nModel << endl;
   cout << "Distance from mesh 1 to mesh 2 is " << xOneNorm[0] << "; " << xTwoNorm[0] << "; " << xInfNorm[0] << endl;
   cout << "Distance from mesh 2 to mesh 1 is " << xOneNorm[1] << "; " << xTwoNorm[1] << "; " << xInfNorm[1] << endl;
+  cout << "RESULT: " 
+    << nIntersect * 1.0 / nUnion << "\t"
+    << nIntersect * 1.0 / nReference << "\t"
+    << xOneNorm[0] << "\t" << xOneNorm[1] << "\t"
+    << xTwoNorm[0] << "\t" << xTwoNorm[1] << "\t"
+    << xInfNorm[0] << "\t" << xInfNorm[1] << endl;
 }

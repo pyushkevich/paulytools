@@ -203,6 +203,7 @@ IF(BUILD_PDE)
     common.py 
     imageprep.py
     segment.py
+    pca.py
     )
   
   FOREACH(FILE ${SCRIPT_FILES})  
