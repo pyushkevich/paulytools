@@ -3,5 +3,6 @@ SUBDIRS(
   AntiAlias
   FillSTLMesh
   Ovoids
+  OneTimeJunk
   Stackem
 )
