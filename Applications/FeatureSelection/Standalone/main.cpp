@@ -115,8 +115,8 @@ void findFeaturesFSV(const Mat &A, const Mat &B, const Vec &L,vector<WinSearchRe
 }
 
 void padVector(const Vec &v,Vec &p,int reps) {
-  p.setSize(v.size()*reps);
-  for(int r=0;r<v.rows();r++)
+  p.set_size(v.size()*reps);
+  for(int r=0;r<v.size();r++)
     for(int i=0;i<reps;i++)
       p(r*reps+i)=v(r);
 }
@@ -274,7 +274,7 @@ void processParameterSet(Mat &A, Mat &B, Mat &O, Mat&p, double alpha, int nRuns,
 }
 
 void leaveRowOut(const Mat &A, Mat &B, int row) {
-	B.setSize(A.rows()-1,A.columns());
+	B.set_size(A.rows()-1,A.columns());
 
 	int ia = 0;
 	for(int j=0;j<A.rows();j++) {

@@ -45,9 +45,9 @@ bool SoPlexWrapper::solve(Vec &r) {
 	case SoPlex::OPTIMAL: 
 	    {
 		// Return the optimal solution solution
-		DVector rtn(r.rows());
+		DVector rtn(r.size());
 		plex->getPrimalUnscaled(rtn);
-		for(int i=0;i<r.rows();i++)
+		for(int i=0;i<r.size();i++)
 		    r(i) = rtn.get_ptr()[i];
 
 		return true;
@@ -109,7 +109,7 @@ void SoPlexWrapper::updateBounds(const Vec &u,const Vec &l) {
 void SoPlexWrapper::updateRow(int i,const Vec &row,double bVal) {
     DSVector dsv;
 
-    for(int j=0;j<row.rows();j++) {
+    for(int j=0;j<row.size();j++) {
 	if(row(j)!=0)
 	    dsv.add(j,row(j));
 	M(i,j) = row(j);

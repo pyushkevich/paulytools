@@ -84,8 +84,7 @@ ADD_LIBRARY(SoPlex ${SOPLEX_LIB_SRCS})
 
 # Create the SoPlex example executable
 ADD_EXECUTABLE(example ${SOURCE_SUBDIR}/example.cpp)
-TARGET_LINK_LIBRARIES(example soplex)
-
+TARGET_LINK_LIBRARIES(example SoPlex)
 
 # Set the include directory
 SET(SOPLEX_INCLUDE_DIR ${SOURCE_SUBDIR})

@@ -44,7 +44,7 @@ int MathematicaIO::readMathematicaMatrix(FILE *f, Mat &A) {
     c = readToSymbol(f);
     if(c == '}') {
       // Matrix is finished
-      A.setSize(vec.size(),vec.front().size());
+      A.set_size(vec.size(),vec.front().size());
       for(int r=0;r<A.rows();r++) {
 	for(int c=0;c<A.columns();c++) {
 	  A(r,c) = vec[r][c];
@@ -87,8 +87,8 @@ int MathematicaIO::readMathematicaVector(FILE *f, Vec &A) {
   } while(c == ',');
 
   // Save vector
-  A.setSize(v.size());
-  for(int i=0;i<A.rows();i++)
+  A.set_size(v.size());
+  for(int i=0;i<A.size();i++)
     A(i) = v[i];
   
   return 0;

@@ -16,5 +16,6 @@ TARGET_LINK_LIBRARIES(fselect
 	FSSoPlexWrapper
 	FeatureSelection
   SoPlex
+  ITKNumerics
   ${PAULY_CORE_LIBS}
 )

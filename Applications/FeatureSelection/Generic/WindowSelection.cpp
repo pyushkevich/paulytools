@@ -26,7 +26,7 @@ void WindowSelection::initialize(const Mat &A, const Mat &B, const Mat &Omega)
 	cout << endl << "-------------- Starting Multi-Window Search ------------" << endl;
 
 	// Inverse of the O matrix
-	Mat Ot = Omega.t();
+	Mat Ot = Omega.transpose();
 
 	// Record the dimensions of various matrices
 	m = A.rows();
@@ -38,11 +38,11 @@ void WindowSelection::initialize(const Mat &A, const Mat &B, const Mat &Omega)
 	Mat M(m+k+n,m+k+n+nw+1);
 
 	// Insert the data matrices and window matrix
-	M.insertMatrix(0,0,A);
-	M.insertMatrix(0,n+m+k,-A*Omega);
-	M.insertMatrix(m,0,-B);
-	M.insertMatrix(m,n+m+k,B*Omega);
-	M.insertMatrix(m+k,n+m+k,2*Omega);
+	M.update(A,0,0);
+	M.update(-A*Omega,0,n+m+k);
+	M.update(-B,m,0);
+	M.update(B*Omega,m,n+m+k);
+	M.update(Omega * 2,m+k,n+m+k);
 
 	// Insert all the identities
 	insertDiagonal(M,0     ,n ,m+k ,1);
@@ -54,23 +54,23 @@ void WindowSelection::initialize(const Mat &A, const Mat &B, const Mat &Omega)
 
 	// Now, specify the vector B
 	Vec b(m+k+n);
-	insertVertical(b,0,0,m+k,1);
+	fillRange(b,0,m+k,1);
 
 	// Construct the basic vector C
-	c.setSize(n+m+k+nw+1);
-	insertVertical(c,n,0,m,1.0/m);
-	insertVertical(c,n+m,0,k,1.0/k);
+	c.set_size(n+m+k+nw+1);
+	fillRange(c,n,m,1.0/m);
+	fillRange(c,n+m,k,1.0/k);
 
 	// Construct the upper and lower limits
 	Vec upper(n+m+k+nw+1), lower(n+m+k+nw+1);
-	upper.setAll(1e100);
+	upper.fill(1e100);
 	lower(n+m+k+nw) = -1e100;
 
 	// Create a soplex problem
 	m_provider->setProblem(c,M,b,lower,upper);
 
 	// Compute window lengths
-	wl.setSize(nw);
+	wl.set_size(nw);
 	for(int wc=0;wc<nw;wc++) {
 		wl(wc) = 0;
 		for(int wr=0;wr<n;wr++) {
@@ -79,8 +79,8 @@ void WindowSelection::initialize(const Mat &A, const Mat &B, const Mat &Omega)
 	}
 
 	// Set the weight vector
-	wgt.setSize(nw);
-	wgt.setAll(0);
+	wgt.set_size(nw);
+	wgt.fill(0);
 
 	state = INIT;
 }
@@ -91,7 +91,7 @@ void WindowSelection::setLinearModulation(double lambda, double eta) {
 	cout << "-------------- New Parameter Value" << endl;
 	cout << "lam = " << lambda << endl << "eta = " << eta << endl;
 
-	wgt.setAll(eta);
+	wgt.fill(eta);
 	wgt += lambda*wl;
 
 	state = INIT;
@@ -126,7 +126,7 @@ bool WindowSelection::run() {
 		}
 
 		// Compute the pre-optimization objective value
-		fLast = c.dotProduct(r.back());
+		fLast = dot_product(c,r.back());
 
 		// Perform the linear programming task!
 		m_provider->updateObjective(c);
@@ -136,18 +136,17 @@ bool WindowSelection::run() {
 		status = m_provider->solve(r.back());
 
 		// Now, continue if the objective has changed
-	} while(status && fabs(fLast - c.dotProduct(r.back())) > eps);
+	} while(status && fabs(fLast - dot_product(c,r.back())) > eps);
 
 	// Store the results
 	Vec rf = r.back();
-	Vec ww(n),yy(m),zz(k),vv(nw);
-	rf.extractMatrix(0,0,ww);
-	rf.extractMatrix(n,0,yy);
-	rf.extractMatrix(n+m,0,zz);
-	rf.extractMatrix(n+m+k,0,vv);
+	Vec ww = rf.extract(n,0);
+	Vec yy = rf.extract(m,n);
+	Vec zz = rf.extract(k,n+m);
+	Vec vv = rf.extract(nw,n+m+k);
 
 	// Compute the objective function
-	objResult = yy.oneNorm() / m + zz.oneNorm() / k;
+	objResult = yy.one_norm() / m + zz.one_norm() / k;
 	for(int i=0;i<nw;i++) {
 		objResult += wgt(i) * (1 - exp(-alpha * vv(i)));
 	}

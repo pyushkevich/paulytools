@@ -2,11 +2,7 @@
 #define _LP_WRAPPER_H_
 
 // This file includes the matrix and class definitions
-#include "matrix.h"
-
-// Shorthand for matrix and vector classes that doesn't clash with other code
-typedef pauly::Matrix Mat;
-typedef pauly::Vector Vec;
+#include "globals.h"
 
 /**
  * An abstract class that represents generic functionality 

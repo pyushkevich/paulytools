@@ -25,7 +25,7 @@ double FeatureSetCrossValidation::leaveSomeOut(const Mat &A, const Mat &B, const
 	// Select the elements rows of A and B
 	vector<int> fsel;
 	unsigned int j;
-	for(j=0;j<w.rows();j++) {
+	for(j=0;j<w.size();j++) {
 		if(w(j)!=0)
 			fsel.push_back(j);
 	}
@@ -33,8 +33,8 @@ double FeatureSetCrossValidation::leaveSomeOut(const Mat &A, const Mat &B, const
 	// Create the matrices X, Y
 	Mat X(A.rows(),fsel.size()),Y(B.rows(),fsel.size());
 	for(j=0;j<fsel.size();j++) {
-		X.insertMatrix(0,j,A.getColumn(fsel[j]));   
-		Y.insertMatrix(0,j,B.getColumn(fsel[j]));
+		X.set_column(j,A.get_column(fsel[j]));   
+		Y.set_column(j,B.get_column(fsel[j]));
 	}
 
 	int cl,el;
@@ -72,8 +72,8 @@ double FeatureSetCrossValidation::leaveSomeOut(const Mat &A, const Mat &B, const
 			}
 
 			// Build matrices
-			Dtrain[cl].setSize(train.size(),fsel.size());
-			Dtest[cl].setSize(test.size(),fsel.size());
+			Dtrain[cl].set_size(train.size(),fsel.size());
+			Dtest[cl].set_size(test.size(),fsel.size());
 
 			for(el=0;el<Dtrain[cl].rows();el++)
 				for(int col=0;col<D.columns();col++) 
@@ -99,8 +99,8 @@ double FeatureSetCrossValidation::leaveSomeOut(const Mat &A, const Mat &B, const
 		// Cross-validate
 		for(cl=0;cl<2;cl++) {
 			for(el=0;el<Dtest[cl].rows();el++) {
-				Vec x = Dtest[cl].getRow(el);
-				double score = x.dotProduct(margin)-gamma;
+				Vec x = Dtest[cl].get_row(el);
+				double score = dot_product(x,margin)-gamma;
 				int cls = score < 0 ? 1 : 0;
 				att++;
 				err += cls==cl ? 0 : 1;
