@@ -1143,6 +1143,8 @@ int main(int argc, char *argv[])
   fltWhiteMesh->SetInvertInput(false);
   fltWhiteMesh->Update();
 
+  cout << "Reading in curves " << endl;
+
   // Allocate an array for curves
   vector<CurveType> vCurves;
 
@@ -1164,6 +1166,7 @@ int main(int argc, char *argv[])
       CurveType c;
       vCurves.push_back(c);
       xLast.fill(-1);
+      cout << "Curve " << vCurves.size() << endl;
       }
     else if (line.substr(0,6) == "      ")
       {
@@ -1185,7 +1188,7 @@ int main(int argc, char *argv[])
   // At this point we've loaded the input into memory. We now compute the 
   // vector distance transform of the white matter
   unsigned int iCurve, iPoint;
-
+/*
   // Interpolate the grey curves in order to make them more smooth
   for(iCurve = 0;iCurve < vCurves.size();iCurve++)
     {
@@ -1214,7 +1217,7 @@ int main(int argc, char *argv[])
     // Clean up
     delete points;
     }
-
+*/
   // Create a copy of the white image
   char *dataWhite = new char[imgWhite->GetBufferedRegion().GetNumberOfPixels()];
   memcpy(dataWhite,imgWhite->GetBufferPointer(),imgWhite->GetBufferedRegion().GetNumberOfPixels());
@@ -1416,10 +1419,10 @@ int main(int argc, char *argv[])
       if(itWhite.Get() != 0)
         itWhite.Set(0x40);
 
-      itBrain.Set(0x7fff);
+      itBrain.Set(8000);
       }
 
-    ++itGrey;++itRibbon;++itWhite;
+    ++itGrey;++itRibbon;++itWhite;++itBrain;
     }
 
   // Save the gree scale image

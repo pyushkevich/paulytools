@@ -4,6 +4,7 @@ OPTION(USE_BOOST "Use BOOST graph library" ON)
 
 ADD_EXECUTABLE(aalias AntiAlias.cpp)
 ADD_EXECUTABLE(lsplit LabelledToBinary.cpp)
+ADD_EXECUTABLE(lcombine BinaryToLabelled.cpp)
 LINK_LIBRARIES(ITKCommon ITKBasicFilters ITKIO ${PAULY_CORE_LIBS}
   vtkCommon 
   vtkFiltering
