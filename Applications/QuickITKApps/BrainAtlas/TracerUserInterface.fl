@@ -119,7 +119,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           Fl_Button m_BtnStartCurve {
             label {add curve}
             callback {OnButtonStartCurve();}
-            xywh {675 370 70 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12
+            xywh {675 370 70 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
           }
           Fl_Button m_BtnDeleteCurve {
             label delete
@@ -167,7 +167,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           Fl_Value_Input m_InNeighborhoodSize {
             label {Neighborhood radius:}
             callback {OnInputNeighborhoodRadius(o->value());}
-            tooltip {The size of the neighborhood (distance from the current point)} xywh {850 545 50 20} labelsize 11 minimum 1 maximum 100 step 1 value 20 textsize 11 deactivate
+            tooltip {The size of the neighborhood (distance from the current point)} xywh {850 545 50 20} labelsize 11 when 8 minimum 1 maximum 100 step 1 value 20 textsize 11 deactivate
           }
           Fl_Check_Button m_ChkDisplayEdges {
             label { Overlay edges on the mesh}

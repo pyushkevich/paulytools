@@ -40,7 +40,9 @@ public:
     m_Data = data;
 
     // Reset state
-    m_DisplayListDirty = true;
+    m_FullMeshDisplayListDirty = m_NeighborhoodDisplayListDirty = 
+      m_EdgeDisplayListDirty = true;
+    
     m_CurrentPoint = -1;
 
     // Attach to new data
@@ -66,7 +68,6 @@ public:
   void SetSurfaceDisplayMode(SurfaceDisplayMode mode)
     {
     m_SurfaceDisplayMode = mode;
-    m_DisplayListDirty = true;
     m_EdgeDisplayListDirty = true;
     }
 
@@ -76,7 +77,7 @@ public:
     m_NeighborhoodSize = size;
     if(m_SurfaceDisplayMode == SURFACE_DISPLAY_NEIGHBORHOOD)
       {
-      m_DisplayListDirty = true;
+      m_NeighborhoodDisplayListDirty = true;
       m_EdgeDisplayListDirty = true;
       redraw();
       }
@@ -86,6 +87,7 @@ public:
   void SetCenterMesh(bool mode)
     {
     m_CenterMesh = mode;
+    m_Trackball.ResetPan();
     redraw();
     }
 
@@ -107,10 +109,14 @@ private:
 
   // Display list associated with the brain surface and with the
   // overlay edges on the brain surface
-  int m_DisplayList, m_EdgeDisplayList;
+  int m_FullMeshDisplayList;
+  int m_EdgeDisplayList;
+  int m_NeighborhoodDisplayList;
 
   // Whether the display lists requires recomputation
-  bool m_DisplayListDirty, m_EdgeDisplayListDirty;
+  bool m_FullMeshDisplayListDirty;
+  bool m_EdgeDisplayListDirty;
+  bool m_NeighborhoodDisplayListDirty;
 
   // Whether GL state needs reinitialization
   bool m_GLStateDirty;
@@ -148,7 +154,8 @@ private:
   void FindPointUnderCursor();
 
   // Do the actual job of computing the display list
-  void ComputeDisplayList();
+  void ComputeFullMeshDisplayList();
+  void ComputeNeighborhoodDisplayList();
   void ComputeEdgeDisplayList();
 
   // Methods for choosing edge colors based on values

@@ -30,9 +30,9 @@ TracerMainWindow(int x, int y, int w, int h, const char *label)
 : Fl_Gl_Window(x,y,w,h,label) 
 {
   m_Data = NULL;
-  m_DisplayListDirty = false;
   m_EdgeDisplayListDirty = false;
-  m_DisplayList = -1;
+  m_FullMeshDisplayList = -1;
+  m_NeighborhoodDisplayList = -1;
   m_EdgeDisplayList = -1;
   m_EditMode = TRACKBALL;
   m_TrackballMode = NONE;
@@ -53,101 +53,107 @@ TracerMainWindow
 
 void 
 TracerMainWindow
-::ComputeDisplayList()
+::ComputeFullMeshDisplayList()
 {
   // Generate a display list number if needed
-  if(m_DisplayList < 0)
-    m_DisplayList = glGenLists(1);
+  if(m_FullMeshDisplayList < 0)
+    m_FullMeshDisplayList = glGenLists(1);
   
   // Build display list
-  glNewList(m_DisplayList,GL_COMPILE_AND_EXECUTE);
+  glNewList(m_FullMeshDisplayList,GL_COMPILE_AND_EXECUTE);
 
-  // If the mode is to display the entire surface, use the display mesh
-  if(m_SurfaceDisplayMode == SURFACE_DISPLAY_ALL || !m_Data->IsPathSourceSet())
+  // Get the triangle strip information.
+  vtkCellArray *triStrips = m_Data->GetDisplayMesh()->GetStrips();
+
+  // Get the vertex information.
+  vtkPoints *verts = m_Data->GetDisplayMesh()->GetPoints();
+
+  // Get the normal information.
+  vtkDataArray *norms = m_Data->GetDisplayMesh()->GetPointData()->GetNormals();
+
+  // Data for getting consecutive points
+  vtkIdType ntris = 0;
+  vtkIdType npts;
+  vtkIdType *pts;
+  for ( triStrips->InitTraversal(); triStrips->GetNextCell(npts,pts); ) 
     {
-    // Get the triangle strip information.
-    vtkCellArray *triStrips = m_Data->GetDisplayMesh()->GetStrips();
-
-    // Get the vertex information.
-    vtkPoints *verts = m_Data->GetDisplayMesh()->GetPoints();
-
-    // Get the normal information.
-    vtkDataArray *norms = m_Data->GetDisplayMesh()->GetPointData()->GetNormals();
-
-    // Data for getting consecutive points
-    vtkIdType ntris = 0;
-    vtkIdType npts;
-    vtkIdType *pts;
-    for ( triStrips->InitTraversal(); triStrips->GetNextCell(npts,pts); ) 
+    ntris += npts-2;
+    glBegin( GL_TRIANGLE_STRIP );
+    for (vtkIdType j = 0; j < npts; j++) 
       {
-      ntris += npts-2;
-      glBegin( GL_TRIANGLE_STRIP );
-      for (vtkIdType j = 0; j < npts; j++) 
-        {
-        // Some ugly code to ensure VTK version compatibility
-        double vx = verts->GetPoint(pts[j])[0];
-        double vy = verts->GetPoint(pts[j])[1];
-        double vz = verts->GetPoint(pts[j])[2];
-        double nx = norms->GetTuple(pts[j])[0];
-        double ny = norms->GetTuple(pts[j])[1];
-        double nz = norms->GetTuple(pts[j])[2];
-        double l = 1.0 / sqrt(nx*nx+ny*ny+nz*nz);
+      // Some ugly code to ensure VTK version compatibility
+      double vx = verts->GetPoint(pts[j])[0];
+      double vy = verts->GetPoint(pts[j])[1];
+      double vz = verts->GetPoint(pts[j])[2];
+      double nx = norms->GetTuple(pts[j])[0];
+      double ny = norms->GetTuple(pts[j])[1];
+      double nz = norms->GetTuple(pts[j])[2];
+      double l = 1.0 / sqrt(nx*nx+ny*ny+nz*nz);
 
-        // Specify normal.
-        glNormal3d(nx, ny, nz);
+      // Specify normal.
+      glNormal3d(nx, ny, nz);
 
-        // Specify vertex.
-        glVertex3d(vx, vy, vz);
-        }
-      glEnd();
+      // Specify vertex.
+      glVertex3d(vx, vy, vz);
       }
-    }
-
-  // Otherwise, use the input mesh, and only draw the triangles that have vertices
-  // within the desired distance to the source
-  else
-    {
-    // Get the triangle strip information.
-    vtkCellArray *polys = m_Data->GetInternalMesh()->GetPolys();
-
-    // Get the vertex information.
-    vtkPoints *verts = m_Data->GetInternalMesh()->GetPoints();
-
-    // Get the normal information.
-    vtkDataArray *norms = m_Data->GetInternalMesh()->GetPointData()->GetNormals();
-
-    // Data for getting consecutive points
-    vtkIdType ntris = 0;
-    vtkIdType npts;
-    vtkIdType *pts;
-      
-    glBegin(GL_TRIANGLES);
-    
-    for ( polys->InitTraversal(); polys->GetNextCell(npts,pts); ) 
-      {
-      // Check if the triangle qualifies
-      bool qual = true;
-      for(vtkIdType iPoint = 0; qual && (iPoint < npts); iPoint++)
-        if(m_Data->GetDistanceMapper()->GetVertexDistance(pts[iPoint]) 
-          > m_NeighborhoodSize) qual = false;
-      if(!qual) continue;
-
-      // Display the qualified triangle
-      for(vtkIdType iPoint = 0; iPoint < npts; iPoint++)
-        {
-        glNormal3dv(norms->GetTuple3(pts[iPoint]));
-        glVertex3dv(verts->GetPoint(pts[iPoint]));
-        }
-      }
-
     glEnd();
-    
     }
+
+  glEndList();
+
+  m_FullMeshDisplayListDirty = false;
+}
+
+void 
+TracerMainWindow
+::ComputeNeighborhoodDisplayList()
+{
+  // Generate a display list number if needed
+  if(m_NeighborhoodDisplayList < 0)
+    m_NeighborhoodDisplayList = glGenLists(1);
+  
+  // Build display list
+  glNewList(m_NeighborhoodDisplayList,GL_COMPILE_AND_EXECUTE);
+
+  // Get the triangle strip information.
+  vtkCellArray *polys = m_Data->GetInternalMesh()->GetPolys();
+
+  // Get the vertex information.
+  vtkPoints *verts = m_Data->GetInternalMesh()->GetPoints();
+
+  // Get the normal information.
+  vtkDataArray *norms = m_Data->GetInternalMesh()->GetPointData()->GetNormals();
+
+  // Data for getting consecutive points
+  vtkIdType ntris = 0;
+  vtkIdType npts;
+  vtkIdType *pts;
+    
+  glBegin(GL_TRIANGLES);
+  
+  for ( polys->InitTraversal(); polys->GetNextCell(npts,pts); ) 
+    {
+    // Check if the triangle qualifies
+    bool qual = true;
+    for(vtkIdType iPoint = 0; qual && (iPoint < npts); iPoint++)
+      if(m_Data->GetDistanceMapper()->GetVertexDistance(pts[iPoint]) 
+        > m_NeighborhoodSize) qual = false;
+    if(!qual) continue;
+
+    // Display the qualified triangle
+    for(vtkIdType iPoint = 0; iPoint < npts; iPoint++)
+      {
+      glNormal3dv(norms->GetTuple3(pts[iPoint]));
+      glVertex3dv(verts->GetPoint(pts[iPoint]));
+      }
+    }
+
+  glEnd();
   
   glEndList();
 
   // Clear the dirty flag
-  m_DisplayListDirty = false;
+  m_NeighborhoodDisplayListDirty = false;
 }
 
 void
@@ -395,22 +401,30 @@ TracerMainWindow
     glEnable(GL_COLOR_MATERIAL);
     glColorMaterial(GL_FRONT_AND_BACK,GL_AMBIENT_AND_DIFFUSE);
     
-    // Create the display list if needed
-    if(m_DisplayListDirty) ComputeDisplayList();
-    else glCallList(m_DisplayList);
-    
+    // If the mode is to display the entire surface, use the display mesh
+    if(m_SurfaceDisplayMode == SURFACE_DISPLAY_ALL || !m_Data->IsPathSourceSet())
+      {
+      // Create the display list if needed
+      if(m_FullMeshDisplayListDirty) ComputeFullMeshDisplayList();
+      else glCallList(m_FullMeshDisplayList);
+      }
+    else 
+      {
+      // Create the display list if needed
+      if(m_NeighborhoodDisplayListDirty) ComputeNeighborhoodDisplayList();
+      else glCallList(m_NeighborhoodDisplayList);
+      }
+
     // Create the edge display list if needed
     if(m_EdgeDisplayListDirty) ComputeEdgeDisplayList();
     else glCallList(m_EdgeDisplayList);
     
     // Set the attributes for line drawing
     glPushAttrib(GL_LIGHTING_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT);
-    // glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    
     glEnable(GL_LINE_SMOOTH);
-    glLineWidth(2.5);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);    
+    glLineWidth(3);
 
     // Get a list of curve id's
     typedef list<TracerCurves::IdType> IdList;
@@ -734,7 +748,8 @@ void
 TracerMainWindow
 ::OnMeshChange(TracerDataEvent *evt)
 {
-  m_DisplayListDirty = true;
+  m_NeighborhoodDisplayListDirty = true;
+  m_FullMeshDisplayListDirty = true;
   m_EdgeDisplayListDirty = true;
   m_CurrentPoint = -1;
   redraw();
@@ -756,14 +771,18 @@ TracerMainWindow
   // m_CurrentPoint = -1;
 
   // The edge drawing is no longer clean if drawing accumulated distances
-  if(m_EdgeDisplayMode == EDGE_DISPLAY_DISTANCE)
-    m_EdgeDisplayListDirty = true;
-
-  // If surface display is in neighborhood mode, dirty it
-  if(m_SurfaceDisplayMode == SURFACE_DISPLAY_NEIGHBORHOOD)
+  m_NeighborhoodDisplayListDirty = true;
+  if(m_EdgeDisplayMode == EDGE_DISPLAY_DISTANCE || 
+    m_SurfaceDisplayMode == SURFACE_DISPLAY_NEIGHBORHOOD)
     {
-    m_DisplayListDirty = true;
     m_EdgeDisplayListDirty = true;
+    }
+  
+  // Special feature: if the current mode is to center on the path source, 
+  // and the path source changes, remove the pan in the trackball
+  if(m_CenterMesh && m_Data->IsPathSourceSet())
+    {
+    m_Trackball.ResetPan();
     }
 
   // Redraw the window

@@ -60,6 +60,13 @@ Trackball
   m_PanY = m_OldPanY = 0.0;
 }
 
+void
+Trackball
+::ResetPan()
+{
+  m_PanX = m_PanY = 0.0;
+}
+
 void 
 Trackball
 ::StartPan( int x, int y )
@@ -206,6 +213,9 @@ Trackball
 
 /*
  *$Log$
+ *Revision 1.2  2004/04/02 15:18:02  pauly2
+ *Separate display lists for global and local meshes
+ *
  *Revision 1.1  2004/03/05 23:10:42  pauly2
  *Added braintrace app
  *

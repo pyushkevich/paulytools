@@ -43,6 +43,7 @@ public:
   ~Trackball();
 
   void Reset();
+  void ResetPan();
   void StartPan( int x, int y );
   void StopPan();
   void TrackPan( int x, int y, int w, int h, float ratew, float rateh );
@@ -64,6 +65,9 @@ public:
 
 /*
  *$Log$
+ *Revision 1.2  2004/04/02 15:18:02  pauly2
+ *Separate display lists for global and local meshes
+ *
  *Revision 1.1  2004/03/05 23:10:42  pauly2
  *Added braintrace app
  *
