@@ -2,6 +2,8 @@
 #include "vtkBYUWriter.h"
 #include "vtkBYUReader.h"
 #include "vtkPoints.h"
+#include "vtkProcrustesAlignmentFilter.h"
+#include "vtkLandmarkTransform.h"
 #include <iostream>
 
 using namespace std;
@@ -21,19 +23,38 @@ int main(int argc, char *argv[])
   // Load a list of meshes
   unsigned int nMeshes = argc - 2;
   vtkPolyData **xMeshes = new vtkPolyData *[nMeshes];
+
+  // Create a procrustes alignment filter
+  vtkProcrustesAlignmentFilter *fltAlign = 
+    vtkProcrustesAlignmentFilter::New();
+  fltAlign->SetNumberOfInputs(nMeshes);
+  fltAlign->GetLandmarkTransform()->SetModeToRigidBody();
+
+  // Read the meshes
   for(unsigned int i = 0; i < nMeshes; i++)
     {
+    // Read the polydata
     vtkBYUReader *reader = vtkBYUReader::New();
     reader->SetFileName(argv[1 + i]);
     reader->Update();
 
+    // Read the mesh
     xMeshes[i] = reader->GetOutput();
-    cout << "." << flush;
+
+    // Plug into procrustes
+    fltAlign->SetInput(i, xMeshes[i]);
+    
+    cout << "." << flush;    
     // reader->Delete();
     }
   cout << endl;
 
+  // Compute the alignment
+  fltAlign->Update();
+  xMeshes[0]->SetPoints(fltAlign->GetMeanPoints());
+
   // Add all meshes to the first mesh
+  /*
   for(unsigned int j = 0; j < xMeshes[0]->GetNumberOfPoints(); j++)
     {
     double *xTarget = xMeshes[0]->GetPoint(j);
@@ -46,6 +67,7 @@ int main(int argc, char *argv[])
       xTarget[d] /= nMeshes;
       }
     }
+    */
 
   // Save the average
   vtkBYUWriter *writer = vtkBYUWriter::New();

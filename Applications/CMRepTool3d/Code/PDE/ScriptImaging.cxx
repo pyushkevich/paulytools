@@ -162,6 +162,8 @@ void FloatImage
   GaussianType::Pointer fltGaussian = GaussianType::New();
   fltGaussian->SetInput(fltMapper->GetOutput());
   fltGaussian->SetVariance(xSigma * xSigma);
+  fltGaussian->SetMaximumError(0.001);
+  fltGaussian->SetUseImageSpacing(true);
   fltGaussian->Update();
 
   // Optionally apply the error functor

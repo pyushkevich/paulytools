@@ -365,7 +365,7 @@ void MedialPDE::ConjugateGradientOptimization(
   // Construct the conjugate gradient optimizer
   ConjugateGradientMethod xMethod(*xProblem, Vector(nCoeff, xSolution.data_block()));
   xMethod.setStepSize(xStep);
-  xMethod.setAdaptableStepSize(true);
+  // xMethod.setAdaptableStepSize(true);
   xMethod.setBrentStepTolerance(2.0e-3);
 
   // Debugging info
@@ -580,20 +580,21 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
   for( ; !it.IsAtEnd(); ++it)
     {
     // Get the volume of this voxel
-    double xVoxVol = 0.5 * (it.Get() + 1.0);
+    if(it.Get() > 0.0)
+      {      
+      // Get the spatial position of the point
+      itk::ContinuousIndex<double, 3> iRaw(it.GetIndex());
+      itk::Point<double, 3> ptPosition;
+      xImage->TransformContinuousIndexToPhysicalPoint(iRaw, ptPosition);
+      SMLVec3d xPosition(ptPosition.GetDataPointer());
 
-    // Get the spatial position of the point
-    itk::ContinuousIndex<double, 3> iRaw(it.GetIndex());
-    itk::Point<double, 3> ptPosition;
-    xImage->TransformContinuousIndexToPhysicalPoint(iRaw, ptPosition);
-    SMLVec3d xPosition(ptPosition.GetDataPointer());
-
-    // Add to the mean and 'covariance'
-    xVolume += xVoxVol;
-    xMean += xVoxVol * xPosition;
-    xCov += xVoxVol * outer_product(xPosition, xPosition);
+      // Add to the mean and 'covariance'
+      xVolume += 1.0;
+      xMean += xPosition;
+      xCov += outer_product(xPosition, xPosition);
+      }
     }
-  
+
   // Compute the actual volume of the image 
   double xPhysicalVolume = xVolume * 
     xImage->GetSpacing()[0] * xImage->GetSpacing()[1] * xImage->GetSpacing()[2];

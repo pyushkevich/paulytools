@@ -63,10 +63,18 @@ public:
   // Compute the energy term 
   virtual double ComputeEnergy(SolutionData *data) = 0;
 
-  // Compute the gradient of the energy term given the medial atoms
-  virtual double ComputeGradient(SolutionData *S0, 
-  	SolutionData **SFwd, SolutionData **SBck,
-    double xEpsilon, vnl_vector<double> &xOutGradient);
+  // Initialize gradient computation and return the value of the solution
+  // at the current state
+  virtual double BeginGradientComputation(SolutionData *SCenter);
+  
+  // Compute the partial derivative (must be called in the middle of Begin and
+  // End of GradientComputation.
+  virtual double ComputePartialDerivative(
+    SolutionData *SCenter, SolutionData *SFwd, SolutionData *SBck,
+    double xEpsilon);
+
+  // Finish gradient computation, remove all temporary data
+  virtual void EndGradientComputation() {};
 
   // Print a verbose report
   virtual void PrintReport(ostream &sout) = 0;
@@ -82,10 +90,18 @@ public:
   // Compute the image match
   double ComputeEnergy(SolutionData *data);
 
-  // Compute the directional derivative of the image match function
-  double ComputeGradient(SolutionData *S0, 
-    SolutionData **SFwd, SolutionData **SBck,
-    double xEpsilon, vnl_vector<double> &xOutGradient);
+  // Initialize gradient computation and return the value of the solution
+  // at the current state
+  double BeginGradientComputation(SolutionData *SCenter);
+  
+  // Compute the partial derivative (must be called in the middle of Begin and
+  // End of GradientComputation.
+  double ComputePartialDerivative(
+    SolutionData *SCenter, SolutionData *SFwd, SolutionData *SBck,
+    double xEpsilon);
+
+  // Finish gradient computation, remove all temporary data
+  void EndGradientComputation();
 
   // Print a verbose report
   void PrintReport(ostream &sout);
@@ -95,6 +111,10 @@ private:
 
   // Terms used in reporting details
   double xImageMatch, xBoundaryArea, xFinalMatch;
+
+  // Temporaries for gradient computation
+  SMLVec3d *xGradI;
+  double *xImageVal, xMatch, xArea;
 };
 
 /**
@@ -113,12 +133,20 @@ public:
   
   /** Compute the volume overlap fraction between image and m-rep */
   double ComputeEnergy(SolutionData *data);
+/*
+  // Initialize gradient computation and return the value of the solution
+  // at the current state
+  double BeginGradientComputation(SolutionData *SCenter);
+  
+  // Compute the partial derivative (must be called in the middle of Begin and
+  // End of GradientComputation.
+  double ComputePartialDerivative(
+    SolutionData *SCenter, SolutionData *SFwd, SolutionData *SBck,
+    double xEpsilon);
 
-  /** Compute the Gradient of the image match function */
-  double ComputeGradient(SolutionData *S0, 
-    SolutionData **SFwd, SolutionData **SBck,
-    double xEpsilon, vnl_vector<double> &xOutGradient);
-
+  // Finish gradient computation, remove all temporary data
+  void EndGradientComputation();
+*/
   // Print a verbose report
   void PrintReport(ostream &sout);
   
@@ -126,6 +154,9 @@ private:
   size_t nCuts;
   FloatImage *xImage;
   double xImageVolume;
+
+  // Temporary for gradient computation
+  double *xImageVal;
 
   // Cached Terms for reporting match details
   double xIntersect, xObjectVolume, xOverlap;

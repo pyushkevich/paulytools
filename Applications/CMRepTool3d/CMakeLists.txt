@@ -192,7 +192,9 @@ IF(BUILD_PDE)
     example5.py
     example6.py
     common.py 
-    imageprep.py)
+    imageprep.py
+    segment.py
+    )
   
   FOREACH(FILE ${SCRIPT_FILES})  
  	CONFIGURE_FILE(

@@ -151,10 +151,10 @@ public:
 
   /** Set the optimization mode */
   void SetOptimizerToGradientDescent(double xStep)
-    { eOptimizer = GRADIENT; }
+    { eOptimizer = GRADIENT; xStepSize = xStep; }
   
   void SetOptimizerToConjugateGradientDescent(double xStep)
-    { eOptimizer = CONJGRAD; }
+    { eOptimizer = CONJGRAD; xStepSize = xStep; }
 
   void SetOptimizerToEvolutionaryMethod(double xStep)
     { eOptimizer = EVOLUTION; }

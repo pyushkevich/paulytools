@@ -4,12 +4,12 @@ from common import *
 
 # Create a medial PDE object
 mp = MedialPDE(4, 8, 40, 80)
-mp.LoadFromParameterFile(dirWork + "avg/average_mrepL_affine.mpde");
+mp.LoadFromParameterFile(dirWork + "mreps/st1006L.affine.mpde");
 mp.Solve()
 
 # Load the highly blurred image
 img = FloatImage();
-img.LoadFromPath(dirWork + "avg/average_hippo_blurred_low","mha");
+img.LoadFromFile(dirWork + "img/st1006L_med.mha");
 img.SetOutsideValue(-1.0);
 
 # Compute the affine transform
@@ -20,7 +20,7 @@ mp.EnableMeshDump("/tmp/meshdump/step2",0.001);
 mp.RunOptimization(img, 800);
 
 # Save the results
-mp.SaveToParameterFile(dirWork + "avg/average_mrepL_ctf01.mpde");
+mp.SaveToParameterFile(dirWork + "mreps/st1006L.ctf01.mpde");
 mp.SaveVTKMesh(
-    dirWork + "avg/average_mrepL_ctf01.med.vtk",
-    dirWork + "avg/average_mrepL_ctf01.bnd.vtk");
+    dirWork + "mreps/st1006L.ctf01.med.vtk",
+    dirWork + "mreps/st1006L.ctf01.bnd.vtk");
