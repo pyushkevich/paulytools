@@ -1,1 +1,4 @@
-SUBDIRS(AntiAlias)
+SUBDIRS(
+  AntiAlias
+  FillSTLMesh
+)
