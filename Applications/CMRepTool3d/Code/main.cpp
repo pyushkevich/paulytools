@@ -89,6 +89,9 @@ ScriptProcessor scriptProcessor;
 // Geodesic thingy
 GeodesicRenderer geodesicRenderer;
 
+// Whether we are in interactive mode or not
+bool flagInteractive = true;
+
 /******************************************************************************
     Small Functions
  ******************************************************************************/
@@ -2069,19 +2072,27 @@ void executeCommand(string command) {
   ostringstream oss;
   processCommand(command.c_str(),oss);
 
-  // Display in the command shell
-  if (commandShell->isVisible())
+  if(flagInteractive)
     {
-    commandShell->print(command.c_str(),command.length());
-    commandShell->print("\n",1);
-    commandShell->print(oss.str().c_str(),oss.str().length());
+    // Display in the command shell
+    if (commandShell->isVisible())
+      {
+      commandShell->print(command.c_str(),command.length());
+      commandShell->print("\n",1);
+      commandShell->print(oss.str().c_str(),oss.str().length());
+      }
+    else
+      {
+      // Show command to user
+      rndFadeStatus.clear();
+      rndFadeStatus.addLine(command.c_str());
+      rndFadeStatus.addLine(oss.str().c_str());
+      }
     }
   else
     {
-    // Show command to user
-    rndFadeStatus.clear();
-    rndFadeStatus.addLine(command.c_str());
-    rndFadeStatus.addLine(oss.str().c_str());
+    cout << command << endl;
+    cout << oss.str() << endl;
     }
 }
 
@@ -5344,7 +5355,8 @@ bool ScriptProcessor::handleIdle() {
     // Make sure there are more commands
     if (commands.size() == 0)
       {
-      GLDisplayDriver::removeListener(this,GLDisplayDriver::IDLE);
+      if(flagInteractive)
+        GLDisplayDriver::removeListener(this,GLDisplayDriver::IDLE);
       return true;
       }
 
@@ -5440,38 +5452,60 @@ void ScriptProcessor::loadScript(const char *fname) {
 
 // Processing commands from script files
 
+int usage()
+  {
+  const char *usage = 
+    "PROGRAM: cmreps3d \n"
+    "  usage: cmreps3d [options] \n"
+    "options: \n"
+    "  -s, --script FILE      Script file to execute upon starting the program\n"
+    "  -i, --init FILE        Location of the initialization file (curr. dir.)\n"
+    "  -n, --nogui            Run program in non-interactive mode\n"
+    "  -h, --help             Bring up this help message\n";
+
+    cout << usage;
+    return -1;
+  }
+
 int main(int argc,char *argv[]) {
 
   // Set memory debugging
   // _CrtSetDbgFlag(_CrtSetDbgFlag(_CRTDBG_REPORT_FLAG) | _CRTDBG_CHECK_ALWAYS_DF | _CRTDBG_LEAK_CHECK_DF);
-
-  // SetThreadPriority(GetCurrentThread(),THREAD_PRIORITY_TIME_CRITICAL);
-  // testOptimization();
-  // SetThreadPriority(GetCurrentThread(),THREAD_PRIORITY_BELOW_NORMAL);
   // _CrtDumpMemoryLeaks();
 
+  // Read the command line parameters
+  string sInitFile("mspline.ini"), sScriptFile;
 
-  // Load the different settings
+  // Read the command line parameters and see if there is a script to execute
+  for (int ar=1;ar<argc;ar++)
+    {
+    string arg = argv[ar];
+    if (arg == "--script" || arg == "-s")
+      { sScriptFile = argv[++ar]; }
+    else if(arg == "--init" || arg == "-i")
+      { sInitFile = argv[++ar]; }
+    else if(arg == "--nogui" || arg == "-n")
+      { flagInteractive = false; }
+    else 
+      { return usage(); }
+    }
+
+  // Load the initialization settings
   try
     {
-    settingsAll.readFromFile("mspline.ini");
+    settingsAll.readFromFile(sInitFile.c_str());
     }
   catch (RException exc)
     {
+    cerr << "Failed to read initialization settings from " << sInitFile << endl;
     }
   settings = &settingsAll.getSubFolder("user");
   settingsUI = &settingsAll.getSubFolder("ui");
   settings->setFlagAddIfNotFound(true);
 
-  // Initialize display system
-  GLDisplayDriver::init(argc,argv);
-
-  // Add command buttons
-  initModes();
-
-  // Add a global event listener at the back of the food chain
-  GLDisplayDriver::addListener(&globalEventHandler,GLDisplayDriver::SPECIAL | GLDisplayDriver::KEYS);
-  makeKeyBindings();
+  // Load the script file
+  if(sScriptFile != "")
+    scriptProcessor.loadScript(sScriptFile.c_str());
 
   // Build and display a spline
   spline = new MSpline(9,6);
@@ -5479,59 +5513,79 @@ int main(int argc,char *argv[]) {
   rndSpline = new BSplineRenderer(spline,splineData,RESLN);
   rndSpline->setSurfaceMode(rndSpline->SEETHRU);
 
-  GLDisplayDriver::addRenderer(new LightRenderer());
-  GLDisplayDriver::addRenderer(rndSpline);
-#ifndef COLOR_SET_1
-
-  GLDisplayDriver::addRenderer(new StarfieldRenderer());
-#endif
-  GLDisplayDriver::addRenderer(rndSpline,GLDisplayDriver::TRAN);
-  GLDisplayDriver::addRenderer(new FrameRateCountRenderer(),GLDisplayDriver::EYE);
-  //GLDisplayDriver::addRenderer(&sliceRenderer,GLDisplayDriver::EYE);
-  GLDisplayDriver::addRenderer(&sliceRenderer);
-  GLDisplayDriver::addRenderer(&levelSetRenderer);
-  GLDisplayDriver::addRenderer(&edgeNetRenderer);
-
-  GLDisplayDriver::addRenderer(&uvImage,GLDisplayDriver::EYE);
-
-  // Add a flow tester
-  flowTester = new FlowTester();
-  GLDisplayDriver::addRenderer(flowTester);
-
-
-  GLDisplayDriver::addRenderer(&rndFadeStatus,GLDisplayDriver::EYE);
-  rndFadeStatus.setAnchor(true,5,-24);    
-  rndFadeStatus.addLine("Welcome to MSpline.  Press F1 for help!");
-
-  // Create the command shell
-  fntCourier12->printf("test");
-  commandShell = new CommandShell();
-  GLDisplayDriver::addRenderer(commandShell,GLDisplayDriver::EYE);
-  commandShell->setVisible(false);
-
-  // Read the command line parameters and see if there is a script to execute
-  for (int ar=1;ar<argc;ar++)
+  // If in GUI mode, start all the interactive stuff
+  if( flagInteractive ) 
     {
-    string arg = argv[ar];
-    cout << arg << endl;
-    if (arg == "-script" || arg == "-s")
+    // Initialize display system
+    GLDisplayDriver::init(argc,argv);
+
+    // Add command buttons
+    initModes();
+
+    // Add a global event listener at the back of the food chain
+    GLDisplayDriver::addListener(&globalEventHandler,GLDisplayDriver::SPECIAL | GLDisplayDriver::KEYS);
+    makeKeyBindings();
+
+    GLDisplayDriver::addRenderer(new LightRenderer());
+    GLDisplayDriver::addRenderer(rndSpline);
+
+  #ifndef COLOR_SET_1
+    GLDisplayDriver::addRenderer(new StarfieldRenderer());
+  #endif
+
+    GLDisplayDriver::addRenderer(rndSpline,GLDisplayDriver::TRAN);
+    GLDisplayDriver::addRenderer(new FrameRateCountRenderer(),GLDisplayDriver::EYE);
+    //GLDisplayDriver::addRenderer(&sliceRenderer,GLDisplayDriver::EYE);
+    GLDisplayDriver::addRenderer(&sliceRenderer);
+    GLDisplayDriver::addRenderer(&levelSetRenderer);
+    GLDisplayDriver::addRenderer(&edgeNetRenderer);
+
+    GLDisplayDriver::addRenderer(&uvImage,GLDisplayDriver::EYE);
+
+    // Add a flow tester
+    flowTester = new FlowTester();
+    GLDisplayDriver::addRenderer(flowTester);
+    GLDisplayDriver::addRenderer(&rndFadeStatus,GLDisplayDriver::EYE);
+    rndFadeStatus.setAnchor(true,5,-24);    
+    rndFadeStatus.addLine("Welcome to MSpline.  Press F1 for help!");
+
+    // Create the command shell
+    fntCourier12->printf("test");
+    commandShell = new CommandShell();
+    GLDisplayDriver::addRenderer(commandShell,GLDisplayDriver::EYE);
+    commandShell->setVisible(false);
+
+    // Load the script parameter
+    if(sScriptFile != "")
       {
-      scriptProcessor.loadScript(argv[++ar]);
+      // Add the script processor as the idle function
       GLDisplayDriver::addListener(&scriptProcessor,GLDisplayDriver::IDLE);
 
       // Make the command shell visible
       commandShell->setVisible(true);
       GLDisplayDriver::addListener(commandShell,GLDisplayDriver::KEYS | GLDisplayDriver::BUTTON | GLDisplayDriver::SPECIAL); 
       }
+
+    // Start GLUT
+    glutMainLoop();
     }
+  else if(sScriptFile == "")
+    {
+    cerr << "Can not run in non-interactive mode without a script" << endl;
+    return -1;
+    }
+  else
+    {
+    // Add command buttons
+    initModes();
 
-  // Check memory
-  // _CrtCheckMemory();
-
-  // Start GLUT
-  glutMainLoop();
+    bool scriptDone = false;
+    while(!scriptDone) 
+      {
+      GLDisplayDriver::runBackgroundProcesses();
+      scriptDone = scriptProcessor.handleIdle();
+      }
+    }
 
   return 0;
 }
-
-

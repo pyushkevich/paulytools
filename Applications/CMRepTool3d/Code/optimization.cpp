@@ -509,6 +509,8 @@ float MRepRadiusConstraint::priorOverPatch(SplineDataCache *sdc,int iPatch,int j
   for (int t=0;t<pdc->idxTrimmed.size();t++)
     {
     int idx = pdc->idxTrimmed[t];
+    if(pdc->MP(idx).R() < 0) 
+      cout << "Rad: " << pdc->MP(idx).R() << endl;
     penalty += maskNegative(pdc->MP(idx).R());
     }
 

@@ -290,8 +290,12 @@ void SplineBinaryVolumeMatcher::alignSplineByMoments() {
   xMean = xMean / nn;
   xCov = (xCov - nn *  outer_product(xMean, xMean)) / (nn - 1.0f) ;
 
-  cout << "Mean asshole: " << xMean << endl;
-  cout << "Coward: " << xCov << endl;
+  cout << "Mean: " << xMean << endl;
+  cout << "Covariance: " << endl << xCov << endl;
+
+  // Make sure the cm-rep has been computed
+  cache->refreshMedialAllPatches(cache->getMaxLevel());
+  cache->refreshBoundaryAllPatches(cache->getMaxLevel());
 
   Mat yCov(0.0f);
   Vec yMean(0.0f);
@@ -330,8 +334,8 @@ void SplineBinaryVolumeMatcher::alignSplineByMoments() {
   yMean = yMean / mm;
   yCov = (yCov - mm *  outer_product(yMean, yMean)) / (mm - 1.0f) ;
 
-  cout << "Mean asshole: " << yMean << endl;
-  cout << "Coward: " << yCov << endl;
+  cout << "Mean: " << yMean << endl;
+  cout << "Covariance: " << endl << yCov << endl;
 
   // Now compute eigendecomposition of yCov
   vnl_vector<float> Dx(3), Dy(3);

@@ -279,6 +279,9 @@ public:
 
     // Enumeration of event listener types
     enum Events {BUTTON = 1, KEYS = 2, MOTION = 4, PASSIVE = 8, SPECIAL = 16, IDLE = 32};
+
+    // Run the background tasks
+    static void runBackgroundProcesses();
 };
 
 // Star field renderer

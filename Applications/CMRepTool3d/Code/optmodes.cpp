@@ -126,9 +126,6 @@ bool OptimizationMH::handleIdle() {
 	value = od->getBestValue();
 	optCost = od->getEvalCost();
 
-	// Post redisplay
-	glutPostRedisplay();
-
 	// Do not block other idlers
 	return false;
 }

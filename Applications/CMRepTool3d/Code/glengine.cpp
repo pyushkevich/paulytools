@@ -222,8 +222,8 @@ void GLDisplayDriver::handleSpecial(int key,int x,int y) {
     }
 }
 
-void GLDisplayDriver::handleIdle() {
-
+void GLDisplayDriver::runBackgroundProcesses() 
+{
   // If there are any idlers, call them
   list<GLEventListener*>::iterator it;
   for (it=listeners[IIDLE].begin();it!=listeners[IIDLE].end();it++)
@@ -232,7 +232,13 @@ void GLDisplayDriver::handleIdle() {
     if (lst->handleIdle())
       break;
     }
+}
 
+void GLDisplayDriver::handleIdle() 
+{
+  // Do backround processing
+  runBackgroundProcesses();
+  
   // Make sure we refresh the screen regularly (30 frames per second);
   if (clock() - tLastRefresh > 20)
     {

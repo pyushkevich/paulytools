@@ -78,9 +78,10 @@ SET(CMREPS_HEADERS
 
 # Create the executable
 ADD_EXECUTABLE(cmreps ${CMREPS_SOURCES} ${CMREPS_HEADERS})
+ADD_EXECUTABLE(testglut Code/testglut.cpp)
 
 # Add the libraries
-TARGET_LINK_LIBRARIES(cmreps
+LINK_LIBRARIES(cmreps
   ${PAULY_CORE_LIBS}
   ${GLUT_LIBRARY}
   ITKIO
