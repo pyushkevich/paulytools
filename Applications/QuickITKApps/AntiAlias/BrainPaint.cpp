@@ -59,26 +59,19 @@ typedef BSplineCurve<3> SplineType;
 typedef vnl_vector_fixed<double,3> Vec;
 typedef pauly::Vector OptVec;
 
-struct CurvePoint {
-  // A point painted manually on the grey matter
-  Vec xGrey;
-    
-  // A matching point generated on the white matter
-  Vec xWhite;
-};
+struct Ribbon 
+{
+  // A chain of points on the white and grey matter surfaces
+  vector<Vec> xWhite, xGrey;
 
-struct Curve {
-  // A vector of curve points
-  vector <CurvePoint> points;
-
-  // A b-spline representing the grey points
+  // Spline approximations of the grey and white curves
   SplineType splWhite, splGrey;
 
   // Interpolation grids for the splines (speedier)
   SplineType::EvaluationGrid gridWhite, gridGrey;
-};
+};  
 
-typedef struct Curve CurveType;
+typedef struct Ribbon CurveType;
 typedef Image<char,3> CharImageType;
 typedef Image<unsigned short,3> ShortImageType;
 typedef Image<float,3> FloatImageType;
@@ -335,6 +328,9 @@ public:
           x101 * uz * vy * ux + 
           x110 * uz * uy * vx + 
           x111 * uz * uy * ux;
+
+        // Take the absolute value of the function
+        xImageVal[j] = abs(xImageVal[j]);
         }
       }
 
@@ -426,6 +422,112 @@ private:
   double m_ImageMax[3];
 };
 
+void OptimizeRibbonShape(CurveType &curve, FloatImageType *imgDistance)
+{
+  
+  // Weight factor for the white-distance component of the penalty function
+  double factor = 400000;
+  
+  // Create the 'global' problem
+  unsigned int nControls = curve.splWhite.GetNumberOfControlPoints();
+  RibbonProblem pbTotal(curve,imgDistance,0,nControls,factor);
+
+  // Compute the objective values
+  RibbonProblem::Objectives obj = pbTotal.ComputeObjectives();
+  cout << "Ribbon: "
+    << "length " << curve.xGrey.size() 
+    << "\t area " << obj.xArea 
+    << "\t irreg " << obj.xWhiteIrregularity  
+    << "\t WMdist " << (obj.xWhiteDistance / obj.xWhiteLength) << endl;
+
+  // Remove this!
+  // return;
+
+  // Create a list of starting points. We are not allowed to optimize the 
+  // first and last points
+  vector<unsigned int> vStarts;
+  unsigned int nSpan = 10;
+  for(unsigned int iStart=1;iStart < curve.splWhite.GetNumberOfControlPoints() - nSpan;iStart++)
+    {
+    vStarts.push_back(iStart);
+    }
+
+  // Iteratevely optimize over ribbon segments
+  for(unsigned int iIteration = 0;iIteration < 200;iIteration++)
+    {
+    // State the iteration
+    cout << "   Running iteration " << iIteration << flush;
+
+    // Perform a random permutation of the starting points
+    random_shuffle(vStarts.begin(),vStarts.end());
+
+    // Peform optimizations
+    for(unsigned int iStep=0;iStep<vStarts.size();iStep++)
+      {
+      // Create a Ribbon problem
+      RibbonProblem pbChunk(curve,imgDistance,vStarts[iStep],nSpan,factor);
+
+      // Create a corresponding solution space
+      SolutionSpace *ss;
+      pbChunk.InitializeSolutionSpace(&ss);
+
+      // Initialize the problem
+      NumericalMethod *method = NULL;
+      NumericalFunction nf(pbChunk);
+
+      if(iIteration < 000)
+        {
+        // Use conjugate descent
+        ConjugateGradientMethod *cgm = new ConjugateGradientMethod(nf,ss->getMean());
+        method = cgm;
+        }
+      else
+        {
+        // Create an evolutionary strategy
+        EvolutionaryStrategy *es = 
+          new EvolutionaryStrategy(pbChunk,*ss,2,4,SELECTION_MuPlusLambda);
+        es->setNth(0,ss->getMean());
+
+        // Set sigma evolution parameters
+        OptVec ds(ss->getMean().size());
+        ds.setAll(0.6);
+        es->setDeltaSigma(ds);
+
+        // Compute upper and lower bounds
+        OptVec upper,lower;
+        pbChunk.ComputeVectorBounds(upper,lower);
+        es->setXBounds(lower,upper);
+        method = es;
+        }
+
+      // Run the optimization 
+      while(pbChunk.getEvaluationCost() < 1000 && !method->isFinished())
+        //while(!method->isFinished())
+        method->performIteration();
+
+      // State the result
+      //cout << "      Chunk " << vStarts[iStep] << "\t Best Value : " 
+      //  << es.getBestEverValue() << endl;
+
+      // Update the curve with the curve from the solution
+      curve = pbChunk.UpdateRibbon(method->getBestEverX());
+
+      delete method;
+      }
+
+    // Create an overall problem
+    RibbonProblem pbFinal(curve,imgDistance,0,nControls,factor);
+
+    // Compute the objective values
+    RibbonProblem::Objectives obj = pbFinal.ComputeObjectives();
+    cout << "\t area: " << obj.xArea 
+      << "\t WM distance: " << (obj.xWhiteDistance / obj.xWhiteLength) 
+      << "\t irreg: " << obj.xWhiteIrregularity 
+      << "\t obj : " << pbFinal.evaluate(pbFinal.GetVectorRepresentation()) << endl;
+    }
+}
+
+
 void drawPolyData(vtkPolyData *poly)
 {
   vtkPolyDataMapper *mapper = vtkPolyDataMapper::New();
@@ -484,6 +586,7 @@ public:
   typedef itk::ProcessObject Superclass;
   typedef itk::SmartPointer<Self> Pointer;
   typedef itk::SmartPointer<const Self> ConstPointer;
+  typedef itk::Image<float,3> FloatImageType;
 
   /** Method for creation through the object factory. */
   itkNewMacro(Self);
@@ -511,6 +614,12 @@ public:
   void Update()
     {
     this->GenerateData();
+    }
+
+  /** Get the 'distance image' based on anti-aliasing the binary image */
+  FloatImageType *GetDistanceImage()
+    {
+    return fltAlias->GetOutput();
     }
   
 
@@ -606,7 +715,6 @@ protected:
     }
 
 private:
-  typedef itk::Image<float,3> FloatImageType;
   typedef itk::ImageRegionIterator<TImage> IteratorType;
   typedef itk::ImageRegionConstIterator<TImage> ConstIteratorType;
   typedef itk::AntiAliasBinaryImageFilter<TImage,FloatImageType> AAFilter;
@@ -774,10 +882,10 @@ void ProjectGreyCurvesOnWhiteMesh(vtkPolyData *mesh, vector<CurveType> &curves)
     vector<unsigned int> xSourcePointList;
     
     // Iterate over points in the grey matter curve
-    for(unsigned int iPoint = 0; iPoint < curve.points.size(); iPoint++)
+    for(unsigned int iPoint = 0; iPoint < curve.xGrey.size(); iPoint++)
       {
       // Find the point closest to the grey matter point
-      vtkIdType iClosest = dijkstra.FindClosestVertexInSpace(curve.points[iPoint].xGrey);
+      vtkIdType iClosest = dijkstra.FindClosestVertexInSpace(curve.xGrey[iPoint]);
 
       // Only compute distances for points 1..n that are non-adjacent
       if(iPoint != 0 && iClosest != iLastClosest)
@@ -815,16 +923,16 @@ void ProjectGreyCurvesOnWhiteMesh(vtkPolyData *mesh, vector<CurveType> &curves)
     for(unsigned int j=0;j<xVertexList.size();j++)
       {
       // Get a pair of points corresponding to the index j
-      CurvePoint p;
-      p.xWhite.set(dijkstra.GetEdgeMesh()->GetPoint(xVertexList[j]));
-      p.xGrey = curve.points[xSourcePointList[j]].xGrey;
+      Vec xWhite(dijkstra.GetEdgeMesh()->GetPoint(xVertexList[j]));
+      Vec xGrey(curve.xGrey[xSourcePointList[j]]);
 
       // Add the points to the curve
-      cNew.points.push_back(p);
+      cNew.xWhite.push_back(xWhite);
+      cNew.xGrey.push_back(xGrey);
 
       // Add the points to the spline construction lists
-      xFitGrey[j] = p.xGrey;
-      xFitWhite[j] = p.xWhite;
+      xFitGrey[j] = xGrey;
+      xFitWhite[j] = xWhite;
       }
 
     // Fit splines to the newly generated point lists
@@ -864,16 +972,16 @@ void drawRibbonsAndBrain(
     vtkPoints *points = vtkPoints::New();
 
     // Create the array of points
-    for(unsigned int j=0;j<curve.points.size();j++)
+    for(unsigned int j=0;j<curve.xGrey.size();j++)
       {
-      const Vec &xGrey = curve.points[j].xGrey;
-      const Vec &xWhite = curve.points[j].xWhite;
+      const Vec &xGrey = curve.xGrey[j];
+      const Vec &xWhite = curve.xWhite[j];
       points->InsertNextPoint(xGrey.data_block());
       points->InsertNextPoint(xWhite.data_block());
       }
 
     // Create an array of cells
-    for(unsigned int k=0;k<curve.points.size()-1;k++)
+    for(unsigned int k=0;k<curve.xGrey.size()-1;k++)
       {
       vtkIdType id1[3] = {k,k+1,k+3};
       vtkIdType id2[3] = {k+1,k+3,k+2};
@@ -958,6 +1066,8 @@ void drawRibbonsAndBrain(
   ren->Delete();
 }
 
+#include "CommandLineArgumentParser.h"
+
 int main(int argc, char *argv[])
 {
   // This program projects curves painted on the surface of the 
@@ -971,44 +1081,73 @@ int main(int argc, char *argv[])
   // The output from this program is:
   //    Grey Matter Image with curves marked with a zero intensity
   //    and projecting through the grey matter
+  
+  // Parse the command line arguments
+  CommandLineArgumentParser cmdParser;
+  cmdParser.AddOption("prj",0);
+  cmdParser.AddOption("opt",0);
+  cmdParser.AddOption("white",1);
+  cmdParser.AddOption("grey",1);
+  cmdParser.AddOption("curves",1);
+  cmdParser.AddOption("bweb",1);
+
+  CommandLineArgumentParseResult cmdResult;
+  cmdParser.TryParseCommandLine(argc,argv,cmdResult,true);
+  
+  // Interpret the arguments
+  bool flagProjectCurves = cmdResult.IsOptionPresent("prj");
+  bool flagOptimizeCurves = cmdResult.IsOptionPresent("opt");
+
+  // Get the required filenames
+  const char *sFileGrey = cmdResult.GetOptionParameter("grey",0);
+  const char *sFileWhite = cmdResult.GetOptionParameter("white",0);
+  const char *sFileCurves = cmdResult.GetOptionParameter("curves",0);
+  const char *sFileBrain = cmdResult.GetOptionParameter("bweb",0);
+
+  // If the files are missing print usage
+  if(!sFileCurves || !sFileWhite || 
+    !sFileGrey || !sFileBrain || !(flagOptimizeCurves || flagProjectCurves))
+    {
+    cerr << "Incorrect program usage!" << endl;
+    cerr << "read source code for documentation... sorry!" << endl;
+    return -1;
+    }
 
   // Images that we will be using
   CharImageType::Pointer imgWhite = NULL;
   ShortImageType::Pointer imgGrey = NULL;
+  ShortImageType::Pointer imgBrain = NULL;
 
-  // Check parameters
-  if(argc != 4)
-    {
-    cout << "Usage: bpaint greyimg whiteimg curvefile" << endl;
-    return -1;
-    }
-
+  // Load in the images
   try 
     {
-    // Read in the grey matter image
-    ShortReaderType::Pointer readerGrey = ShortReaderType::New();
-    readerGrey->SetFileName(argv[1]);
-    readerGrey->Update();
-    imgGrey = readerGrey->GetOutput();
-
-    // Read in the white matter image
-    CharReaderType::Pointer readerWhite = CharReaderType::New();
-    readerWhite->SetFileName(argv[2]);
-    readerWhite->Update();
-    imgWhite = readerWhite->GetOutput();
+    cout << "Reading white matter image" << endl;
+    ReadImage(imgWhite,sFileWhite);
+    
+    cout << "Reading grey matter image" << endl;
+    ReadImage(imgGrey,sFileGrey);
+    
+    cout << "Reading whole brain image" << endl;
+    ReadImage(imgBrain,sFileBrain);
     }
   catch(...)
     {
     cout << "Image read error" << endl;
     return -1;
     }
- 
+  
+  // Compute the white matter mesh and the white matter distance image
+  typedef BinaryImageToMeshFilter<CharImageType> WhiteMeshFilter;
+  WhiteMeshFilter::Pointer fltWhiteMesh = WhiteMeshFilter::New();
+  fltWhiteMesh->SetInput(imgWhite);
+  fltWhiteMesh->SetInvertInput(false);
+  fltWhiteMesh->Update();
 
   // Allocate an array for curves
   vector<CurveType> vCurves;
 
   // Read in the curves on the surface
-  FILE *fCurves = fopen(argv[3],"rt");
+  FILE *fCurves = fopen(sFileCurves,"rt");
   char buffer[1024];
   while(!feof(fCurves)) 
     {
@@ -1028,32 +1167,53 @@ int main(int argc, char *argv[])
       }
     else if (line.substr(0,6) == "      ")
       {
-      CurvePoint p;
+      Vec xGrey;
       istringstream iss(buffer);
-      iss >> p.xGrey[0];
-      iss >> p.xGrey[1];
-      iss >> p.xGrey[2];
+      iss >> xGrey[0];
+      iss >> xGrey[1];
+      iss >> xGrey[2];
 
-      if(p.xGrey != xLast)
-        vCurves.back().points.push_back(p);
+      if(xGrey != xLast)
+        {
+        vCurves.back().xGrey.push_back(xGrey);
+        vCurves.back().xWhite.push_back(Vec(0.0));
+        }
       }
     }
 
-  unsigned int iCurve, iPoint;
-  /*
-  for(iCurve=0;iCurve<vCurves.size();iCurve++)
-    {
-    CurveType &curve = vCurves[iCurve];
-    CurveType curveTrim;
-    for(iPoint=0;iPoint<curve.size()-1;iPoint+=3)
-      curveTrim.push_back(curve[iPoint]);
-    curveTrim.push_back(curve.back());
-    curve = curveTrim;
-    }
-  */
 
   // At this point we've loaded the input into memory. We now compute the 
   // vector distance transform of the white matter
+  unsigned int iCurve, iPoint;
+
+  // Interpolate the grey curves in order to make them more smooth
+  for(iCurve = 0;iCurve < vCurves.size();iCurve++)
+    {
+    CurveType &curve = vCurves[iCurve];
+
+    // Cast point list to an array
+    Vec *points = new Vec[curve.xGrey.size()];
+    for(iPoint = 0;iPoint<curve.xGrey.size();iPoint++)
+      points[iPoint] = curve.xGrey[iPoint];
+
+    // Create an interpolation
+    curve.splGrey.SetNumberOfControlPoints(20);
+    curve.splGrey.FitToPoints(curve.xGrey.size(),points);
+
+    // Create a uniform grid
+    unsigned int nPoints = 100;
+    curve.splGrey.CreateUniformEvaluationGrid(nPoints,curve.gridGrey);
+
+    // Interpolate the grid, saving the points
+    curve.xGrey.resize(nPoints); curve.xWhite.resize(nPoints,Vec(0.0));
+    for(iPoint=0;iPoint<nPoints;iPoint++)
+      {
+      curve.xGrey[iPoint] = curve.splGrey.EvaluateGridPoint(curve.gridGrey,iPoint,0);
+      }
+    
+    // Clean up
+    delete points;
+    }
 
   // Create a copy of the white image
   char *dataWhite = new char[imgWhite->GetBufferedRegion().GetNumberOfPixels()];
@@ -1069,33 +1229,7 @@ int main(int argc, char *argv[])
     6,xDistance,xDistance+1,xDistance+2);
 
   delete dataWhite;
-
-  // Create a signed squared distance image
-  FloatImageType::Pointer imgDistance = FloatImageType::New();
-  imgDistance->SetRegions(imgWhite->GetBufferedRegion());
-  imgDistance->Allocate();
-  float *xDistanceBuffer = imgDistance->GetBufferPointer();
-  for(unsigned int iPixel=0; iPixel < 
-      imgDistance->GetBufferedRegion().GetNumberOfPixels(); iPixel++)
-    {
-    xDistanceBuffer[iPixel] = 
-      xDistance[0][iPixel] * xDistance[0][iPixel] + 
-      xDistance[1][iPixel] * xDistance[1][iPixel] + 
-      xDistance[2][iPixel] * xDistance[2][iPixel];
-    }
-
-  // Blur the distance image
-  /*
-  cout << "Blurring the distance transform..." << endl;
-  typedef itk::DiscreteGaussianImageFilter<FloatImageType,FloatImageType> BlurFilter;
-  BlurFilter::Pointer fltBlur = BlurFilter::New();
-  double var[] = {1.0,1.0,1.0};
-  fltBlur->SetInput(imgDistance);
-  fltBlur->SetVariance(var);
-  fltBlur->Update();
-  imgDistance = fltBlur->GetOutput();
-  */
-
+  
   // Create the distance transform images
   typedef Image<short,3> OffsetImageType;
   OffsetImageType::Pointer imgOffset[3];
@@ -1109,23 +1243,22 @@ int main(int argc, char *argv[])
     free(xDistance[i]);
     }
   
-  // Save the distance transform
-  WriteImage(imgDistance,"white_distance.hdr");
-
   // Find the nearest white matter pixel for each of the curves
   for(iCurve=0;iCurve<vCurves.size();iCurve++)
     {
     CurveType &curve = vCurves[iCurve];
-    for(iPoint=0;iPoint<curve.points.size();iPoint++)
+    for(iPoint=0;iPoint<curve.xGrey.size();iPoint++)
       {
-      CurvePoint &p = curve.points[iPoint];
+      Vec xGrey = curve.xGrey[iPoint];
+      Vec xWhite = curve.xWhite[iPoint];
+      
       Index<3> idx = {{
-        (unsigned int)p.xGrey[0],
-        (unsigned int)p.xGrey[1],
-        (unsigned int)p.xGrey[2]}};
+        (unsigned int)xGrey[0],
+        (unsigned int)xGrey[1],
+        (unsigned int)xGrey[2]}};
 
       for(unsigned int j=0;j<3;j++)
-        p.xWhite[j] = p.xGrey[j] + imgOffset[j]->GetPixel(idx);
+        curve.xWhite[iPoint][j] = xGrey[j] + imgOffset[j]->GetPixel(idx);
       }
     }
 
@@ -1133,7 +1266,7 @@ int main(int argc, char *argv[])
   for(iCurve=0;iCurve<vCurves.size();iCurve++)
     {
     CurveType &curve = vCurves[iCurve];
-    unsigned int nPoints = curve.points.size();
+    unsigned int nPoints = curve.xGrey.size();
     
     // Construct a matrix Q
     SplineType::Point *Q1 = new SplineType::Point[nPoints];
@@ -1142,8 +1275,8 @@ int main(int argc, char *argv[])
     // Fill the matrix    
     for(iPoint=0;iPoint<nPoints;iPoint++)
       {
-      Q1[iPoint] = curve.points[iPoint].xGrey;
-      Q2[iPoint] = curve.points[iPoint].xWhite;      
+      Q1[iPoint] = curve.xGrey[iPoint];
+      Q2[iPoint] = curve.xWhite[iPoint];      
       }
 
     // Create the b-splines
@@ -1156,147 +1289,28 @@ int main(int argc, char *argv[])
     curve.splWhite.CreateUniformEvaluationGrid(1000, curve.gridWhite);
     }
   
-  // This is the part of the code where we "project" the grey edge of the ribbon 
-  // onto the white matter
-  typedef BinaryImageToMeshFilter<CharImageType> WhiteMeshFilter;
-  WhiteMeshFilter::Pointer fltWhiteMesh = WhiteMeshFilter::New();
-  fltWhiteMesh->SetInput(imgWhite);
-  fltWhiteMesh->SetInvertInput(false);
-  fltWhiteMesh->Update();
+  // Save the distance transform (based on anti-aliasing) as an image
+  FloatImageType::Pointer imgDistance = fltWhiteMesh->GetDistanceImage();
+  WriteImage(imgDistance,"white_distance.hdr");
 
   // Compute ribbons that trace the white matter surface
   ProjectGreyCurvesOnWhiteMesh(fltWhiteMesh->GetMesh(), vCurves);
 
-  /*  
-  // This is the most interesting part of the program. We attempt to 
-  // improve the ribbons by making their free side pass entirely through
-  // the white matter
-  for(iCurve=0; iCurve < vCurves.size() ;iCurve++)
+  // Now that we've computed the ribbons deterministically, we can try to improve their
+  // quality using optimization. The goal is to keep the bottom of the ribbon on the 
+  // white matter surface, while minimizing the area and irregularity of the ribbon
+  if(flagOptimizeCurves)
     {
-    // Create a curve
-    CurveType &curve = vCurves[iCurve];
-
-    // Create an overall problem
-    double factor = 400000;
-    unsigned int nControls = curve.splWhite.GetNumberOfControlPoints();
-    RibbonProblem pbTotal(curve,imgDistance,0,nControls,factor);
-
-    // Compute the objective values
-    RibbonProblem::Objectives obj = pbTotal.ComputeObjectives();
-    cout << "Ribbon " << iCurve << " of length " << curve.points.size() << " has area " << obj.xArea 
-       << " irreg " << obj.xWhiteIrregularity  
-      << " and WM distance " << (obj.xWhiteDistance / obj.xWhiteLength) << endl;
-
-    continue;
-
-
-    // Create a list of starting points. We are not allowed to optimize the 
-    // first and last points
-    vector<unsigned int> vStarts;
-    unsigned int nSpan = 10;
-    for(unsigned int iStart=1;iStart < curve.splWhite.GetNumberOfControlPoints() - nSpan;iStart++)
+    // This procedure is repeated for each curve
+    for(iCurve=0; iCurve < vCurves.size() ;iCurve++) 
       {
-      vStarts.push_back(iStart);
-      }
-    
-    // Iteratevely optimize over ribbon segments
-    for(unsigned int iIteration = 0;iIteration < 200;iIteration++)
-      {
-      // drawRibbons(vCurves,iCurve);
-       
-      // State the iteration
-      cout << "   Running iteration " << iIteration << flush;
-            
-      // Perform a random permutation of the starting points
-      random_shuffle(vStarts.begin(),vStarts.end());
-
-      // Peform optimizations
-      for(unsigned int iStep=0;iStep<vStarts.size();iStep++)
-        {
-        // Create a Ribbon problem
-        RibbonProblem pbChunk(curve,imgDistance,vStarts[iStep],nSpan,factor);
-
-        // Create a corresponding solution space
-        SolutionSpace *ss;
-        pbChunk.InitializeSolutionSpace(&ss);
-        
-        // Initialize the problem
-        NumericalMethod *method = NULL;
-        NumericalFunction nf(pbChunk);
-
-        if(iIteration < 000)
-          {
-          // Use conjugate descent
-          ConjugateGradientMethod *cgm = new ConjugateGradientMethod(nf,ss->getMean());
-          method = cgm;
-          }
-        else
-          {
-          // Create an evolutionary strategy
-          EvolutionaryStrategy *es = 
-            new EvolutionaryStrategy(pbChunk,*ss,2,4,SELECTION_MuPlusLambda);
-          es->setNth(0,ss->getMean());
-
-          // Set sigma evolution parameters
-          OptVec ds(ss->getMean().size());
-          ds.setAll(0.6);
-          es->setDeltaSigma(ds);
-
-          // Compute upper and lower bounds
-          OptVec upper,lower;
-          pbChunk.ComputeVectorBounds(upper,lower);
-          es->setXBounds(lower,upper);
-          method = es;
-          }
-        
-        // Run the optimization 
-        while(pbChunk.getEvaluationCost() < 1000 && !method->isFinished())
-        //while(!method->isFinished())
-          method->performIteration();
-      
-        // State the result
-        //cout << "      Chunk " << vStarts[iStep] << "\t Best Value : " 
-        //  << es.getBestEverValue() << endl;
-
-        // Update the curve with the curve from the solution
-        curve = pbChunk.UpdateRibbon(method->getBestEverX());
-
-        delete method;
-        }
-
-      // Create an overall problem
-      RibbonProblem pbFinal(curve,imgDistance,0,nControls,factor);
-
-      // Compute the objective values
-      RibbonProblem::Objectives obj = pbFinal.ComputeObjectives();
-      cout << "\t area: " << obj.xArea 
-        << "\t WM distance: " << (obj.xWhiteDistance / obj.xWhiteLength) 
-        << "\t irreg: " << obj.xWhiteIrregularity 
-        << "\t obj : " << pbFinal.evaluate(pbFinal.GetVectorRepresentation()) << endl;
-      }
-
-      // drawRibbons(vCurves,iCurve);
-
-    }
-*/
-  
-  // Verify that the points are located inside of the white matter
-  cout << "Listing White Point intensities " << endl;
-  for(iCurve = 0;iCurve < vCurves.size(); iCurve++) 
-    {
-    vector<CurvePoint> &pp = vCurves[iCurve].points;
-    for(iPoint = 0;iPoint < pp.size();iPoint++)
-      {
-      CharImageType::IndexType index;
-      index[0] = (unsigned int) pp[iPoint].xWhite[0];
-      index[1] = (unsigned int) pp[iPoint].xWhite[1];
-      index[2] = (unsigned int) pp[iPoint].xWhite[2];
-      cout << "   " << (int) imgWhite->GetPixel(index) << endl;
+      cout << "Optimizing ribbon #" << iCurve << endl;
+      OptimizeRibbonShape(vCurves[iCurve], imgDistance);
       }
     }
 
   // Draw the results in VTK
-  drawRibbonsAndBrain(vCurves,fltWhiteMesh->GetMesh(),imgGrey);
+  // drawRibbonsAndBrain(vCurves,fltWhiteMesh->GetMesh(),imgGrey);
     
   // At this point we have hopefully optimized the ribbons, and we proceed to
   // embed them into the grey matter image to form segmentation boundaries
@@ -1309,7 +1323,7 @@ int main(int argc, char *argv[])
     {
     unsigned int nPoints = 
       (flagDrawSplineRibbons) ?  vCurves[iCurve].gridWhite.size()
-      : vCurves[iCurve].points.size();
+      : vCurves[iCurve].xGrey.size();
 
     nTriangles += nPoints * 2 - 2;
     nTotalPoints += nPoints;
@@ -1333,7 +1347,7 @@ int main(int argc, char *argv[])
       }
     else
       {
-      nPoints = curve.points.size();
+      nPoints = curve.xGrey.size();
       }
 
     for(iPoint=1;iPoint<nPoints;iPoint++)
@@ -1350,10 +1364,10 @@ int main(int argc, char *argv[])
         }
       else
         {
-        g1 = &curve.points[iPoint-1].xGrey;
-        g2 = &curve.points[iPoint].xGrey;
-        w1 = &curve.points[iPoint-1].xWhite;
-        w2 = &curve.points[iPoint].xWhite;
+        g1 = &curve.xGrey[iPoint-1];
+        g2 = &curve.xGrey[iPoint];
+        w1 = &curve.xWhite[iPoint-1];
+        w2 = &curve.xWhite[iPoint];
         }
 
       xTriangles[iTriangle++] = g1->data_block();
@@ -1390,6 +1404,7 @@ int main(int argc, char *argv[])
   RibbonIterator itRibbon(imgRibbon,imgRibbon->GetBufferedRegion());
   GreyIterator itGrey(imgGrey,imgGrey->GetBufferedRegion());
   WhiteIterator itWhite(imgWhite,imgWhite->GetBufferedRegion());
+  GreyIterator itBrain(imgBrain,imgBrain->GetBufferedRegion());
   while(!itGrey.IsAtEnd())
     {
     
@@ -1400,6 +1415,8 @@ int main(int argc, char *argv[])
       
       if(itWhite.Get() != 0)
         itWhite.Set(0x40);
+
+      itBrain.Set(0x7fff);
       }
 
     ++itGrey;++itRibbon;++itWhite;
@@ -1410,4 +1427,7 @@ int main(int argc, char *argv[])
 
   // Save the white scale image
   WriteImage(imgWhite,"white_with_ribbon.hdr");
+
+  // Save the white scale image
+  WriteImage(imgBrain,"brain_with_ribbon.hdr");
 }
