@@ -19,5 +19,4 @@ LINK_LIBRARIES(ITKCommon ITKBasicFilters ITKIO ${PAULY_CORE_LIBS}
 
 IF(USE_BOOST)
   ADD_EXECUTABLE(bpaint BrainPaint.cpp)
-  INCLUDE_DIRECTORIES("/usr/local/include/boost-1_31")
 ENDIF(USE_BOOST)

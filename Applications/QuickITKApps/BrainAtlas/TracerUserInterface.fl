@@ -1,0 +1,56 @@
+# data file for the Fltk User Interface Designer (fluid)
+version 1.0104 
+header_name {.h} 
+code_name {.cxx}
+class TracerUserInterface {open : {public TracerUserInterfaceBase}
+} {
+  Function {MakeWindow()} {open
+  } {
+    Fl_Window m_WinMain {
+      label {GeeLab Brain Tracer} open
+      xywh {178 282 925 665} type Double
+      code0 {\#include "TracerUserInterfaceBase.h"}
+      code1 {\#include "TracerMainWindow.h"} visible
+    } {
+      Fl_Group {} {open
+        xywh {5 30 645 625} box PLASTIC_DOWN_FRAME
+      } {
+        Fl_Box m_WinTrace {
+          label {Curve Drawing Area} selected
+          xywh {10 35 635 615} box FLAT_BOX color 0 labelcolor 7
+          class TracerMainWindow
+        }
+      }
+      Fl_Group {} {open
+        xywh {655 30 265 255} box PLASTIC_DOWN_FRAME
+      } {
+        Fl_Box {} {
+          label {Conformal Map Display}
+          xywh {660 35 255 245} box FLAT_BOX color 0 labelcolor 7
+        }
+      }
+      Fl_Menu_Bar {} {open
+        xywh {0 0 930 25}
+      } {
+        submenu {} {
+          label File open
+          xywh {0 0 100 20}
+        } {
+          menuitem {} {
+            label {Load Mesh...}
+            callback {OnMenuLoadMesh()}
+            xywh {0 0 100 20}
+          }
+          menuitem {} {
+            label Quit
+            callback {OnMenuQuit()}
+            xywh {5 5 100 20}
+          }
+        }
+      }
+      Fl_Group {} {open
+        xywh {655 290 265 365} box PLASTIC_UP_BOX
+      } {}
+    }
+  }
+} 
