@@ -217,9 +217,6 @@ BSplineCurve<VDimension,TReal,VOrder,VJetOrder>
   for (unsigned int i=1;i<n;i++)
     SetControlPoint(i, R1.get_row(i-1));
   SetControlPoint(n, points[m]);
-
-  // Done!
-  std::cout << "fit " << std::endl;
 }
 
 template <unsigned int VDimension, class TReal, unsigned int VOrder, unsigned int VJetOrder>

@@ -106,7 +106,7 @@ public:
    * Create a new B-Spline Curve. By default this generates a minimal
    * possible curve of one dimension 
    */
-  BSplineCurve() : m_KnotList(NULL)
+  BSplineCurve() : m_KnotList(VOrder)
     {
     SetNumberOfControlPoints(VOrder + 1);
     }

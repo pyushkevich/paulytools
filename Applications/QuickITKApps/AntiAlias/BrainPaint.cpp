@@ -71,7 +71,7 @@ typedef ImageFileReader<ShortImageType> ShortReaderType;
 template <class TImageType> 
 void ReadImage(SmartPointer<TImageType> &target, const char *file)
 {
-  ImageFileReader<TImageType>::Pointer reader = 
+  typename ImageFileReader<TImageType>::Pointer reader = 
     ImageFileReader<TImageType>::New();
   reader->SetFileName(file);
   reader->Update();
@@ -81,7 +81,7 @@ void ReadImage(SmartPointer<TImageType> &target, const char *file)
 template <class TImageType> 
 void WriteImage(SmartPointer<TImageType> image, const char *file)
 {
-  ImageFileWriter<TImageType>::Pointer writer = 
+  typename ImageFileWriter<TImageType>::Pointer writer = 
     ImageFileWriter<TImageType>::New();
   writer->SetFileName(file);
   writer->SetInput(image);
@@ -379,7 +379,7 @@ public:
 
     // Generate a standard deviation vector
     OptVec sd(mean.size());
-    sd.setAll(0.1);
+    sd.setAll(0.001);
    
     // Return a Gaussian solution space
     *space = new GaussianSS(mean,sd);
