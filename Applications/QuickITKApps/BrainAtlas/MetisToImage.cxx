@@ -271,6 +271,7 @@ void VerifyGraph(int n, T *ai, T *a, S *wv, S *we)
 }
 
 #include <vnl/vnl_cost_function.h>
+#include <vnl/algo/vnl_powell.h>
 
 class MetisPartitionProblem : public vnl_cost_function
 {
@@ -461,11 +462,18 @@ int main(int argc, char *argv[])
   // Create a METIS problem based on the graph and weights
   MetisPartitionProblem mp(fltGraph,xEdgeWeight,nParts);
 
+  vnl_powell optPowell(&mp);
+  optPowell.set_max_function_evals(10);
+  optPowell.set_verbose(true);
+  optPowell.set_trace(true);
+  optPowell.minimize(xWeights);
+
   // Evaluate the problem
-  cout << "   edge cut value is " << mp.f(xWeights) << endl;
+  // cout << "   edge cut value is " << mp.f(xWeights) << endl;
   idxtype *xPartition = mp.GetLastPartition();
 
   // Verify the edge cut ourselves
+  /*
   iEdge = 0;
   int cut = 0;
   for(iVertex = 0;iVertex < nVertices;iVertex++)
@@ -481,8 +489,8 @@ int main(int argc, char *argv[])
         cut += xEdgeWeight[fltGraph->GetAdjacencyIndex()[iVertex] + iNbr];
       }
   	}
-
-  cout << "verified cut is " << (cut/2) << endl;
+    cout << "verified cut is " << (cut/2) << endl;
+  */
 
   // Create output image 
   ImageType::Pointer imgOut = ImageType::New();
