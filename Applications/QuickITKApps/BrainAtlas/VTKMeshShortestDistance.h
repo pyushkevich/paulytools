@@ -1,6 +1,8 @@
 #ifndef __VTKMeshShortestDistance_h_
 #define __VTKMeshShortestDistance_h_
 
+#include <vnl/vnl_vector_fixed.h>
+
 #include <vtkCellLocator.h>
 #include <vtkPolyData.h>
 #include <vtkPointData.h>
@@ -10,16 +12,11 @@
 #include <vtkCleanPolyData.h>
 #include <vtkLoopSubdivisionFilter.h>
 
-#include <vnl/vnl_vector_fixed.h>
-
 #include <vector>
 #include <utility>
-#include <boost/config.hpp>
-#include <boost/graph/graph_traits.hpp>
-#include <boost/graph/adjacency_list.hpp>
-#include <boost/graph/dijkstra_shortest_paths.hpp>
 
-using namespace boost;
+#include "ShortestPath.h"
+
 using namespace std;
 
 /** 
@@ -123,20 +120,27 @@ public:
   void ComputeDistances(vtkIdType iStartNode);
 
   /** Get the distance between start node and given node */
-  double GetVertexDistance(vtkIdType iNode)
-    { return m_Distance[iNode] / EDGE_WEIGHT_FACTOR; }
+  float GetVertexDistance(vtkIdType iNode) const 
+    { return m_ShortestPath->GetDistanceArray()[iNode]; }
 
   /** Use this to get the path between start node and given node */
-  vtkIdType GetVertexPredecessor(vtkIdType iNode)
-    { return m_Predecessor[iNode]; }
+  vtkIdType GetVertexPredecessor(vtkIdType iNode) const 
+    { return m_ShortestPath->GetPredecessorArray()[iNode]; }
 
+  /** Check if the given node is connected to the source node */
+  bool IsVertexConnected(vtkIdType iNode) const
+    { 
+    return (m_ShortestPath->GetPredecessorArray()[iNode] 
+      != DijkstraAlgorithm::NO_PATH);
+    }
+    
   /** This is a helper method: find vertex whose Euclidean distance to a
     given point is minimal */
   vtkIdType FindClosestVertexInSpace(Vec vec)
     { return fltLocator->FindClosestPoint(vec.data_block()); }
 
   /** Get the edge mesh to which the indices map */
-  vtkPolyData *GetInputMesh() 
+  vtkPolyData *GetInputMesh() const 
     { return m_SourceMesh; }
 
   /** Get the weight associated with an edge */
@@ -146,40 +150,42 @@ public:
   /** Given a ray, find a point closest to that ray */
   bool PickPoint(Vec xStart, Vec xEnd, vtkIdType &point);
 
-  /** Get the number of edges in the graph */
-  unsigned int GetNumberOfEdges() const
-    { return m_Edges.size(); }
+  /** Get the number of vertices in the graph */
+  unsigned int GetNumberOfVertices() const 
+    { return m_NumberOfVertices; }
+
+  /** Get the number of edges in the graph. This returns the number of
+   * bidirectional edges, which is twice the number of directional edges.
+   * This way it is possible to have different weights for different 
+   * directions through the edge */
+  unsigned int GetNumberOfDirectedEdges() const
+    { return m_NumberOfEdges; }
+
+  /** Get number of vertices adjacent to a given vertex */
+  unsigned int GetVertexNumberOfEdges(vtkIdType iVertex) const
+    { return m_AdjacencyIndex[iVertex+1] - m_AdjacencyIndex[iVertex]; }
 
   /** Get the given edge */
-  vtkIdType GetEdgeStart(unsigned int iEdge) const
-    { return m_Edges[iEdge].first; }
-
-  /** Get the given edge */
-  vtkIdType GetEdgeEnd(unsigned int iEdge) const
-    { return m_Edges[iEdge].second; }
+  vtkIdType GetVertexEdge(vtkIdType iVertex, unsigned int iEdge) const
+    { return m_Adjacency[m_AdjacencyIndex[iVertex] + iEdge]; }
 
 private:
 
-  // Constant mapping Euclidean (and other) mesh distances to integer
-  // values that are used for Dijkstra's algorithm
-  static const double EDGE_WEIGHT_FACTOR;
+  // Clean up graph structures
+  void DeleteGraphData();
 
-  // Graph-related typedefs (boost)
-  typedef property<edge_weight_t, unsigned int> WeightType;
-  typedef adjacency_list<vecS, vecS, bidirectionalS, no_property, WeightType > GraphType;
-  typedef std::pair<vtkIdType,vtkIdType> EdgeType;
-  typedef graph_traits<GraphType>::vertex_descriptor VertexDescriptor;
+  // Adjacency table used to represent the edge graph
+  unsigned int *m_AdjacencyIndex, *m_Adjacency; 
 
-  // Graph-related attributes: list of edges
-  vector<EdgeType> m_Edges;
-  vector<unsigned int> m_EdgeWeights;
+  // Mesh dimensions
+  unsigned int m_NumberOfEdges, m_NumberOfVertices;
 
-  // The graph based on the mesh
-  GraphType *m_Graph;
+  // The array of weights of the graph edges
+  float *m_EdgeWeights;
 
-  // The distance and predecessor maps
-  vector<int> m_Distance;
-  vector<VertexDescriptor> m_Predecessor;
+  // The structure used to compute the shortest paths on the mesh
+  typedef DijkstraShortestPath<float> DijkstraAlgorithm;
+  DijkstraAlgorithm *m_ShortestPath;
 
   // VTK filters
   vtkPointLocator *fltLocator;

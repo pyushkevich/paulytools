@@ -2,6 +2,7 @@
 #define __BinaryHeap_h_
 
 #include <iostream>
+#include <cassert>
 
 /**
  * This class defines the binary heap data structure. It is an array
@@ -37,7 +38,7 @@ public:
     {
     m_WeightArray = inWeightArray;
     m_ReserveSize = nWeights;
-    m_HeapIndex = new unsigned int[nWeights];
+    m_HeapIndex = new int[nWeights];
     m_Heap = new unsigned int[nWeights];
     m_HeapSize = 0;
     }
@@ -58,7 +59,7 @@ public:
   void InsertAllElementsWithEqualWeights(TWeight weight)
     { 
     m_HeapSize = m_ReserveSize;
-    for(unsigned int i=0;i<m_ReserveSize;i++)
+    for(int i=0;i<m_ReserveSize;i++)
       {
       m_WeightArray[i] = weight;
       Put(i,i);
@@ -85,24 +86,76 @@ public:
     Put(0, m_Heap[m_HeapSize-1]);
     m_HeapSize--;
     SiftDown(0,false);
+
+    // Update the position of the element in the heap
+    m_HeapIndex[rtn] = m_ReserveSize;
+
     return rtn;
     }
 
   /** 
-   * Change the weight of an element and reorder the heap accordingly.
-   * 
-   * This operation is O(log n) 
+   * Lower the weight of an element and reorder the heap accordingly.
+   * The parameter to the call is the new weight of the element, not
+   * the difference. It's important that the new weight is less than
+   * the old weight! It's also important that the element is in the 
+   * heap (use ContainsElement to check)
+   *
+   * This operation is O(log n) with small constant term
    */
-  void UpdateWeight(unsigned int iElement, TWeight weight)
+  void DecreaseElementWeight(unsigned int iElement, TWeight xNewWeight)
+    { 
+    // Check the predicates
+    assert(m_HeapIndex[iElement] < m_HeapSize
+      && xNewWeight <= m_WeightArray[iElement]);
+
+    // Change the weight
+    m_WeightArray[iElement] = xNewWeight;
+
+    // Find the place for the element upstream
+    SiftUp(iElement, m_HeapIndex[iElement]);
+    }
+
+  /** 
+   * Increase the weight of an element. 
+   * Same usage as DecreaseElementWeight
+   */
+  void IncreaseElementWeight(unsigned int iElement, TWeight xNewWeight)
+    { 
+    // Check the predicates
+    assert(m_HeapIndex[iElement] < m_HeapSize
+      && xNewWeight >= m_WeightArray[iElement]);
+
+    // Change the weight
+    m_WeightArray[iElement] = xNewWeight;
+
+    // Find the place for the element down stream
+    SiftDown(m_HeapIndex[iElement]);
+    }
+
+  /** 
+   * Change the weight of an element and reorder the heap accordingly.
+   * This is a bit less efficient than calling DecreaseElementWeight or 
+   * IncreaseElementWeight directly if you know apriori if the weight
+   * is increased or decreassed.
+   * 
+   * This operation is O(log n) however 
+   */
+  void UpdateElementWeight(unsigned int iElement, TWeight weight)
     {
+    // Check the direction
+    if(weight < m_WeightArray[iElement])
+      DecreaseElementWeight(iElement, weight);
+    else
+      IncreaseElementWeight(iElement, weight);
+
     // Push the lement down to the leaf
-    int iPos = SiftDown(m_HeapIndex[iElement], true);
+    // int iPos = SiftDown(m_HeapIndex[iElement], true);
 
     // Update the weight
-    m_WeightArray[iElement] = weight;
+    // m_WeightArray[iElement] = weight;
 
     // Perform insertion on the element from that position
-    SiftUp(iElement, iPos);
+    // SiftUp(iElement, iPos);
     }
 
   // Print the heap (prints on one line, not useful for big heaps)
@@ -135,16 +188,16 @@ public:
 
 private:
   // The number of elements allocated
-  unsigned int m_ReserveSize;
+  int m_ReserveSize;
 
   // The number of elements in the heap
-  unsigned int m_HeapSize;
+  int m_HeapSize;
 
   // The weights associated with the heap
   TWeight *m_WeightArray;
 
   // The position in the heap of each element
-  unsigned int *m_HeapIndex;
+  int *m_HeapIndex;
 
   // The heap array
   unsigned int *m_Heap;

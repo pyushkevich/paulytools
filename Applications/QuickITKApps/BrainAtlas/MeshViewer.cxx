@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
   const char *sScalarArray = NULL;
   double xScalarMin, xScalarMax;
   bool flagSetScalars = false;
-  for(unsigned int iArg = 1; iArg < argc-1; iArg++)
+  for(int iArg = 1; iArg < argc-1; iArg++)
     {
     if(!strcmp(argv[iArg],"-a"))
       {

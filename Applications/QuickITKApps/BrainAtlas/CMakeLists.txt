@@ -1,13 +1,35 @@
+INCLUDE_DIRECTORIES(
+  ${PAULY_SOURCE_DIR}/Applications/QuickITKApps/BrainAtlas
+)
+
+
+# Tracer application GUI
+SET(TRACER_SRCS
+  BinaryHeap.h
+  ShortestPath.cxx
+  ShortestPath.h
+  TracerCurves.cxx
+  TracerCurves.h
+  TracerData.cxx
+  TracerData.h
+  TracerMain.cxx
+  TracerMainWindow.h
+  TracerMainWindow.cxx
+  TracerUserInterfaceBase.h
+  TracerUserInterfaceLogic.cxx
+  TracerUserInterfaceLogic.h
+  Trackball.cxx
+  Trackball.h
+  VTKMeshShortestDistance.cxx
+  VTKMeshShortestDistance.h
+)
+
 ADD_EXECUTABLE("binary2mesh" BinaryToMesh.cxx)
 ADD_EXECUTABLE("viewmesh" MeshViewer.cxx)
 ADD_EXECUTABLE("binary2metis" ImageToMetis.cxx)
 ADD_EXECUTABLE("metis2mask" MetisToImage.cxx)
 ADD_EXECUTABLE("sulcusfilter" FilterSulci.cxx)
-ADD_EXECUTABLE("shorty" ShortestPath.cxx)
-
-INCLUDE_DIRECTORIES(
-  ${PAULY_SOURCE_DIR}/Applications/QuickITKApps/BrainAtlas
-)
+ADD_EXECUTABLE(braintracer ${TRACER_SRCS})
 
 LINK_LIBRARIES(
   ITKCommon 
@@ -27,32 +49,9 @@ LINK_LIBRARIES(
   ${FLTK_LIBRARY}
 )
 
-# Tracer application GUI
-SET(TRACER_SRCS
-#  ShortestPath.cxx
-  TracerCurves.cxx
-  TracerCurves.h
-  TracerData.cxx
-  TracerData.h
-  TracerMain.cxx
-  TracerMainWindow.h
-  TracerMainWindow.cxx
-  TracerUserInterfaceBase.h
-  TracerUserInterfaceLogic.cxx
-  TracerUserInterfaceLogic.h
-  Trackball.cxx
-  Trackball.h
-  VTKMeshShortestDistance.cxx
-  VTKMeshShortestDistance.h
-)
-
 SET(TRACER_FLUIDS TracerUserInterface.fl)
 
 FLTK_WRAP_UI(braintracer ${TRACER_FLUIDS})
-
-IF(USE_BOOST)
-  ADD_EXECUTABLE(braintracer ${TRACER_SRCS})
-ENDIF(USE_BOOST)
 
 # Add the option to use Metis
 OPTION(USE_METIS "Use METIS graph partitioning library" OFF)

@@ -21,12 +21,12 @@ int TestBinaryHeapInteractive(int argc, char *argv[])
     else if(buffer[0] == '+')
       {
       int iPos = atoi(buffer.c_str()+1);
-      heap.UpdateWeight(iPos, weight[iPos]+1);
+      heap.IncreaseElementWeight(iPos, weight[iPos]+1);
       }
     else if(buffer[0] == '-')
       {
       int iPos = atoi(buffer.c_str()+1);
-      heap.UpdateWeight(iPos, weight[iPos]-1);
+      heap.DecreaseElementWeight(iPos, weight[iPos]-1);
       }
     else if(buffer[0] == 'm')
       {

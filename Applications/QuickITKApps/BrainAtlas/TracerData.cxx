@@ -43,31 +43,31 @@ TracerData
   // Read the data from disk
   m_DataReader->SetFileName(file);
   m_DataReader->Update();
-  m_DataReader->GetOutput();
-
-  // Clean the input data
-  m_CleanFilter->SetInput(m_DataReader->GetOutput());
-  m_CleanFilter->SetTolerance(0);
-  m_CleanFilter->Update();
-
-  // Convert the input to triangles
-  m_Triangulator->PassLinesOff();
-  m_Triangulator->PassVertsOff();
-  m_Triangulator->SetInput(m_CleanFilter->GetOutput());
-  m_Triangulator->Update();
+  m_Mesh = m_DataReader->GetOutput();
 
   // Compute all normals 
-  m_NormalsFilter->SetInput(m_Triangulator->GetOutput());
+  m_NormalsFilter->SetInput(m_Mesh);
   m_NormalsFilter->ConsistencyOn();
   m_NormalsFilter->AutoOrientNormalsOn();
   m_NormalsFilter->NonManifoldTraversalOn();
   m_NormalsFilter->Update();
-  
-  // Get the output, store it for subsequent use
   m_Mesh = m_NormalsFilter->GetOutput();
 
+  // Clean the input data
+  m_CleanFilter->SetInput(m_Mesh);
+  m_CleanFilter->SetTolerance(0);
+  m_CleanFilter->Update();
+  m_Mesh = m_CleanFilter->GetOutput();
+
+  // Convert the input to triangles
+  m_Triangulator->PassLinesOff();
+  m_Triangulator->PassVertsOff();
+  m_Triangulator->SetInput(m_Mesh);
+  m_Triangulator->Update();
+  m_Mesh = m_Triangulator->GetOutput();
+
   // Set up the stripper
-  m_Stripper->SetInput(m_NormalsFilter->GetOutput());
+  m_Stripper->SetInput(m_Mesh);
   m_Stripper->Update();
   m_DisplayMesh = m_Stripper->GetOutput();
 

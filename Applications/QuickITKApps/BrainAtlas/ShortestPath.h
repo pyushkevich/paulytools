@@ -28,6 +28,13 @@ template <class TWeight>
 class DijkstraShortestPath 
 {
 public:
+  /** Constant representing infinite distance to soruce vertex, ie, no
+   * path to source */
+  static const TWeight INFINITE_WEIGHT;
+
+  /** Constant representing no path to source vertex */
+  static const unsigned int NO_PATH;
+
   /** 
    * Constructor, creates shortest path computer for given graph
    * specified in METIS format. In addition pass in the weights
@@ -66,19 +73,15 @@ public:
     {
     unsigned int i;
 
-    // Set the Infinity value
-    static TWeight INFTY = std::numeric_limits<TWeight>::max();
-    const unsigned int NOPRED = (unsigned int) -1;
-
     // Initialize the predecessor array (necessary?)
     for(i = 0; i < m_NumberOfVertices; i++)
-      { m_Predecessor[i] = NOPRED; } 
+      { m_Predecessor[i] = NO_PATH; } 
 
     // Reset the binary heap and weights
-    m_Heap->InsertAllElementsWithEqualWeights(INFTY);
+    m_Heap->InsertAllElementsWithEqualWeights(INFINITE_WEIGHT);
 
     // Change the distance for the first weight to 0
-    m_Heap->UpdateWeight(iSource, 0);
+    m_Heap->DecreaseElementWeight(iSource, 0);
 
     // Set the predecessor of iSource to itself
     m_Predecessor[iSource] = iSource;
@@ -90,7 +93,7 @@ public:
       unsigned int iNbr = m_Adjacency[i];
 
       // Get the edge weight associated with it and update it in the queue
-      m_Heap->UpdateWeight(iNbr, m_EdgeWeight[i]);
+      m_Heap->DecreaseElementWeight(iNbr, m_EdgeWeight[i]);
 
       // Update the predecessor as well 
       m_Predecessor[iNbr] = iSource;
@@ -117,7 +120,7 @@ public:
           if(dTest < m_Distance[iNbr])
             {
             // Update the weight
-            m_Heap->UpdateWeight(iNbr, dTest);
+            m_Heap->DecreaseElementWeight(iNbr, dTest);
 
             // Set the predecessor
             m_Predecessor[iNbr] = w;
@@ -143,5 +146,15 @@ private:
   unsigned int *m_AdjacencyIndex, *m_Adjacency;
   unsigned int m_NumberOfVertices, m_NumberOfEdges;
 };
+
+template<class TWeight>
+const TWeight
+DijkstraShortestPath<TWeight>
+::INFINITE_WEIGHT = numeric_limits<TWeight>::max();
+
+template<class TWeight>
+const unsigned int
+DijkstraShortestPath<TWeight>
+::NO_PATH = numeric_limits<unsigned int>::max();
 
 #endif

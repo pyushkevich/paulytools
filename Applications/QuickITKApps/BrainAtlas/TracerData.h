@@ -7,6 +7,7 @@
 #include "vtkPolyDataNormals.h"
 #include "VTKMeshShortestDistance.h"
 #include <list>
+#include <ctime>
 
 #include "TracerCurves.h"
 
@@ -133,7 +134,7 @@ public:
     target.clear();
 
     // Do we have a 'focus' point
-    if(m_FocusPoint != -1)
+    if(m_FocusPoint != -1 && m_DistanceMapper->IsVertexConnected(iPoint))
       {
       vtkIdType iLast = m_Curves.GetControlPointVertex(m_FocusPoint);
       vtkIdType iCurrent = iPoint;
@@ -149,12 +150,13 @@ public:
           return -1;
           }
         }
-      cout << endl;
       }
     else
       {
       target.push_front(iPoint);
       }
+
+    return true;
     }
 
   // Check if there is a path source
@@ -187,10 +189,17 @@ public:
       m_Curves.AddLink(m_FocusPoint, iNewControl, m_FocusCurve, lPoints);
       }
 
-    // Compute distances from this point
-    cout << "computing distances to point " << iPoint << endl;
+    
+    // Time the computation
+    double tStart = (double) clock();
+
+    // Compute the distances
     m_DistanceMapper->ComputeDistances(iPoint);
-    cout << "done" << endl;
+
+    // Get the elapsed time
+    double tElapsed = (clock() - tStart) * 1000.0 / CLOCKS_PER_SEC;    
+    cout << "Shortest paths to source " << iPoint 
+      << " computed in " << tElapsed << " ms." << endl;
 
     // Save the added point as the focus point
     m_FocusPoint = iNewControl;

@@ -30,9 +30,11 @@ void TestShortestPath()
     }
 }
 
+/* 
 int main(int argc, char *argv[])
 {
   TestShortestPath();
 }
+*/ 
 
 

@@ -169,26 +169,32 @@ TracerMainWindow
 
     const VTKMeshShortestDistance *dm = m_Data->GetDistanceMapper();
     glBegin(GL_LINES);
-    for(unsigned int i=0;i<dm->GetNumberOfEdges();i++)
+    for(vtkIdType p = 0; p < dm->GetNumberOfVertices(); p++)
       {
-      vtkIdType iStart = dm->GetEdgeStart(i);
-      vtkIdType iEnd = dm->GetEdgeEnd(i);
-
-      if(iStart < iEnd)
+      unsigned int nEdges = dm->GetVertexNumberOfEdges(p);
+      for(unsigned int j = 0; j < nEdges; j++)
         {
-        vnl_vector_fixed<double,3> p1, p2;
-        m_Data->GetPointCoordinate(iStart, p1);
-        m_Data->GetPointCoordinate(iEnd, p2);
-        glVertex3dv(p1.data_block());
-        glVertex3dv(p2.data_block());
+        vtkIdType q = dm->GetVertexEdge(p, j);
+        if( p < q )
+          {
+          vnl_vector_fixed<double,3> x1, x2;
+          m_Data->GetPointCoordinate(p, x1);
+          m_Data->GetPointCoordinate(q, x2);
+          
+          float w = dm->GetVertexDistance(p);
+          glColor3f( 1.0f - 0.01f * w, 1.0f,1.0f - 0.01f * w); 
+          glVertex3dv(x1.data_block());
+          
+          w = dm->GetVertexDistance(q);
+          glColor3f(1.0f - 0.01f * w, 1.0f, 1.0f - 0.01f * w);           
+          glVertex3dv(x2.data_block());
+          }
         }
       }
     glEnd();
-    
-
+   
     glPopAttrib();
-    
-
+   
     // Set the attributes for line drawing
     glPushAttrib(GL_LIGHTING_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT);
     glDisable(GL_LIGHTING);
@@ -266,13 +272,9 @@ TracerMainWindow
         m_Data->GetPointCoordinate(*it2, xPoint);
         glVertex3dv(xPoint.data_block());
 
-        cout << *it1 << " " << std::flush;
-
         // Increase the iterators
         it1++; it2++;
         }
-
-      cout << *it1 << endl;
 
       glEnd();
       }
