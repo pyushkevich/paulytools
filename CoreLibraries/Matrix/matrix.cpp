@@ -36,9 +36,8 @@ NAMESPACE_PAULY_START
 extern "C" {
 	//int dgesv_(long *n, long *nrhs, double *a, long *lda, long *ipiv, double *b, long *ldb, long *info);
    //int dposv_(char *uplo, long *n, long *nrhs, double *a, long *lda, double *b, long *ldb, long *info);
-   int dsyev_(char *jobz, char *uplo, long *n, double *a,long *lda, double *w, double *work, long *lwork, long *info);
-   int dgesvd_(char *jobu, char *jobvt, long *m, long *n, double *a, long *lda, double *s, double *u, long *
-        ldu, double *vt, long *ldvt, double *work, long *lwork, long *info);
+   //int dsyev_(char *jobz, char *uplo, long *n, double *a,long *lda, double *w, double *work, long *lwork, long *info);
+   //int dgesvd_(char *jobu, char *jobvt, long *m, long *n, double *a, long *lda, double *s, double *u, long * ldu, double *vt, long *ldvt, double *work, long *lwork, long *info);
 
 }
 
@@ -62,7 +61,7 @@ typedef int lapack_int;
 #else
 
 typedef long lapack_int;
-
+/*
 extern "C" {
 	int dgemm_(char *transa, char *transb, long *m, long *n, long *k, 
 				  double *alpha, double *a, long *lda, double *b, long *ldb, 
@@ -73,14 +72,57 @@ extern "C" {
    int dgetrs_(char *,long *, long *, double *a, long *lda, long *ipiv, double *work, long *lwork, long *info);
 	int dpotrf_(char *,long *, double *a, long *, long *);
 }
+*/
+
+int dgemm_(char *transa, char *transb, long *m, long *n, long *k, 
+  double *alpha, double *a, long *lda, double *b, long *ldb, 
+  double *beta, double *c, long *ldc)
+{
+  assert(0);
+  return 0;
+}
+
+int dgetrf_(long *m, long *n, double *a, long *lda, long *ipiv, long *info)
+{
+  assert(0);
+  return 0;
+}
+
+int dgetri_(long *n, double *a, long *lda, long *ipiv, double *work, long *lwork, long *info)
+{
+  assert(0);
+  return 0;
+}
+
+int dgetrs_(char *,long *, long *, double *a, long *lda, long *ipiv, double *work, long *lwork, long *info)
+{
+  assert(0);
+  return 0;
+}
+
+int dpotrf_(char *,long *, double *a, long *, long *)
+{
+  assert(0);
+  return 0;
+}
+
+int dsyev_(char *jobz, char *uplo, long *n, double *a,long *lda, double *w, double *work, long *lwork, long *info)
+{
+  assert(0);
+  return 0;
+}
+
+int dgesvd_(char *jobu, char *jobvt, long *m, long *n, double *a, long *lda, double *s, double *u, long * ldu, double *vt, long *ldvt, double *work, long *lwork, long *info)
+{
+  assert(0);
+  return 0;
+}
 
 #define DGETRI dgetri_ 
 #define DGETRF dgetrf_
 #define DGETRS dgetrs_
 #define DGEMM dgemm_ 
 #define DPOTRF dpotrf_
-
-
 
 #endif
 

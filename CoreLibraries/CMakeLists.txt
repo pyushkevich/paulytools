@@ -6,6 +6,7 @@ SET (LIBRARY_OUTPUT_PATH ${MYLIBS_BINARY_DIR}/bin CACHE INTERNAL "Single output 
 # Set up the subdirectories as the include directories
 SET(MYLIBS_INCLUDE_DIRS 
     ${MYLIBS_SOURCE_DIR}
+    ${MYLIBS_SOURCE_DIR}/BasicImaging
     ${MYLIBS_SOURCE_DIR}/MReps2d
     ${MYLIBS_SOURCE_DIR}/Matrix
     ${MYLIBS_SOURCE_DIR}/Optima
@@ -17,6 +18,7 @@ INCLUDE_DIRECTORIES(${MYLIBS_INCLUDE_DIRS})
 
 # Include some sub-directories
 SUBDIRS(
+  BasicImaging
   Matrix
   Optima
   Registry

@@ -4,8 +4,13 @@
 #include "itkImageFileWriter.h"
 #include "itkImageRegionConstIteratorWithIndex.h"
 #include "itkBinaryThresholdImageFilter.h"
+#include "itkResampleImageFilter.h"
 #include "itkCommand.h"
-        
+
+#include "itkIdentityTransform.h"
+#include "itkBSplineInterpolateImageFunction.h"
+#include "itkLinearInterpolateImageFunction.h"
+
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -22,7 +27,7 @@ public:
 
 void ProgressCommand(itk::Object *dummy, const itk::EventObject &, void *data)
 {
-  cout << "." << endl;
+  cout << "." << flush;
 }
 
 int main(int argc, char **argv)
@@ -105,42 +110,69 @@ int main(int argc, char **argv)
       typedef itk::Image<float, 3> FloatImageType;
       FloatImageType::Pointer imgBinary = FloatImageType::New();
       imgBinary->SetRegions(imgInput->GetBufferedRegion());
+      imgBinary->SetSpacing(imgInput->GetSpacing());
       imgBinary->Allocate();
-      imgBinary->FillBuffer(0.0f);
+      imgBinary->FillBuffer(1.0f);
 
       // Pass the image through, binarizing current label
-      itk::ImageRegionConstIterator<ImageType> itBinSource(imgInput,roi);
-      itk::ImageRegionIterator<FloatImageType> itBinTarget(imgBinary,roi);
+      itk::ImageRegionConstIterator<ImageType> itBinSource(imgInput,imgInput->GetBufferedRegion());
+      itk::ImageRegionIterator<FloatImageType> itBinTarget(imgBinary,imgInput->GetBufferedRegion());
       while(!itBinSource.IsAtEnd())
         {
-        itBinTarget.Set(it->val == itBinSource.Get() ? 1.0f : 0.0f);
+        itBinTarget.Set(it->val == itBinSource.Get() ? -1.0f : 1.0f);
         ++itBinSource;++itBinTarget;
         }
+
+      // Resample the image from 5mm z to 1mm z distance
+      typedef itk::ResampleImageFilter<FloatImageType,FloatImageType> ResampleFilter;
+      // typedef itk::BSplineInterpolateImageFunction<FloatImageType,double> IFType;
+      typedef itk::LinearInterpolateImageFunction<FloatImageType,double> IFType;
+      
+      ResampleFilter::Pointer fltResample = ResampleFilter::New();
+      fltResample->SetInput(imgBinary);
+      fltResample->SetTransform(itk::IdentityTransform<double,3>::New());
+      fltResample->SetInterpolator(IFType::New());
+
+      itk::Size<3> size; 
+      size[0] = imgBinary->GetBufferedRegion().GetSize()[0];
+      size[1] = imgBinary->GetBufferedRegion().GetSize()[1];
+      size[2] = imgBinary->GetBufferedRegion().GetSize()[2] * 5;
+      fltResample->SetSize(size);
+      
+      double spacing[] = {1.0,1.0,1.0};
+      fltResample->SetOutputSpacing(spacing);
+      fltResample->SetDefaultPixelValue(1.0f);
 
       // Create progress command
       itk::CStyleCommand::Pointer command = itk::CStyleCommand::New();
       command->SetCallback(ProgressCommand);
 
+      // Run the resampler
+      fltResample->AddObserver(itk::ProgressEvent(),command);
+      fltResample->UpdateLargestPossibleRegion();
+      
       // Apply antialiasing to the binary image
       typedef itk::AntiAliasBinaryImageFilter<FloatImageType,FloatImageType>
         AntiFilterType;
       AntiFilterType::Pointer fltAnti = AntiFilterType::New();
-      fltAnti->SetInput(imgBinary);
+      fltAnti->SetInput(fltResample->GetOutput());
       fltAnti->SetMaximumRMSError(0.0001);
+      fltAnti->SetNumberOfIterations(1500);
+      fltAnti->SetIsoSurfaceValue(0.0f);
       fltAnti->AddObserver(itk::ProgressEvent(),command);
       fltAnti->Update();
 
       // Recast to short
       ImageType::Pointer imgOut = ImageType::New();
-      imgOut->SetRegions(imgInput->GetBufferedRegion());
+      imgOut->SetRegions(fltAnti->GetOutput()->GetBufferedRegion());
       imgOut->Allocate();
       imgOut->FillBuffer(0);
 
-      itk::ImageRegionConstIterator<FloatImageType> itOutSource(fltAnti->GetOutput(),roi);
-      itk::ImageRegionIterator<ImageType> itOutTarget(imgOut,roi);
+      itk::ImageRegionConstIterator<FloatImageType> itOutSource(fltAnti->GetOutput(),imgOut->GetBufferedRegion());
+      itk::ImageRegionIterator<ImageType> itOutTarget(imgOut,imgOut->GetBufferedRegion());
       while(!itOutSource.IsAtEnd())
         {
-        itOutTarget.Set(itOutSource.Get() > 0.5 ? it->val : 0);
+        itOutTarget.Set(itOutSource.Get() < 0.0 ? it->val : 0);
         ++itOutTarget;++itOutSource;
         }
 

@@ -1,9 +1,7 @@
 PROJECT(AntiAlias)
 
-SET(ANTI_ALIAS_SRCS
-  AntiAlias.cpp
-)
-
-ADD_EXECUTABLE(aalias ${ANTI_ALIAS_SRCS})
-TARGET_LINK_LIBRARIES(aalias ITKCommon ITKBasicFilters ITKIO)
+ADD_EXECUTABLE(aalias AntiAlias.cpp)
+ADD_EXECUTABLE(bpaint BrainPaint.cpp)
+ADD_EXECUTABLE(lsplit LabelledToBinary.cpp)
+LINK_LIBRARIES(ITKCommon ITKBasicFilters ITKIO ${PAULY_CORE_LIBS})
 
