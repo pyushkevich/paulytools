@@ -29,6 +29,7 @@ int usage()
   cout << "   -ea FILE    Export the anti-aliased image as an image file FILE" << endl;
   cout << "   -es FILE    Export the scaled image as an image file FILE" << endl;
   cout << "   -d X.XX     Decimate the mesh by a factor of X.XX (between 0 and 1)" << endl;
+  cout << "   -s NNN      Smooth the mesh for NNN iterations" << endl;
   return -1;
 }
 
@@ -38,6 +39,7 @@ int main(int argc, char *argv[])
   double aaParm = 0.024;
   double xScale = 1.0;
   double xDecimate = 0.0;
+  int nSmoothIterations = 0;
   const char *fnOutAA = NULL, *fnOutResample = NULL;
 
   // Check parameters
@@ -71,6 +73,11 @@ int main(int argc, char *argv[])
       fnOutResample = argv[++i];
       cout << "will export resampled image to " << fnOutResample << endl;
       }
+    else if(0 == strcmp(argv[i],"-sm"))
+      {
+      nSmoothIterations = atoi(argv[++i]);
+      cout << "will smooth the mesh using " << nSmoothIterations << "iterations"  << endl;
+      }
     else
       {
       cerr << "Bad option " << argv[i] << endl;
@@ -92,6 +99,7 @@ int main(int argc, char *argv[])
   fltMesh->SetResampleScaleFactor(xScale);
   fltMesh->SetAntiAliasMaxRMSError(aaParm);
   fltMesh->SetDecimateFactor(xDecimate);
+  fltMesh->SetSmoothingIterations(nSmoothIterations);
 
   cout << "==========================================================" << endl;
   fltMesh->Update();
@@ -110,7 +118,6 @@ int main(int argc, char *argv[])
     FilterType::FloatImageType::Pointer imgAlias = fltMesh->GetAntiAliasImage();
     WriteImage(imgAlias, fnOutAA);
     }
-
 
   // Save the mesh
   vtkPolyDataWriter *writer = vtkPolyDataWriter::New();

@@ -21,6 +21,7 @@
 #include <vtkPolyDataConnectivityFilter.h>
 #include <vtkStripper.h>
 #include <vtkCleanPolyData.h>
+#include <vtkSmoothPolyDataFilter.h>
 
 #include <iostream>
 
@@ -93,6 +94,10 @@ public:
   /** Whether to decimate the mesh and how much, 0 for none*/
   itkSetMacro(DecimateFactor, double);
   itkGetMacro(DecimateFactor, double);
+
+  /** Smoothing iterations, or 0 for none */
+  itkSetMacro(SmoothingIterations, double);
+  itkGetMacro(SmoothingIterations, double);
 
   /** Set the input */
   void SetInput(TImage *image) 
@@ -192,6 +197,12 @@ protected:
     fltDecimate->PreserveTopologyOn();
     meshPipeEnd = fltDecimate->GetOutput();
 
+    // Smooth the data, keeping it on the contour
+    fltSmoothMesh = vtkSmoothPolyDataFilter::New();
+    fltSmoothMesh->SetInput(meshPipeEnd);
+    fltSmoothMesh->SetSource(meshPipeEnd);
+    meshPipeEnd = fltSmoothMesh->GetOutput();
+
     // Compute triangle strips for faster display
     fltTriangle = vtkTriangleFilter::New();
     fltTriangle->SetInput(meshPipeEnd);
@@ -225,6 +236,7 @@ protected:
     fltTriangle->Delete();
     fltClean->Delete();
     fltDecimate->Delete();
+    fltSmoothMesh->Delete();
     }
 
   /** Generate Data */
@@ -328,12 +340,22 @@ protected:
 
     cout << "   converting mesh to triangles" << endl;
     fltTriangle->Update();
+    m_Result = fltTriangle->GetOutput();
 
     cout << "      mesh has " 
       << fltTriangle->GetOutput()->GetNumberOfCells() << " cells and " 
       << fltTriangle->GetOutput()->GetNumberOfPoints() << " points. " << endl;
     
-    // PrintMeshStatistics( fltStripper->GetOutput() );
+    // If smoothing is on, run it
+    if(m_SmoothingIterations > 0)
+      {
+      cout << "   smoothing the mesh " << m_DecimateFactor << endl;
+      fltSmoothMesh->SetNumberOfIterations(m_SmoothingIterations);
+      fltSmoothMesh->SetInput(m_Result);
+      fltSmoothMesh->SetSource(m_Result);
+      fltSmoothMesh->Update();
+      m_Result = fltSmoothMesh->GetOutput();
+      }
     }
 
 private:
@@ -374,10 +396,14 @@ private:
   vtkCleanPolyData *fltClean;
   vtkTriangleFilter *fltTriangle;
   vtkDecimate *fltDecimate;
+  vtkSmoothPolyDataFilter *fltSmoothMesh;
 
   bool m_InvertInput;
   float m_ResampleScaleFactor;
   double m_DecimateFactor;
+  int m_SmoothingIterations;
+
+  vtkPolyData *m_Result;
 
   void ProgressCommand(itk::Object *source, const itk::EventObject &evt) 
     {
