@@ -1,6 +1,7 @@
 #include "bspline.h"
-#include <vnl/algo/vnl_qr.h>
+#include <vnl/algo/vnl_svd.h>
 #include <xmmintrin.h>
+#include <iostream>
 
 #ifndef _WIN32
 void *_mm_malloc(size_t size,size_t align) {
@@ -244,8 +245,9 @@ void KnotVector::getKnotIndexSequence(vector<float> &in,vector<int> &out) {
 }
 
 int KnotVector::getKnotAtParm(float u) {
-  int n = nk-3;
-  if (u == knots[n+1]) return n;
+  int n = nk-5;
+  if (u >= knots[n+1]) 
+    return n;
   int lo = 3,hi = n+1,mid = (lo+hi)/2;
   while (u < knots[mid] || u>=knots[mid+1])
     {
@@ -359,7 +361,7 @@ void BSpline1D::fitToPoints(const MatrixType &Q)
       VectorType L = Q.get_row(r)-Q.get_row(0)*BN(r,0)-Q.get_row(m)*BN(r,n);
       VectorType Rk = R.get_row(c-1);
       Rk += L * BN(r,c);
-      R.set_column(c-1,Rk);
+      R.set_row(c-1,Rk);
       }
     }
 
@@ -368,8 +370,8 @@ void BSpline1D::fitToPoints(const MatrixType &Q)
   MatrixType NTN = N.transpose() * N;
 
   // Solve for P
-  vnl_qr<double> qr(NTN);
-  MatrixType R1 = qr.solve(R);
+  vnl_svd<double> svd(NTN);
+  MatrixType R1 = svd.solve(R);
 
   // NTN.ipSolveLinearSystem(R);
 
@@ -383,4 +385,6 @@ void BSpline1D::fitToPoints(const MatrixType &Q)
       }
     setControl(n,p,Q(m,p));
     }
+
+  std::cout << "fit " << std::endl;
 }

@@ -158,7 +158,7 @@ class SimpleBSplineCurve
   {
 public:
   SimpleBSplineCurve(unsigned int nControlPoints, unsigned int nDimensionsPerPoint)
-  : spline(nControlPoints,nDimensionsPerPoint)
+  : spline(nControlPoints-1,nDimensionsPerPoint)
   {
     d = nDimensionsPerPoint;
   }
@@ -188,11 +188,11 @@ public:
   void SetUniformInterpolationGrid(unsigned int nPoints)
   {
     double *values = new double[nPoints];
-    double step = (GetNumberOfControlPoints() - 3) *  1.0 / (nPoints - 1);
+    double step = 1.0 / (nPoints - 1);
     double val = 0.0;
     for (unsigned int i=0;i<nPoints;i++)
       {
-      values[i] = val;
+      values[i] = val < 1.0 ? val : 1.0;
       val += step;
       }    
     SetInterpolationGrid(nPoints,values);
@@ -214,7 +214,7 @@ public:
   // Interpolate a grid point
   void InterpolateGrid(unsigned int iGrid, float *valArray)
   {
-    spline.interpolatePoint(grid[iGrid].k,&grid[iGrid].W,0,0,d-1,valArray);
+    spline.interpolatePoint(grid[iGrid].k-3,&grid[iGrid].W,0,0,d-1,valArray);
   }
 
   // Fit the spline to points
