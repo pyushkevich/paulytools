@@ -1,0 +1,62 @@
+# ==================================
+# Mesh generation for curve tracing
+# ==================================
+# This scripts takes the tissue-segmented brainweb images and creates
+# meshes for each of the tissues. 
+export BINDIR=@PAULY_BINARY_DIR@/Applications/QuickITKApps/BrainAtlas@BINARY_SUBDIR@
+export BINDIRX=@PAULY_BINARY_DIR@/Applications/QuickITKApps/AntiAlias@BINARY_SUBDIR@
+export INPDIR=@BATLAS_DATA_ROOT@/atlas02/input
+export MESHDIR=@BATLAS_DATA_ROOT@/atlas02/mesh
+export GEOMDIR=@BATLAS_DATA_ROOT@/atlas02/geometry/input
+
+export IMGNAME=phantom_1.0mm_normal_crisp
+export MASKNAME=grey_and_white_11
+
+export  LEFTLABEL=002
+export RIGHTLABEL=003
+export WHITELABEL=003
+export  GREYLABEL=002
+
+# Extract the left and right hemispheres from the hand segmented atlas
+echo "Creating the left and right masks"
+$BINDIRX/lsplit $INPDIR/"$MASKNAME".hdr $INPDIR/"$MASKNAME"_split
+
+# Use the extracted hemispheres as masks for white/grey image
+echo "Applying left mask..."
+$BINDIR/maskimage \
+    $INPDIR/"$IMGNAME".hdr \
+    $INPDIR/"$MASKNAME"_split.$LEFTLABEL.hdr \
+    $INPDIR/"$IMGNAME"_left.img.gz;
+
+echo "Applying right mask..."
+$BINDIR/maskimage \
+    $INPDIR/"$IMGNAME".hdr \
+    $INPDIR/"$MASKNAME"_split.$RIGHTLABEL.hdr \
+    $INPDIR/"$IMGNAME"_right.img.gz;
+
+# Clean up the split images
+rm -rf $INPDIR/"$MASKNAME"_split.*;
+
+# Extract the left and right hemispheres from the hand segmented atlas
+for SIDE in "left" "right"
+do
+	# Split into white matter and grey matter
+	$BINDIRX/lsplit $INPDIR/"$IMGNAME"_"$SIDE".hdr $INPDIR/"$IMGNAME"_"$SIDE"_split 
+
+	# Construct the mesh based on the left and right hemispheres
+	echo "Building $SIDE white mesh"
+	$BINDIR/binary2mesh \
+    	-a 0.024 -ea $GEOMDIR/"$SIDE"_whitematter_alias.mha \
+	    $INPDIR/"$IMGNAME"_"$SIDE"_split.$WHITELABEL.hdr \
+    	$MESHDIR/"$SIDE"_whitematter.vtk
+
+	# Construct the mesh based on the left and right hemispheres
+	echo "Building $SIDE grey mesh"
+	$BINDIR/binary2mesh \
+    	-a 0.024 -ea $GEOMDIR/"$SIDE"_greymatter_alias.mha \
+	    $INPDIR/"$IMGNAME"_"$SIDE"_split.$GREYLABEL.hdr \
+    	$MESHDIR/"$SIDE"_greymatter.vtk
+
+	# Clean up the splits
+	rm -rf $INPDIR/"$IMGNAME"_"$SIDE"_split.*
+done
