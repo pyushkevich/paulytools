@@ -41,10 +41,7 @@ TracerUserInterfaceLogic
   // Get the mesh file name
   char *file = fl_file_chooser("Select a VTK mesh", "*.vtk", NULL, 1);
   if(file)
-    {
     m_Data->LoadInputMesh(file);
-    m_WinTrace->OnMeshUpdate();
-    }
 }
 
 void 
@@ -100,7 +97,6 @@ TracerUserInterfaceLogic
     // Try loading
     if(m_Data->LoadCurves(file))
       { 
-      m_WinTrace->redraw();
       m_CurvesDirty = false;
       m_CurvesFile = file;
       }
@@ -302,8 +298,6 @@ TracerUserInterfaceLogic
     m_Data->SetEdgeWeightsToEuclideanDistance();
   else
     m_Data->SetEdgeWeightsToPitchDistance(value);
-
-  m_WinTrace->OnMeshUpdate();
 }
 
 void 
@@ -358,9 +352,6 @@ TracerUserInterfaceLogic
     m_MenuStartCurve->deactivate();
     m_MenuLoadCurves->deactivate();
     }
-
-  // Update the tracer window
-  m_WinTrace->SetTracerData(m_Data);
 }
 
 void 
@@ -384,9 +375,6 @@ TracerUserInterfaceLogic
 
   // Change the current item in the drop-down
   RebuildCurveList();
-
-  // Redraw the tracing window
-  m_WinTrace->redraw();
 }
 
 void 
@@ -404,9 +392,6 @@ TracerUserInterfaceLogic
     m_BtnDeleteLastPoint->deactivate();
     m_MenuDeleteLastPoint->deactivate();
     }
-  
-  // Update the tracing window
-  m_WinTrace->OnPathSourceChange();
 }
 
 void 
@@ -414,7 +399,6 @@ TracerUserInterfaceLogic
 ::OnFocusCurveDataChange(TracerDataEvent *evt)
 {
   m_CurvesDirty = true;
-  m_WinTrace->redraw();
 }
 
 void

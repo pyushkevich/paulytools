@@ -2,6 +2,39 @@
 #include <sstream>
 #include <cassert>
 
+string StringEncode(const string &source)
+{
+  ostringstream oss;
+  for(unsigned int i=0;i<source.size();i++)
+    {
+    char c = source[i];
+    if((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+      (c >= '0' && c <= '9') || (c == '_'))
+      oss << c;
+    else
+      oss << '\\' << std::setfill('0') << std::oct << 
+        std::setw(3) << ((int)c);
+    }
+  return oss.str();
+}
+
+string StringDecode(const string &source)
+{
+  ostringstream oss;
+  for(unsigned int i=0;i<source.size();i++)
+    {
+    char c = source[i];
+    if(c != '\\')
+      oss << c;
+    else if(i+3 < source.size())
+      oss << (char)(
+        64 * (int)(source[++i] - '0') + 
+         8 * (int)(source[++i] - '0') + 
+         1 * (int)(source[++i] - '0'));
+    }
+  return oss.str();
+}
+
 TracerCurves::IdType
 TracerCurves
 ::AddControlPoint(IdType id, MeshVertex v)
@@ -225,7 +258,8 @@ TracerCurves
   while(itCurve != m_Curves.end())
     {
     const Curve &c = itCurve->second;
-    fout << "CURVE\t" << itCurve->first << "\t\"" << c.name << "\"" << endl;
+    fout << "CURVE\t" << itCurve->first << " " << 
+      StringEncode(c.name) << endl;
     itCurve++;
     }
 
@@ -304,7 +338,7 @@ TracerCurves
         string name; iss >> name;
 
         // Add the curve
-        AddCurve(id, name.c_str());
+        AddCurve(id, StringDecode(name).c_str());
         }
       else if(key == "LINK")
         {

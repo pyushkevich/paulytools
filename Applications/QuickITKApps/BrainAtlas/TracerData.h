@@ -44,6 +44,9 @@ public:
   /** Fired when the list of curves is changed, including number of
     * curves and the names of the curves */
   virtual void OnCurveListChange(TracerDataEvent *evt) = 0; 
+
+  /** Fired when the edge weights are updated */
+  virtual void OnEdgeWeightsUpdate(TracerDataEvent *evt) = 0;
 };
 
 /**
@@ -336,6 +339,9 @@ private:
   pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
     OnMeshChange, TracerDataEvent);
 
+  pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
+    OnEdgeWeightsUpdate, TracerDataEvent);
+
   // Set the focus curve, firing the associated event
   void SetFocusCurve(int inFocusCurve);
 
@@ -343,24 +349,7 @@ private:
   void SetFocusPoint(int inFocusPoint);
   
   /** Set the edge weight function to another mode */
-  void UpdateEdgeWeightFunction(MeshEdgeWeightFunction *fnNew)
-    {
-    // Pass on the new function
-    m_DistanceMapper->SetEdgeWeightFunction(fnNew);
-
-    // Recompute the graph
-    m_DistanceMapper->ComputeGraph();
-
-    // If there is a focus point, compute distances to it
-    if(m_FocusPoint != -1)
-      m_DistanceMapper->ComputeDistances(m_FocusPoint);
-    
-    // Delete the old edge weight function
-    delete m_EdgeWeightFunction;
-
-    // Assign the edge weight function 
-    m_EdgeWeightFunction = fnNew;
-    }
+  void UpdateEdgeWeightFunction(MeshEdgeWeightFunction *fnNew);
 };
 
 #endif

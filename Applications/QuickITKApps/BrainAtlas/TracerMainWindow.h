@@ -5,7 +5,9 @@
 #include <FL/Fl_Gl_Window.h>
 #include "TracerData.h"
 
-class TracerMainWindow : public Fl_Gl_Window
+class TracerMainWindow 
+: public Fl_Gl_Window,
+  virtual public ITracerDataListener
 {
 public:
   // Modes and button information
@@ -14,44 +16,35 @@ public:
 
   // Edge display mode (for edges displayed over the surface of 
   // the mesh
-  enum EdgeDisplayMode { EDGE_DISPLAY_NONE, 
-    EDGE_DISPLAY_PLAIN, EDGE_DISPLAY_LENGTH, EDGE_DISPLAY_DISTANCE };
+  enum EdgeDisplayMode 
+    { EDGE_DISPLAY_NONE, EDGE_DISPLAY_PLAIN, 
+      EDGE_DISPLAY_LENGTH, EDGE_DISPLAY_DISTANCE };
+
+  // Surface display mode
+  enum SurfaceDisplayMode 
+    { SURFACE_DISPLAY_ALL, SURFACE_DISPLAY_NEIGHBORHOOD };
 
   // Constructor
   TracerMainWindow(int x, int y, int w, int h, const char *label);
   
   // Destructor
-  virtual ~TracerMainWindow() {};
+  virtual ~TracerMainWindow();
 
   // Associate the data with the window
   void SetTracerData(TracerData *data) 
     {
+    // Detach from the old data
+    if(m_Data) m_Data->RemoveTracerDataListener(this);
+
+    // Get the new data pointer
     m_Data = data;
+
+    // Reset state
     m_DisplayListDirty = true;
     m_CurrentPoint = -1;
-    }
 
-  // Call this method in response to a change in the actively selected
-  // control point
-  void OnPathSourceChange()
-    {
-    // Get the currently selected point from the data
-    m_CurrentPoint = -1;
-
-    // The edge drawing is no longer clean if drawing accumulated distances
-    if(m_EdgeDisplayMode == EDGE_DISPLAY_DISTANCE)
-      m_EdgeDisplayListDirty = true;
-
-    // Redraw the window
-    redraw();
-    } 
-
-  // Request an update of the display lists
-  void OnMeshUpdate() 
-    {
-    m_DisplayListDirty = true;
-    m_EdgeDisplayListDirty = true;
-    if(shown()) redraw();
+    // Attach to new data
+    m_Data->AddTracerDataListener(this);
     }
 
   // Set the tracing/tracking mode
@@ -69,22 +62,29 @@ public:
     redraw();
     }
 
+  // Set the surface display mode
+  void SetSurfaceDisplayMode(SurfaceDisplayMode mode)
+    {
+    m_SurfaceDisplayMode = mode;
+    m_DisplayListDirty = true;
+    m_EdgeDisplayListDirty = true;
+    }
+
   // Draw method
   void draw();
 
   // Event handler
   int handle(int);
 
+  // Callbacks from TracerData event system
+  void OnMeshChange(TracerDataEvent *evt);
+  void OnFocusCurveChange(TracerDataEvent *evt);
+  void OnFocusPointChange(TracerDataEvent *evt);
+  void OnFocusCurveDataChange(TracerDataEvent *evt);
+  void OnCurveListChange(TracerDataEvent *evt);
+  void OnEdgeWeightsUpdate(TracerDataEvent *evt);
+
 private:
-
-  // Do the actual job of computing the display list
-  void ComputeDisplayList();
-  void ComputeEdgeDisplayList();
-
-  // Methods for choosing edge colors based on values
-  void SetGLColorHSV(double xHue, double xSaturation, double xValue);
-  void SetGLEdgeColorFromDistance(double xDistance);
-  void SetGLEdgeColorFromWeight(double xWeight);
 
   // Display list associated with the brain surface and with the
   // overlay edges on the brain surface
@@ -98,6 +98,9 @@ private:
 
   // Current mode for edge overlay display
   EdgeDisplayMode m_EdgeDisplayMode;
+
+  // Current mode for surface display
+  SurfaceDisplayMode m_SurfaceDisplayMode;
 
   // Pointer to the tracer data
   TracerData *m_Data;
@@ -118,6 +121,16 @@ private:
 
   // Perform ray intersection to find point under cursor
   void FindPointUnderCursor();
+
+  // Do the actual job of computing the display list
+  void ComputeDisplayList();
+  void ComputeEdgeDisplayList();
+
+  // Methods for choosing edge colors based on values
+  void SetGLColorHSV(double xHue, double xSaturation, double xValue);
+  void SetGLEdgeColorFromDistance(double xDistance);
+  void SetGLEdgeColorFromWeight(double xWeight);
+
 };
 
 

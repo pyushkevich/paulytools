@@ -45,6 +45,7 @@ public:
   void OnFocusPointChange(TracerDataEvent *evt);
   void OnFocusCurveDataChange(TracerDataEvent *evt);
   void OnCurveListChange(TracerDataEvent *evt);
+  void OnEdgeWeightsUpdate(TracerDataEvent *evt) {};
 
   void ShowWindows() 
     {

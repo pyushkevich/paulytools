@@ -166,3 +166,28 @@ TracerData
     BroadcastOnFocusPointChange(&evt);
     }
 }
+
+void 
+TracerData
+::UpdateEdgeWeightFunction(MeshEdgeWeightFunction *fnNew)
+{
+  // Pass on the new function
+  m_DistanceMapper->SetEdgeWeightFunction(fnNew);
+
+  // Recompute the graph
+  m_DistanceMapper->ComputeGraph();
+
+  // If there is a focus point, compute distances to it
+  if(m_FocusPoint != -1)
+    m_DistanceMapper->ComputeDistances(m_FocusPoint);
+
+  // Delete the old edge weight function
+  delete m_EdgeWeightFunction;
+
+  // Assign the edge weight function 
+  m_EdgeWeightFunction = fnNew;
+
+  // Fire the appropriate event
+  TracerDataEvent evt(this);
+  BroadcastOnEdgeWeightsUpdate(&evt);
+}

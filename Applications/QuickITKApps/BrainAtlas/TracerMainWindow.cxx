@@ -26,7 +26,15 @@ TracerMainWindow(int x, int y, int w, int h, const char *label)
   m_GLStateDirty = true;
   m_CurrentPoint = -1;
   m_EdgeDisplayMode = EDGE_DISPLAY_NONE;
+  m_SurfaceDisplayMode = SURFACE_DISPLAY_ALL;
 } 
+
+TracerMainWindow
+::~TracerMainWindow()
+{
+  if(m_Data)
+    m_Data->RemoveTracerDataListener(this);
+}
 
 void 
 TracerMainWindow
@@ -642,4 +650,63 @@ TracerMainWindow
     }
 
   return 0;
+}
+  
+void 
+TracerMainWindow
+::OnMeshChange(TracerDataEvent *evt)
+{
+  m_DisplayListDirty = true;
+  m_EdgeDisplayListDirty = true;
+  m_CurrentPoint = -1;
+  redraw();
+}
+  
+void 
+TracerMainWindow
+::OnFocusCurveChange(TracerDataEvent *evt)
+{
+  m_CurrentPoint = -1;
+  redraw();
+}
+  
+void 
+TracerMainWindow
+::OnFocusPointChange(TracerDataEvent *evt)
+{
+  // Get the currently selected point from the data
+  m_CurrentPoint = -1;
+
+  // The edge drawing is no longer clean if drawing accumulated distances
+  if(m_EdgeDisplayMode == EDGE_DISPLAY_DISTANCE)
+    m_EdgeDisplayListDirty = true;
+
+  // If surface display is in neighborhood mode, dirty it
+  if(m_SurfaceDisplayMode == SURFACE_DISPLAY_NEIGHBORHOOD)
+    m_DisplayListDirty = true;
+
+  // Redraw the window
+  redraw();
+}
+
+void 
+TracerMainWindow
+::OnFocusCurveDataChange(TracerDataEvent *evt)
+{
+  redraw();
+}
+  
+void 
+TracerMainWindow
+::OnCurveListChange(TracerDataEvent *evt)
+{
+  redraw();
+}
+  
+void 
+TracerMainWindow
+::OnEdgeWeightsUpdate(TracerDataEvent *evt)
+{
+  m_EdgeDisplayListDirty = true;
+  redraw();
 }
