@@ -95,16 +95,16 @@ LINK_LIBRARIES(cmreps
 ENDIF("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" GREATER 1.5)
 
 # Copy over the icon files
-SET(CMREP_RESOURCES 
-	robot.tga 
-	robot_act.tga 
-	woild.tga 
-	woild_act.tga 
-	mspline.ini
-)
-
-FOREACH(FILE ${CMREP_RESOURCES})  
-	CONFIGURE_FILE(
-		${PAULY_SOURCE_DIR}/Applications/CMRepTool3d/Code/Data/${FILE}
-		${PAULY_BINARY_DIR}/Applications/CMRepTool3d/${FILE} COPY_ONLY)
-ENDFOREACH(FILE)
+#SET(CMREP_RESOURCES 
+#	robot.tga 
+#	robot_act.tga 
+#	woild.tga 
+#	woild_act.tga 
+#	mspline.ini
+#)
+#
+#FOREACH(FILE ${CMREP_RESOURCES})  
+#	CONFIGURE_FILE(
+#		${PAULY_SOURCE_DIR}/Applications/CMRepTool3d/Code/Data/${FILE}
+#		${PAULY_BINARY_DIR}/Applications/CMRepTool3d/${FILE} COPY_ONLY)
+#ENDFOREACH(FILE)
