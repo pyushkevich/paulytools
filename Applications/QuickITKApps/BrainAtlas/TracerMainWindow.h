@@ -12,19 +12,14 @@ public:
   enum EditMode { TRACKBALL, TRACER };
   enum TrackballMode { NONE, ROTATE, ZOOM, PAN };
 
-  // Constructor
-  TracerMainWindow(int x, int y, int w, int h, const char *label) 
-    : Fl_Gl_Window(x,y,w,h,label) 
-    {
-    m_Data = NULL;
-    m_DisplayListDirty = false;
-    m_DisplayList = -1;
-    m_EditMode = TRACKBALL;
-    m_TrackballMode = NONE;
-    m_GLStateDirty = true;
-    m_CurrentPoint = -1;
-    } 
+  // Edge display mode (for edges displayed over the surface of 
+  // the mesh
+  enum EdgeDisplayMode { EDGE_DISPLAY_NONE, 
+    EDGE_DISPLAY_PLAIN, EDGE_DISPLAY_LENGTH, EDGE_DISPLAY_DISTANCE };
 
+  // Constructor
+  TracerMainWindow(int x, int y, int w, int h, const char *label);
+  
   // Destructor
   virtual ~TracerMainWindow() {};
 
@@ -41,12 +36,18 @@ public:
     {
     m_CurrentPoint = -1;
     redraw();
+
+    // The edge drawing is no longer clean if drawing accumulated distances
+    if(m_EdgeDisplayMode == EDGE_DISPLAY_DISTANCE)
+      m_EdgeDisplayListDirty = true;
+
     } 
 
   // Request an update of the display lists
   void OnMeshUpdate() 
     {
     m_DisplayListDirty = true;
+    m_EdgeDisplayListDirty = true;
     if(shown()) redraw();
     }
 
@@ -54,6 +55,14 @@ public:
   void SetMode(EditMode mode) 
     {
     m_EditMode = mode;
+    redraw();
+    }
+
+  // Set the edge display mode
+  void SetEdgeDisplayMode(EdgeDisplayMode mode)
+    {
+    m_EdgeDisplayMode = mode;
+    m_EdgeDisplayListDirty = true;
     redraw();
     }
 
@@ -67,15 +76,25 @@ private:
 
   // Do the actual job of computing the display list
   void ComputeDisplayList();
+  void ComputeEdgeDisplayList();
 
-  // Display list associated with the brain surface
-  int m_DisplayList;
+  // Methods for choosing edge colors based on values
+  void SetGLColorHSV(double xHue, double xSaturation, double xValue);
+  void SetGLEdgeColorFromDistance(double xDistance);
+  void SetGLEdgeColorFromWeight(double xWeight);
+
+  // Display list associated with the brain surface and with the
+  // overlay edges on the brain surface
+  int m_DisplayList, m_EdgeDisplayList;
 
   // Whether the display lists requires recomputation
-  bool m_DisplayListDirty;
+  bool m_DisplayListDirty, m_EdgeDisplayListDirty;
 
   // Whether GL state needs reinitialization
   bool m_GLStateDirty;
+
+  // Current mode for edge overlay display
+  EdgeDisplayMode m_EdgeDisplayMode;
 
   // Pointer to the tracer data
   TracerData *m_Data;

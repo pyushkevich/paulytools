@@ -169,6 +169,10 @@ public:
   vtkIdType GetVertexEdge(vtkIdType iVertex, unsigned int iEdge) const
     { return m_Adjacency[m_AdjacencyIndex[iVertex] + iEdge]; }
 
+  /** Get the edge weight for a vertex */
+  float GetVertexEdgeWeight(vtkIdType iVertex, unsigned int iEdge) const
+    { return m_EdgeWeights[m_AdjacencyIndex[iVertex] + iEdge]; }
+
 private:
 
   // Clean up graph structures
@@ -199,7 +203,6 @@ private:
 
   // Default function object used to compute edge distances
   EuclideanDistanceMeshEdgeWeightFunction m_DefaultWeightFunction;
-  PitchBasedMeshEdgeWeightFunction m_DefaultWeightFunction2;
 };
 
 #endif

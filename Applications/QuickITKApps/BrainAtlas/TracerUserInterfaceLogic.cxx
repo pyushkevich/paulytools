@@ -222,5 +222,41 @@ TracerUserInterfaceLogic
     m_Data->SetEdgeWeightsToEuclideanDistance();
   else
     m_Data->SetEdgeWeightsToPitchDistance(value);
+
+  m_WinTrace->OnMeshUpdate();
 }
 
+void 
+TracerUserInterfaceLogic
+::OnSelectEdgeColoring(int value)
+{
+  if(value == 0)
+    m_WinTrace->SetEdgeDisplayMode(TracerMainWindow::EDGE_DISPLAY_DISTANCE);
+  else if(value == 1)
+    m_WinTrace->SetEdgeDisplayMode(TracerMainWindow::EDGE_DISPLAY_LENGTH);
+  else if(value == 2)
+    m_WinTrace->SetEdgeDisplayMode(TracerMainWindow::EDGE_DISPLAY_PLAIN);
+}
+
+void 
+TracerUserInterfaceLogic
+::OnCheckDisplayEdges(int value)
+{
+  if(value)
+    {
+    // Enable the edge coloring drop box
+    m_ChcEdgeColoring->activate();
+
+    // Enable edge display in the window based on current
+    // edge coloring
+    OnSelectEdgeColoring(m_ChcEdgeColoring->value());
+    }
+  else
+    {
+    // Disable edge coloring choice
+    m_ChcEdgeColoring->deactivate();
+
+    // Disable edge display
+    m_WinTrace->SetEdgeDisplayMode(TracerMainWindow::EDGE_DISPLAY_NONE);
+    }
+}

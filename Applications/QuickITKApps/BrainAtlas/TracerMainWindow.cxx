@@ -3,6 +3,7 @@
 #include <GL/glu.h>
 #include <Fl/Fl.H>
 #include <Fl/fl_draw.H>
+#include <Fl/Fl_Color_Chooser.h>
 
 #include <vtkPointData.h>
 #include <vtkDataArray.h>
@@ -11,11 +12,26 @@
 
 #include "Trackball.h"
 
+TracerMainWindow::
+TracerMainWindow(int x, int y, int w, int h, const char *label) 
+: Fl_Gl_Window(x,y,w,h,label) 
+{
+  m_Data = NULL;
+  m_DisplayListDirty = false;
+  m_EdgeDisplayListDirty = false;
+  m_DisplayList = -1;
+  m_EdgeDisplayList = -1;
+  m_EditMode = TRACKBALL;
+  m_TrackballMode = NONE;
+  m_GLStateDirty = true;
+  m_CurrentPoint = -1;
+  m_EdgeDisplayMode = EDGE_DISPLAY_NONE;
+} 
+
 void 
 TracerMainWindow
 ::ComputeDisplayList()
 {
-  
   // Generate a display list number if needed
   if(m_DisplayList < 0)
     m_DisplayList = glGenLists(1);
@@ -63,6 +79,131 @@ TracerMainWindow
 
   // Clear the dirty flag
   m_DisplayListDirty = false;
+}
+
+void
+TracerMainWindow
+::SetGLColorHSV(double xHue, double xSaturation, double xValue)
+{
+  double r, g, b;
+  Fl_Color_Chooser::hsv2rgb(xHue * 6.0, xSaturation, xValue, r, g, b);
+  glColor3d(r,g,b);
+}
+
+void
+TracerMainWindow
+::SetGLEdgeColorFromDistance(double xDistance)
+{
+  // Use distance to source to paint the vertex in
+  // a given color. For now, use the hue map
+  double hue = fmod(xDistance * 0.01, 1.0);
+  
+  // Set the HSV color
+  SetGLColorHSV(hue, 0.5, 1.0);
+}
+
+void
+TracerMainWindow
+::SetGLEdgeColorFromWeight(double xWeight)
+{
+  // Use distance to source to paint the vertex in
+  // a given color. For now, use the hue map
+  double hue = xWeight * 0.5;
+  if(hue > 0.67) hue = 0.67;
+  
+  // Set the HSV color
+  SetGLColorHSV(hue, 0.5, 1.0);
+}
+
+void
+TracerMainWindow
+::ComputeEdgeDisplayList()
+{
+  // Generate a display list number if needed
+  if(m_EdgeDisplayList < 0)
+    m_EdgeDisplayList = glGenLists(1);
+
+  // Get the data needed to draw the edges
+  const VTKMeshShortestDistance *dm = m_Data->GetDistanceMapper();
+
+  // Build display list
+  glNewList(m_EdgeDisplayList,GL_COMPILE_AND_EXECUTE);
+
+  // Asjust the mode based on the current state
+  EdgeDisplayMode xActualMode = m_EdgeDisplayMode;
+  if(xActualMode == EDGE_DISPLAY_DISTANCE && !m_Data->IsPathSourceSet())
+    xActualMode = EDGE_DISPLAY_PLAIN;
+
+  // Only do something if the mode is set
+  if(xActualMode != EDGE_DISPLAY_NONE)
+    {
+
+    // Draw the edges
+    glPushAttrib(GL_LIGHTING_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT);
+    glDisable(GL_LIGHTING);
+
+    // Set the default drawing color
+    glColor3f(0.2f, 0.8f, 0.6f);
+    
+    // Start line drawing
+    glBegin(GL_LINES);
+
+    // Go through all the edges
+    for(vtkIdType p = 0; p < dm->GetNumberOfVertices(); p++)
+      {
+      unsigned int nEdges = dm->GetVertexNumberOfEdges(p);
+      for(unsigned int j = 0; j < nEdges; j++)
+        {
+        // Get the adjacent point
+        vtkIdType q = dm->GetVertexEdge(p, j);
+        
+        // Only process each edge once
+        if( p < q )
+          {
+          vnl_vector_fixed<double,3> x1, x2;
+          m_Data->GetPointCoordinate(p, x1);
+          m_Data->GetPointCoordinate(q, x2);
+
+          // If in plain mode, don't set any color
+          if(xActualMode == EDGE_DISPLAY_PLAIN)
+            {
+            glVertex3dv(x1.data_block());
+            glVertex3dv(x2.data_block());
+            }
+          else if(m_EdgeDisplayMode == EDGE_DISPLAY_LENGTH)
+            {
+            // Get the weight of the edge
+            float xWeight = dm->GetVertexEdgeWeight(p, j);
+            
+            // Compute and set the color based on length
+            SetGLEdgeColorFromWeight(xWeight);
+
+            // Draw the vertices
+            glVertex3dv(x1.data_block());
+            glVertex3dv(x2.data_block());
+            }
+          else if(m_EdgeDisplayMode == EDGE_DISPLAY_DISTANCE)
+            {
+            SetGLEdgeColorFromDistance(dm->GetVertexDistance(p));
+            glVertex3dv(x1.data_block());
+            
+            SetGLEdgeColorFromDistance(dm->GetVertexDistance(q));
+            glVertex3dv(x2.data_block());
+            }
+          }
+        }
+      }
+
+    // Restore state
+    glEnd();
+    glPopAttrib();
+    }
+
+  // Close the display list
+  glEndList();
+
+  // The display list is 'clean'
+  m_EdgeDisplayListDirty = false;
 }
 
 void 
@@ -162,39 +303,11 @@ TracerMainWindow
     // Create the display list if needed
     if(m_DisplayListDirty) ComputeDisplayList();
     else glCallList(m_DisplayList);
-
-    // Draw the edges
-    glPushAttrib(GL_LIGHTING_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT);
-    glDisable(GL_LIGHTING);
-
-    const VTKMeshShortestDistance *dm = m_Data->GetDistanceMapper();
-    glBegin(GL_LINES);
-    for(vtkIdType p = 0; p < dm->GetNumberOfVertices(); p++)
-      {
-      unsigned int nEdges = dm->GetVertexNumberOfEdges(p);
-      for(unsigned int j = 0; j < nEdges; j++)
-        {
-        vtkIdType q = dm->GetVertexEdge(p, j);
-        if( p < q )
-          {
-          vnl_vector_fixed<double,3> x1, x2;
-          m_Data->GetPointCoordinate(p, x1);
-          m_Data->GetPointCoordinate(q, x2);
-          
-          float w = dm->GetVertexDistance(p);
-          glColor3f( 1.0f - 0.01f * w, 1.0f,1.0f - 0.01f * w); 
-          glVertex3dv(x1.data_block());
-          
-          w = dm->GetVertexDistance(q);
-          glColor3f(1.0f - 0.01f * w, 1.0f, 1.0f - 0.01f * w);           
-          glVertex3dv(x2.data_block());
-          }
-        }
-      }
-    glEnd();
-   
-    glPopAttrib();
-   
+    
+    // Create the edge display list if needed
+    if(m_EdgeDisplayListDirty) ComputeEdgeDisplayList();
+    else glCallList(m_EdgeDisplayList);
+    
     // Set the attributes for line drawing
     glPushAttrib(GL_LIGHTING_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT);
     glDisable(GL_LIGHTING);
@@ -510,6 +623,10 @@ TracerMainWindow
 
       // Add the point as to the list
       m_Data->AddNewPoint(m_CurrentPoint);
+
+      // The edge drawing is no longer clean if drawing accumulated distances
+      if(m_EdgeDisplayMode == EDGE_DISPLAY_DISTANCE)
+        m_EdgeDisplayListDirty = true;
       }
     }
 

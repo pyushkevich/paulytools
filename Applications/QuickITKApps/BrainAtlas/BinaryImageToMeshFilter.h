@@ -5,7 +5,10 @@
 #define __BinaryImageToMeshFilter_h_
 
 #include "itkImage.h"
+#include "itkResampleImageFilter.h"
+#include "itkWindowedSincInterpolateImageFunction.h"
 #include "itkAntiAliasBinaryImageFilter.h"
+#include "itkUnaryFunctorImageFilter.h"
 #include "itkCommand.h"
 
 #include <vtkCellArray.h>
@@ -17,12 +20,12 @@
 #include <vtkDecimate.h>
 #include <vtkPolyDataConnectivityFilter.h>
 #include <vtkStripper.h>
+#include <vtkCleanPolyData.h>
 
 #include <iostream>
 
 using namespace std;
 
-                                                                                                                                                                                   
 template<class TImage>
 void ConnectITKToVTK(itk::VTKImageExport<TImage> *fltExport,vtkImageImport *fltImport)
 {
@@ -39,6 +42,21 @@ void ConnectITKToVTK(itk::VTKImageExport<TImage> *fltExport,vtkImageImport *fltI
   fltImport->SetBufferPointerCallback( fltExport->GetBufferPointerCallback());
   fltImport->SetCallbackUserData( fltExport->GetCallbackUserData());
 }
+
+class UnaryFunctorBinaryToFloat
+{
+public:
+  UnaryFunctorBinaryToFloat()
+    { m_InsideValue = 1.0f; }
+
+  void SetInvertImage(bool invert)
+    { m_InsideValue = invert ? -1.0f : 1.0f; }
+
+  inline float operator()(short in)
+    { return in == 0 ? -m_InsideValue : m_InsideValue; }
+private:
+  float m_InsideValue;
+};
 
 template<class TImage>
 class BinaryImageToMeshFilter : public itk::ProcessObject
@@ -58,7 +76,7 @@ public:
 
   /** Get the result mesh */
   vtkPolyData *GetMesh()
-    { return fltStripper->GetOutput(); }
+    { return fltTriangle->GetOutput(); }
 
   /** Get the intermediate antialiased image */
   FloatImageType *GetAntiAliasImage() 
@@ -67,6 +85,10 @@ public:
   /** Whether to invert the binary image */
   itkSetMacro(InvertInput,bool);
   itkGetMacro(InvertInput,bool);
+
+  /** Whether to invert the binary image */
+  itkSetMacro(ResampleScaleFactor,float);
+  itkGetMacro(ResampleScaleFactor,float);
 
   /** Set the input */
   void SetInput(TImage *image) 
@@ -103,17 +125,34 @@ public:
 protected:
   BinaryImageToMeshFilter() 
     {
+    // Set the cardinality of the filter
     this->SetNumberOfInputs(1);
     this->SetNumberOfOutputs(1);
+
+    // Create the converter to float
+    fltToFloat = ToFloatFilter::New();
+    typename FloatImageType::Pointer imgPipeEnd = fltToFloat->GetOutput();
+
+    // Initialize the interpolation function
+    fnInterpolate = ResampleFunction::New();
+
+    // Create a resampling image filter
+    fltResample = ResampleFilter::New();
+    fltResample->SetInput(imgPipeEnd);
+    fltResample->SetTransform(itk::IdentityTransform<double,3>::New());
+    fltResample->SetInterpolator(fnInterpolate);
+    imgPipeEnd = fltResample->GetOutput();
   
     // Create an anti-aliasing image filter
     fltAlias = AAFilter::New();
     fltAlias->SetMaximumRMSError(0.024);
+    fltAlias->SetInput(imgPipeEnd);
+    imgPipeEnd = fltAlias->GetOutput();
 
     // Cast the image to VTK
     fltExport = ExportFilter::New();
     fltImport = vtkImageImport::New();
-    fltExport->SetInput(fltAlias->GetOutput());
+    fltExport->SetInput(imgPipeEnd);
     ConnectITKToVTK(fltExport.GetPointer(),fltImport);
 
     // Compute marching cubes
@@ -123,24 +162,38 @@ protected:
     fltMarching->ComputeGradientsOff();
     fltMarching->SetNumberOfContours(1);
     fltMarching->SetValue(0,0.0f);
+    vtkPolyData *meshPipeEnd = fltMarching->GetOutput();
 
     // Keep the largest connected component
     fltConnect = vtkPolyDataConnectivityFilter::New();
-    fltConnect->SetInput(fltMarching->GetOutput());
+    fltConnect->SetInput(meshPipeEnd);
     fltConnect->SetExtractionModeToLargestRegion();
+    meshPipeEnd = fltMarching->GetOutput();
+
+    // Clean up the data
+    fltClean = vtkCleanPolyData::New();
+    fltClean->SetInput(meshPipeEnd);
+    meshPipeEnd = fltClean->GetOutput();
 
     // Compute triangle strips for faster display
-    fltStripper = vtkStripper::New();
-    fltStripper->SetInput(fltConnect->GetOutput());
+    fltTriangle = vtkTriangleFilter::New();
+    fltTriangle->SetInput(meshPipeEnd);
+    meshPipeEnd = fltTriangle->GetOutput();
 
     // Set up progress
-    typedef itk::SimpleMemberCommand<Self> CommandType;
+    typedef itk::MemberCommand<Self> CommandType;
     typename CommandType::Pointer cmd = CommandType::New();
     cmd->SetCallbackFunction(this, &Self::ProgressCommand);
+
+    // Add progress to the two slow filters
+    fltResample->AddObserver(itk::ProgressEvent(),cmd);
     fltAlias->AddObserver(itk::ProgressEvent(),cmd);
 
     // Invert - NO
     m_InvertInput = false;
+
+    // Resample - NO
+    m_ResampleScaleFactor = 1.0f;
     }
 
   ~BinaryImageToMeshFilter()
@@ -149,83 +202,149 @@ protected:
     fltMarching->Delete();
     fltConnect->Delete();
     fltImport->Delete();
-    fltStripper->Delete();
+    fltTriangle->Delete();
+    fltClean->Delete();
     }
 
   /** Generate Data */
   virtual void GenerateData( void )
     {
-    // Get the input and output pointers
-    typename TImage::ConstPointer inputImage = 
-      reinterpret_cast<TImage *>(this->GetInput(0));
-    fltAlias->SetInput(inputImage);
-
     // Run the computation
     cout << "Computing white matter mesh" << endl;
 
-    // Make a negative image
-    if(m_InvertInput)
+    // Get the input and output pointers
+    typename TImage::ConstPointer inputImage = 
+      reinterpret_cast<TImage *>(this->GetInput(0));
+
+    // Pass the input to the remapper
+    fltToFloat->SetInput(inputImage);
+
+    // Set the inversion if necessary
+    m_ToFloatFunctor.SetInvertImage(m_InvertInput);
+    fltToFloat->SetFunctor(m_ToFloatFunctor);
+
+    // Convert the image to floats
+    fltToFloat->Update();
+
+    // Peform resampling only if necessary
+    if(m_ResampleScaleFactor != 1.0)
       {
-      typename TImage::Pointer imgInverse = TImage::New();
-      imgInverse->SetRegions(inputImage->GetBufferedRegion());
-      imgInverse->Allocate();
+      // Include the filter in the pipeline
+      fltAlias->SetInput(fltResample->GetOutput());
 
-      typename TImage::PixelType iMax = 
-        std::numeric_limits< typename TImage::PixelType >::max();
-      
-      ConstIteratorType itSrc(inputImage, inputImage->GetBufferedRegion());
-      IteratorType itTrg(imgInverse, imgInverse->GetBufferedRegion());
-      while(!itSrc.IsAtEnd())
-        {
-        itTrg.Set(iMax - itSrc.Get());
-        ++itTrg; ++itSrc;
-        }
+      // Set the size parameter
+      FloatImageType::SizeType szOutput = 
+        inputImage->GetBufferedRegion().GetSize();
+      szOutput[0] = (unsigned long) (szOutput[0] * m_ResampleScaleFactor);
+      szOutput[1] = (unsigned long) (szOutput[1] * m_ResampleScaleFactor);
+      szOutput[2] = (unsigned long) (szOutput[2] * m_ResampleScaleFactor);
+      fltResample->SetSize(szOutput);
 
-      inputImage = imgInverse;
+      // Set the scale and origin
+      FloatImageType::SpacingType xSpacing = 
+        inputImage->GetSpacing();
+      xSpacing[0] /= m_ResampleScaleFactor;
+      xSpacing[1] /= m_ResampleScaleFactor;
+      xSpacing[2] /= m_ResampleScaleFactor;
+      fltResample->SetOutputSpacing(xSpacing);
+      fltResample->SetOutputOrigin(inputImage->GetOrigin());
+
+      // Compute the resampling
+      cout << "   resampling the image " << endl;
+      fltResample->Update();
+      cout << endl;
+      }
+    else
+      {
+      // Exclude the filter from the pipeline
+      fltAlias->SetInput(fltToFloat->GetOutput());
       }
 
     // Run the filters
     cout << "   anti-aliasing the image " << endl;
     fltAlias->Update();
 
-    cout << "   converting image to VTK" << endl;
+    cout << endl << "   converting image to VTK" << endl;
     fltImport->Update();
 
     cout << "   running marching cubes algorithm" << endl;
     fltMarching->Update();
 
-    // cout << "      mesh has " << fltMarching->GetOutput()->GetNumberOfCells() << " cells." << endl;
-    // PrintMeshStatistics( fltMarching->GetOutput() );
+    cout << "      mesh has " 
+      << fltMarching->GetOutput()->GetNumberOfCells() << " cells and " 
+      << fltMarching->GetOutput()->GetNumberOfPoints() << " points. " << endl;
 
     cout << "   extracting the largest component" << endl;
     fltConnect->Update();
 
-    cout << "      mesh has " << fltConnect->GetOutput()->GetNumberOfCells() << " cells." << endl;
-    // PrintMeshStatistics( fltConnect->GetOutput() );
+    cout << "      mesh has " 
+      << fltConnect->GetOutput()->GetNumberOfCells() << " cells and " 
+      << fltConnect->GetOutput()->GetNumberOfPoints() << " points. " << endl;
 
-    cout << "   converting mesh to triangle strips" << endl;
-    fltStripper->Update();
-    PrintMeshStatistics( fltStripper->GetOutput() );
+    cout << "   cleaning the mesh " << endl;
+    fltClean->Update();
+
+    cout << "      mesh has " 
+      << fltClean->GetOutput()->GetNumberOfCells() << " cells and " 
+      << fltClean->GetOutput()->GetNumberOfPoints() << " points. " << endl;
+
+    cout << "   converting mesh to triangles" << endl;
+    fltTriangle->Update();
+
+    cout << "      mesh has " 
+      << fltTriangle->GetOutput()->GetNumberOfCells() << " cells and " 
+      << fltTriangle->GetOutput()->GetNumberOfPoints() << " points. " << endl;
+    
+    // PrintMeshStatistics( fltStripper->GetOutput() );
     }
 
 private:
   typedef itk::ImageRegionIterator<TImage> IteratorType;
   typedef itk::ImageRegionConstIterator<TImage> ConstIteratorType;
-  typedef itk::AntiAliasBinaryImageFilter<TImage,FloatImageType> AAFilter;
+
+  // Functor for remapping to float
+  UnaryFunctorBinaryToFloat m_ToFloatFunctor;
+  
+  // Filter to remap image to floating point
+  typedef itk::UnaryFunctorImageFilter<
+    TImage, FloatImageType, UnaryFunctorBinaryToFloat> ToFloatFilter;
+
+  // Windowed sinc for resampling
+  typedef itk::Function::WelchWindowFunction<4> WindowFunction;
+  typedef itk::WindowedSincInterpolateImageFunction<
+    FloatImageType, 4, WindowFunction, 
+    itk::ConstantBoundaryCondition<FloatImageType>, double> ResampleFunction;
+
+  // Filter to resample image
+  typedef itk::ResampleImageFilter<FloatImageType,FloatImageType> ResampleFilter;
+
+  // Antialiasing filter 
+  typedef itk::AntiAliasBinaryImageFilter<FloatImageType,FloatImageType> AAFilter;
+  
+  // Export to VTK filter
   typedef itk::VTKImageExport<FloatImageType> ExportFilter;
 
   typename AAFilter::Pointer fltAlias;
   typename ExportFilter::Pointer fltExport;
+  typename ToFloatFilter::Pointer fltToFloat;
+  typename ResampleFilter::Pointer fltResample;
+  typename ResampleFunction::Pointer fnInterpolate;
+
   vtkImageImport *fltImport;
   vtkImageMarchingCubes *fltMarching;
   vtkPolyDataConnectivityFilter *fltConnect;
-  vtkStripper *fltStripper;
+  vtkCleanPolyData *fltClean;
+  vtkTriangleFilter *fltTriangle;
 
   bool m_InvertInput;
+  float m_ResampleScaleFactor;
 
-  void ProgressCommand() 
+  void ProgressCommand(itk::Object *source, const itk::EventObject &evt) 
     {
-    cout << "." << flush;
+    // Get the elapsed progress
+    itk::ProcessObject *po = reinterpret_cast<ProcessObject *>(source);
+    float progress = po->GetProgress();
+    cout << setprecision(4) << (100 * progress) << "  " << flush;
     }
 };
 

@@ -18,6 +18,8 @@ public:
   void OnButtonStartCurve();
   void OnInputSulcalFactor(double value);
   void OnSelectCurve();
+  void OnSelectEdgeColoring(int value);
+  void OnCheckDisplayEdges(int value);
 
   void ShowWindows() 
     {

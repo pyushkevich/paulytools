@@ -46,18 +46,20 @@ TracerData
   m_Mesh = m_DataReader->GetOutput();
 
   // Compute all normals 
+  /*
   m_NormalsFilter->SetInput(m_Mesh);
   m_NormalsFilter->ConsistencyOn();
   m_NormalsFilter->AutoOrientNormalsOn();
   m_NormalsFilter->NonManifoldTraversalOn();
   m_NormalsFilter->Update();
   m_Mesh = m_NormalsFilter->GetOutput();
+  */
 
   // Clean the input data
-  m_CleanFilter->SetInput(m_Mesh);
-  m_CleanFilter->SetTolerance(0);
-  m_CleanFilter->Update();
-  m_Mesh = m_CleanFilter->GetOutput();
+  //m_CleanFilter->SetInput(m_Mesh);
+  //m_CleanFilter->SetTolerance(0);
+  //m_CleanFilter->Update();
+  //m_Mesh = m_CleanFilter->GetOutput();
 
   // Convert the input to triangles
   m_Triangulator->PassLinesOff();

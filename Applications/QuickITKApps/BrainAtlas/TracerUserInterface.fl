@@ -7,10 +7,10 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
   Function {MakeWindow()} {open
   } {
     Fl_Window m_WinMain {
-      label {GeeLab Brain Tracer} open
-      xywh {287 49 925 665} type Double resizable
+      label {GeeLab Brain Tracer}
+      xywh {47 75 925 665} type Double hide resizable
       code0 {\#include "TracerUserInterfaceBase.h"}
-      code1 {\#include "TracerMainWindow.h"} visible
+      code1 {\#include "TracerMainWindow.h"}
     } {
       Fl_Group {} {open
         xywh {5 30 645 625} box PLASTIC_DOWN_FRAME
@@ -58,8 +58,8 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           }
         }
       }
-      Fl_Group {} {open
-        xywh {655 290 265 365} box PLASTIC_UP_BOX
+      Fl_Group {} {
+        xywh {655 290 265 365} box PLASTIC_UP_BOX color 31
       } {
         Fl_Group {} {
           label {Interaction Mode:} open
@@ -68,17 +68,17 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           Fl_Light_Button m_BtnModeTrackball {
             label trackball
             callback {OnButtonModeTrackball();}
-            xywh {675 330 75 25} type Radio box PLASTIC_UP_BOX value 1 labelfont 1 labelsize 12
+            xywh {675 330 75 25} type Radio box PLASTIC_UP_BOX value 1 color 76 labelfont 1 labelsize 12
           }
           Fl_Light_Button m_BtnModeTracer {
             label tracer
             callback {OnButtonModeTracer();}
-            xywh {755 330 75 25} type Radio box PLASTIC_UP_BOX labelfont 1 labelsize 12 deactivate
+            xywh {755 330 75 25} type Radio box PLASTIC_UP_BOX color 76 labelfont 1 labelsize 12 deactivate
           }
         }
         Fl_Group {} {
           label {Curve Editing} open
-          xywh {665 390 245 220} box PLASTIC_DOWN_FRAME labelsize 12 align 5
+          xywh {665 390 245 160} box PLASTIC_DOWN_FRAME labelsize 12 align 5
         } {
           Fl_Choice m_ChcCurve {
             label {Current curve:}
@@ -88,27 +88,69 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           Fl_Button m_BtnStartCurve {
             label {add curve}
             callback {OnButtonStartCurve();}
-            xywh {675 445 80 25} box PLASTIC_UP_BOX labelfont 1 labelsize 12
+            xywh {675 445 80 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12
           }
           Fl_Button m_BtnDeleteCurve {
             label delete
             callback {OnButtonDeleteCurve();}
-            xywh {830 445 70 25} box PLASTIC_UP_BOX labelfont 1 labelsize 12 deactivate
+            xywh {830 445 70 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
           }
           Fl_Button m_BtnEditCurve {
             label edit
             callback {OnButtonEditCurve();}
-            xywh {760 445 65 25} box PLASTIC_UP_BOX labelfont 1 labelsize 12 deactivate
+            xywh {760 445 65 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
           }
           Fl_Value_Input {} {
             label {Sulcal support factor:}
             callback {OnInputSulcalFactor(o->value());}
-            tooltip {The degree to which curvature affects the path traced on the surface.} xywh {840 575 60 25} labelsize 12 when 8 step 0.1 textsize 12
+            tooltip {The degree to which curvature affects the path traced on the surface.} xywh {840 495 60 25} labelsize 12 when 8 step 0.1 textsize 12
           }
         }
         Fl_Group {} {open
           xywh {665 615 245 30} resizable
         } {}
+        Fl_Group {} {open
+          xywh {665 555 245 60}
+        } {
+          Fl_Button {} {
+            label {mesh options}
+            callback {m_WinMeshOptions->show();}
+            xywh {670 560 90 25} box PLASTIC_UP_BOX color 170 labelfont 1 labelsize 12
+          }
+        }
+      }
+    }
+    Fl_Window m_WinMeshOptions {
+      label {Mesh Display Options} open selected
+      xywh {228 472 303 415} type Double box ENGRAVED_BOX visible
+    } {
+      Fl_Group {} {
+        label {Displaying mesh edges:} open
+        xywh {10 35 280 85} box ENGRAVED_BOX labelfont 1 labelsize 12 align 5
+      } {
+        Fl_Check_Button m_ChkDisplayEdges {
+          label {Overlay edges on the mesh}
+          callback {OnCheckDisplayEdges(o->value());}
+          xywh {20 45 260 25} down_box DOWN_BOX labelsize 12
+        }
+        Fl_Choice m_ChcEdgeColoring {
+          label {Color edges based on:}
+          callback {OnSelectEdgeColoring(o->value());} open
+          xywh {35 90 240 20} down_box BORDER_BOX labelsize 12 align 5 textsize 12 deactivate
+        } {
+          menuitem {} {
+            label {distance to current vertex}
+            xywh {0 0 100 20} labelsize 12
+          }
+          menuitem {} {
+            label {edge weight}
+            xywh {10 10 100 20} labelsize 12
+          }
+          menuitem {} {
+            label {do not color edges}
+            xywh {20 20 100 20} labelsize 12
+          }
+        }
       }
     }
   }

@@ -5,7 +5,6 @@ VTKMeshShortestDistance
 ::VTKMeshShortestDistance()
 {
   // Set the distance function
-  m_DefaultWeightFunction2.SetPitchFactor(1.0);
   m_WeightFunctionPtr = &m_DefaultWeightFunction;
 
   // Initialize the filters
