@@ -1,0 +1,283 @@
+# data file for the Fltk User Interface Designer (fluid)
+version 1.0104 
+header_name {.h} 
+code_name {.cpp}
+Function {createUI()} {open
+} {
+  Fl_Window winMain {
+    label {Blob Modeller} open
+    xywh {507 104 260 580} box BORDER_BOX labelfont 1
+    code0 {\#include <stdio.h>}
+    code1 {\#include "FL/glut.h"}
+    code2 {\#include "blobmodl.h"}
+    code3 {extern Model *model;} visible
+  } {
+    Fl_Group {} {
+      label {Display Options:} open
+      xywh {5 50 250 300} box ENGRAVED_FRAME labeltype ENGRAVED_LABEL align 5
+    } {
+      Fl_Group {} {
+        label {Display Mode:} open
+        xywh {20 110 225 90} align 5
+      } {
+        Fl_Round_Button rbCSNotComputed {
+          label {Not computed}
+          xywh {25 110 120 25} type Radio down_box ROUND_DOWN_BOX selection_color 3 deactivate
+        }
+        Fl_Round_Button rbCSNotDisplayed {
+          label {Computed, not displayed}
+          callback {uiCSDisplayMode(false,false);}
+          xywh {25 130 185 25} type Radio down_box ROUND_DOWN_BOX selection_color 3
+          code0 {extern void uiCSDisplayMode(bool display,bool solid);}
+        }
+        Fl_Round_Button rbCSWireframe {
+          label {Displayed as wireframe}
+          callback {uiCSDisplayMode(true,false);}
+          xywh {25 150 185 25} type Radio down_box ROUND_DOWN_BOX value 1 selection_color 3
+        }
+        Fl_Round_Button rbCSSolid {
+          label {Displayed as solid}
+          callback {uiCSDisplayMode(true,true);}
+          xywh {25 170 190 25} type Radio down_box ROUND_DOWN_BOX selection_color 3
+        }
+      }
+      Fl_Choice choiceSurface {
+        label {Surface:}
+        callback uiCSChange open
+        xywh {75 60 170 25} down_box BORDER_BOX
+      } {
+        menuitem {} {
+          label {Implicit Surface}
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label {Parabolic Surface}
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label {Ridge Surface}
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label {Caustic Surface}
+          xywh {0 0 100 20}
+        }
+      }
+      Fl_Button {} {
+        label {Change Color}
+        callback uiCSColor
+        xywh {125 315 125 25}
+      }
+      Fl_Value_Input inputPolygonSize {
+        label {Polygon Size:}
+        callback uiCSPolygonResize
+        xywh {110 255 125 25}
+      }
+      Fl_Choice {} {
+        label {Implicit surface display mode:    } open
+        xywh {30 220 190 25} down_box BORDER_BOX align 9
+      } {
+        menuitem {} {
+          label {Plain vanilla}
+          callback {model->setMode(Model::plainSurface);}
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label {Gaussian curvature}
+          callback {model->setMode(Model::gcCodedSurface);}
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label {Principal field}
+          callback {model->setMode(Model::princField);}
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label {Asymptotic directions}
+          callback {model->setMode(Model::asymptField);}
+          xywh {0 0 100 20}
+        }
+      }
+    }
+    Fl_Menu_Bar {} {open
+      xywh {0 0 260 25}
+    } {
+      submenu {} {
+        label File open
+        xywh {0 0 100 20}
+      } {
+        menuitem {} {
+          label {Open...}
+          callback uiLoadModel
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label {Save...}
+          callback uiSaveModel
+          xywh {0 0 100 20}
+        }
+      }
+      submenu {} {
+        label Options open
+        xywh {0 0 100 20}
+      } {
+        menuitem {} {
+          label {Show/Hide Ovoids}
+          callback uiShowHideOvoids
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label {Polar Movement}
+          callback uiPolarMovement
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label {Fly-by Movement}
+          callback uiFlyBy
+          xywh {0 0 100 20}
+        }
+      }
+    }
+    Fl_Group {} {
+      label {Surface Position:} open
+      xywh {5 380 250 195} box ENGRAVED_BOX labeltype ENGRAVED_LABEL align 5
+    } {
+      Fl_Value_Output outKappa1 {
+        label {k1:}
+        xywh {40 390 80 20} labelfont 12
+      }
+      Fl_Value_Output outKappa2 {
+        label {k2:}
+        xywh {160 390 80 20} labelfont 12
+      }
+      Fl_Value_Output outGradMag {
+        label {Gradient Magnitude:}
+        xywh {160 415 80 20}
+      }
+      Fl_Group {} {
+        label {Hit space with mouse over the surface to set the current surface position.} open
+        xywh {10 520 235 5} labelsize 10 align 133
+      } {}
+      Fl_Check_Button {} {
+        label {Draw oscillating spheres}
+        callback {drawSpheres=!drawSpheres; glutPostRedisplay();}
+        xywh {15 460 210 25} down_box DIAMOND_DOWN_BOX
+        code0 {extern bool drawSpheres;}
+      }
+      Fl_Button {} {
+        label {Edit Ovoids}
+        callback uiEditOvoids
+        xywh {160 540 85 25}
+      }
+      Fl_Button {} {
+        label {Edit Ovoids}
+        callback uiEditOvoids selected
+        xywh {70 540 85 25}
+      }
+    }
+  }
+  Fl_Window winCompEditor {
+    label {Blob Component Editor} open
+    xywh {630 123 265 570} labeltype ENGRAVED_LABEL align 2 visible
+  } {
+    Fl_Group {} {
+      label {Log Scale:} open
+      xywh {5 190 255 105} box EMBOSSED_BOX labeltype ENGRAVED_LABEL align 21
+    } {
+      Fl_Value_Slider inputXS {
+        label {x:}
+        callback affineSliderChange
+        xywh {25 215 225 20} type Horizontal align 4 minimum -5 maximum 5 step 0.1
+      }
+      Fl_Value_Slider inputYS {
+        label {y:}
+        callback affineSliderChange
+        xywh {25 240 225 20} type Horizontal align 4 minimum -5 maximum 5 step 0.1
+      }
+      Fl_Value_Slider inputZS {
+        label {z:}
+        callback affineSliderChange
+        xywh {25 265 225 20} type Horizontal align 4 minimum -5 maximum 5 step 0.1
+      }
+    }
+    Fl_Group {} {
+      label {Rotation (degrees):} open
+      xywh {5 305 255 110} box EMBOSSED_BOX labeltype ENGRAVED_LABEL align 21
+    } {
+      Fl_Value_Slider inputXR {
+        label {x:}
+        callback affineSliderChange
+        xywh {30 335 220 20} type Horizontal align 4 minimum -180 maximum 180 step 1
+      }
+      Fl_Value_Slider inputYR {
+        label {y:}
+        callback affineSliderChange
+        xywh {30 360 220 20} type Horizontal align 4 minimum -180 maximum 180 step 1
+      }
+      Fl_Value_Slider inputZR {
+        label {z:}
+        callback affineSliderChange
+        xywh {30 385 220 20} type Horizontal align 4 minimum -180 maximum 180 step 1
+      }
+    }
+    Fl_Group {} {
+      label {Translation:} open
+      xywh {5 425 255 105} box EMBOSSED_BOX labeltype ENGRAVED_LABEL align 21
+    } {
+      Fl_Value_Slider inputXT {
+        label {x:}
+        callback affineSliderChange
+        xywh {25 450 225 20} type Horizontal align 4 minimum -5 maximum 5 step 0.1
+      }
+      Fl_Value_Slider inputYT {
+        label {y:}
+        callback affineSliderChange
+        xywh {25 475 225 20} type Horizontal align 4 minimum -5 maximum 5 step 0.1
+      }
+      Fl_Value_Slider inputZT {
+        label {z:}
+        callback affineSliderChange
+        xywh {25 500 225 20} type Horizontal align 4 minimum -5 maximum 5 step 0.1
+      }
+    }
+    Fl_Group {} {
+      label {Shape parameters:} open
+      xywh {5 95 255 85} box ENGRAVED_FRAME labeltype ENGRAVED_LABEL align 21
+    } {
+      Fl_Value_Slider sliderAlpha {
+        label {a:}
+        callback parameterSliderChange
+        xywh {25 125 225 20} type Horizontal labelfont 12 align 4 maximum 3.5 step 0.1 value 1
+      }
+      Fl_Value_Slider sliderBeta {
+        label {b:}
+        callback parameterSliderChange
+        xywh {25 150 225 20} type Horizontal labelfont 12 align 4 maximum 3.5 step 0.1 value 1
+      }
+    }
+    Fl_Return_Button buttonOK {
+      label Close
+      callback blobOKPressed
+      xywh {160 540 100 25}
+    }
+    Fl_Button {} {
+      label {Delete Ovoid}
+      callback uiDeleteOvoid
+      xywh {155 45 105 25}
+    }
+    Fl_Choice choiceOvoid {
+      callback ovoidSelected open
+      xywh {5 15 255 25} down_box BORDER_BOX
+    } {}
+    Fl_Button buttonCreate {
+      label {Create Ovoid}
+      callback createOvoid
+      xywh {45 45 105 25}
+    }
+    Fl_Button {} {
+      label {Rebuild Model}
+      callback uiRebuildModel
+      xywh {50 540 100 25}
+    }
+  }
+} 

@@ -1,5 +1,6 @@
 #include "TracerCurves.h"
 #include <sstream>
+#include <cassert>
 
 TracerCurves::IdType
 TracerCurves

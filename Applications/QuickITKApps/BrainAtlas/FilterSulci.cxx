@@ -180,74 +180,50 @@ int main(int argc, char *argv[])
     {
     // Define the gradient vector and the hessian matrix
     Vec xGradient(0.0f);
+    Mat xHessian(0.0f);
 
     // Get the current pixel value
     float xCenter = it.GetPixel( center );
 
-    // Compute the Hessian matrix
+    // Compute the gradient and the Hessian matrix
     for(unsigned int i = 0; i < 3; i++)
       {
       // Get the neighboring values in the current direction
-      float xNext = it.GetPixel( center + stride[i] );
-      float xPrev = it.GetPixel( center - stride[i] );
+      float xiNext = it.GetPixel( center + stride[i] );
+      float xiPrev = it.GetPixel( center - stride[i] );
 
       // Average the values to compute directional derivative using
       // central differences. (Argh!)
-      xGradient[i] = 0.5f * ( xNext - xPrev);
+      xGradient[i] = 0.5f * ( xiNext - xiPrev);
+
+      // Compute the second derivative in the i'th direction
+      xHessian[i][i] = xiNext + xiPrev - (xCenter + xCenter);
+
+      // Compute the mixed derivative
+      for(unsigned int j = 0; j < i; j++)
+        {
+        // Get the neighboring values in the current direction
+        float xjNext = it.GetPixel( center + stride[j] );
+        float xjPrev = it.GetPixel( center - stride[j] );
+        float xijNext = it.GetPixel( center + (stride[j] + stride[i]) );
+        float xijPrev = it.GetPixel( center - (stride[j] + stride[i]) );
+
+        // Compute the mixed directional derivative
+        xHessian[i][j] = xHessian[j][i] = 
+          0.5 * (
+          ( xCenter + xCenter + xijNext + xijPrev ) - 
+          ( xiNext + xiPrev + xjNext + xjPrev ) );
+        }
       }
 
     // Store the gradient
     imgGradient->SetPixel(it.GetIndex(), xGradient);
 
-    // Go to the next pixel
-    ++it;
-    }
-
-  cout << " Computed the gradient image " << endl;
-
-  // Create a neighborhood iterator for the gradient image. 
-  typedef itk::ConstNeighborhoodIterator<VecImage> GradientIterator;
-  GradientIterator itGrad(radius, imgGradient, imgGradient->GetBufferedRegion());
-
-  // Compute the Hessian matrix using central differences in the gradient image
-  while(!itGrad.IsAtEnd())
-    {
-    // Matrix to store the Hessian
-    Mat xHessian(0.0f);
-    
-    // Get the gradient at the center position
-    const Vec &xCenterGrad = itGrad.GetPixel( center );
-
-    // Compute each of the Hessian components
-    for(unsigned int i = 0; i < 3 ; i++)
-      {
-      // Get the previous and the next gradients
-      const Vec &xNextGrad = itGrad.GetPixel( center + stride[i] );
-      const Vec &xPrevGrad = itGrad.GetPixel( center - stride[i] );
-
-      // Compute the second derivative in the i-th direction
-      xHessian[i][i] = 0.5f * (xNextGrad[i] - xPrevGrad[i]);
-
-      // Compute the mixed derivatives
-      for(unsigned int j = 0; j < i; j++)
-        {
-        // Get the adjacent gradients in the J direction
-        const Vec &xNextJGrad = itGrad.GetPixel( center + stride[j] );
-        const Vec &xPrevJGrad = itGrad.GetPixel( center - stride[j] );
-
-        // Compute the second derivatives
-        xHessian[i][j] = xHessian[j][i] = 
-          0.25 * (
-            xNextJGrad[i] - xPrevJGrad[i] + 
-            xNextGrad[j] - xPrevGrad[j]);
-        }
-      }
-
     // Create the Geometry information vector
     GeomArray G;
-    G[0] = xCenterGrad[0];
-    G[1] = xCenterGrad[1];
-    G[2] = xCenterGrad[2];
+    G[0] = xGradient[0];
+    G[1] = xGradient[1];
+    G[2] = xGradient[2];
     G[3] = xHessian[0][0];
     G[4] = xHessian[1][1];
     G[5] = xHessian[2][2];
@@ -256,23 +232,23 @@ int main(int argc, char *argv[])
     G[8] = xHessian[1][2];
 
     // Store the Hessian for later use
-    imgGeom->SetPixel(itGrad.GetIndex(), G);
+    imgGeom->SetPixel(it.GetIndex(), G);
 
     // Compute the curvatures
     float xCurvMajor = 0.0, xCurvMinor = 0.0;
-    if(ComputePrincipalCurvatures(xHessian,xCenterGrad,xCurvMinor,xCurvMajor))
+    if(ComputePrincipalCurvatures(xHessian,xGradient,xCurvMinor,xCurvMajor))
       {
       // Save the curvatures
-      imgCrv[MINOR]->SetPixel(itGrad.GetIndex(),xCurvMinor);
-      imgCrv[MAJOR]->SetPixel(itGrad.GetIndex(),xCurvMajor);
+      imgCrv[MINOR]->SetPixel(it.GetIndex(),xCurvMinor);
+      imgCrv[MAJOR]->SetPixel(it.GetIndex(),xCurvMajor);
 
       // Compute mean and gaussian curvatures
-      imgCrv[GAUSS]->SetPixel(itGrad.GetIndex(),xCurvMinor * xCurvMajor);
-      imgCrv[MEAN]->SetPixel(itGrad.GetIndex(),0.5 * (xCurvMinor + xCurvMajor));
+      imgCrv[GAUSS]->SetPixel(it.GetIndex(),xCurvMinor * xCurvMajor);
+      imgCrv[MEAN]->SetPixel(it.GetIndex(),0.5 * (xCurvMinor + xCurvMajor));
       }
     
     // Go to the next pixel
-    ++itGrad;
+    ++it;
     }
 
   // Store the curvature files
@@ -300,15 +276,12 @@ int main(int argc, char *argv[])
     fVecInterp->SetInputImage(imgGeom);
 
     // Create data arrays for curvatures
-    vtkFloatArray *xCrvArray[4];
-    const char *names[] = { "MAJOR", "MINOR", "GAUSS", "MEAN" };
-    for(i=0; i < 4; i++) 
+    vtkFloatArray *xCrvArray[6];
+    const char *names[] = { "MAJOR", "MINOR", "GAUSS", "MEAN", "KOEN_S", "KOEN_C" };
+    for(i=0; i < 6; i++) 
       {
       xCrvArray[i] = vtkFloatArray::New();
       xCrvArray[i]->SetName(names[i]);
-      // xCrvArray[i]->SetNumberOfComponents(1);
-      // xCrvArray[i]->SetNumberOfTuples(mesh->GetNumberOfPoints());
-      // xCrvArray[i]->Allocate(mesh->GetNumberOfPoints());
       }
 
     // Iterate through the mesh
@@ -349,13 +322,22 @@ int main(int argc, char *argv[])
 
       xCrvArray[GAUSS]->InsertNextValue(xCurvMajor * xCurvMinor);
       xCrvArray[MEAN]->InsertNextValue(0.5 * (xCurvMinor + xCurvMajor));
+
+      const float xLogBoundLow = exp(-4.0f);
+      const float xLogBoundHi = exp(4.0f);
+      float xKoenderinkC = sqrt(xCurvMajor * xCurvMajor + xCurvMinor * xCurvMinor);
+      float xKoenderinkCLog = 
+         xKoenderinkCLog > xLogBoundHi ? 4.0f : 
+         ( xKoenderinkCLog < xLogBoundLow ? -4.0f : log(xKoenderinkCLog) );
+      float xKoenderinkS = atan2(xCurvMinor, xCurvMajor);
+
+      xCrvArray[4]->InsertNextValue( xKoenderinkCLog );
+      xCrvArray[5]->InsertNextValue( xKoenderinkS );
       }
 
     // Store the arrays with the data
-    for(i=0; i < 4; i++) 
+    for(i=0; i < 6; i++) 
       mesh->GetPointData()->AddArray(xCrvArray[i]);
-
-    cout << "array " << mesh->GetPointData()->GetArray(3)->GetNumberOfTuples() << endl;
 
     // Save the array
     vtkPolyDataWriter *writer = vtkPolyDataWriter::New();

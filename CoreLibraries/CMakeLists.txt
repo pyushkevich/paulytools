@@ -21,6 +21,7 @@ INCLUDE_DIRECTORIES(${MYLIBS_INCLUDE_DIRS})
 SUBDIRS(
   BasicImaging
   BSpline
+  ITKExtensions
   Matrix
   Optima
   Registry

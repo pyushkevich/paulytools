@@ -11,6 +11,7 @@
 #include "vtkRenderWindowInteractor.h"
 #include "vtkPointData.h"
 #include "vtkPolyData.h"
+#include "vtkCurvatures.h"
 
 using namespace std;
 
@@ -50,8 +51,14 @@ int main(int argc, char *argv[])
   fltReader->SetFileName(fnInput);
   fltReader->Update();
 
+  vtkCurvatures *fltCurv = vtkCurvatures::New();
+  fltCurv->SetInput(fltReader->GetOutput());
+  fltCurv->SetCurvatureTypeToMean();
+  fltCurv->Update();
+
   // Check what additional information the mesh has
-  vtkPolyData *mesh = fltReader->GetOutput();
+  // vtkPolyData *mesh = fltReader->GetOutput();
+  vtkPolyData *mesh = fltCurv->GetOutput();
 
   // If the scalar arrays are specified ...
   if(sScalarArray) 

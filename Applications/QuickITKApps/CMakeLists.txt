@@ -11,4 +11,5 @@ SUBDIRS(
   BrainAtlas
   AntiAlias
   FillSTLMesh
+  Ovoids
 )
