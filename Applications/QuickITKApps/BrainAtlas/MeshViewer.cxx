@@ -11,7 +11,8 @@
 #include "vtkRenderWindowInteractor.h"
 #include "vtkPointData.h"
 #include "vtkPolyData.h"
-#include "vtkCurvatures.h"
+#include "vtkStripper.h"
+
 
 using namespace std;
 
@@ -50,15 +51,16 @@ int main(int argc, char *argv[])
   vtkPolyDataReader *fltReader = vtkPolyDataReader::New();
   fltReader->SetFileName(fnInput);
   fltReader->Update();
+  cout << "Read the mesh " << fnInput << endl;
 
-  vtkCurvatures *fltCurv = vtkCurvatures::New();
-  fltCurv->SetInput(fltReader->GetOutput());
-  fltCurv->SetCurvatureTypeToMean();
-  fltCurv->Update();
+  // Triangulate the mesh
+  vtkStripper *fltStripper = vtkStripper::New();
+  fltStripper->SetInput(fltReader->GetOutput());
+  fltStripper->Update();
+  cout << "Converted to triangle strips " << endl;
 
   // Check what additional information the mesh has
-  // vtkPolyData *mesh = fltReader->GetOutput();
-  vtkPolyData *mesh = fltCurv->GetOutput();
+  vtkPolyData *mesh = fltStripper->GetOutput();
 
   // If the scalar arrays are specified ...
   if(sScalarArray) 

@@ -1487,6 +1487,13 @@ void ImageCube<T>::loadFromITKReadableFile(const char *giplFile, std::ostream &o
   makePaddedDataCube(size[0],size[1],size[2],res,
                      reader->GetOutput()->GetBufferPointer(),imageCube);
   loadFromPaddedCube(imageCube.root(),imageCube.size());
+
+  // Set the voxel size
+  setVoxelSize(
+    reader->GetOutput()->GetSpacing()[0],
+    reader->GetOutput()->GetSpacing()[1],
+    reader->GetOutput()->GetSpacing()[2]);
+  out << "Setting voxel size to " << getVoxelSize() << endl;
     
   // Compute the voxel transform
   makeDefaultTransform(SMLVec3f(1.0f,1.0f,1.0f));

@@ -3276,7 +3276,15 @@ bool loadImage(const char *fname, ImagingSystem::ITypes type, ostream &err) {
     bool zip = tryUnzipFile(fnmod,err);
 
     // Load the image
-    imaging.loadImage(fnmod,type,ImagingSystem::USE_EXTENSION,err);
+    try
+      {
+      imaging.loadImage(fnmod,type,ImagingSystem::USE_EXTENSION,err);
+      }
+    catch(...)
+      {
+      err << "Exception when loading image" << endl;
+      return false;
+      }
 
     // Rezip if needed
     if (zip)
@@ -5121,6 +5129,17 @@ void processCommand(const char *chrCommand, ostream &sout) {
         }
       }
 
+    else if (cmd == "align")
+      {
+      
+        if (imaging.getType() == imaging.BINARY)
+          {
+          SplineBinaryVolumeMatcher *match = (SplineBinaryVolumeMatcher *)imaging.getImageMatch();    
+          match->setSpline(spline,splineData);
+          match->alignSplineByMoments();
+          }
+      }
+
     else if (cmd == "test")
       {
       iss >> cmd;
@@ -5326,7 +5345,7 @@ bool ScriptProcessor::handleIdle() {
     if (commands.size() == 0)
       {
       GLDisplayDriver::removeListener(this,GLDisplayDriver::IDLE);
-      return false;
+      return true;
       }
 
     // Pop a command from the stack
@@ -5350,6 +5369,8 @@ string getenvs(string var) {
   return rtn;
 }
 
+
+// Script commands can use environment variables as '{'
 void ScriptProcessor::loadScript(const char *fname) {
   ifstream ifs(fname);
   commands.clear();
@@ -5365,20 +5386,23 @@ void ScriptProcessor::loadScript(const char *fname) {
       char ch = command.at(i);            
       if (evmode)
         {
-        if (isalnum(ch))
-          {
-          evar += ch;
-          }
-        else if (evar.length() == 0)
+        if(ch == '$')
           {
           newcmd += '$';
           evmode = false;
           }
-        else
+        if(ch == '{')
+          {
+          evar.assign("");
+          }
+        else if(ch == '}')
           {
           newcmd += getenvs(evar);
-          newcmd += ch;
           evmode = false;
+          }
+        else
+          {
+          evar += ch;
           }
         }
       else
@@ -5386,7 +5410,6 @@ void ScriptProcessor::loadScript(const char *fname) {
         if (ch == '$')
           {
           evmode = true;
-          evar.assign("");
           }
         else if (ch == '#' && i==0)
           {

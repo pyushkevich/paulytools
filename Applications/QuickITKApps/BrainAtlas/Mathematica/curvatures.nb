@@ -1,0 +1,870 @@
+(************** Content-type: application/mathematica **************
+                     CreatedBy='Mathematica 5.0'
+
+                    Mathematica-Compatible Notebook
+
+This notebook can be used with any Mathematica-compatible
+application, such as Mathematica, MathReader or Publicon. The data
+for the notebook starts with the line containing stars above.
+
+To get the notebook into a Mathematica-compatible application, do
+one of the following:
+
+* Save the data starting with the line of stars above into a file
+  with a name ending in .nb, then open the file inside the
+  application;
+
+* Copy the data starting with the line of stars above to the
+  clipboard, then use the Paste menu command inside the application.
+
+Data for notebooks contains only printable 7-bit ASCII and can be
+sent directly in email or through ftp in text mode.  Newlines can be
+CR, LF or CRLF (Unix, Macintosh or MS-DOS style).
+
+NOTE: If you modify the data for this notebook not in a Mathematica-
+compatible application, you must delete the line below containing
+the word CacheID, otherwise Mathematica-compatible applications may
+try to use invalid cache data.
+
+For more information on notebooks and Mathematica-compatible 
+applications, contact Wolfram Research:
+  web: http://www.wolfram.com
+  email: info@wolfram.com
+  phone: +1-217-398-0700 (U.S.)
+
+Notebook reader applications are available free of charge from 
+Wolfram Research.
+*******************************************************************)
+
+(*CacheID: 232*)
+
+
+(*NotebookFileLineBreakTest
+NotebookFileLineBreakTest*)
+(*NotebookOptionsPosition[     20769,        648]*)
+(*NotebookOutlinePosition[     21495,        673]*)
+(*  CellTagsIndexPosition[     21451,        669]*)
+(*WindowFrame->Normal*)
+
+
+
+Notebook[{
+
+Cell[CellGroupData[{
+Cell["\<\
+This notebook was used to test curvature computation in SulcusFilter.cxx\
+\>", "Title"],
+
+Cell[BoxData[
+    \(<< LinearAlgebra`MatrixManipulation`\)], "Input"],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+    RowBox[{
+      RowBox[{"H", "=", 
+        RowBox[{"(", GridBox[{
+              {\(F\_xx\), \(F\_xy\), \(F\_xz\)},
+              {\(F\_xy\), \(F\_yy\), \(F\_yz\)},
+              {\(F\_xz\), \(F\_yz\), \(F\_zz\)}
+              }], ")"}]}], 
+      ";"}], "\[IndentingNewLine]", \(G = {F\_x, F\_y, F\_z}\)}], "Input"],
+
+Cell[BoxData[
+    \({\((\(-Cos[y\ z]\)\ Sin[x] + Cos[z]\ Sin[x\ y] + Cos[y]\ Sin[x\ \
+z])\)\_x, \((\(-Cos[y\ z]\)\ Sin[x] + Cos[z]\ Sin[x\ y] + Cos[y]\ Sin[x\ \
+z])\)\_y, \((\(-Cos[y\ z]\)\ Sin[x] + Cos[z]\ Sin[x\ y] + Cos[y]\ Sin[x\ \
+z])\)\_z}\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+    RowBox[{
+      RowBox[{"H", "=", 
+        RowBox[{"(", GridBox[{
+              {"Fxx", "Fxy", "Fxz"},
+              {"Fxy", "Fyy", "Fyz"},
+              {"Fxz", "Fyz", "Fzz"}
+              }], ")"}]}], 
+      ";"}], "\[IndentingNewLine]", \(G = {Fx, Fy, Fz}\)}], "Input"],
+
+Cell[BoxData[
+    \({Fx, Fy, Fz}\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    RowBox[{"\[Kappa]Gauss", "=", 
+      RowBox[{
+        RowBox[{\(\(-1\)\/\((G . G)\)\^2\), 
+          RowBox[{"Det", "@", 
+            RowBox[{"BlockMatrix", "[", 
+              RowBox[{"(", GridBox[{
+                    {"H", \(Transpose@{G}\)},
+                    {\({G}\), \({{0}}\)}
+                    }], ")"}], "]"}]}]}], "//", "FullSimplify"}]}]], "Input"],
+
+Cell[BoxData[
+    \(\(\(1\/\((Fx\^2 + Fy\^2 + Fz\^2)\)\^2\)\((\(-Fxz\^2\)\ Fy\^2 + 
+        2\ Fxz\ \((Fx\ Fy\ Fyz + Fxy\ Fy\ Fz - Fx\ Fyy\ Fz)\) + 
+        Fz\ \((\(-2\)\ Fxx\ Fy\ Fyz - Fxy\^2\ Fz + Fxx\ Fyy\ Fz)\) + 
+        Fxx\ Fy\^2\ Fzz + 2\ Fx\ Fxy\ \((Fyz\ Fz - Fy\ Fzz)\) + 
+        Fx\^2\ \((\(-Fyz\^2\) + Fyy\ Fzz)\))\)\)\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(\[Kappa]Mean = \(1\/\(2 \((G . G)\)\^\(3/2\)\)\) \((\((G . 
+                    G)\) \((H\[LeftDoubleBracket]1, 1\[RightDoubleBracket] + 
+                    H\[LeftDoubleBracket]2, 2\[RightDoubleBracket] + 
+                    H\[LeftDoubleBracket]3, 3\[RightDoubleBracket])\) - 
+              Sum[G\[LeftDoubleBracket]i\[RightDoubleBracket] 
+                  G\[LeftDoubleBracket]j\[RightDoubleBracket] 
+                  H\[LeftDoubleBracket]i, j\[RightDoubleBracket], {i, 3}, {j, 
+                  3}])\) // FullSimplify\)], "Input"],
+
+Cell[BoxData[
+    \(\((\(-2\)\ Fy\ Fyz\ Fz + Fyy\ Fz\^2 - 2\ Fx\ \((Fxy\ Fy + Fxz\ Fz)\) + 
+          Fxx\ \((Fy\^2 + Fz\^2)\) + Fy\^2\ Fzz + 
+          Fx\^2\ \((Fyy + 
+                Fzz)\))\)/\((2\ \((Fx\^2 + Fy\^2 + Fz\^2)\)\^\(3/2\))\)\)], \
+"Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(GN = G\/\((G . G)\)\^\(1/2\)\)], "Input"],
+
+Cell[BoxData[
+    \({Fx\/\@\(Fx\^2 + Fy\^2 + Fz\^2\), Fy\/\@\(Fx\^2 + Fy\^2 + Fz\^2\), 
+      Fz\/\@\(Fx\^2 + Fy\^2 + Fz\^2\)}\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(S = \(-\(1\/\((G . G)\)\^\(3/2\)\)\) \((IdentityMatrix[3] - 
+                Transpose[{GN}] . {GN})\) . H // Factor\)], "Input"],
+
+Cell[BoxData[
+    \({{\(Fx\ Fxy\ Fy - Fxx\ Fy\^2 + Fx\ Fxz\ Fz - Fxx\ Fz\^2\)\/\((Fx\^2 + \
+Fy\^2 + Fz\^2)\)\^\(5/2\), \(\(-Fxy\)\ Fy\^2 + Fx\ Fy\ Fyy + Fx\ Fyz\ Fz - \
+Fxy\ Fz\^2\)\/\((Fx\^2 + Fy\^2 + Fz\^2)\)\^\(5/2\), \(\(-Fxz\)\ Fy\^2 + Fx\ \
+Fy\ Fyz - Fxz\ Fz\^2 + Fx\ Fz\ Fzz\)\/\((Fx\^2 + Fy\^2 + Fz\^2)\)\^\(5/2\)}, \
+{\(-\(\(Fx\^2\ Fxy - Fx\ Fxx\ Fy - Fxz\ Fy\ Fz + 
+                Fxy\ Fz\^2\)\/\((Fx\^2 + Fy\^2 + Fz\^2)\)\^\(5/2\)\)\), \(-\(\
+\(\(-Fx\)\ Fxy\ Fy + Fx\^2\ Fyy - Fy\ Fyz\ Fz + 
+                Fyy\ Fz\^2\)\/\((Fx\^2 + Fy\^2 + Fz\^2)\)\^\(5/2\)\)\), \(-\(\
+\(\(-Fx\)\ Fxz\ Fy + Fx\^2\ Fyz + Fyz\ Fz\^2 - 
+                Fy\ Fz\ Fzz\)\/\((Fx\^2 + Fy\^2 + Fz\^2)\)\^\(5/2\)\)\)}, \
+{\(-\(\(Fx\^2\ Fxz + Fxz\ Fy\^2 - Fx\ Fxx\ Fz - 
+                Fxy\ Fy\ Fz\)\/\((Fx\^2 + Fy\^2 + Fz\^2)\)\^\(5/2\)\)\), \
+\(-\(\(Fx\^2\ Fyz + Fy\^2\ Fyz - Fx\ Fxy\ Fz - 
+                Fy\ Fyy\ Fz\)\/\((Fx\^2 + Fy\^2 + Fz\^2)\)\^\(5/2\)\)\), \
+\(-\(\(\(-Fx\)\ Fxz\ Fz - Fy\ Fyz\ Fz + Fx\^2\ Fzz + 
+                Fy\^2\ Fzz\)\/\((Fx\^2 + Fy\^2 + Fz\^2)\)\^\(5/2\)\)\)}}\)], \
+"Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(\(S*\((G . G)\)\^\(3/2\) // FullSimplify\) // InputForm\)], "Input"],
+
+Cell["\<\
+{{-Fxx + (Fx*(Fx*Fxx + Fxy*Fy + Fxz*Fz))/
+    (Fx^2 + Fy^2 + Fz^2), 
+  -Fxy + (Fx*(Fx*Fxy + Fy*Fyy + Fyz*Fz))/
+    (Fx^2 + Fy^2 + Fz^2), 
+  (-(Fxz*(Fy^2 + Fz^2)) + 
+    Fx*(Fy*Fyz + Fz*Fzz))/(Fx^2 + Fy^2 + 
+    Fz^2)}, 
+ {-Fxy + (Fy*(Fx*Fxx + Fxy*Fy + Fxz*Fz))/
+    (Fx^2 + Fy^2 + Fz^2), 
+  -Fyy + (Fy*(Fx*Fxy + Fy*Fyy + Fyz*Fz))/
+    (Fx^2 + Fy^2 + Fz^2), 
+  (Fx*Fxz*Fy - Fx^2*Fyz - Fyz*Fz^2 + 
+    Fy*Fz*Fzz)/(Fx^2 + Fy^2 + Fz^2)}, 
+ {(-(Fxz*(Fx^2 + Fy^2)) + (Fx*Fxx + Fxy*Fy)*
+     Fz)/(Fx^2 + Fy^2 + Fz^2), 
+  (-((Fx^2 + Fy^2)*Fyz) + (Fx*Fxy + Fy*Fyy)*
+     Fz)/(Fx^2 + Fy^2 + Fz^2), 
+  ((Fx*Fxz + Fy*Fyz)*Fz - (Fx^2 + Fy^2)*Fzz)/
+   (Fx^2 + Fy^2 + Fz^2)}}\
+\>", "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(\(-Tr[S]\)\/\(2  \[Kappa]Mean\) // Simplify\)], "Input"],
+
+Cell[BoxData[
+    \(1\/\(Fx\^2 + Fy\^2 + Fz\^2\)\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(Det[S]\)], "Input"],
+
+Cell[BoxData[
+    \(0\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(CrossProduct[{x1[0], x1[1], x1[2]}, {x2[0], x2[1], x2[2]}] // 
+      InputForm\)], "Input"],
+
+Cell["\<\
+{-(x1[2]*x2[1]) + x1[1]*x2[2], 
+ x1[2]*x2[0] - x1[0]*x2[2], 
+ -(x1[1]*x2[0]) + x1[0]*x2[1]}\
+\>", "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Try A Test Function", "Subsubtitle"],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+    \(<< Calculus`VectorAnalysis`\), "\[IndentingNewLine]", 
+    \(SetCoordinates[Cartesian[x, y, z]]\)}], "Input"],
+
+Cell[BoxData[
+    \(Cartesian[x, y, z]\)], "Output"]
+}, Open  ]],
+
+Cell["Define some arbitrary function", "Text"],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(F = Sin[x*y] Cos[z] - Cos[y*z] Sin[x] + Sin[z*x] Cos[y]\)], "Input"],
+
+Cell[BoxData[
+    \(\(-Cos[y\ z]\)\ Sin[x] + Cos[z]\ Sin[x\ y] + 
+      Cos[y]\ Sin[x\ z]\)], "Output"]
+}, Open  ]],
+
+Cell["Compute the Jet of the function at some point", "Text"],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+    \(\(ruleX\  = {x \[Rule] 0.45, y \[Rule] 0.34, 
+          z \[Rule] 0.23};\)\), "\[IndentingNewLine]", 
+    \({F0, G, H, J} = NestList[Grad, F, 3] /. ruleX\)}], "Input"],
+
+Cell[BoxData[
+    \({\(-0.18784483126023965`\), {\(-0.3548426658982121`\), 
+        0.4063925445859318`, 
+        0.39877779332790714`}, {{0.4113298063852732`, 0.8794759631233682`, 
+          0.8749384680146448`}, {0.8794759631233682`, \
+\(-0.1045106969541517`\), \(-0.18276757953060643`\)}, {0.8749384680146448`, \
+\(-0.18276757953060643`\), \(-0.11798577844567834`\)}}, \
+{{{0.8484642288571604`, \(-0.15695662346307657`\), \
+\(-0.07466323580620746`\)}, {\(-0.15695662346307657`\), \
+\(-0.3679903537116246`\), \(-0.40759190913411686`\)}, \
+{\(-0.07466323580620746`\), \(-0.40759190913411686`\), \
+\(-0.35474053915109927`\)}}, {{\(-0.15695662346307657`\), \
+\(-0.3679903537116246`\), \(-0.40759190913411686`\)}, {\(-0.3679903537116246`\
+\), \(-0.05364799581878249`\), \(-0.21607204037022362`\)}, \
+{\(-0.40759190913411686`\), \(-0.21607204037022362`\), \(-0.1320853475778618`\
+\)}}, {{\(-0.07466323580620746`\), \(-0.40759190913411686`\), \
+\(-0.35474053915109927`\)}, {\(-0.40759190913411686`\), \
+\(-0.21607204037022362`\), \(-0.1320853475778618`\)}, \
+{\(-0.35474053915109927`\), \(-0.1320853475778618`\), \(-0.05203969503228948`\
+\)}}}}\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+    RowBox[{"\[Kappa]Gauss", "=", 
+      RowBox[{\(\(-1\)\/\((G . G)\)\^2\), 
+        RowBox[{"Det", "@", 
+          RowBox[{"BlockMatrix", "[", 
+            RowBox[{"(", GridBox[{
+                  {"H", \(Transpose@{G}\)},
+                  {\({G}\), \({{0}}\)}
+                  }], ")"}], 
+            "]"}]}]}]}], "\[IndentingNewLine]", \(\[Kappa]Mean = \(1\/\(2 \
+\((G . G)\)\^\(3/2\)\)\) \((\((Gt . 
+                  G)\) \((H\[LeftDoubleBracket]1, 1\[RightDoubleBracket] + 
+                  H\[LeftDoubleBracket]2, 2\[RightDoubleBracket] + 
+                  H\[LeftDoubleBracket]3, 3\[RightDoubleBracket])\) - 
+            Sum[G\[LeftDoubleBracket]i\[RightDoubleBracket] 
+                G\[LeftDoubleBracket]j\[RightDoubleBracket] 
+                H\[LeftDoubleBracket]i, j\[RightDoubleBracket], {i, 3}, {j, 
+                3}])\)\)}], "Input"],
+
+Cell[BoxData[
+    \(0.21049819891586855`\)], "Output"],
+
+Cell[BoxData[
+    \(1.0427250878109364`\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(Nt = G\/\@\(G . G\)\)], "Input"],
+
+Cell[BoxData[
+    \({\(-0.5289141823860325`\), 0.6057523547889972`, 
+      0.5944021133361657`}\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \({\[Kappa]Gauss, \[Kappa]Mean} /. ruleX\)], "Input"],
+
+Cell[BoxData[
+    \({0.21049819891586855`, 1.0427250878109364`}\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(k1 = \[Kappa]Mean + \@\(\[Kappa]Mean\^2 - \[Kappa]Gauss\) /. 
+        ruleX\)], "Input"],
+
+Cell[BoxData[
+    \(1.9790890180402338`\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(k2 = \[Kappa]Mean - \@\(\[Kappa]Mean\^2 - \[Kappa]Gauss\) /. 
+        ruleX\)], "Input"],
+
+Cell[BoxData[
+    \(0.106361157581639`\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+    \(\(S = \(-\(1\/Norm[G]\)\) \((IdentityMatrix[3] - 
+                Transpose[{G}] . {G}\/Norm[G]\^2)\) . 
+            H;\)\), "\[IndentingNewLine]", 
+    \(S // MatrixForm\)}], "Input"],
+
+Cell[BoxData[
+    TagBox[
+      RowBox[{"(", "\[NoBreak]", GridBox[{
+            {\(-1.2716058798042549`\), \(-0.8086259725608514`\), \
+\(-0.7967397579657268`\)},
+            {\(-0.5567542422560129`\), \(-0.4194757099689393`\), \
+\(-0.3086961780976877`\)},
+            {\(-0.5641218014293242`\), \(-0.2920503513494144`\), \
+\(-0.39436858584867884`\)}
+            }], "\[NoBreak]", ")"}],
+      Function[ BoxForm`e$, 
+        MatrixForm[ BoxForm`e$]]]], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+    \(\(S1 = S + k1*IdentityMatrix[3];\)\), "\[IndentingNewLine]", 
+    \(S1 // MatrixForm\)}], "Input"],
+
+Cell[BoxData[
+    TagBox[
+      RowBox[{"(", "\[NoBreak]", GridBox[{
+            {
+              "0.707483138235979`", \(-0.8086259725608514`\), \
+\(-0.7967397579657268`\)},
+            {\(-0.5567542422560129`\), 
+              "1.5596133080712946`", \(-0.3086961780976877`\)},
+            {\(-0.5641218014293242`\), \(-0.2920503513494144`\), 
+              "1.584720432191555`"}
+            }], "\[NoBreak]", ")"}],
+      Function[ BoxForm`e$, 
+        MatrixForm[ BoxForm`e$]]]], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(Eigensystem[S1] // TableForm\)], "Input"],
+
+Cell[BoxData[
+    InterpretationBox[GridBox[{
+          {"1.9790890180402332`", "1.8727278604585953`", "0.`"},
+          {GridBox[{
+                {\(-0.6549061306054561`\)},
+                {"0.39520760565470736`"},
+                {"0.6441342317623422`"}
+                },
+              RowSpacings->0.25,
+              ColumnSpacings->1,
+              RowAlignments->Baseline,
+              ColumnAlignments->{Left}], GridBox[{
+                {\(-0.0012445431993655762`\)},
+                {\(-0.7009409881679121`\)},
+                {"0.7132181869655428`"}
+                },
+              RowSpacings->0.25,
+              ColumnSpacings->1,
+              RowAlignments->Baseline,
+              ColumnAlignments->{Left}], GridBox[{
+                {\(-0.848674400923664`\)},
+                {\(-0.376491455113888`\)},
+                {\(-0.3714915146313404`\)}
+                },
+              RowSpacings->0.25,
+              ColumnSpacings->1,
+              RowAlignments->Baseline,
+              ColumnAlignments->{Left}]}
+          },
+        RowSpacings->1,
+        ColumnSpacings->3,
+        RowAlignments->Baseline,
+        ColumnAlignments->{Left}],
+      TableForm[ {{1.9790890180402332, 1.8727278604585953, 
+        0.0}, {{-.6549061306054561, .39520760565470736, .64413423176234219}, \
+{-.0012445431993655762, -.70094098816791206, .71321818696554284}, \
+{-.84867440092366397, -.37649145511388799, -.37149151463134039}}}]]], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(Eigenvectors[S1] . G /. ruleX\)], "Input"],
+
+Cell[BoxData[
+    \({0.6498644893480063`, 2.942091015256665`*^-15, 
+      8.326672684688674`*^-17}\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+    \(e1 = \(#\/\@\(# . #\) &\)@
+        CrossProduct[St1\[LeftDoubleBracket]1\[RightDoubleBracket], 
+          St1\[LeftDoubleBracket]2\[RightDoubleBracket]]\), "\
+\[IndentingNewLine]", 
+    \(e2 = CrossProduct[e1, Nt]\)}], "Input"],
+
+Cell[BoxData[
+    \({0.8486744009236639`, 0.376491455113888`, 
+      0.37149151463134095`}\)], "Output"],
+
+Cell[BoxData[
+    \({\(-0.0012445431993628514`\), \(-0.7009409881679146`\), 
+      0.7132181869655406`}\)], "Output"]
+}, Open  ]],
+
+Cell["Compute the ridge function", "Text"],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(dkds1 = \(1\/\@\(G . G\)\) \((Sum[
+              J\[LeftDoubleBracket]i, j, k\[RightDoubleBracket] 
+                e1\[LeftDoubleBracket]i\[RightDoubleBracket] 
+                e1\[LeftDoubleBracket]j\[RightDoubleBracket] 
+                e1\[LeftDoubleBracket]k\[RightDoubleBracket], {i, 3}, {j, 
+                3}, {k, 3}] + 
+            3*k1*Sum[
+                H\[LeftDoubleBracket]i, j\[RightDoubleBracket] 
+                  e1\[LeftDoubleBracket]i\[RightDoubleBracket] 
+                  Nt\[LeftDoubleBracket]j\[RightDoubleBracket], {i, 3}, {j, 
+                  3}])\)\)], "Input"],
+
+Cell[BoxData[
+    \(1.6216829651412046`\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(dkds2 = \(1\/\@\(G . G\)\) \((Sum[
+              J\[LeftDoubleBracket]i, j, k\[RightDoubleBracket] 
+                e2\[LeftDoubleBracket]i\[RightDoubleBracket] 
+                e2\[LeftDoubleBracket]j\[RightDoubleBracket] 
+                e2\[LeftDoubleBracket]k\[RightDoubleBracket], {i, 3}, {j, 
+                3}, {k, 3}] + 
+            3*k2*Sum[
+                H\[LeftDoubleBracket]i, j\[RightDoubleBracket] 
+                  e2\[LeftDoubleBracket]i\[RightDoubleBracket] 
+                  Nt\[LeftDoubleBracket]j\[RightDoubleBracket], {i, 3}, {j, 
+                  3}])\)\)], "Input"],
+
+Cell[BoxData[
+    \(\(-0.13525683470465827`\)\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(dkds1*dkds2\)], "Input"],
+
+Cell[BoxData[
+    \(\(-0.219343704759464`\)\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[""], "Input"],
+
+Cell[BoxData[
+    \({\(-0.0012445431993628514`\), \(-0.7009409881679146`\), 
+      0.7132181869655406`}\)], "Output"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Ridge Computations", "Subsubtitle"],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+    \(Clear[F]\), "\[IndentingNewLine]", 
+    \(J2 = 
+      Table[Subscript[F, 
+          StringJoin@
+            Sort[ToString /@ \(({x, y, z}\[LeftDoubleBracket]{i, 
+                      j}\[RightDoubleBracket])\)]], {i, 3}, {j, 
+          3}]\), "\[IndentingNewLine]", 
+    \(J3 = 
+      Table[Subscript[F, 
+          StringJoin@
+            Sort[ToString /@ \(({x, y, z}\[LeftDoubleBracket]{i, j, 
+                      k}\[RightDoubleBracket])\)]], {i, 3}, {j, 3}, {k, 
+          3}]\)}], "Input"],
+
+Cell[BoxData[
+    \({{F\_"xx", F\_"xy", F\_"xz"}, {F\_"xy", F\_"yy", F\_"yz"}, {F\_"xz", 
+        F\_"yz", F\_"zz"}}\)], "Output"],
+
+Cell[BoxData[
+    \({{{F\_"xxx", F\_"xxy", F\_"xxz"}, {F\_"xxy", F\_"xyy", 
+          F\_"xyz"}, {F\_"xxz", F\_"xyz", F\_"xzz"}}, {{F\_"xxy", F\_"xyy", 
+          F\_"xyz"}, {F\_"xyy", F\_"yyy", F\_"yyz"}, {F\_"xyz", F\_"yyz", 
+          F\_"yzz"}}, {{F\_"xxz", F\_"xyz", F\_"xzz"}, {F\_"xyz", F\_"yyz", 
+          F\_"yzz"}, {F\_"xzz", F\_"yzz", F\_"zzz"}}}\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+    \(Clear[T, t]\), "\[IndentingNewLine]", 
+    \(T = {t\_x, t\_y, t\_z}\), "\[IndentingNewLine]", 
+    \(a1 = 
+      Sum[J3\[LeftDoubleBracket]i, j, k\[RightDoubleBracket]*
+          T\[LeftDoubleBracket]i\[RightDoubleBracket]*
+          T\[LeftDoubleBracket]j\[RightDoubleBracket]*
+          T\[LeftDoubleBracket]k\[RightDoubleBracket], {i, 3}, {j, 3}, {k, 
+          3}]\)}], "Input"],
+
+Cell[BoxData[
+    \({t\_x, t\_y, t\_z}\)], "Output"],
+
+Cell[BoxData[
+    \(F\_"xxx"\ t\_x\%3 + 3\ F\_"xxy"\ t\_x\%2\ t\_y + 
+      3\ F\_"xyy"\ t\_x\ t\_y\%2 + F\_"yyy"\ t\_y\%3 + 
+      3\ F\_"xxz"\ t\_x\%2\ t\_z + 6\ F\_"xyz"\ t\_x\ t\_y\ t\_z + 
+      3\ F\_"yyz"\ t\_y\%2\ t\_z + 3\ F\_"xzz"\ t\_x\ t\_z\%2 + 
+      3\ F\_"yzz"\ t\_y\ t\_z\%2 + F\_"zzz"\ t\_z\%3\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(a2 = 
+      Sum[J2\[LeftDoubleBracket]i, j\[RightDoubleBracket]*
+            T\[LeftDoubleBracket]i\[RightDoubleBracket]*{n\_x, n\_y, 
+                n\_z}\[LeftDoubleBracket]j\[RightDoubleBracket], {i, 3}, {j, 
+            3}] // Factor\)], "Input"],
+
+Cell[BoxData[
+    \(F\_"xx"\ n\_x\ t\_x + F\_"xy"\ n\_y\ t\_x + F\_"xz"\ n\_z\ t\_x + 
+      F\_"xy"\ n\_x\ t\_y + F\_"yy"\ n\_y\ t\_y + F\_"yz"\ n\_z\ t\_y + 
+      F\_"xz"\ n\_x\ t\_z + F\_"yz"\ n\_y\ t\_z + 
+      F\_"zz"\ n\_z\ t\_z\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(Collect[a2, t\__]\)], "Input"],
+
+Cell[BoxData[
+    \(\((F\_"xx"\ n\_x + F\_"xy"\ n\_y + 
+            F\_"xz"\ n\_z)\)\ t\_x + \((F\_"xy"\ n\_x + F\_"yy"\ n\_y + 
+            F\_"yz"\ n\_z)\)\ t\_y + \((F\_"xz"\ n\_x + F\_"yz"\ n\_y + 
+            F\_"zz"\ n\_z)\)\ t\_z\)], "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(Collect[a1, t_]\)], "Input"],
+
+Cell[BoxData[
+    \(F\_"xxx"\ t\_x\%3 + 3\ F\_"xxy"\ t\_x\%2\ t\_y + 
+      3\ F\_"xyy"\ t\_x\ t\_y\%2 + F\_"yyy"\ t\_y\%3 + 
+      3\ F\_"xxz"\ t\_x\%2\ t\_z + 6\ F\_"xyz"\ t\_x\ t\_y\ t\_z + 
+      3\ F\_"yyz"\ t\_y\%2\ t\_z + 3\ F\_"xzz"\ t\_x\ t\_z\%2 + 
+      3\ F\_"yzz"\ t\_y\ t\_z\%2 + F\_"zzz"\ t\_z\%3\)], "Output"]
+}, Open  ]],
+
+Cell[BoxData[""], "Input"],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+    \(a1 + 3  k*a2 // Factor\)], "Input"],
+
+Cell[BoxData[
+    \(3\ k\ F\_"xx"\ n\_x\ t\_x + 3\ k\ F\_"xy"\ n\_y\ t\_x + 
+      3\ k\ F\_"xz"\ n\_z\ t\_x + F\_"xxx"\ t\_x\%3 + 
+      3\ k\ F\_"xy"\ n\_x\ t\_y + 3\ k\ F\_"yy"\ n\_y\ t\_y + 
+      3\ k\ F\_"yz"\ n\_z\ t\_y + 3\ F\_"xxy"\ t\_x\%2\ t\_y + 
+      3\ F\_"xyy"\ t\_x\ t\_y\%2 + F\_"yyy"\ t\_y\%3 + 
+      3\ k\ F\_"xz"\ n\_x\ t\_z + 3\ k\ F\_"yz"\ n\_y\ t\_z + 
+      3\ k\ F\_"zz"\ n\_z\ t\_z + 3\ F\_"xxz"\ t\_x\%2\ t\_z + 
+      6\ F\_"xyz"\ t\_x\ t\_y\ t\_z + 3\ F\_"yyz"\ t\_y\%2\ t\_z + 
+      3\ F\_"xzz"\ t\_x\ t\_z\%2 + 3\ F\_"yzz"\ t\_y\ t\_z\%2 + 
+      F\_"zzz"\ t\_z\%3\)], "Output"]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]]
+},
+FrontEndVersion->"5.0 for Microsoft Windows",
+ScreenRectangle->{{0, 1680}, {0, 960}},
+WindowSize->{1239, 783},
+WindowMargins->{{Automatic, 6}, {Automatic, 7}},
+PrintingCopies->1,
+PrintingPageRange->{Automatic, Automatic},
+Magnification->1.5
+]
+
+(*******************************************************************
+Cached data follows.  If you edit this Notebook file directly, not
+using Mathematica, you must remove the line containing CacheID at
+the top of  the file.  The cache data will then be recreated when
+you save this file from within Mathematica.
+*******************************************************************)
+
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+
+(*NotebookFileOutline
+Notebook[{
+
+Cell[CellGroupData[{
+Cell[1776, 53, 97, 2, 222, "Title"],
+Cell[1876, 57, 69, 1, 42, "Input"],
+
+Cell[CellGroupData[{
+Cell[1970, 62, 332, 8, 122, "Input"],
+Cell[2305, 72, 259, 4, 93, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[2601, 81, 290, 8, 110, "Input"],
+Cell[2894, 91, 46, 1, 41, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[2977, 97, 382, 9, 68, "Input"],
+Cell[3362, 108, 346, 5, 90, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[3745, 118, 559, 8, 97, "Input"],
+Cell[4307, 128, 257, 5, 76, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[4601, 138, 61, 1, 67, "Input"],
+Cell[4665, 141, 140, 2, 65, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[4842, 148, 149, 2, 68, "Input"],
+Cell[4994, 152, 1096, 17, 287, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[6127, 174, 88, 1, 43, "Input"],
+Cell[6218, 177, 686, 20, 455, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[6941, 202, 76, 1, 65, "Input"],
+Cell[7020, 205, 62, 1, 60, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[7119, 211, 39, 1, 42, "Input"],
+Cell[7161, 214, 35, 1, 41, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[7233, 220, 111, 2, 42, "Input"],
+Cell[7347, 224, 117, 4, 103, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[7501, 233, 42, 0, 44, "Subsubtitle"],
+
+Cell[CellGroupData[{
+Cell[7568, 237, 130, 2, 68, "Input"],
+Cell[7701, 241, 52, 1, 41, "Output"]
+}, Open  ]],
+Cell[7768, 245, 46, 0, 47, "Text"],
+
+Cell[CellGroupData[{
+Cell[7839, 249, 88, 1, 42, "Input"],
+Cell[7930, 252, 103, 2, 41, "Output"]
+}, Open  ]],
+Cell[8048, 257, 61, 0, 47, "Text"],
+
+Cell[CellGroupData[{
+Cell[8134, 261, 188, 3, 68, "Input"],
+Cell[8325, 266, 1154, 19, 191, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[9516, 290, 872, 17, 126, "Input"],
+Cell[10391, 309, 54, 1, 41, "Output"],
+Cell[10448, 312, 53, 1, 41, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[10538, 318, 52, 1, 73, "Input"],
+Cell[10593, 321, 109, 2, 41, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[10739, 328, 71, 1, 42, "Input"],
+Cell[10813, 331, 77, 1, 41, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[10927, 337, 108, 2, 54, "Input"],
+Cell[11038, 341, 53, 1, 41, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[11128, 347, 108, 2, 54, "Input"],
+Cell[11239, 351, 52, 1, 41, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[11328, 357, 205, 4, 97, "Input"],
+Cell[11536, 363, 462, 11, 99, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[12035, 379, 119, 2, 68, "Input"],
+Cell[12157, 383, 491, 12, 99, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[12685, 400, 61, 1, 42, "Input"],
+Cell[12749, 403, 1451, 36, 109, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[14237, 444, 62, 1, 42, "Input"],
+Cell[14302, 447, 112, 2, 43, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[14451, 454, 248, 5, 104, "Input"],
+Cell[14702, 461, 104, 2, 41, "Output"],
+Cell[14809, 465, 117, 2, 41, "Output"]
+}, Open  ]],
+Cell[14941, 470, 42, 0, 47, "Text"],
+
+Cell[CellGroupData[{
+Cell[15008, 474, 614, 11, 134, "Input"],
+Cell[15625, 487, 53, 1, 41, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[15715, 493, 614, 11, 134, "Input"],
+Cell[16332, 506, 59, 1, 41, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[16428, 512, 44, 1, 42, "Input"],
+Cell[16475, 515, 57, 1, 41, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[16569, 521, 26, 0, 42, "Input"],
+Cell[16598, 523, 117, 2, 41, "Output"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[16764, 531, 41, 0, 44, "Subsubtitle"],
+
+Cell[CellGroupData[{
+Cell[16830, 535, 518, 13, 94, "Input"],
+Cell[17351, 550, 130, 2, 42, "Output"],
+Cell[17484, 554, 372, 5, 94, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[17893, 564, 403, 8, 95, "Input"],
+Cell[18299, 574, 52, 1, 42, "Output"],
+Cell[18354, 577, 325, 5, 76, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[18716, 587, 271, 5, 43, "Input"],
+Cell[18990, 594, 250, 4, 42, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[19277, 603, 50, 1, 44, "Input"],
+Cell[19330, 606, 250, 4, 42, "Output"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+Cell[19617, 615, 48, 1, 42, "Input"],
+Cell[19668, 618, 325, 5, 76, "Output"]
+}, Open  ]],
+Cell[20008, 626, 26, 0, 42, "Input"],
+
+Cell[CellGroupData[{
+Cell[20059, 630, 55, 1, 42, "Input"],
+Cell[20117, 633, 612, 10, 104, "Output"]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]]
+}
+]
+*)
+
+
+
+(*******************************************************************
+End of Mathematica Notebook file.
+*******************************************************************)
+

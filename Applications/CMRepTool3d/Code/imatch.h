@@ -192,6 +192,9 @@ public:
     // Compute the total match measure
     float getMatch();
 
+    // This method can be used to align the cm-rep with the image pixels
+    void alignSplineByMoments();
+
     // Get a printout
     void printMatchInfo(std::ostream &out);
 

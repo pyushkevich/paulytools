@@ -1,4 +1,5 @@
 #include "blobmodl.h"
+
 #include "ui.h"
 
 #include <FL/glut.h>
@@ -79,333 +80,333 @@ int main (int argc, char *argv[])
 }
 
 /*****************************************************************
- All kinds of UI functions
+  All kinds of UI functions
  *****************************************************************/
 void fillInputFields(Ovoid *ovoid) {
-   inputXR->value(ovoid->Rx); 
-   inputYR->value(ovoid->Ry); 
-   inputZR->value(ovoid->Rz); 
-   inputXT->value(ovoid->Tx); 
-   inputYT->value(ovoid->Ty); 
-   inputZT->value(ovoid->Tz); 
-   inputXS->value(log(ovoid->Sx)); 
-   inputYS->value(log(ovoid->Sy)); 
-   inputZS->value(log(ovoid->Sz)); 
+  inputXR->value(ovoid->Rx); 
+  inputYR->value(ovoid->Ry); 
+  inputZR->value(ovoid->Rz); 
+  inputXT->value(ovoid->Tx); 
+  inputYT->value(ovoid->Ty); 
+  inputZT->value(ovoid->Tz); 
+  inputXS->value(log(ovoid->Sx)); 
+  inputYS->value(log(ovoid->Sy)); 
+  inputZS->value(log(ovoid->Sz)); 
 
-   sliderAlpha->value(log(ovoid->getAlpha()) / log(2.0) ); 
-   sliderBeta->value( log(ovoid->getBeta() ) / log(2.0) ); 
+  sliderAlpha->value(log(ovoid->getAlpha()) / log(2.0) ); 
+  sliderBeta->value( log(ovoid->getBeta() ) / log(2.0) ); 
 }
 
 
 void blobAffineChange() {
-   // Compute a matrix
-   int o = choiceOvoid->value();
-   Ovoid *ovoid = (Ovoid *) model->ovoids->get(o);
+  // Compute a matrix
+  int o = choiceOvoid->value();
+  Ovoid *ovoid = (Ovoid *) model->ovoids->get(o);
 
-   ovoid->setAffineTransform(exp(inputXS->value()),
-                             exp(inputYS->value()),
-                             exp(inputZS->value()),
-                             inputXT->value(),
-                             inputYT->value(),
-                             inputZT->value(),
-                             inputXR->value(),
-                             inputYR->value(),
-                             inputZR->value());
-   
-   glutPostRedisplay();
+  ovoid->setAffineTransform(exp(inputXS->value()),
+    exp(inputYS->value()),
+    exp(inputZS->value()),
+    inputXT->value(),
+    inputYT->value(),
+    inputZT->value(),
+    inputXR->value(),
+    inputYR->value(),
+    inputZR->value());
+
+  glutPostRedisplay();
 }
 
 int currentOvoid = 0;
 
 void ovoidChanged() {
-	// All surfaces become invalid
-	model->invalidate();
-	psurf->invalidate();
-	csurf->invalidate();
-	rsurf->invalidate();
+  // All surfaces become invalid
+  model->invalidate();
+  psurf->invalidate();
+  csurf->invalidate();
+  rsurf->invalidate();
 
-	// Update the radio buttons
-	uiCSChange(NULL,NULL);
+  // Update the radio buttons
+  uiCSChange(NULL,NULL);
 
-   // redisplay
-	glutPostRedisplay();
+  // redisplay
+  glutPostRedisplay();
 }
 
 
 void affineSliderChange(Fl_Value_Slider*a, void*b) {
-   blobAffineChange();
-	ovoidChanged();
+  blobAffineChange();
+  ovoidChanged();
 }
 
 void fillChoiceBox() {
-   Ovoid *ovoid;
-   
-	choiceOvoid->clear();
-   for(int i=0;i<model->ovoids->getSize();i++)  {
-      ovoid = (Ovoid *)model->ovoids->get(i);
-      char text[256];
-      sprintf(text,"Blob %d, (%lg,%lg)",i,ovoid->getAlpha(),ovoid->getBeta());
-      choiceOvoid->add(text);
-   }
+  Ovoid *ovoid;
 
-	choiceOvoid->value(currentOvoid);
+  choiceOvoid->clear();
+  for(int i=0;i<model->ovoids->getSize();i++)  {
+    ovoid = (Ovoid *)model->ovoids->get(i);
+    char text[256];
+    sprintf(text,"Blob %d, (%lg,%lg)",i,ovoid->getAlpha(),ovoid->getBeta());
+    choiceOvoid->add(text);
+  }
+
+  choiceOvoid->value(currentOvoid);
 }
 
 void parameterSliderChange(Fl_Value_Slider *s, void*junk) {
-   int o = choiceOvoid->value();
-   Ovoid *ovoid = (Ovoid *) model->ovoids->get(o);
+  int o = choiceOvoid->value();
+  Ovoid *ovoid = (Ovoid *) model->ovoids->get(o);
 
-   double alpha = pow(2,sliderAlpha->value());
-   double beta = pow(2,sliderBeta->value());
-	ovoid->setParms(alpha,beta);
+  double alpha = pow(2.0,sliderAlpha->value());
+  double beta = pow(2.0,sliderBeta->value());
+  ovoid->setParms(alpha,beta);
 
-   blobAffineChange();
-	ovoidChanged();
+  blobAffineChange();
+  ovoidChanged();
 }
 
 void ovoidSelected(Fl_Choice *choice,void *junk) {
-   int o = choiceOvoid->value();
-   Ovoid *ovoid = (Ovoid *) model->ovoids->get(o);
-	Ovoid *lastOvoid = (Ovoid *) model->ovoids->get(currentOvoid);
+  int o = choiceOvoid->value();
+  Ovoid *ovoid = (Ovoid *) model->ovoids->get(o);
+  Ovoid *lastOvoid = (Ovoid *) model->ovoids->get(currentOvoid);
 
-	if(!ovoid)
-		return;
+  if(!ovoid)
+    return;
 
-   fillInputFields(ovoid);
-   
-   lastOvoid->setColor(0.6,0.6,0.6,1);
-	ovoid->setColor(0,0,0.6,1);
+  fillInputFields(ovoid);
 
-	currentOvoid = o;
+  lastOvoid->setColor(0.6,0.6,0.6,1);
+  ovoid->setColor(0,0,0.6,1);
+
+  currentOvoid = o;
 }
 
 bool showOvoids = true;
 
 void uiEditOvoids(Fl_Button*, void*) {
-	fillChoiceBox();
-	winCompEditor->show();
-	winMain->hide();
+  fillChoiceBox();
+  winCompEditor->show();
+  winMain->hide();
 
-	// All surfaces become invalid
-	model->invalidate();
-	psurf->invalidate();
-	csurf->invalidate();
-	rsurf->invalidate();
+  // All surfaces become invalid
+  model->invalidate();
+  psurf->invalidate();
+  csurf->invalidate();
+  rsurf->invalidate();
 
-	// Show all ovoids
-	for(int i=0;i<model->ovoids->getSize();i++) {
-		Ovoid *ovoid = (Ovoid *) model->ovoids->get(i);
-		ovoid->setDisplayed(true);
-	}
-	
-	// Set all fields to current ovoid
-	ovoidSelected(NULL,NULL);
+  // Show all ovoids
+  for(int i=0;i<model->ovoids->getSize();i++) {
+    Ovoid *ovoid = (Ovoid *) model->ovoids->get(i);
+    ovoid->setDisplayed(true);
+  }
 
-	// redisplay
-	glutPostRedisplay();
+  // Set all fields to current ovoid
+  ovoidSelected(NULL,NULL);
+
+  // redisplay
+  glutPostRedisplay();
 }
 
 void uiShowHideOvoids(Fl_Menu_*, void*) {
-	showOvoids = !showOvoids;
+  showOvoids = !showOvoids;
 
-	for(int i=0;i<model->ovoids->getSize();i++) {
-		Ovoid *ovoid = (Ovoid *) model->ovoids->get(i);
-		ovoid->setDisplayed(showOvoids);
-	}
+  for(int i=0;i<model->ovoids->getSize();i++) {
+    Ovoid *ovoid = (Ovoid *) model->ovoids->get(i);
+    ovoid->setDisplayed(showOvoids);
+  }
 
-	glutPostRedisplay();
+  glutPostRedisplay();
 }
 
 void blobOKPressed(Fl_Return_Button *button,void *junk) {
-	Ovoid *lastOvoid = (Ovoid *) model->ovoids->get(currentOvoid);
-	lastOvoid->setColor(0.6,0.6,0.6,1);
+  Ovoid *lastOvoid = (Ovoid *) model->ovoids->get(currentOvoid);
+  lastOvoid->setColor(0.6,0.6,0.6,1);
 
-   winCompEditor->hide();
-   currentOvoid = 0;
+  winCompEditor->hide();
+  currentOvoid = 0;
 
-  	// Recompute the model
-	model->setDisplayed(true);
+  // Recompute the model
+  model->setDisplayed(true);
 
-	// Update the radio buttons
-	uiCSChange(NULL,NULL);
+  // Update the radio buttons
+  uiCSChange(NULL,NULL);
 
-	// Hide all ovoids if flag says so
-	if(!showOvoids) {
-		for(int i=0;i<model->ovoids->getSize();i++) {
-			Ovoid *ovoid = (Ovoid *) model->ovoids->get(i);
-			ovoid->setDisplayed(false);
-		}
-	}
-   
-	// redisplay
-	glutPostRedisplay();
+  // Hide all ovoids if flag says so
+  if(!showOvoids) {
+    for(int i=0;i<model->ovoids->getSize();i++) {
+      Ovoid *ovoid = (Ovoid *) model->ovoids->get(i);
+      ovoid->setDisplayed(false);
+    }
+  }
 
-	// Show the main window
-	winMain->show();
+  // redisplay
+  glutPostRedisplay();
+
+  // Show the main window
+  winMain->show();
 }
 
 void uiDeleteOvoid(Fl_Button*, void*) {
-	Ovoid *ovoid = (Ovoid *) model->ovoids->get(currentOvoid);
+  Ovoid *ovoid = (Ovoid *) model->ovoids->get(currentOvoid);
 
-	// Remove it from model
-	model->ovoids->set(currentOvoid,NULL);
-	model->ovoids->compact();
+  // Remove it from model
+  model->ovoids->set(currentOvoid,NULL);
+  model->ovoids->compact();
 
-	// Remove it from surface list
-	iSurfList->set(iSurfList->getIndex(ovoid),NULL);
-	iSurfList->compact();
+  // Remove it from surface list
+  iSurfList->set(iSurfList->getIndex(ovoid),NULL);
+  iSurfList->compact();
 
-	// Delete it
-	delete ovoid;
+  // Delete it
+  delete ovoid;
 
-	// Rebuild the choice box
-	fillChoiceBox();
-   choiceOvoid->value(0);
-	currentOvoid = 0;
-	ovoidSelected(NULL,NULL);
+  // Rebuild the choice box
+  fillChoiceBox();
+  choiceOvoid->value(0);
+  currentOvoid = 0;
+  ovoidSelected(NULL,NULL);
 
-	// Ovoid configuratoin changed
-	ovoidChanged();
+  // Ovoid configuratoin changed
+  ovoidChanged();
 }
 
 void createOvoid(Fl_Button*b, void*j) {
-   Ovoid *o = new Ovoid(2,2);
-   model->ovoids->append(o);
-   
-	// Update the window
-	fillChoiceBox();
-   choiceOvoid->value(model->ovoids->getSize()-1);
-   ovoidSelected(NULL,NULL);
+  Ovoid *o = new Ovoid(2,2);
+  model->ovoids->append(o);
 
-	// Add ovoid to list
-	iSurfList->append(o);
+  // Update the window
+  fillChoiceBox();
+  choiceOvoid->value(model->ovoids->getSize()-1);
+  ovoidSelected(NULL,NULL);
 
-	ovoidChanged();
+  // Add ovoid to list
+  iSurfList->append(o);
+
+  ovoidChanged();
 }
 
 void uiRebuildModel(Fl_Button*, void*) {
-	model->recompute();
-	glutPostRedisplay();
+  model->recompute();
+  glutPostRedisplay();
 }
 
 void uiCSChange(Fl_Choice*, void*) {
-	switch(choiceSurface->value()) {
-	case 0 : currSurface = model;break;
-	case 1 : currSurface = psurf;break;
-	case 2 : currSurface = rsurf;break;
-	case 3 : currSurface = csurf;break;
+  switch(choiceSurface->value()) {
+  case 0 : currSurface = model;break;
+  case 1 : currSurface = psurf;break;
+  case 2 : currSurface = rsurf;break;
+  case 3 : currSurface = csurf;break;
 
-	}
+  }
 
-	// Set radio buttons 
-	rbCSNotComputed->value(0);
-	rbCSNotDisplayed->value(0);
-	rbCSWireframe->value(0);
-	rbCSSolid->value(0);
+  // Set radio buttons 
+  rbCSNotComputed->value(0);
+  rbCSNotDisplayed->value(0);
+  rbCSWireframe->value(0);
+  rbCSSolid->value(0);
 
-	if(!currSurface->computed) 
-		rbCSNotComputed->value(1);
-	else if(!currSurface->displayed)
-		rbCSNotDisplayed->value(1);
-	else if(!currSurface->solid)
-		rbCSWireframe->value(1);
-	else
-		rbCSSolid->value(1);
+  if(!currSurface->computed) 
+    rbCSNotComputed->value(1);
+  else if(!currSurface->displayed)
+    rbCSNotDisplayed->value(1);
+  else if(!currSurface->solid)
+    rbCSWireframe->value(1);
+  else
+    rbCSSolid->value(1);
 
-	inputPolygonSize->value(currSurface->getTetraSize());
+  inputPolygonSize->value(currSurface->getTetraSize());
 }	
 
-void uiCSDisplayMode(bool display,bool solid) {
-	if(solid)
-		currSurface->drawSolid();
-	else
-		currSurface->drawWireframe();
+  void uiCSDisplayMode(bool display,bool solid) {
+    if(solid)
+      currSurface->drawSolid();
+    else
+      currSurface->drawWireframe();
 
-	currSurface->setDisplayed(display);
+    currSurface->setDisplayed(display);
 
-	// Update the radio buttons
-	uiCSChange(NULL,NULL);
+    // Update the radio buttons
+    uiCSChange(NULL,NULL);
 
-	glutPostRedisplay();
-}
+    glutPostRedisplay();
+  }
 
 void uiCSColor(Fl_Button*, void*) {
-	double r = currSurface->color[0],g = currSurface->color[1],b = currSurface->color[2];
-	fl_color_chooser("Surface Color", r, g, b);
-	currSurface->setColor(r,g,b,1);
-	glutPostRedisplay();
+  double r = currSurface->color[0],g = currSurface->color[1],b = currSurface->color[2];
+  fl_color_chooser("Surface Color", r, g, b);
+  currSurface->setColor(r,g,b,1);
+  glutPostRedisplay();
 }
 
 void uiLoadModel(Fl_Menu_*, void*) {
-	char *file = fl_file_chooser("Load Model","*.blobs",NULL);
-	if(!file)
-		return;
-	
-	Registry reg;
-	reg.readFromFile(file);
+  char *file = fl_file_chooser("Load Model","*.blobs",NULL);
+  if(!file)
+    return;
 
-	model->read(&reg.getSubFolder("model"));
+  Registry reg;
+  reg.readFromFile(file);
 
-	delete psurf;
-	psurf = new ParabolicSurface(model);
-	
-	delete csurf;
-	csurf = new CausticSurface(model);
+  model->read(&reg.getSubFolder("model"));
 
-	delete rsurf;
-	rsurf = new RidgeSurface(model);
+  delete psurf;
+  psurf = new ParabolicSurface(model);
 
-	iSurfList->clear();
-	for(int o=0;o<model->ovoids->getSize();o++) {
-		iSurfList->append(model->ovoids->get(o));
-		iSurfList->append(model);
-		iSurfList->append(psurf);
-		iSurfList->append(csurf);
-		iSurfList->append(rsurf);
-	}
+  delete csurf;
+  csurf = new CausticSurface(model);
 
-	// Update the radio buttons
-	model->recompute();
-	uiCSChange(NULL,NULL);
-	fillChoiceBox();
+  delete rsurf;
+  rsurf = new RidgeSurface(model);
 
-	glutPostRedisplay();
+  iSurfList->clear();
+  for(int o=0;o<model->ovoids->getSize();o++) {
+    iSurfList->append(model->ovoids->get(o));
+    iSurfList->append(model);
+    iSurfList->append(psurf);
+    iSurfList->append(csurf);
+    iSurfList->append(rsurf);
+  }
+
+  // Update the radio buttons
+  model->recompute();
+  uiCSChange(NULL,NULL);
+  fillChoiceBox();
+
+  glutPostRedisplay();
 }
 
 void uiSaveModel(Fl_Menu_*, void*) {
-	char *file = fl_file_chooser("Load Model","*.blobs",NULL);
-	if(!file)
-		return;
+  char *file = fl_file_chooser("Load Model","*.blobs",NULL);
+  if(!file)
+    return;
 
-	Registry reg;
-	model->write(&reg.getSubFolder("model"));
-	reg.writeToFile(file);
+  Registry reg;
+  model->write(&reg.getSubFolder("model"));
+  reg.writeToFile(file);
 }
 
 void uiCSPolygonResize(Fl_Value_Input*, void*) {
-	currSurface->setTetraSize(inputPolygonSize->value());
-	currSurface->setDisplayed(true);
-	glutPostRedisplay();
+  currSurface->setTetraSize(inputPolygonSize->value());
+  currSurface->setDisplayed(true);
+  glutPostRedisplay();
 }
 
 
 void fillCurrentPointInfo() {
-	if(currentPoint) {
-		outKappa1->value(currentPoint->kappa1);
-		outKappa2->value(currentPoint->kappa2);
-		outGradMag->value(currentPoint->gradMag);
-	}
-	else {
-		outKappa1->value(0);
-		outKappa2->value(0);
-		outGradMag->value(0);
-	}
+  if(currentPoint) {
+    outKappa1->value(currentPoint->kappa1);
+    outKappa2->value(currentPoint->kappa2);
+    outGradMag->value(currentPoint->gradMag);
+  }
+  else {
+    outKappa1->value(0);
+    outKappa2->value(0);
+    outGradMag->value(0);
+  }
 }
 
 void uiFlyBy(Fl_Menu_*, void*) {
-	agvSwitchMoveMode(FLYING);
+  agvSwitchMoveMode(FLYING);
 }
 
 void uiPolarMovement(Fl_Menu_*, void*) {
-	agvSwitchMoveMode(POLAR);
+  agvSwitchMoveMode(POLAR);
 }

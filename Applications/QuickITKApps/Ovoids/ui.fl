@@ -1,12 +1,12 @@
 # data file for the Fltk User Interface Designer (fluid)
-version 1.0104 
+version 1.0105 
 header_name {.h} 
 code_name {.cpp}
 Function {createUI()} {open
 } {
   Fl_Window winMain {
     label {Blob Modeller} open
-    xywh {507 104 260 580} box BORDER_BOX labelfont 1
+    xywh {507 104 260 580} type Double box BORDER_BOX labelfont 1
     code0 {\#include <stdio.h>}
     code1 {\#include "FL/glut.h"}
     code2 {\#include "blobmodl.h"}
@@ -99,11 +99,11 @@ Function {createUI()} {open
         }
       }
     }
-    Fl_Menu_Bar {} {open
+    Fl_Menu_Bar {} {
       xywh {0 0 260 25}
     } {
       submenu {} {
-        label File open
+        label File open selected
         xywh {0 0 100 20}
       } {
         menuitem {} {
@@ -115,6 +115,11 @@ Function {createUI()} {open
           label {Save...}
           callback uiSaveModel
           xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label {Import Level Set...}
+          callback uiLoadImage
+          xywh {10 10 100 20}
         }
       }
       submenu {} {
@@ -171,14 +176,14 @@ Function {createUI()} {open
       }
       Fl_Button {} {
         label {Edit Ovoids}
-        callback uiEditOvoids selected
+        callback uiEditOvoids
         xywh {70 540 85 25}
       }
     }
   }
   Fl_Window winCompEditor {
     label {Blob Component Editor} open
-    xywh {630 123 265 570} labeltype ENGRAVED_LABEL align 2 visible
+    xywh {-32000 -32000 265 570} type Double align 2 hide
   } {
     Fl_Group {} {
       label {Log Scale:} open

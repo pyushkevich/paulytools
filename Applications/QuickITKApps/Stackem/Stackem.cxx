@@ -15,6 +15,14 @@
 #include "itksys/Directory.hxx"
 #include "itksys/SystemTools.hxx"
 
+#include "itkImageRegistrationMethod.h"
+#include "itkTranslationTransform.h"
+#include "itkAffineTransform.h"
+#include "itkAffineTransform.h"
+#include "itkMeanSquaresImageToImageMetric.h"
+#include "itkLinearInterpolateImageFunction.h"
+#include "itkGradientDescentOptimizer.h"
+
 using namespace std;
 using namespace itksys;
 
@@ -39,6 +47,115 @@ int usage(const char *message = NULL)
   cout << "   stackem -z 1.5 ../slices out.hdr" << endl;
   return -1;
 }
+
+typedef itk::Image<short,2> SliceType;
+
+void registerSlices(SliceType *img1, SliceType *img2)
+  {
+  typedef SliceType FixedImageType;
+  typedef SliceType MovingImageType;
+  
+  // Transform Type
+  typedef itk::TranslationTransform< double, 2 > TransformType;
+  typedef TransformType::ParametersType             ParametersType;
+
+  // Optimizer Type
+  typedef itk::GradientDescentOptimizer                  OptimizerType;
+
+  // Metric Type
+  typedef itk::MeanSquaresImageToImageMetric< 
+                                    FixedImageType, 
+                                    MovingImageType >    MetricType;
+
+  // Interpolation technique
+  typedef itk:: LinearInterpolateImageFunction< 
+                                    MovingImageType,
+                                    double >             InterpolatorType;
+
+  // Registration Method
+  typedef itk::ImageRegistrationMethod< 
+                                    FixedImageType, 
+                                    MovingImageType >    RegistrationType;
+
+  //typedef itk::CommandIterationUpdate<  
+  //                                OptimizerType >    CommandIterationType;
+
+
+  MetricType::Pointer         metric        = MetricType::New();
+  TransformType::Pointer      transform     = TransformType::New();
+  OptimizerType::Pointer      optimizer     = OptimizerType::New();
+  TransformType::Pointer      trasform      = TransformType::New();
+  InterpolatorType::Pointer   interpolator  = InterpolatorType::New();
+  RegistrationType::Pointer   registration  = RegistrationType::New();
+
+  FixedImageType::ConstPointer     fixedImage    = img1;
+  MovingImageType::ConstPointer    movingImage   = img2;
+
+  //
+  // Connect all the components required for Registratio
+  //
+  registration->SetMetric(        metric        );
+  registration->SetOptimizer(     optimizer     );
+  registration->SetTransform(     transform     );
+  registration->SetFixedImage(    fixedImage    );
+  registration->SetMovingImage(   movingImage   );
+  registration->SetInterpolator(  interpolator  );
+
+  // Select the Region of Interest over which the Metric will be computed
+  // Registration time will be proportional to the number of pixels in this region.
+  metric->SetFixedImageRegion( fixedImage->GetBufferedRegion() );
+
+  // Instantiate an Observer to report the progress of the Optimization
+  //CommandIterationType::Pointer iterationCommand = CommandIterationType::New();
+  //iterationCommand->SetOptimizer(  optimizer.GetPointer() );
+
+  // Scale the translation components of the Transform in the Optimizer
+  OptimizerType::ScalesType scales( transform->GetNumberOfParameters() );
+  scales.Fill( 1.0 );
+  
+  unsigned long   numberOfIterations =  100;
+  double          translationScale   = 1e-6;
+  double          learningRate       = 1e-8;
+
+  for( unsigned int i=0; i<2; i++)
+    {
+    scales[ i + 2 * 2 ] = translationScale;
+    }
+
+  optimizer->SetScales( scales );
+  optimizer->SetLearningRate( learningRate );
+  optimizer->SetNumberOfIterations( numberOfIterations );
+  optimizer->MinimizeOn();
+
+  // Start from an Identity transform (in a normal case, the user 
+  // can probably provide a better guess than the identity...
+  transform->SetIdentity();
+  registration->SetInitialTransformParameters( transform->GetParameters() );
+
+  // Initialize the internal connections of the registration method. 
+  // This can potentially throw an exception
+  try
+    {
+    registration->Update();
+    }
+  catch( itk::ExceptionObject & e )
+    {
+    std::cerr << e << std::endl;
+    }
+
+  ParametersType finalParameters  = registration->GetLastTransformParameters();
+
+  //
+  //  Get the transform as the Output of the Registration filter
+  //
+  RegistrationType::TransformOutputConstPointer transformDecorator = 
+                                                        registration->GetOutput();
+
+  TransformType::ConstPointer finalTransform = 
+    static_cast< const TransformType * >( transformDecorator->Get() ); 
+
+  cout << "Trasform computed:" << finalParameters << endl;
+  }
 
 int main(int argc, char *argv[])
 {
@@ -158,6 +275,14 @@ int main(int argc, char *argv[])
   // Report on the common region
   vout << "Stack'em: loaded " << imgSlices.size() << " slice images" << endl;
   vout << "   common slice size: " << rgnCommon.GetSize() << endl; 
+
+  if(flagCoregister)
+    {
+    for(unsigned int iSlice = 1; iSlice < imgSlices.size(); iSlice++)
+      {
+      registerSlices(imgSlices[iSlice-1],imgSlices[iSlice]);
+      }
+    }
 
   // If no registration is required, simply combine the slices and save the image
   if(!flagCoregister)

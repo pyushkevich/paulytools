@@ -27,41 +27,41 @@ struct PFactoryFunction;
 
 class PFactory {
 protected:
-	static PFactoryFunction *list, *p;
-   static void initFactory();
+  static PFactoryFunction *list, *p;
+  static void initFactory();
 public:
-   static int addFunction(factoryFunction f,int mgcStart,int mgcEnd);
+  static int addFunction(factoryFunction f,int mgcStart,int mgcEnd);
 
-	// System factory - creates system classes
-   static PPersistent *system(int magicNumber);
+  // System factory - creates system classes
+  static PPersistent *system(int magicNumber);
 
-   // Create an instance for magic number
-	static PPersistent* use(int magicNumber);
+  // Create an instance for magic number
+  static PPersistent* use(int magicNumber);
 };
 
 class PList {
 protected:
-	int iSize,dSize;
-   int allocated;
-   int lastElt;
+  int iSize,dSize;
+  int allocated;
+  int lastElt;
 
-   void **array;
-	void reallocate();
+  void **array;
+  void reallocate();
 
 public:
-	PList(int initSize=10,int incrSize=10,int magic=PMAGIC_PLIST);
-   ~PList();
+  PList(int initSize=10,int incrSize=10,int magic=PMAGIC_PLIST);
+  ~PList();
 
-   void set(int index,void *p);
-   void *get(int index);
-   int append(void *p);
+  void set(int index,void *p);
+  void *get(int index);
+  int append(void *p);
 
-	int getSize();
-   int getAllocSize();
-   int getIndex(void *p);
+  int getSize();
+  int getAllocSize();
+  int getIndex(void *p);
 
-   void clear();
-   void compact();
+  void clear();
+  void compact();
 };
 
 #endif

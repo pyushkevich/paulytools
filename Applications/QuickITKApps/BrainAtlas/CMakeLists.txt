@@ -30,7 +30,6 @@ ADD_EXECUTABLE("binary2mesh" BinaryToMesh.cxx)
 ADD_EXECUTABLE("viewmesh" MeshViewer.cxx)
 ADD_EXECUTABLE("binary2metis" ImageToMetis.cxx)
 ADD_EXECUTABLE("metis2mask" MetisToImage.cxx)
-ADD_EXECUTABLE("sulcusfilter" FilterSulci.cxx)
 ADD_EXECUTABLE("maskimage" MaskImage.cxx)
 ADD_EXECUTABLE(braintracer ${TRACER_SRCS})
 
@@ -68,6 +67,25 @@ IF(USE_METIS)
     LINK_LIBRARIES(${METIS_LIBRARY})
   ENDIF(METIS_ROOT_DIR)
 ENDIF(USE_METIS)
+
+# Add the option to use the OpenMesh Library
+OPTION(USE_OPENMESH "Use OpenMesh library" OFF)
+IF(USE_OPENMESH)
+  FIND_PATH(OPENMESH_ROOT_DIR "OpenMesh/Core/Mesh/BaseMesh.hh")
+  IF(OPENMESH_ROOT_DIR)
+	FIND_LIBRARY(OPENMESH_CORE_LIBRARY "Core" 
+      ${OPENMESH_ROOT_DIR}/OpenMesh/Core 
+	  ${OPENMESH_ROOT_DIR}/OpenMesh/Win/msvc7/Core/Release)
+	  
+	SET(OPENMESH_INCLUDE_DIR ${OPENMESH_ROOT_DIR})
+	INCLUDE_DIRECTORIES(${OPENMESH_INCLUDE_DIR})
+	LINK_LIBRARIES(${OPENMESH_CORE_LIBRARY})
+	
+	ADD_DEFINITIONS(-D_USE_MATH_DEFINES)
+  ENDIF(OPENMESH_ROOT_DIR)
+  ADD_EXECUTABLE("sulcusfilter" FilterSulci.cxx implicit.c)
+ENDIF(USE_OPENMESH)
+
 
 # Configure scripts
 FIND_PATH(BATLAS_DATA_ROOT "atlas02" "~/data2004" "c:/data2004")

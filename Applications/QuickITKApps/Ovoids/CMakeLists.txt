@@ -7,7 +7,8 @@ SET(OVOIDS_SRC
   glcode.h
   implicit.c
   implicit.h
-  main.cpp
+  imagesurface.cpp
+  imagesurface.h
   plib.cpp
   plib.h
 )
@@ -16,15 +17,21 @@ INCLUDE_DIRECTORIES(
   ${PAULY_SOURCE_DIR}/Applications/QuickITKApps/Ovoids
 )
 
-ADD_EXECUTABLE(ovoids ${OVOIDS_SRC})
+ADD_EXECUTABLE(ovoids ${OVOIDS_SRC} main.cpp)
+ADD_EXECUTABLE(bettermesh ${OVOIDS_SRC} bettermesh.cpp)
 
 FLTK_WRAP_UI(ovoids ui.fl)
 
 LINK_LIBRARIES(
+  ITKCommon 
+  ITKBasicFilters 
+  ITKIO 
   ITKNumerics
+  vtkCommon
   ${PAULY_CORE_LIBS}
-  ${FLTK_GL_LIBRARY}
-  ${FLTK_BASE_LIBRARY}
+  ${FLTK_LIBRARY}
 )
 
-
+IF(WIN32)
+  LINK_LIBRARIES(wsock32 comctl32)
+ENDIF(WIN32)
