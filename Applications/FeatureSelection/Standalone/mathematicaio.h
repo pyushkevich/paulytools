@@ -14,14 +14,6 @@ public:
 	static int readMathematicaVector(FILE *f, Vec &A);
 };
 
-
-
-
-
-
-
-
-
 #endif
 
 
