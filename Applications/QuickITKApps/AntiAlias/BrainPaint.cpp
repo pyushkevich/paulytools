@@ -588,8 +588,8 @@ int main(int argc, char *argv[])
     CurveType &curve = vCurves[iCurve];
 
     // Construct a matrix Q
-         OptMat Q1(curve.points.size(),3);
-    OptMat Q2(curve.points.size(),3);
+    BSpline1D::MatrixType Q1(curve.points.size(),3);
+    BSpline1D::MatrixType Q2(curve.points.size(),3);
 
     for(iPoint=0;iPoint<curve.points.size();iPoint++)
       {

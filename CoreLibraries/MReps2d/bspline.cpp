@@ -1,5 +1,5 @@
 #include "bspline.h"
-#include <vnl/vnl_qr.h>
+#include <vnl/algo/vnl_qr.h>
 #include <xmmintrin.h>
 
 #ifndef _WIN32
@@ -359,13 +359,13 @@ void BSpline1D::fitToPoints(const MatrixType &Q)
       VectorType L = Q.get_row(r)-Q.get_row(0)*BN(r,0)-Q.get_row(m)*BN(r,n);
       VectorType Rk = R.get_row(c-1);
       Rk += L * BN(r,c);
-      R.update(Rk.t(),c-1,0);
+      R.set_column(c-1,Rk);
       }
     }
 
   // N is a chunk of BN
-  N = BN.extract(m-1,n-1,1,1);
-  Matrix NTN = N.t() * N;
+  N = BN.extract(m-1,n-1,1,1);  
+  MatrixType NTN = N.transpose() * N;
 
   // Solve for P
   vnl_qr<double> qr(NTN);

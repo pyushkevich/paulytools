@@ -1004,7 +1004,8 @@ void CBSpline::buildFromPB(PolygonBoundary &pb,int numSplines) {
 	Q(pb.vertices.size(),1) = Q(0,1);
 
 	// Fit the spline
-	spline->fitToPoints(Q);
+	// TODO: Fix Me!!! 
+    // spline->fitToPoints(Q);
 }
 
 void CBSpline::buildFromPB(PolygonBoundary &pb) {
