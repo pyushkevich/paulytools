@@ -12,8 +12,8 @@ export IMAGE=grey_and_white
 
 # Convert the input binary image to a METIS graph
 $BINDIR/binary2metis \
-  $INPDIR/$IMAGE.img \ 
-  $GRAPHDIR/$IMAGE.metis_mesh.txt \ 
+  $INPDIR/$IMAGE.img \
+  $GRAPHDIR/$IMAGE.metis_mesh.txt \
   $GRAPHDIR/$IMAGE.metis_map.txt
 
 # Partition the image using metis tools into given sizes
@@ -25,9 +25,9 @@ do
   $METIS/pmetis $GRAPHDIR/$IMAGE.metis_mesh.txt $i
 
   # Create an image from output
-  $BINDIR/metis2image \
-    $INPDIR/$IMAGE.img \ 
-    $GRAPHDIR/$IMAGE.metis_mesh.txt."$i" \ 
+  $BINDIR/metis2mask \
+    $INPDIR/$IMAGE.img \
+    $GRAPHDIR/$IMAGE.metis_mesh.txt."$i" \
     $GRAPHDIR/$IMAGE.metis_map.txt \
     $GRAPHDIR/$IMAGE.metis."$i".img
 
