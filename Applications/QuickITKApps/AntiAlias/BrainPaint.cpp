@@ -1,3 +1,4 @@
+#include "itkAntiAliasBinaryImageFilter.h"
 #include "itkImageFileReader.h"
 #include "itkImageFileWriter.h"
 #include "itkImageRegionIterator.h"
@@ -33,9 +34,25 @@ using namespace pauly;
 #include <vtkPolyDataMapper.h>
 #include <vtkSTLReader.h>
 #include <vtkTriangleFilter.h>
+#include <vtkImageMarchingCubes.h>
+#include <vtkImageImport.h>
+#include <itkVTKImageExport.h>
+#include <vtkDecimate.h>
+#include <vtkPolyDataConnectivityFilter.h>
+#include <vtkPolyDataReader.h>
+#include <vtkPolyDataWriter.h>
+#include <vtkExtractEdges.h>
+#include <vtkMergePoints.h>
+#include <vtkVolumeRayCastCompositeFunction.h>
+#include <vtkVolumeRayCastMapper.h>
+#include <vtkVolume.h>
+  
 
 // Include my BSpline library
 #include "BSplineCurve.h"
+
+// Constants
+const unsigned int NUMBER_OF_CONTROL_POINTS = 32;
 
 // Typedef of the spline
 typedef BSplineCurve<3> SplineType;
@@ -362,7 +379,7 @@ public:
 
     // Compute overall objective value based on the two components
     double result = m_Factor * (obj.xWhiteDistance / obj.xWhiteLength) 
-       + obj.xArea + 10000 * obj.xWhiteIrregularity;
+       + obj.xArea + 0.2 * m_Factor * obj.xWhiteIrregularity;
 
     // Increase the iterations counter
     setEvaluationCost(getEvaluationCost() + 1);
@@ -409,6 +426,424 @@ private:
   double m_ImageMax[3];
 };
 
+void drawPolyData(vtkPolyData *poly)
+{
+  vtkPolyDataMapper *mapper = vtkPolyDataMapper::New();
+  mapper->SetInput(poly);
+
+  vtkLODActor *actor = vtkLODActor::New();
+  actor->SetMapper(mapper);
+
+  vtkRenderer *ren = vtkRenderer::New();
+  ren->AddActor(actor);
+  ren->SetBackground(0.1,0.2,0.4);
+
+  vtkRenderWindow *renWin = vtkRenderWindow::New();
+  renWin->AddRenderer(ren);
+  renWin->SetSize(500,500);
+
+  vtkRenderWindowInteractor *iren = vtkRenderWindowInteractor::New();
+  iren->SetRenderWindow(renWin);
+  iren->Initialize();
+
+  renWin->Render();
+  iren->Start();
+
+  iren->Delete();
+  renWin->Delete();
+  ren->Delete();
+  actor->Delete();
+  mapper->Delete();
+}
+
+template <class TImage>
+void ConvertImageToVTK(TImage *src, vtkImageData **imgOut)
+{
+  // Cast the image to VTK 
+  typedef typename itk::VTKImageExport<TImage> ExportFilter;
+  typename ExportFilter::Pointer fltExport = ExportFilter::New();
+  vtkImageImport *fltImport = vtkImageImport::New();
+  fltExport->SetInput(src);
+  fltImport->SetUpdateInformationCallback( fltExport->GetUpdateInformationCallback());
+  fltImport->SetPipelineModifiedCallback( fltExport->GetPipelineModifiedCallback());
+  fltImport->SetWholeExtentCallback( fltExport->GetWholeExtentCallback());
+  fltImport->SetSpacingCallback( fltExport->GetSpacingCallback());
+  fltImport->SetOriginCallback( fltExport->GetOriginCallback());
+  fltImport->SetScalarTypeCallback( fltExport->GetScalarTypeCallback());
+  fltImport->SetNumberOfComponentsCallback( fltExport->GetNumberOfComponentsCallback());
+  fltImport->SetPropagateUpdateExtentCallback( fltExport->GetPropagateUpdateExtentCallback());
+  fltImport->SetUpdateDataCallback( fltExport->GetUpdateDataCallback());
+  fltImport->SetDataExtentCallback( fltExport->GetDataExtentCallback());
+  fltImport->SetBufferPointerCallback( fltExport->GetBufferPointerCallback());
+  fltImport->SetCallbackUserData( fltExport->GetCallbackUserData());
+
+  // Do it
+  cout << "   casting image to VTK " << endl;
+  fltImport->Update(); cout << " done " << endl;
+
+  *imgOut = fltImport->GetOutput();
+  fltImport -> Delete();
+}
+
+/********************************************************************************
+ * Create a VTK mesh from the white matter image
+ *******************************************************************************/
+vtkPolyData *CreateWhiteMatterMesh(CharImageType *imgWhite)
+{
+  // Compute the mesh
+  cout << "Computing white matter mesh" << endl;
+  
+  // Create an anti-aliasing image filter
+  typedef itk::AntiAliasBinaryImageFilter<CharImageType,FloatImageType> AAFilter;
+  AAFilter::Pointer fltAlias = AAFilter::New();
+  fltAlias->SetInput(imgWhite);
+  fltAlias->SetMaximumRMSError(0.024);
+  
+  cout << "   anti-aliasing the image " << endl;
+  fltAlias->Update();
+
+  // Cast the image to VTK 
+  vtkImageData *imgVTK;
+  ConvertImageToVTK(fltAlias->GetOutput(), &imgVTK);
+
+  // Compute marching cubes
+  vtkImageMarchingCubes *fltMarching = vtkImageMarchingCubes::New();
+  fltMarching->SetInput(imgVTK);
+  fltMarching->ComputeScalarsOff();
+  fltMarching->ComputeGradientsOff();
+  fltMarching->SetNumberOfContours(1);
+  fltMarching->SetValue(0,0.0f);
+
+  cout << "   running marching cubes algorithm" << endl;
+  fltMarching->Update();
+
+  cout << "      mesh has " << fltMarching->GetOutput()->GetNumberOfCells() << " cells." << endl;
+  
+  // Decimate the triangles 
+  vtkDecimate *fltDecimate = vtkDecimate::New();
+  fltDecimate->SetInput(fltMarching->GetOutput());
+  fltDecimate->SetTargetReduction(0.95);
+  fltDecimate->SetAspectRatio(20);
+  fltDecimate->SetInitialError(0.005);
+  fltDecimate->SetErrorIncrement(0.01);
+  fltDecimate->SetMaximumIterations(6);
+  fltDecimate->SetInitialFeatureAngle(30);
+
+  cout << "   decimating the iso-surface" << endl;
+  fltDecimate->Update();
+  
+  cout << "      mesh has " << fltDecimate->GetOutput()->GetNumberOfCells() << " cells." << endl;
+
+  // Keep the largest connected component
+  vtkPolyDataConnectivityFilter *fltConnect = vtkPolyDataConnectivityFilter::New();
+  fltConnect->SetInput(fltDecimate->GetOutput());
+  fltConnect->SetExtractionModeToLargestRegion();
+   
+  cout << "   extracting the largest component" << endl;
+  fltConnect->Update();
+
+  cout << "      mesh has " << fltConnect->GetOutput()->GetNumberOfCells() << " cells." << endl;
+  
+  // This should be enough. Display the polydata
+  // drawPolyData(fltConnect->GetOutput());
+  vtkPolyData *poly = fltConnect->GetOutput();
+  
+  // Save the mesh
+  vtkPolyDataWriter *fltWriter = vtkPolyDataWriter::New();
+  fltWriter->SetInput(fltConnect->GetOutput());
+  fltWriter->SetFileName("white_surface.vtk");
+  fltWriter->SetFileTypeToBinary();
+  
+  cout << "   writing mesh to file white_surface.vtk" << endl;
+  fltWriter->Update();
+
+  // CLean up
+  fltMarching->Delete();
+  fltConnect->Delete();
+  fltDecimate->Delete();
+  fltWriter->Delete();
+
+  // Return
+  return poly;
+}
+
+#include <utility>
+#include <boost/config.hpp>
+#include <boost/graph/graph_traits.hpp>
+#include <boost/graph/adjacency_list.hpp>
+#include <boost/graph/dijkstra_shortest_paths.hpp>
+
+using namespace boost;
+
+/***************************************************************************
+ * Create a BOOST graph structure from the white matter mesh
+ **************************************************************************/
+vtkPolyData *CreateWhiteMatterGraph(vector<CurveType> &curves)
+{
+  cout << "Creating a graph structure from the white matter mesh" << endl;
+  
+  // Load or create the white matter mesh
+  vtkPolyDataReader *reader = vtkPolyDataReader::New();
+  reader->SetFileName("white_surface.vtk");
+
+  cout << "   reading the white matter mesh" << endl;
+  reader->Update();
+
+  vtkPolyData *poly = reader->GetOutput();
+  cout << "      mesh loaded with " << poly->GetNumberOfCells() << " cells and " 
+      << poly->GetNumberOfPoints() << " vertices." << endl;
+
+  // Get the edges in the mesh
+  vtkExtractEdges *fltEdge = vtkExtractEdges::New();
+  fltEdge->SetInput(reader->GetOutput());
+
+  cout << "   extracting edges from the mesh" << endl;
+  fltEdge->Update();
+
+  vtkPolyData *pEdges = fltEdge->GetOutput();
+  pEdges->BuildCells();
+  
+  unsigned int nEdges = pEdges->GetNumberOfLines();
+  cout << "      number of edges (lines) : " << nEdges << endl;
+
+  // Create a point locator
+  vtkPointLocator *fltLocator = vtkPointLocator::New();
+  fltLocator->SetDataSet(pEdges);
+  fltLocator->BuildLocator();
+  
+  // Type definitions for the graph structure
+  typedef property<edge_weight_t, unsigned int> WeightType;
+  typedef adjacency_list<vecS, vecS, bidirectionalS, no_property, WeightType > Graph;
+  typedef std::pair<vtkIdType,vtkIdType> Edge;
+  typedef graph_traits<Graph>::vertex_descriptor VertexDescriptor;
+
+  // Create an edge list
+  Edge *edges = new Edge[nEdges];
+  unsigned int *weights = new unsigned int[nEdges];
+  vtkIdType nPoints = 0; vtkIdType *xPoints = NULL;
+  
+  for(unsigned int i=0;i<nEdges;i++)
+    {
+    // Get the next edge
+    pEdges->GetCellPoints(i, nPoints, xPoints);
+    
+    // Place the edge into the Edge structure
+    assert(nPoints == 2);
+    edges[i].first = xPoints[0];
+    edges[i].second = xPoints[1];
+
+    // Compute the associated weight
+    vnl_vector_fixed<double,3> p1(pEdges->GetPoint(edges[i].first));
+    vnl_vector_fixed<double,3> p2(pEdges->GetPoint(edges[i].second));
+    weights[i] = (int) (1000 * (p1-p2).two_norm());
+    }
+  
+  // Declare the graph object
+  cout << "   constructing the graph" << endl;
+  Graph graph(edges, edges + nEdges, weights, pEdges->GetNumberOfPoints());
+  
+  // Compute Dijkstra's shortest path
+  vector<int> dist(num_vertices(graph));
+  vector<VertexDescriptor> path(num_vertices(graph));
+  VertexDescriptor start = vertex(123,graph);
+
+  cout << "   computing Dijkstra's shortest paths" << endl;
+  dijkstra_shortest_paths(graph,start,predecessor_map(&path[0]).distance_map(&dist[0]));
+
+  // Print out the shortest path
+  cout << "distance to 332 is " << dist[332] << endl;
+  cout << "predecessor to 332 is " << path[332] << endl;
+
+  
+  // For each curve, compute a path on the white matter surface
+  vtkIdType iLastClosest = 0;
+  for(unsigned int iCurve = 0; iCurve < curves.size(); iCurve++)
+    {
+    CurveType &curve = curves[iCurve];
+    vector<vtkIdType> xVertexList;
+    vector<unsigned int> xSourcePointList;
+    for(unsigned int iPoint = 0; iPoint < curve.points.size(); iPoint++)
+      {
+      // Find the point closest to the grey matter point
+      vtkIdType iClosest = fltLocator->FindClosestPoint(curve.points[iPoint].xGrey.data_block());
+      curve.points[iPoint].xWhite.set(pEdges->GetPoint(iClosest));
+
+      if(iPoint != 0 && iClosest != iLastClosest)
+        {
+        // Compute Dijkstra's shortest path from the closest white point to the 
+        // last closest white point
+        start = vertex(iClosest,graph);
+        dijkstra_shortest_paths(graph,start,predecessor_map(&path[0]).distance_map(&dist[0]));
+
+        // Trace the shortest path from the last closest point
+        while(path[iLastClosest] != iClosest)
+          {
+          iLastClosest = path[iLastClosest];
+          xVertexList.push_back(iLastClosest);
+          xSourcePointList.push_back(iPoint);
+          cout << ".";
+          }
+        }
+      
+      // Put the point in the vertex list
+      xVertexList.push_back(iClosest);
+      xSourcePointList.push_back(iPoint);
+      
+      iLastClosest = iClosest;
+      cout << "*" << flush;
+      }
+
+    // Create a new curve object to represent the newer, longer curve
+    CurveType cNew;
+    
+    // Prepare arrays for spline fitting
+    Vec *xFitGrey = new Vec[xVertexList.size()];
+    Vec *xFitWhite = new Vec[xVertexList.size()];
+    
+    // Populate the new curve
+    for(unsigned int j=0;j<xVertexList.size();j++)
+      {
+      // Get a pair of points corresponding to the index j
+      CurvePoint p;
+      p.xWhite.set(pEdges->GetPoint(xVertexList[j]));
+      p.xGrey = curve.points[xSourcePointList[j]].xGrey;
+
+      // Add the points to the curve
+      cNew.points.push_back(p);
+
+      // Add the points to the spline construction lists
+      xFitGrey[j] = p.xGrey;
+      xFitWhite[j] = p.xWhite;
+      }
+
+    // Fit splines to the newly generated point lists
+    cout << endl << " Fitting spline " << endl;
+   
+    cNew.splWhite.SetNumberOfControlPoints(NUMBER_OF_CONTROL_POINTS);
+    cNew.splWhite.FitToPoints(xVertexList.size(),xFitWhite);
+    cNew.splWhite.CreateUniformEvaluationGrid(1000,cNew.gridWhite);
+    delete xFitWhite;
+
+    cNew.splGrey.SetNumberOfControlPoints(NUMBER_OF_CONTROL_POINTS);
+    cNew.splGrey.FitToPoints(xVertexList.size(),xFitGrey);
+    cNew.splGrey.CreateUniformEvaluationGrid(1000,cNew.gridGrey);
+    delete xFitGrey;
+
+    // Copy in the new curve
+    curves[iCurve] = curve;
+    }
+
+  return poly;
+}
+
+/*********************************************************************************
+ * Visualize the ribbons, white matter mesh and the grey matter image
+ ********************************************************************************/
+void drawRibbonsAndBrain(
+  const vector<CurveType> &curves,vtkPolyData *whiteMesh, ShortImageType *imgGrey)
+{
+  // Create a renderer
+  vtkRenderer *ren = vtkRenderer::New();
+  ren->SetBackground(0.8,0.8,0.8);
+
+  // Add all ribbons to it
+  for(unsigned int i=0;i<curves.size();i++) 
+    {
+    const CurveType &curve = curves[i];
+    vtkPolyData *poly = vtkPolyData::New();
+    vtkCellArray *cells = vtkCellArray::New();
+    vtkPoints *points = vtkPoints::New();
+
+    // Create the array of points
+    for(unsigned int j=0;j<curve.points.size();j++)
+      {
+      const Vec &xGrey = curve.points[j].xGrey;
+      const Vec &xWhite = curve.points[j].xWhite;
+      points->InsertNextPoint(xGrey.data_block());
+      points->InsertNextPoint(xWhite.data_block());
+      }
+
+    // Create an array of cells
+    for(unsigned int k=0;k<curve.points.size()-1;k++)
+      {
+      vtkIdType id1[3] = {k,k+1,k+3};
+      vtkIdType id2[3] = {k+1,k+3,k+2};
+      cells->InsertNextCell(3,id1);
+      cells->InsertNextCell(3,id2);
+      }
+
+    // Put the cells and points into PD
+    poly->SetPoints(points);
+    poly->SetPolys(cells);
+
+    // Delete junk
+    //points->Delete();
+    //cells->Delete();
+
+    // Create a property
+    vtkProperty *prop = vtkProperty::New();
+    prop->SetColor(1.0f,0.0f,0.0f);
+    prop->SetInterpolationToFlat();
+
+    // Create a mapper and an actor
+    vtkPolyDataMapper *mapper = vtkPolyDataMapper::New();
+    mapper->SetInput(poly);
+    
+    vtkLODActor *actor = vtkLODActor::New();
+    actor->SetMapper(mapper);   
+    actor->SetProperty(prop);
+    ren->AddActor(actor);
+    }
+
+  // Add the white matter mesh
+  vtkDecimate *fltDecimate = vtkDecimate::New();
+  fltDecimate->SetInput(whiteMesh);
+  fltDecimate->SetTargetReduction(0.95);
+  fltDecimate->SetAspectRatio(30);
+  fltDecimate->SetInitialError(0.002);
+  fltDecimate->SetErrorIncrement(0.01);
+  fltDecimate->SetMaximumIterations(6);
+  fltDecimate->SetInitialFeatureAngle(40);
+  fltDecimate->Update();
+
+  vtkLODActor *actor = vtkLODActor::New();
+  vtkPolyDataMapper *mapper = vtkPolyDataMapper::New();
+  mapper->SetInput(fltDecimate->GetOutput());
+  actor->SetMapper(mapper);
+  ren->AddActor(actor);
+
+  // Add the grey image
+  vtkImageData *imgGreyVTK;
+  ConvertImageToVTK(imgGrey, &imgGreyVTK);
+  vtkVolumeRayCastMapper *volMapper = vtkVolumeRayCastMapper::New();
+  volMapper->SetInput(imgGreyVTK);
+  volMapper->SetVolumeRayCastFunction(
+    vtkVolumeRayCastCompositeFunction::New());
+
+  vtkVolume *vol = vtkVolume::New();
+  vol->SetMapper(volMapper);
+ 
+  ren->AddVolume(vol);
+  
+  vtkRenderWindow *renWin = vtkRenderWindow::New();
+  renWin->AddRenderer(ren);
+  renWin->SetSize(500,500);
+
+  vtkRenderWindowInteractor *iren = vtkRenderWindowInteractor::New();
+  iren->SetRenderWindow(renWin);
+  iren->Initialize();
+
+  renWin->Render();
+  iren->Start();
+
+  iren->Delete();
+  renWin->Delete();
+  ren->Delete();
+}
+
+
+
+
 int main(int argc, char *argv[])
 {
   // This program projects curves painted on the surface of the 
@@ -453,6 +888,7 @@ int main(int argc, char *argv[])
     cout << "Image read error" << endl;
     return -1;
     }
+ 
 
   // Allocate an array for curves
   vector<CurveType> vCurves;
@@ -597,14 +1033,20 @@ int main(int argc, char *argv[])
       }
 
     // Create the b-splines
-    curve.splGrey.SetNumberOfControlPoints(16);
+    curve.splGrey.SetNumberOfControlPoints(24);
     curve.splGrey.FitToPoints(nPoints,Q1);
-    curve.splGrey.CreateUniformEvaluationGrid(200, curve.gridGrey);
+    curve.splGrey.CreateUniformEvaluationGrid(1000, curve.gridGrey);
     
-    curve.splWhite.SetNumberOfControlPoints(16);
+    curve.splWhite.SetNumberOfControlPoints(24);
     curve.splWhite.FitToPoints(nPoints,Q2);
-    curve.splWhite.CreateUniformEvaluationGrid(200, curve.gridWhite);
+    curve.splWhite.CreateUniformEvaluationGrid(1000, curve.gridWhite);
     }
+  
+  // This is the part of the code where we "project" the grey edge of the ribbon 
+  // onto the white matter
+  
+  CreateWhiteMatterMesh(imgWhite);
+  vtkPolyData *polyWhiteMesh = CreateWhiteMatterGraph(vCurves);
   
   // This is the most interesting part of the program. We attempt to 
   // improve the ribbons by making their free side pass entirely through
@@ -615,7 +1057,7 @@ int main(int argc, char *argv[])
     CurveType &curve = vCurves[iCurve];
 
     // Create an overall problem
-    double factor = 20000;
+    double factor = 400000;
     unsigned int nControls = curve.splWhite.GetNumberOfControlPoints();
     RibbonProblem pbTotal(curve,imgDistance,0,nControls,factor);
 
@@ -625,10 +1067,13 @@ int main(int argc, char *argv[])
        << " irreg " << obj.xWhiteIrregularity  
       << " and WM distance " << (obj.xWhiteDistance / obj.xWhiteLength) << endl;
 
+    continue;
+
+
     // Create a list of starting points. We are not allowed to optimize the 
     // first and last points
     vector<unsigned int> vStarts;
-    unsigned int nSpan = 4;
+    unsigned int nSpan = 10;
     for(unsigned int iStart=1;iStart < curve.splWhite.GetNumberOfControlPoints() - nSpan;iStart++)
       {
       vStarts.push_back(iStart);
@@ -685,7 +1130,7 @@ int main(int argc, char *argv[])
           }
         
         // Run the optimization 
-        while(pbChunk.getEvaluationCost() < 200 && !method->isFinished())
+        while(pbChunk.getEvaluationCost() < 1000 && !method->isFinished())
         //while(!method->isFinished())
           method->performIteration();
       
@@ -713,16 +1158,24 @@ int main(int argc, char *argv[])
       // drawRibbons(vCurves,iCurve);
 
     }
+
+
+  // Draw the results in VTK
+  drawRibbonsAndBrain(vCurves,polyWhiteMesh,imgGrey);
     
   // At this point we have hopefully optimized the ribbons, and we proceed to
   // embed them into the grey matter image to form segmentation boundaries
-  
+  bool flagDrawSplineRibbons = false;
+    
   // Compute the number of triangles in the ribbons
   unsigned int nTriangles = 0, iTriangle = 0;
   unsigned int nTotalPoints = 0, iTotalPoints = 0;
   for(iCurve=0;iCurve<vCurves.size();iCurve++)
     {
-    unsigned int nPoints = vCurves[iCurve].gridWhite.size();
+    unsigned int nPoints = 
+      (flagDrawSplineRibbons) ?  vCurves[iCurve].gridWhite.size()
+      : vCurves[iCurve].points.size();
+
     nTriangles += nPoints * 2 - 2;
     nTotalPoints += nPoints;
     }
@@ -735,25 +1188,45 @@ int main(int argc, char *argv[])
   for(iCurve=0;iCurve<vCurves.size();iCurve++)
     {
     CurveType &curve = vCurves[iCurve];
-    unsigned int nPoints = curve.gridWhite.size();
+    unsigned int nPoints; 
+    
+    if(flagDrawSplineRibbons)
+      {
+      nPoints = curve.gridWhite.size();
+      xPoints[iTotalPoints++] = curve.splGrey.EvaluateGridPoint(curve.gridGrey,0,0);
+      xPoints[iTotalPoints++] = curve.splWhite.EvaluateGridPoint(curve.gridWhite,0,0);
+      }
+    else
+      {
+      nPoints = curve.points.size();
+      }
 
-    xPoints[iTotalPoints++] = curve.splGrey.EvaluateGridPoint(curve.gridGrey,0,0);
-    xPoints[iTotalPoints++] = curve.splWhite.EvaluateGridPoint(curve.gridWhite,0,0);
     for(iPoint=1;iPoint<nPoints;iPoint++)
       {
-      SplineType::Point &g1 = xPoints[iTotalPoints-2];
-      SplineType::Point &w1 = xPoints[iTotalPoints-1];
-      SplineType::Point &g2 = xPoints[iTotalPoints++] 
-        = curve.splGrey.EvaluateGridPoint(curve.gridGrey,iPoint,0);
-      SplineType::Point &w2 =xPoints[iTotalPoints++] 
-        = curve.splWhite.EvaluateGridPoint(curve.gridWhite,iPoint,0);
+      Vec *g1,*w1,*g2,*w2;
+      if(flagDrawSplineRibbons)
+        {
+        xPoints[iTotalPoints++] = curve.splGrey.EvaluateGridPoint(curve.gridGrey,iPoint,0);
+        xPoints[iTotalPoints++] = curve.splWhite.EvaluateGridPoint(curve.gridWhite,iPoint,0);
+        g1 = &xPoints[iTotalPoints-4];
+        w1 = &xPoints[iTotalPoints-3];
+        g2 = &xPoints[iTotalPoints-2];
+        w2 = &xPoints[iTotalPoints-1];
+        }
+      else
+        {
+        g1 = &curve.points[iPoint-1].xGrey;
+        g2 = &curve.points[iPoint].xGrey;
+        w1 = &curve.points[iPoint-1].xWhite;
+        w2 = &curve.points[iPoint].xWhite;
+        }
 
-      xTriangles[iTriangle++] = g1.data_block();
-      xTriangles[iTriangle++] = w1.data_block();
-      xTriangles[iTriangle++] = g2.data_block();
-      xTriangles[iTriangle++] = w1.data_block();
-      xTriangles[iTriangle++] = w2.data_block();
-      xTriangles[iTriangle++] = g2.data_block();
+      xTriangles[iTriangle++] = g1->data_block();
+      xTriangles[iTriangle++] = w1->data_block();
+      xTriangles[iTriangle++] = g2->data_block();
+      xTriangles[iTriangle++] = w1->data_block();
+      xTriangles[iTriangle++] = w2->data_block();
+      xTriangles[iTriangle++] = g2->data_block();
       }
     }
 
