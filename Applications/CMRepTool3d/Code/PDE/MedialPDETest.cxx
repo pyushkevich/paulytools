@@ -51,9 +51,13 @@ int main(int argc, char *argv[])
   gd.PrintSelf(cout);
 
   /* Step 2. Evaluate the equation at each site */
-  MedialPDESolver mps(101,101);
+  MedialPDESolver mps(11,11);
 
   time_t t = clock();
   mps.Solve(&p1);
   cout << "*** Elapsed Time: " << (t-clock()) << " ms." << " ***" << endl;
 }
+
+
+
+

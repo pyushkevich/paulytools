@@ -1,5 +1,8 @@
 #include "MedialPDESolver.h"
 #include <cmath>
+#include <algorithm>
+
+using namespace std;
 
 extern "C" {
   #include <laspack/itersolv.h> 
@@ -133,6 +136,32 @@ FDInternalSite::FDInternalSite(
   i4 = i3 - stride_u; 
   i6 = i7 - stride_u; 
   i8 = i7 + stride_u;
+
+  // Initialize the indices in sorted order
+  if(stride_u < stride_v)
+    {
+    xColumns[0] = i6; xEntry[6] = 0;
+    xColumns[1] = i7; xEntry[7] = 1;
+    xColumns[2] = i8; xEntry[8] = 2;
+    xColumns[3] = i5; xEntry[5] = 3;
+    xColumns[4] = i0; xEntry[0] = 4;
+    xColumns[5] = i1; xEntry[1] = 5;
+    xColumns[6] = i4; xEntry[4] = 6;
+    xColumns[7] = i3; xEntry[3] = 7;
+    xColumns[8] = i2; xEntry[2] = 8;
+    }
+  else
+    {
+    xColumns[0] = i6; xEntry[5] = 0;
+    xColumns[1] = i5; xEntry[4] = 1;
+    xColumns[2] = i4; xEntry[3] = 2;
+    xColumns[3] = i7; xEntry[7] = 3;
+    xColumns[4] = i0; xEntry[0] = 4;
+    xColumns[5] = i3; xEntry[3] = 5;
+    xColumns[6] = i8; xEntry[8] = 6;
+    xColumns[7] = i1; xEntry[1] = 7;
+    xColumns[8] = i2; xEntry[2] = 8;
+    }
 }
 
 /** Initialize the border site */
@@ -144,10 +173,12 @@ FDBorderSite::FDBorderSite(
 : FDAbstractSite(m, n, i, j)
 {
   // Initialize the cites around a circle, forgetting for a moment that
-  // we are at a border site
-  i0 = iNode;
-  i1 = i0 + stride_u; i2 = i0 + stride_v; 
-  i3 = i0 - stride_u; i4 = i0 - stride_v;
+  // we are at a border site. Some of these indices are off the grid
+  xNeighbor[0] = iNode;
+  xNeighbor[1] = iNode + stride_u; 
+  xNeighbor[2] = iNode + stride_v; 
+  xNeighbor[3] = iNode - stride_u; 
+  xNeighbor[4] = iNode - stride_v;
 
   // Initialize the weights in u and v
   wu = 0.5; wv = 0.5;
@@ -155,60 +186,46 @@ FDBorderSite::FDBorderSite(
   // Now, depending on which border we are on, correct the index and weights of finite
   // differences in u and v directions
   if(i == 0)
-    { i3 = i0; wu = 1; }
+    { xNeighbor[3] = iNode; wu = 1; }
   else if(i == m - 1)
-    { i1 = i0; wu = 1; }
+    { xNeighbor[1] = iNode; wu = 1; }
   if(j == 0)
-    { i4 = i0; wv = 1; }
+    { xNeighbor[4] = iNode; wv = 1; }
   else if(j == n - 1)
-    { i2 = i0; wv = 1; }
+    { xNeighbor[2] = iNode; wv = 1; }
 
   // Check whether we are at a corner
   corner = (wu == 1.0 && wv == 1.0);
   nDistinctSites = corner ? 3 : 4;
 
-  // Determine the distinct sites (the non-corner situation)
-  xDistinctSites[0] = i1; xEntry[1] = 0; 
-  xDistinctSites[1] = i2; xEntry[2] = 1; 
-  xDistinctSites[2] = i3; xEntry[3] = 2;
-  xDistinctSites[3] = i4; xEntry[4] = 3;
+  // Now, sort the entries in xNeighbor
+  unsigned int k, p;
+  for(k = 0; k < 4; k++) xDistinctSites[k] = xNeighbor[k+1];
+  sort(xDistinctSites,xDistinctSites+4);
 
-  // Correct the above arrays in case of corners   
-  if(i1 == i2) 
-    { 
-    xDistinctSites[xEntry[2]] = i4; 
-    xEntry[4] = xEntry[2]; 
-    xEntry[2] = xEntry[1]; 
-    }
-  else if(i2 == i3)
-    { 
-    xDistinctSites[xEntry[3]] = i4; 
-    xEntry[4] = xEntry[3]; 
-    xEntry[3] = xEntry[2]; 
-    }
-  else if(i3 == i4)
-    { 
-    xEntry[4] = xEntry[3]; 
-    }
-  else if(i4 == i1)
-    { 
-    xEntry[4] = xEntry[1]; 
-    }
+  // Two of the distinct sites can be duplicates - they should be removed
+  for(k = 0; k < 3; k++)
+    if(xDistinctSites[k] == xDistinctSites[k+1])
+      for(p = k+1; p < 3; p++)
+        xDistinctSites[p] = xDistinctSites[p+1];
 
-  // Find the entry corresponding to the center index
-  for(unsigned int j = 0; j < nDistinctSites; j++)
-    if(xDistinctSites[j] == i0)
-      xEntry[0] = j;
+  // At this point, the first nDistinctSites in xDistinctSites hold sorted
+  // unique column values. Now we need to compute a back-map taking each
+  // neighbor to one of these values. For now we do this in a slow manner
+  for(k = 0; k < 5; k++)
+    for(p = 0; p < nDistinctSites; p++)
+      if(xNeighbor[k] == xDistinctSites[p]) 
+        { xEntry[k] = p; break; }
 }
 
 /** Compute the equation corresponding to an internal site. */
-double FDInternalSite::ComputeEquation(Vector *Y)
+double FDInternalSite::ComputeEquation(double *Y)
 {
   // Get the components
   double 
-    F0 = V_GetCmp(Y, i0 + 1), F1 = V_GetCmp(Y, i1 + 1), F2 = V_GetCmp(Y, i2 + 1), 
-    F3 = V_GetCmp(Y, i3 + 1), F4 = V_GetCmp(Y, i4 + 1), F5 = V_GetCmp(Y, i5 + 1), 
-    F6 = V_GetCmp(Y, i6 + 1), F7 = V_GetCmp(Y, i7 + 1), F8 = V_GetCmp(Y, i8 + 1);
+    F0 = Y[i0], F1 = Y[i1], F2 = Y[i2], 
+    F3 = Y[i3], F4 = Y[i4], F5 = Y[i5], 
+    F6 = Y[i6], F7 = Y[i7], F8 = Y[i8];
   
   // Compute the finite differences, without scaling factors
   double Fu = F1 - F5;
@@ -221,51 +238,52 @@ double FDInternalSite::ComputeEquation(Vector *Y)
   return Cuu * Fuu + Cuv * Fuv + Cvv * Fvv + Cu * Fu + Cv * Fv - rho;
 }
 
-double FDBorderSite::ComputeEquation(Vector *Y)
+double FDBorderSite::ComputeEquation(double *Y)
 {
   // Compute the finite differences, without scaling factors
-  double Fu = V_GetCmp(Y, i1 + 1) - V_GetCmp(Y, i3 + 1);
-  double Fv = V_GetCmp(Y, i2 + 1) - V_GetCmp(Y, i4 + 1);
+  double Fu = Y[ xNeighbor[1] ] - Y[ xNeighbor[3] ];
+  double Fv = Y[ xNeighbor[2] ] - Y[ xNeighbor[4] ];
 
   // Compute the generalized gradient magnitude using precomputed values
-  return CuCu * Fu * Fu + CuCv * Fu * Fv + CvCv * Fv * Fv - C0 * V_GetCmp(Y, i0 + 1);
+  return CuCu * Fu * Fu + CuCv * Fu * Fv + CvCv * Fv * Fv - C0 * Y[ xNeighbor[0] ];
 }
 
 /** Compute the derivatives for Newton's method */
-void FDInternalSite::ComputeDerivative(Vector *, QMatrix *A, unsigned int iRow)
+void FDInternalSite::ComputeDerivative(double *, double *A, unsigned int iRow)
 {
   // Simply copy the values of the b's into A
-  Q_SetEntry(A, iRow, 0, i0 + 1, b0);
-  Q_SetEntry(A, iRow, 1, i1 + 1, b1);
-  Q_SetEntry(A, iRow, 2, i2 + 1, b2);
-  Q_SetEntry(A, iRow, 3, i3 + 1, b3);
-  Q_SetEntry(A, iRow, 4, i4 + 1, b4);
-  Q_SetEntry(A, iRow, 5, i5 + 1, b5);
-  Q_SetEntry(A, iRow, 6, i6 + 1, b6);
-  Q_SetEntry(A, iRow, 7, i7 + 1, b7);
-  Q_SetEntry(A, iRow, 8, i8 + 1, b8);
+  A[ xEntry[0] ] = b0;
+  A[ xEntry[1] ] = b1;
+  A[ xEntry[2] ] = b2;
+  A[ xEntry[3] ] = b3;
+  A[ xEntry[4] ] = b4;
+  A[ xEntry[5] ] = b5;
+  A[ xEntry[6] ] = b6;
+  A[ xEntry[7] ] = b7;
+  A[ xEntry[8] ] = b8;
 }
 
 /** Compute the derivatives for Newton's method */
-void FDBorderSite::ComputeDerivative(Vector *Y, QMatrix *A, unsigned int iRow)
+void FDBorderSite::ComputeDerivative(double *Y, double *A, unsigned int iRow)
 {
   // This computes the derivative of the site's equation with respect to the
   // four variables involved in the equation.
-  double Fu = V_GetCmp(Y, i1 + 1) - V_GetCmp(Y, i3 + 1);
-  double Fv = V_GetCmp(Y, i2 + 1) - V_GetCmp(Y, i4 + 1);
+  double Fu = Y[ xNeighbor[1] ] - Y[ xNeighbor[3] ];
+  double Fv = Y[ xNeighbor[2] ] - Y[ xNeighbor[4] ];
+
   double d1 = (CuCu + CuCu) * Fu + CuCv * Fv;
   double d2 = CuCv * Fu + (CvCv + CvCv) * Fv;
 
   // Clear all the entries to zero
   for(unsigned int j = 0; j < nDistinctSites; j++)
-    Q_SetEntry(A, iRow, j, xDistinctSites[j] + 1, 0.0);
+    A[j] = 0.0;
 
   // Compute the derivatives
-  Q_AddVal(A, iRow, xEntry[0], -C0 );
-  Q_AddVal(A, iRow, xEntry[1], d1 );
-  Q_AddVal(A, iRow, xEntry[2], d2 );
-  Q_AddVal(A, iRow, xEntry[3], -d1 );
-  Q_AddVal(A, iRow, xEntry[4], -d2 );
+  A[ xEntry[0] ] -= C0;
+  A[ xEntry[1] ] += d1;
+  A[ xEntry[2] ] += d2;
+  A[ xEntry[3] ] -= d1;
+  A[ xEntry[4] ] -= d2;
 }
 
 /** Initialize internal site */
@@ -323,52 +341,6 @@ void FDBorderSite::SetGeometry(GeometryDescriptor *g, double)
   C0 = 4.0;
 }
 
-static char *dummy = "Newton";
-
-MedialPDESolver
-::MedialPDESolver(unsigned int m, unsigned int n)
-{
-  // Copy the site dimensions
-  this->m = m; this->n = n;
-  du = 1.0 / (m - 1); dv = 1.0 / (n - 1);
-
-  nSites = m * n;
-  xSites = new FDAbstractSite*[nSites];
-  xSiteIndex = new unsigned int*[m];
-
-  // Initialize the A Matrix and the b vector storage
-  Q_Constr(&A,"Newton Mat",nSites,False,Rowws,Normal,True);
-  V_Constr(&b,"Newton RHS",nSites,Normal,True);
-  V_Constr(&y,"Newton Sol",nSites,Normal,True);
-  V_Constr(&eps,"Newton Epsilon",nSites,Normal,True);
-
-  // Initialize the sites and the site index
-  unsigned int iSite = 0, i, j;
-  for(i = 0; i < m; i++) 
-    {
-    xSiteIndex[i] = new unsigned int[n];
-    for(j = 0; j < n; j++) 
-      {
-      // Decide whether to create a border site or a center site
-      if(i == 0 || j == 0 || i == m-1 || j == n-1)
-        xSites[iSite] = new FDBorderSite(m, n, i, j, iSite, n, 1);
-      else
-        xSites[iSite] = new FDInternalSite(m, n, i, j, iSite, n, 1);
-
-      // Initialize the row in the Q Matrix
-      Q_SetLen(&A, iSite + 1, xSites[iSite]->GetNumberOfNetwonColumns());
-
-      // Associate the raw offset with the u-v index
-      xSiteIndex[i][j] = iSite++;
-      }
-    }
-
-  // Compute the initial solution
-  xInitSoln = new double[nSites];
-  for(iSite = 0; iSite < nSites; iSite++)
-    xInitSoln[iSite] = xSites[iSite]->GetInitialValue();
-}
-
 void DumpQMatrix(QMatrix *q)
 {
   char ch = '{';
@@ -389,6 +361,7 @@ void DumpQMatrix(QMatrix *q)
   cout << "}]" << endl;
 }
 
+/*
 void DumpVector(Vector *q)
 {
   char c = '{';
@@ -414,6 +387,73 @@ double MaxAbs_VV(Vector *q)
       cand = abs(V_GetCmp(q,i));
   return cand;
 }
+*/
+
+MedialPDESolver
+::MedialPDESolver(unsigned int m, unsigned int n)
+{
+  // Copy the site dimensions
+  this->m = m; this->n = n;
+  du = 1.0 / (m - 1); dv = 1.0 / (n - 1);
+
+  nSites = m * n;
+  xSites = new FDAbstractSite*[nSites];
+  xSiteIndex = new unsigned int*[m];
+
+  // Initialize the sites and the site index
+  unsigned int iSite = 0, i, j;
+  for(i = 0; i < m; i++) 
+    {
+    xSiteIndex[i] = new unsigned int[n];
+    for(j = 0; j < n; j++) 
+      {
+      // Decide whether to create a border site or a center site
+      if(i == 0 || j == 0 || i == m-1 || j == n-1)
+        xSites[iSite] = new FDBorderSite(m, n, i, j, iSite, n, 1);
+      else
+        xSites[iSite] = new FDInternalSite(m, n, i, j, iSite, n, 1);
+
+      // Associate the raw offset with the u-v index
+      xSiteIndex[i][j] = iSite++;
+      }
+    }
+
+  // Initialize the sparse matrix row index (use Fortran-based indexing)
+  xRowIndex = new unsigned int[nSites + 1];
+  xRowIndex[0] = 1;
+  for(iSite = 0; iSite < nSites; iSite++)
+    xRowIndex[iSite+1] = xRowIndex[iSite] + xSites[iSite]->GetNumberOfNetwonColumns();
+
+  // Initialize the column index
+  nSparseEntries = xRowIndex[nSites] - 1;
+  xColIndex = new unsigned int[nSparseEntries];
+  for(iSite = 0; iSite < nSites; iSite++)
+    {
+    unsigned int nEntries = xRowIndex[iSite+1] - xRowIndex[iSite];
+    for(unsigned int iEntry = 0; iEntry < nEntries; iEntry++)
+      xColIndex[ xRowIndex[iSite] + iEntry - 1 ] = xSites[iSite]->GetNewtonColumnAtIndex(iEntry) + 1;
+    }
+
+  // Initialize the sparse data
+  xSparseValues = new double[nSparseEntries];
+
+  // Compute the initial solution
+  xInitSoln = new double[nSites];
+  for(iSite = 0; iSite < nSites; iSite++)
+    xInitSoln[iSite] = xSites[iSite]->GetInitialValue();
+
+  // Initialize our three vectors
+  b = new double[nSites];
+  y = new double[nSites];
+  eps = new double[nSites];
+}
+
+extern "C" {
+  typedef unsigned int CBLAS_INDEX;
+  void cblas_dcopy(const int N, const double *X, const int incX, double *Y, const int incY);
+  void cblas_daxpy(const int N, const double alpha, const double *X, const int incX, double *Y, const int incY);
+  CBLAS_INDEX cblas_idamax(const int N, const double *X, const int incX);
+}
 
 void
 MedialPDESolver
@@ -432,9 +472,6 @@ MedialPDESolver
       // Get the index of the site
       unsigned int iSite = xSiteIndex[i][j];
 
-      // Copy the initial solution to the current solution
-      V_SetCmp(&y, iSite+1, xInitSoln[iSite]);
-
       // Compute the surface jet and the laplacian
       problem->ComputeJet2(u,v,X,Xu,Xv,Xuu,Xuv,Xvv);
 
@@ -446,25 +483,28 @@ MedialPDESolver
       }
     }
 
-  // Initialize epsilon to zero
-  V_SetAllCmp(&eps, 0.0);
+  // Copy the initial solution to the current solution
+  cblas_dcopy(nSites, xInitSoln, 1, y, 1);
 
-  // Set the accuracy of the solver
-  SetRTCAccuracy(1e-8);
+  // Initialize epsilon to zero
+  memset(eps, 0, sizeof(double) * nSites);
 
   // We are now ready to perform the Newton loop
   bool flagComplete = false;
   for(unsigned int iIter = 0; iIter < 16 && !flagComplete; iIter++)
     {
-    // Compute the A matrix and the b vector
+    // Compute the A matrix and the b vector at each node
     for(k = 0; k < nSites; k++)
       {
-      xSites[k]->ComputeDerivative(&y, &A, k+1);
-      V_SetCmp(&b, k+1, - xSites[k]->ComputeEquation(&y) );
+      // Compute the non-zero values of A for this row
+      xSites[k]->ComputeDerivative(y, xSparseValues + xRowIndex[k] - 1, k+1);
+
+      // Compute the value of b
+      b[k] = - xSites[k]->ComputeEquation(y);
       }
 
     // Solve the equation for X
-    BiCGIter(&A, &eps, &b, nSites, NULL, 1.0);
+    // BiCGIter(&A, &eps, &b, nSites, NULL, 1.0);
 
     /*
     cout << "A = "; DumpQMatrix(&A);
@@ -473,16 +513,15 @@ MedialPDESolver
     */
 
     // Get the largest error (eps)
-    double epsMax = MaxAbs_VV(&eps);
-    double bMax = MaxAbs_VV(&b);
+    double epsMax = eps[cblas_idamax(nSites, eps, 1)];
+    double bMax = b[cblas_idamax(nSites, b, 1)];
 
     // Append the epsilon vector to the result
-    AddAsgn_VV(&y, &eps);
+    cblas_daxpy(nSites, 1.0, eps, 1, y, 1);
     
     // Print the statistics
     cout << "-----------" << endl;
     cout << "Step " << iIter << ": " << endl;
-    cout << "  Lin. Solver Error: " << MaxAbs_VV( Sub_VV(Mul_QV(&A, &eps), &b) ) << endl;
     cout << "  Largest Epsilon: " << epsMax << endl;
     cout << "  Largest Eqn Error: " << bMax << endl;
 

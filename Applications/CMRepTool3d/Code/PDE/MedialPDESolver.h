@@ -29,8 +29,8 @@ class FDAbstractSite
 {
 public:
   FDAbstractSite(unsigned int m, unsigned int n, unsigned int i, unsigned int j);
-  virtual double ComputeEquation(Vector *Y) = 0;
-  virtual void ComputeDerivative(Vector *Y, QMatrix *A, unsigned int iRow) = 0;
+  virtual double ComputeEquation(double *Y) = 0;
+  virtual void ComputeDerivative(double *Y, double *A, unsigned int iRow) = 0;
   virtual void SetGeometry(GeometryDescriptor *gd, double rho) = 0;
 
   // Returns the number of boundaries that a site touches (0 - int, 1 - border, 2 - corner)
@@ -39,6 +39,9 @@ public:
 
   // Return the number of columns in each row of the matrix A used in Newton's method
   virtual unsigned int GetNumberOfNetwonColumns() = 0;
+
+  // Return the i-th column number that is non-zero in this equation
+  virtual unsigned int GetNewtonColumnAtIndex(unsigned int index) = 0;
   
 protected:
   // Position in the grid and grid dimensions
@@ -58,8 +61,8 @@ public:
     unsigned int iNode, unsigned int stride_u, unsigned int stride_v);
 
   void SetGeometry(GeometryDescriptor *gd, double rho);
-  double ComputeEquation(Vector *Y);
-  void ComputeDerivative(Vector *Y, QMatrix *A, unsigned int iRow);
+  double ComputeEquation(double *Y);
+  void ComputeDerivative(double *Y, double *A, unsigned int iRow);
 
   // This site touches no boundaries
   bool IsBorderSite(unsigned int) { return false; }
@@ -67,9 +70,20 @@ public:
   // Number of non-zero columns in newton's matrix
   unsigned int GetNumberOfNetwonColumns() { return 9; }
 
+  // Get the column of the newton's matrix entry
+  unsigned int GetNewtonColumnAtIndex(unsigned int index)
+    { return xColumns[index]; }
+
 protected:
-  /** Indices into the flat data array of all neighbors */
+  /** Indices into the flat data array of all neighbors, indexed counterclockwise
+   with the center at index 0 */
   unsigned int i0, i1, i2, i3, i4, i5, i6, i7, i8;
+
+  /** Sorted list of 9 column numbers associated with the neighbors */
+  unsigned int xColumns[9];
+
+  /** Mapping from internal neighbor index to column number */
+  unsigned int xEntry[9];
 
   /** Coefficients of the finite differences in the equation */
   double Cuu, Cuv, Cvv, Cu, Cv;
@@ -91,8 +105,8 @@ public:
   FDBorderSite(unsigned int m, unsigned int n, unsigned int i, unsigned int j, 
     unsigned int iNode, unsigned int stride_u, unsigned int stride_v);
   
-  double ComputeEquation(Vector *Y);
-  void ComputeDerivative(Vector *Y, QMatrix *A, unsigned int iRow);
+  double ComputeEquation(double *Y);
+  void ComputeDerivative(double *Y, double *A, unsigned int iRow);
   void SetGeometry(GeometryDescriptor *gd, double rho);
   
   // This site touches one or two boundaries
@@ -103,12 +117,16 @@ public:
   unsigned int GetNumberOfNetwonColumns() 
     { return nDistinctSites; }
 
+  // Get the column of the newton's matrix entry
+  unsigned int GetNewtonColumnAtIndex(unsigned int index)
+    { return xDistinctSites[index]; }
+
 protected:
   /** Is this a corner site? */
   bool corner;
 
   /** Indices into the flat data array of all neighbors */
-  unsigned int i0, i1, i2, i3, i4;
+  unsigned int xNeighbor[5];
 
   /** List of distinct sites involved in this site's equation */
   unsigned int nDistinctSites, xDistinctSites[4];
@@ -167,11 +185,12 @@ private:
   /** The initial solution */
   double *xInitSoln;
 
-  /** The LasPack Matrix used in Newton's method */
-  QMatrix A;
+  /** Representation for the sparse matrix */
+  double *xSparseValues;
+  unsigned int *xRowIndex, *xColIndex, nSparseEntries;
 
-  /** The LasPack Vector used in the RHS of the Newton's method */
-  Vector b, y, eps;
+  /** Three vectors used in the iteration */
+  double *eps, *b, *y;
 };
 
 
