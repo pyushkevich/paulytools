@@ -74,6 +74,10 @@ SET(BATLAS_SCRIPTS
   makemesh.sh
   metispartition.sh
 )
+  
+CONFIGURE_FILE(
+  ${PAULY_SOURCE_DIR}/Applications/QuickITKApps/BrainAtlas/Utilities/InnoSetup/InstallBrainTracer.iss.in
+  ${PAULY_BINARY_DIR}/Applications/QuickITKApps/BrainAtlas/Utilities/InnoSetup/InstallBrainTracer.iss)
 
 FOREACH(SCRIPT ${BATLAS_SCRIPTS})
   CONFIGURE_FILE(

@@ -1,0 +1,9 @@
+PROJECT(STACKEM)
+
+ADD_EXECUTABLE(stackem Stackem.cxx)
+
+LINK_LIBRARIES(
+  ITKCommon
+  ITKIO
+  ITKNumerics
+)
