@@ -362,7 +362,7 @@ public:
 
     // Compute overall objective value based on the two components
     double result = m_Factor * (obj.xWhiteDistance / obj.xWhiteLength) 
-       + obj.xArea + 100000 * obj.xWhiteIrregularity;
+       + obj.xArea + 10000 * obj.xWhiteIrregularity;
 
     // Increase the iterations counter
     setEvaluationCost(getEvaluationCost() + 1);
