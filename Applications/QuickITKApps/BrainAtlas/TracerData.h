@@ -597,6 +597,9 @@ public:
   // Compute Voronoi segmentation using markers
   void ComputeMarkerSegmentation();
 
+  // Compute segmentation using graph partitioning
+  void ComputeMedialSegmentation();
+
   // Check whether the Voronoi segmentation is present
   bool IsMarkerSegmentationValid() const
     { return m_VoronoiDiagram->IsDiagramValid(); }
@@ -615,10 +618,10 @@ public:
   bool ImportCurves(const char *file);
     
 private:
-  // Shortest distance computer
+  // Shortest distance / voronoi computer
   VTKMeshShortestDistance *m_DistanceMapper;
 
-  // Voronoi diagram computer
+  // Voronoi diagram computer for cells
   VTKMeshVoronoiDiagram *m_VoronoiDiagram;
 
   // The edge weight function object

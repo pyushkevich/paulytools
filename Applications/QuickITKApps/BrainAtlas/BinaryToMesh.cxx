@@ -28,6 +28,7 @@ int usage()
   cout << "   -s X.XX     Scale the image by factor X.XX before mesh extraction" << endl;
   cout << "   -ea FILE    Export the anti-aliased image as an image file FILE" << endl;
   cout << "   -es FILE    Export the scaled image as an image file FILE" << endl;
+  cout << "   -d X.XX     Decimate the mesh by a factor of X.XX (between 0 and 1)" << endl;
   return -1;
 }
 
@@ -36,6 +37,7 @@ int main(int argc, char *argv[])
   // Command line options
   double aaParm = 0.024;
   double xScale = 1.0;
+  double xDecimate = 0.0;
   const char *fnOutAA = NULL, *fnOutResample = NULL;
 
   // Check parameters
@@ -48,6 +50,11 @@ int main(int argc, char *argv[])
       {
       aaParm = atof(argv[++i]);
       cout << "using mean RMS error of " << aaParm << endl;
+      }
+    else if(0 == strcmp(argv[i],"-d")) 
+      {
+      xDecimate = atof(argv[++i]);
+      cout << "will decimate besh by factor of " << xDecimate << endl;
       }
     else if(0 == strcmp(argv[i],"-ea"))
       {
@@ -84,6 +91,7 @@ int main(int argc, char *argv[])
   fltMesh->SetInput(imgInput);
   fltMesh->SetResampleScaleFactor(xScale);
   fltMesh->SetAntiAliasMaxRMSError(aaParm);
+  fltMesh->SetDecimateFactor(xDecimate);
 
   cout << "==========================================================" << endl;
   fltMesh->Update();

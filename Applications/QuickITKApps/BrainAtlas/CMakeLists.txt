@@ -27,11 +27,12 @@ SET(TRACER_SRCS
   VTKMeshVoronoiDiagram.h
 )
 
-ADD_EXECUTABLE("binary2mesh" BinaryToMesh.cxx)
-ADD_EXECUTABLE("viewmesh" MeshViewer.cxx)
-ADD_EXECUTABLE("binary2metis" ImageToMetis.cxx)
-ADD_EXECUTABLE("maskimage" MaskImage.cxx)
+ADD_EXECUTABLE(binary2mesh BinaryToMesh.cxx)
+ADD_EXECUTABLE(viewmesh MeshViewer.cxx)
+ADD_EXECUTABLE(maskimage MaskImage.cxx)
+ADD_EXECUTABLE(threshimage ThresholdImage.cxx)
 ADD_EXECUTABLE(braintracer ${TRACER_SRCS})
+ADD_EXECUTABLE(dumpmeshpoints DumpMeshPoints.cxx)
 
 # Use FFTW from ITK if requested
 IF(USE_ITK_FFTW)

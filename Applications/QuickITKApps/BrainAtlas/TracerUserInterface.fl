@@ -1,5 +1,5 @@
 # data file for the Fltk User Interface Designer (fluid)
-version 1.0104 
+version 1.0105 
 header_name {.h} 
 code_name {.cxx}
 class TracerUserInterface {open : {public TracerUserInterfaceBase}
@@ -9,9 +9,9 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
     Fl_Window m_WinMain {
       label {GeeLab Brain Tracer}
       callback {OnMenuQuit();} open
-      xywh {61 74 925 710} type Double hide resizable
+      xywh {268 132 925 710} type Double resizable
       code0 {\#include "TracerUserInterfaceBase.h"}
-      code1 {\#include "TracerMainWindow.h"}
+      code1 {\#include "TracerMainWindow.h"} visible
     } {
       Fl_Group {} {open
         xywh {5 30 645 645} box PLASTIC_DOWN_FRAME
@@ -30,7 +30,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           xywh {660 35 260 245} box FLAT_BOX color 0 labelcolor 7
         }
       }
-      Fl_Menu_Bar {} {open selected
+      Fl_Menu_Bar {} {open
         xywh {0 0 930 25}
       } {
         submenu {} {
@@ -150,7 +150,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
         } {
           Fl_Group m_GrpCurves {
             label Curves open
-            xywh {655 320 265 385} color 167 selection_color 77 labelfont 1 labelsize 12
+            xywh {655 320 265 385} color 167 selection_color 77 labelfont 1 labelsize 12 hide
           } {
             Fl_Browser m_BrsCurves {
               label {Available curves:}
@@ -181,6 +181,11 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
               label {undo last point}
               callback {OnButtonDeleteLastPoint();}
               xywh {665 590 100 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
+            }
+            Fl_Button m_BtnCurveNecks {
+              label {find necks}
+              callback {OnButtonComputeNecks();}
+              xywh {800 665 100 25} box PLASTIC_UP_BOX color 140 labelfont 1 labelsize 12 deactivate
             }
           }
           Fl_Group m_GrpMarkers {
@@ -215,7 +220,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           }
           Fl_Group m_GrpDisplay {
             label Display
-            xywh {655 320 265 385} color 246 selection_color 227 labelfont 1 labelsize 12 hide
+            xywh {655 320 265 385} color 246 selection_color 227 labelfont 1 labelsize 12
           } {
             Fl_Check_Button {} {
               label { Center mesh on current point}
@@ -238,9 +243,9 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
               xywh {665 420 190 25} down_box DOWN_BOX labelsize 12
             }
             Fl_Choice m_ChcEdgeColoring {
-              label {Color map:}
+              label {Edge color map:}
               callback {OnSelectEdgeColoring(o->value());} open
-              xywh {740 455 170 20} down_box BORDER_BOX labelsize 11 textsize 11 deactivate
+              xywh {785 455 125 20} down_box BORDER_BOX labelsize 11 textsize 11 deactivate
             } {
               menuitem {} {
                 label None
@@ -253,6 +258,24 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
               menuitem {} {
                 label {Edge weight}
                 xywh {30 30 100 20} labelsize 11
+              }
+            }
+            Fl_Choice m_ChcVertexColoring {
+              label {Vertex color map:}
+              callback {OnSelectVertexColoring(o->value());} open selected
+              xywh {785 480 125 20} down_box BORDER_BOX labelsize 11 textsize 11
+            } {
+              menuitem {} {
+                label None
+                xywh {50 50 100 20} value 1 labelsize 11
+              }
+              menuitem {} {
+                label {Distance to curves}
+                xywh {30 30 100 20} labelsize 11
+              }
+              menuitem {} {
+                label {Segmentation label}
+                xywh {40 40 100 20} labelsize 11
               }
             }
           }

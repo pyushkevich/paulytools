@@ -90,6 +90,10 @@ public:
   itkSetMacro(ResampleScaleFactor,float);
   itkGetMacro(ResampleScaleFactor,float);
 
+  /** Whether to decimate the mesh and how much, 0 for none*/
+  itkSetMacro(DecimateFactor, double);
+  itkGetMacro(DecimateFactor, double);
+
   /** Set the input */
   void SetInput(TImage *image) 
     { this->SetNthInput(0,image); }
@@ -182,6 +186,12 @@ protected:
     fltClean->SetInput(meshPipeEnd);
     meshPipeEnd = fltClean->GetOutput();
 
+    // Decimate the data 
+    fltDecimate = vtkDecimate::New();
+    fltDecimate->SetInput(meshPipeEnd);
+    fltDecimate->PreserveTopologyOn();
+    meshPipeEnd = fltDecimate->GetOutput();
+
     // Compute triangle strips for faster display
     fltTriangle = vtkTriangleFilter::New();
     fltTriangle->SetInput(meshPipeEnd);
@@ -201,6 +211,9 @@ protected:
 
     // Resample - NO
     m_ResampleScaleFactor = 1.0f;
+
+    // Decimate - NO
+    m_DecimateFactor = 0.0f;
     }
 
   ~BinaryImageToMeshFilter()
@@ -211,13 +224,14 @@ protected:
     fltImport->Delete();
     fltTriangle->Delete();
     fltClean->Delete();
+    fltDecimate->Delete();
     }
 
   /** Generate Data */
   virtual void GenerateData( void )
     {
     // Run the computation
-    cout << "Computing white matter mesh" << endl;
+    cout << "Computing mesh from binary image" << endl;
 
     // Get the input and output pointers
     typename TImage::ConstPointer inputImage = 
@@ -295,6 +309,23 @@ protected:
       << fltClean->GetOutput()->GetNumberOfCells() << " cells and " 
       << fltClean->GetOutput()->GetNumberOfPoints() << " points. " << endl;
 
+    // If decimation is on, run it
+    if(m_DecimateFactor > 0.0)
+      {
+      cout << "   decimating the mesh by factor of " << m_DecimateFactor << endl;
+      fltDecimate->SetTargetReduction(m_DecimateFactor);
+      fltDecimate->Update();
+      fltTriangle->SetInput(fltDecimate->GetOutput());
+
+      cout << "      mesh has " 
+        << fltClean->GetOutput()->GetNumberOfCells() << " cells and " 
+        << fltClean->GetOutput()->GetNumberOfPoints() << " points. " << endl;
+      }
+    else
+      {
+      fltTriangle->SetInput(fltClean->GetOutput());
+      }
+
     cout << "   converting mesh to triangles" << endl;
     fltTriangle->Update();
 
@@ -342,9 +373,11 @@ private:
   vtkPolyDataConnectivityFilter *fltConnect;
   vtkCleanPolyData *fltClean;
   vtkTriangleFilter *fltTriangle;
+  vtkDecimate *fltDecimate;
 
   bool m_InvertInput;
   float m_ResampleScaleFactor;
+  double m_DecimateFactor;
 
   void ProgressCommand(itk::Object *source, const itk::EventObject &evt) 
     {

@@ -238,6 +238,37 @@ TracerData
     << " computed in " << tElapsed << " ms." << endl;
 }
 
+void TracerData
+::ComputeMedialSegmentation()
+{
+  // Create a list of source vertices
+  list< vtkIdType > lSources;
+
+  // Pass the separating edges as boundaries for the segmentation
+  TracerCurves::IdList lCurves;
+  m_Curves.GetCurveIdList(lCurves);
+  TracerCurves::IdList::iterator itCurve = lCurves.begin();
+  while(itCurve != lCurves.end())
+    {
+    // Get the points associated with this curve
+    const TracerCurves::MeshCurve &curve = m_Curves.GetCurveVertices(*itCurve);
+    TracerCurves::MeshCurve::const_iterator it = curve.begin();
+    while(it != curve.end())
+      {
+      lSources.push_back(*it);
+      ++it;
+      }   
+    ++itCurve;
+    }
+
+  // Pass the curves to the vertex Voronoi distance mapper
+  m_DistanceMapper->ComputeDistances(lSources);
+
+  // Now we need a way to visualize the distance function
+  TracerDataEvent evt(this);
+  BroadcastOnFocusPointChange(&evt);  // TODO: Bogus!
+}
+
 void
 TracerData
 ::ComputeMarkerSegmentation()

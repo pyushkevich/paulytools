@@ -41,6 +41,7 @@ TracerMainWindow(int x, int y, int w, int h, const char *label)
   m_CurrentPoint = -1;
   m_CurrentMarkerCell = -1;
   m_EdgeDisplayMode = EDGE_DISPLAY_NONE;
+  m_VertexColorMode = VERTEX_COLOR_NONE;
   m_SurfaceDisplayMode = SURFACE_DISPLAY_ALL;
   m_CenterMesh = false;
   m_NeighborhoodSize = 10.0;
@@ -51,6 +52,26 @@ TracerMainWindow
 {
   if(m_Data)
     m_Data->RemoveTracerDataListener(this);
+}
+
+// Callback to determine the color of a vertex based on current settings
+void
+TracerMainWindow
+::ApplyMeshVertexColor(vtkIdType id)
+{
+  if(m_VertexColorMode == VERTEX_COLOR_NONE) return;
+  else if(m_VertexColorMode == VERTEX_COLOR_LABEL) return;
+  else if(m_VertexColorMode == VERTEX_COLOR_DISTANCE)
+    {
+    // Get the distance map from the vd
+    float dist = m_Data->GetDistanceMapper()->GetVertexDistance(id);
+
+    // Scale the distance by something
+    double val = atan(dist / 100.0) * 0.63661977;
+
+    // Apply the appropriate color
+    glColor3d(val, val, 1.0);
+    }
 }
 
 void
@@ -75,6 +96,7 @@ TracerMainWindow
     for (vtkIdType j = 0; j < npts; j++) 
       {
       // Some ugly code to ensure VTK version compatibility
+      ApplyMeshVertexColor(pts[j]);
       glNormal3dv(norms->GetTuple(pts[j]));
       glVertex3dv(verts->GetPoint(pts[j]));
       }
@@ -96,6 +118,8 @@ TracerMainWindow
 
   // Draw the base display list (non-markered)
   glColor3d(0.4,0.4,0.4);
+
+  // This is somewhat weird... What about the grey marker...
   GLDrawStrippedPolyData(m_Data->GetDisplayMesh());
 
   // Draw each of the segmented triangle strips
@@ -117,6 +141,7 @@ TracerMainWindow
       ++it;
       }
     }
+  
 
   glEndList();
 

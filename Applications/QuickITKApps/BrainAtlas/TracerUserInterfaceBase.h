@@ -28,11 +28,14 @@ public:
   virtual void OnSelectMarker(int value) = 0;
  
   virtual void OnCheckDisplayEdges(int value) = 0;
+  virtual void OnSelectVertexColoring(int value) = 0;
   virtual void OnSelectEdgeColoring(int value) = 0;
   virtual void OnCheckCenterMesh(int value) = 0;
   virtual void OnCheckDisplayNeighborhood(int value) = 0;
   virtual void OnInputSulcalFactor(double value) = 0;
   virtual void OnInputNeighborhoodRadius(double value) = 0;
+
+  virtual void OnButtonComputeNecks() = 0;
 };
 
 #endif

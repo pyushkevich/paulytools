@@ -15,6 +15,10 @@ public:
   enum EditMode { TRACKBALL, TRACER, MARKER };
   enum TrackballMode { NONE, ROTATE, ZOOM, PAN };
 
+  // Vertex coloring mode 
+  enum VertexColorMode 
+    { VERTEX_COLOR_NONE, VERTEX_COLOR_LABEL, VERTEX_COLOR_DISTANCE };
+
   // Edge display mode (for edges displayed over the surface of 
   // the mesh
   enum EdgeDisplayMode 
@@ -66,6 +70,17 @@ public:
     m_EdgeDisplayMode = mode;
     m_EdgeDisplayListDirty = true;
     redraw();
+    }
+
+  // Set the vertex coloring mode
+  void SetVertexColorMode(VertexColorMode mode)
+    {
+    if(m_VertexColorMode != mode)
+      {
+      m_VertexColorMode = mode;
+      m_FullMeshDisplayListDirty = true;
+      m_NeighborhoodDisplayListDirty = true;
+      }
     }
 
   // Set the surface display mode
@@ -132,6 +147,9 @@ private:
   // Current mode for edge overlay display
   EdgeDisplayMode m_EdgeDisplayMode;
 
+  // Current mode for vertex coloring
+  VertexColorMode m_VertexColorMode;
+
   // Current mode for surface display
   SurfaceDisplayMode m_SurfaceDisplayMode;
 
@@ -175,6 +193,9 @@ private:
   void DrawMesh();
   void DrawCurves();
   void DrawMarkers();
+
+  // Method for applying vertex color
+  void ApplyMeshVertexColor(vtkIdType id);
 
   // Methods for choosing edge colors based on values
   void SetGLColorHSV(double xHue, double xSaturation, double xValue);

@@ -23,8 +23,8 @@ Name: "quicklaunchicon"; Description: "Create a &Quick Launch icon"; GroupDescri
 [Files]
 Source: "@PAULY_BINARY_DIR@\Applications\QuickITKApps\BrainAtlas\Release\braintracer.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
-Source: "{sys}\MSVCP71.dll"; DestDir "{sys}"; Flags restartreplace uninsneveruninstall sharedfile
-Source: "{sys}\MSVCR71.dll"; DestDir "{sys}"; Flags restartreplace uninsneveruninstall sharedfile
+Source: "C:\Program Files\Microsoft Visual Studio .NET 2003\Visual Studio .NET Professional 2003 - English\MSVCP71.dll"; DestDir: {sys}; Flags: restartreplace uninsneveruninstall sharedfile onlyifdoesntexist
+Source: "C:\Program Files\Microsoft Visual Studio .NET 2003\Visual Studio .NET Professional 2003 - English\MSVCR71.dll"; DestDir: {sys}; Flags: restartreplace uninsneveruninstall sharedfile onlyifdoesntexist
 
 [INI]
 Filename: "{app}\braintracer.url"; Section: "InternetShortcut"; Key: "URL"; String: "http://www.grasp.upenn.edu/~pauly"

@@ -48,10 +48,14 @@ public:
  
   void OnCheckDisplayEdges(int value);
   void OnSelectEdgeColoring(int value);
+  void OnSelectVertexColoring(int value);
   void OnCheckCenterMesh(int value);
   void OnCheckDisplayNeighborhood(int value);
   void OnInputNeighborhoodRadius(double value);
   void OnInputSulcalFactor(double value);
+
+  // Experimental
+  void OnButtonComputeNecks();
 
   // Callbacks from TracerData event system
   void OnMeshChange(TracerDataEvent *evt);

@@ -13,6 +13,7 @@
 #include <vtkLoopSubdivisionFilter.h>
 
 #include <vector>
+#include <list>
 #include <utility>
 
 #include "ShortestPath.h"
@@ -82,8 +83,6 @@ private:
 };
   
 /***************************************************************************
- * Create a BOOST graph structure from the white matter mesh
- *
  * This class takes as an input a mesh and computes a graph that can
  * be used to calculate Dijkstra's shortest path on the surface. 
  *
@@ -124,6 +123,9 @@ public:
 
   /** Compute shortest distances from a vertex on a mesh to other vertices */
   void ComputeDistances(vtkIdType iStartNode);
+
+  /** Compute the shortest distance from a list of start nodes */
+  void ComputeDistances(const list<vtkIdType> &iStartNodes);
 
   /** Get the distance between start node and given node */
   float GetVertexDistance(vtkIdType iNode) const 
@@ -212,7 +214,7 @@ private:
   float *m_EdgeWeights;
 
   // The structure used to compute the shortest paths on the mesh
-  typedef DijkstraShortestPath<float> DijkstraAlgorithm;
+  typedef GraphVoronoiDiagram<float> DijkstraAlgorithm;
   DijkstraAlgorithm *m_ShortestPath;
 
   // VTK filters

@@ -206,7 +206,23 @@ VTKMeshShortestDistance
   point = fltLocator->FindClosestPoint(ptLine.data_block());
   return subId == 0;
 }
+
+void 
+VTKMeshShortestDistance
+::ComputeDistances(const list<vtkIdType> &lSources)
+{
+  // Create an array from the list
+  unsigned int *lSourceArray = new unsigned int[lSources.size()];
+  unsigned int iSource = 0;
+
+  list<vtkIdType>::const_iterator it = lSources.begin();
+  while(it != lSources.end())
+    lSourceArray[iSource++] = *it++;
+
+  m_ShortestPath->ComputePathsFromManySources(iSource, lSourceArray);
   
+  delete[] lSourceArray;
+}
 
 void 
 VTKMeshShortestDistance

@@ -57,6 +57,7 @@ TracerUserInterfaceLogic
   m_Activation.AddWidget(m_BtnRecolorMarker, AF_ACTIVE_MARKER);
   // m_Activation.AddWidget(m_BrsMarkers, AF_MARKERS_EXIST);
   m_Activation.AddWidget(m_BtnComputeRegions, AF_MARKERS_EXIST);
+  m_Activation.AddWidget(m_BtnCurveNecks, AF_CURVES_EXIST);
 }
 
 bool
@@ -416,6 +417,18 @@ TracerUserInterfaceLogic
 
 void 
 TracerUserInterfaceLogic
+::OnSelectVertexColoring(int value)
+{
+  if(value == 2)
+    m_WinTrace->SetVertexColorMode(TracerMainWindow::VERTEX_COLOR_LABEL);
+  else if(value == 1)
+    m_WinTrace->SetVertexColorMode(TracerMainWindow::VERTEX_COLOR_DISTANCE);
+  else if(value == 0)
+    m_WinTrace->SetVertexColorMode(TracerMainWindow::VERTEX_COLOR_NONE);
+}
+
+void 
+TracerUserInterfaceLogic
 ::OnCheckDisplayEdges(int value)
 {
   if(value)
@@ -604,4 +617,13 @@ OnFocusMarkerChange(TracerDataEvent *evt)
         }
       }
     }
+}
+
+void
+TracerUserInterfaceLogic::
+OnButtonComputeNecks()
+{
+  // Compute a distance transform from the curves to the rest of the mesh
+  // using Dijkstra's algorithm
+  m_Data->ComputeMedialSegmentation();
 }
