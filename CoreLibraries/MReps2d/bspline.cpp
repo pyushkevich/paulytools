@@ -369,7 +369,7 @@ void BSpline1D::fitToPoints(const MatrixType &Q)
 
   // Solve for P
   vnl_qr<double> qr(NTN);
-  R = qr.solve(R);
+  MatrixType R1 = qr.solve(R);
 
   // NTN.ipSolveLinearSystem(R);
 
@@ -379,7 +379,7 @@ void BSpline1D::fitToPoints(const MatrixType &Q)
     setControl(0,p,Q(0,p));
     for (int i=1;i<=n-1;i++)
       {
-      setControl(i,p,R(i-1,p));
+      setControl(i,p,R1(i-1,p));
       }
     setControl(n,p,Q(m,p));
     }
