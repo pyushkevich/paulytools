@@ -1,5 +1,6 @@
 #include "OptimizationTerms.h"
 #include "ITKImageWrapper.h"
+#include "MedialAtomGrid.h"
 #include <iostream>
 
 using namespace std;
@@ -480,6 +481,59 @@ void VolumeOverlapEnergyTerm::PrintReport(ostream &sout)
 }
   
 /*********************************************************************************
+ * Crest Laplacian Penalty Term: Assure negative Rho on the crest
+ ********************************************************************************/
+double CrestLaplacianEnergyTerm::ComputeEnergy(SolutionData *data)
+{
+  // Initialize the accumulators
+  xMaxLaplacian = -1e10;
+  xTotalPenalty = xAvgLaplacian = 0.0;
+  nCrestAtoms = nBadSites = 0;
+  
+  // Iterate over all crest atoms
+  MedialAtomIterator *itAtom = data->xAtomGrid->NewAtomIterator();
+  for( ; !itAtom->IsAtEnd(); ++(*itAtom) )
+    {
+    if(itAtom->IsEdgeAtom())
+      {
+      // Get the laplacian at this point
+      double x = data->xAtoms[itAtom->GetIndex()].xLapR;
+
+      // Update the minimum value
+      if(x > xMaxLaplacian) xMaxLaplacian = x;
+
+      // Update the bad atom counter 
+      if(x > 0) nBadSites++;
+      nCrestAtoms++;
+
+      // Update the average
+      xAvgLaplacian += x;
+      
+      // Update the total penalty
+      xTotalPenalty += PenaltyFunction(x, 100, 0.0);
+      }
+    }
+  delete itAtom;
+
+  // Finish up
+  xAvgLaplacian /= nCrestAtoms;
+  xTotalPenalty;
+
+  return xTotalPenalty;
+}  
+
+void CrestLaplacianEnergyTerm::PrintReport(ostream &sout)
+{
+  sout << "  Crest Laplacian Penalty Term: " << endl;
+  sout << "    number of crest atoms    : " << nCrestAtoms << endl; 
+  sout << "    number of bad atoms      : " << nBadSites << endl; 
+  sout << "    largest laplacian value  : " << xMaxLaplacian << endl; 
+  sout << "    average laplacian value  : " << xAvgLaplacian << endl; 
+  sout << "    total penalty            : " << xTotalPenalty << endl;
+}
+
+
+/*********************************************************************************
  * MEDIAL OPTIMIZATION PROBLEM
  ********************************************************************************/
 const double MedialOptimizationProblem::xPrecision = 1.0e-12;
@@ -496,7 +550,7 @@ void MedialOptimizationProblem::AddEnergyTerm(EnergyTerm *term, double xWeight)
 double MedialOptimizationProblem::Evaluate(double *X)
 {
   // Update the surface with the new solution
-  xSurface->SetRawCoefficientArray(X);
+  xCoeff->SetCoefficientArray(X);
   xSolver->Solve(xPrecision);
 
   // Create a solution data object representing current solution
@@ -520,8 +574,8 @@ MedialOptimizationProblem
 ::ComputeGradient(double *X, double *XGradient)
 {
   // Copy the x-vector into the coefficients of the surface
-  size_t nCoeff = xSurface->GetNumberOfRawCoefficients();
-  xSurface->SetRawCoefficientArray(X);
+  size_t nCoeff = xCoeff->GetNumberOfCoefficients();
+  xCoeff->SetCoefficientArray(X);
 
   // Use current solution as the guess
   xSolver->Solve(xPrecision);
@@ -540,15 +594,15 @@ MedialOptimizationProblem
   for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)
     {
     // Increment the coefficient by epsilon
-    double xOldValue = xSurface->GetRawCoefficient(iCoeff);
-    xSurface->SetRawCoefficient(iCoeff, xOldValue + xEpsilon);
+    double xOldValue = xCoeff->GetCoefficient(iCoeff);
+    xCoeff->SetCoefficient(iCoeff, xOldValue + xEpsilon);
 
     // Solve the PDE for the new value and create a solution data object
     xSolver->Solve(xPrecision); cout << "." << flush;
     SGrad[iCoeff] = new SolutionData(xSolver, true);
 
     // Restore the old solution value
-    xSurface->SetRawCoefficient(iCoeff, xOldValue);
+    xCoeff->SetCoefficient(iCoeff, xOldValue);
     }
 
   // See how much time elapsed for the medial computation
@@ -568,6 +622,9 @@ MedialOptimizationProblem
     // cout << xGradTerm << endl;
     xSolution += xWeights[iTerm] * xValue;
     xGradTotal += xWeights[iTerm] * xGradTerm;
+
+    
+    cout << "GRADIENT : " << xGradTerm << endl;
     }
 
   // Finish timing

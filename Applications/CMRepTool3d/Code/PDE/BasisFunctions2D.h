@@ -3,6 +3,7 @@
 
 #include <valarray>
 #include <smlmath.h>
+#include "CoefficientMask.h"
 #include "Registry.h"
 
 using namespace std;
@@ -10,6 +11,10 @@ using namespace std;
 class IHyperSurface2D
 {
 public:
+  // Typed definitions
+  typedef vnl_matrix<double> MatrixType;
+  typedef vnl_vector<double> VectorType;
+
   /** Evaluate the function at a particular u, v coordinate. The return value
    * is a vector of doubles */
   virtual void Evaluate(double u, double v, double *x) = 0;
@@ -26,6 +31,16 @@ public:
   /** Evaluate the function at a grid point */
   virtual void EvaluateAtGridIndex(
     size_t iu, size_t iv, size_t ou, size_t ov, size_t c0, size_t nc, double *x) = 0;
+  
+  /** Apply affine transform to the hypersurface */
+  virtual void ApplyAffineTransform(
+    const MatrixType &A, const VectorType &b, const VectorType &c) = 0;
+
+  /** Find the center of the surface (for rotations) */
+  virtual VectorType GetCenterOfRotation() = 0;
+
+  /** Get the number of dimensions of the surface */
+  virtual size_t GetNumberOfDimensions() = 0;
 };
 
 /** This is an interface that should be implemented by any 2D basis function
@@ -33,7 +48,6 @@ public:
 class IBasisRepresentation2D : virtual public IHyperSurface2D
 {
 public:
-
   /** Get the coefficients as an array of real values */
   virtual size_t GetNumberOfRawCoefficients() = 0;
   virtual double *GetRawCoefficientArray() = 0;
@@ -51,11 +65,11 @@ public:
 
   /** Read the coefficients from a registry */
   virtual bool ReadFromRegistry(Registry &R) = 0;
-
-  /** Apply affine transform to the surface */
-  virtual void ApplyAffineTransform(
-    const vnl_matrix<double> &A, const vnl_vector<double> &b, 
-    const vnl_vector<double> &c) = 0;
+  
+  /** Get a coefficient mask of a given coarseness in each component.
+   * Coarseness of zero should mean minimal number of coefficients, and
+   * coarseness of one is the maximal numner of coefficients */
+  virtual IMedialCoefficientMask *NewCoarseToFineCoefficientMask(double *xCoarseness) = 0;
 };
   
 /**
@@ -109,7 +123,12 @@ public:
   void SetEvaluationGrid(size_t nu, size_t nv, double *uu, double *vv); 
 
   /** Evaluate the function at a grid point */
-  void EvaluateAtGridIndex(size_t iu, size_t iv, size_t ou, size_t ov, size_t c0, size_t nc, double *x); 
+  void EvaluateAtGridIndex(
+    size_t iu, size_t iv, size_t ou, size_t ov, size_t c0, size_t nc, double *x); 
+
+  /** Get the number of components/dimensions */
+  size_t GetNumberOfDimensions() 
+    { return NComponents; }
 
   /** Get number of raw coefficients */
   size_t GetNumberOfRawCoefficients()
@@ -178,11 +197,20 @@ FourierSurfaceBase;
 class FourierSurface : public FourierSurfaceBase
 {
 public:
+  // Constructor
   FourierSurface(size_t ncu, size_t ncv) : FourierSurfaceBase(ncu, ncv) {}
+
+  /** Find the center of the surface (for rotations) */
+  vnl_vector<double> GetCenterOfRotation();
 
   // Special way to apply the affine transform
   void ApplyAffineTransform( const vnl_matrix<double> &A, 
     const vnl_vector<double> &b, const vnl_vector<double> &c);
+  
+  /** Get a coefficient mask of a given coarseness in each component.
+   * Coarseness of zero should mean minimal number of coefficients, and
+   * coarseness of one is the maximal numner of coefficients */
+  IMedialCoefficientMask *NewCoarseToFineCoefficientMask(double *xCoarseness);
 };
 
 #endif

@@ -3,20 +3,20 @@ from common import *
 from medialpde import *
 
 # Create a medial PDE object
-mp = MedialPDE(3, 5, 10)
-mp.LoadFromDiscreteMRep("/tmp/surf01.txt", -0.25, 10)
+mp = MedialPDE(4, 6, 8)
+mp.LoadFromDiscreteMRep("/tmp/surf01.txt", -0.5, 10)
 mp.Solve()
 
 # Load the image and gradients
 img = FloatImage()
-img.LoadFromFile(dirWork + "avg/average_hippo_blurred.mha")
+img.LoadFromFile(dirWork + "avg/average_hippo_blurred_low.mha")
 
 # Match the volume to the image
-mp.MatchImageByMoments(img, 10)
+mp.MatchImageByMoments(img, 5)
 
 # Save the m-rep as a mesh and an m-rep file
-mp.SaveBYUMesh(dirWork + "avg/average_mrepL_01.byu");
-mp.SaveToParameterFile(dirWork + "avg/average_mrepL_01.mpde");
+mp.SaveBYUMesh(dirWork + "avg/average_mrepL_align.byu");
+mp.SaveToParameterFile(dirWork + "avg/average_mrepL_align.mpde");
 
 # Compute the boundary image match
 print "Image Match = ", mp.ComputeImageMatch(img)

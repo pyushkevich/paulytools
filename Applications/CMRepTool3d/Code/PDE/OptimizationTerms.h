@@ -5,6 +5,7 @@
 #include "MedialPDESolver.h"
 #include "BasisFunctions2D.h"
 #include "ScriptInterface.h"
+#include "CoefficientMask.h"
 #include <optima.h>
 
 using medialpde::FloatImage;
@@ -142,13 +143,25 @@ private:
     { return exp( - a * x ) + exp( x - b ); }
 };
 
+class CrestLaplacianEnergyTerm : public EnergyTerm
+{
+public:
+  double ComputeEnergy(SolutionData *data);
+  void PrintReport(ostream &sout);
+private:
+  double xMaxLaplacian, xAvgLaplacian, xTotalPenalty;
+  size_t nCrestAtoms, nBadSites;
+  double PenaltyFunction(double x, double a, double b)
+    { return exp( a * x - b ); }
+};
+
 class MedialOptimizationProblem : public DifferentiableFunction
 {
 public:
   /** Initialize the problem */
-  MedialOptimizationProblem(MedialPDESolver *xSolver, IBasisRepresentation2D *xSurface)
+  MedialOptimizationProblem(MedialPDESolver *xSolver, IMedialCoefficientMask *xCoeff)
     {
-    this->xSurface = xSurface;
+    this->xCoeff = xCoeff;
     this->xSolver = xSolver;
     }
 
@@ -183,7 +196,7 @@ private:
   double xSolution;
 
   MedialPDESolver *xSolver;
-  IBasisRepresentation2D *xSurface;
+  IMedialCoefficientMask *xCoeff;
   vector<double> xWeights;
   vector<EnergyTerm *> xTerms;
 };

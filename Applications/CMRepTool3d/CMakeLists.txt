@@ -114,6 +114,7 @@ IF(BUILD_PDE)
     Code/glengine.cpp
     Code/PDE/BasisFunctions2D.cxx
     Code/PDE/CartesianMedialAtomGrid.cxx
+    Code/PDE/CoefficientMask.cxx
     Code/PDE/FourierSurface.cxx
     Code/PDE/GeometryDescriptor.cxx
     Code/PDE/ITKImageWrapper.cxx
@@ -179,7 +180,7 @@ IF(BUILD_PDE)
   TARGET_LINK_LIBRARIES("testpde" ${PDE_LIBS})
   
   # Copy the script files
-  SET(SCRIPT_FILES example.py example2.py common.py imageprep.py)
+  SET(SCRIPT_FILES example.py example2.py example3.py common.py imageprep.py)
   FOREACH(FILE ${SCRIPT_FILES})  
  	CONFIGURE_FILE(
  		${CMREPS_SOURCE_DIR}/Code/PDE/Python/${FILE}

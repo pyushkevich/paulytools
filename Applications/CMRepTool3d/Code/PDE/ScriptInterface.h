@@ -3,6 +3,8 @@
 
 class MedialPDESolver;
 class FourierSurface;
+class MedialOptimizationProblem;
+class IMedialCoefficientMask;
 template <typename TPixel> class ITKImageWrapper;
 
 namespace medialpde {
@@ -112,30 +114,59 @@ public:
   /** Compute the match between the model and a floating point image */
   double ComputeImageMatch(FloatImage *image);
   
-  /** Perform gradient descent */
-  void GradientDescentOptimization(
-    FloatImage *image, unsigned int nSteps, double xStep);
-  
-  void ConjugateGradientOptimization(
-    FloatImage *image, unsigned int nSteps, double xStep);
-  
-  void EvolutionaryOptimization(FloatImage *image, unsigned int nSteps);
-  
   /** Fit the model to the binary image by matching moments of inertia */
   void MatchImageByMoments(FloatImage *image, unsigned int nCuts);
 
+  /** Perform gradient descent */
+  void RunOptimization(FloatImage *image, unsigned int nSteps);
+  
   /** Save the model as a BYU mesh */
   void SaveBYUMesh(const char *file);
 
   /** Compute the radius function after surface/pho update */
   void Solve();
 
+  /** Set the optimization mode to affine */
+  void SetOptimizationToAffine()
+    { eMask = AFFINE; }
+
+  /** Set the optimization mode to deformable */
+  void SetOptimizationToDeformable(double crsX, double crsRho)
+    { eMask = COARSE_TO_FINE; xCoarsenessX = crsX; xCoarsenessRho = crsRho; }
+
+  void SetOptimizationToDeformable()
+    { eMask = FULL; }
+
+  /** Set the optimization mode */
+  void SetOptimizerToGradientDescent(double xStep)
+    { eOptimizer = GRADIENT; }
+  
+  void SetOptimizerToConjugateGradientDescent(double xStep)
+    { eOptimizer = CONJGRAD; }
+
+  void SetOptimizerToEvolutionaryMethod(double xStep)
+    { eOptimizer = EVOLUTION; }
+
   /** Should not be here! */
   MedialPDESolver *GetSolver() { return xSolver; }
 
 private:
+  // Optimization modes and optimizers
+  enum OptimizerType { CONJGRAD, GRADIENT, EVOLUTION };
+  enum MaskType { AFFINE, COARSE_TO_FINE, FULL }; 
+  
+  // The solver
   MedialPDESolver *xSolver;
+
+  // The surface
   FourierSurface *xSurface;
+
+  // Properties associated with different modes
+  double xCoarsenessX, xCoarsenessRho, xStepSize;
+
+  // Current modes
+  OptimizerType eOptimizer;
+  MaskType eMask;
 
   // Friend functions
   friend void RenderMedialPDE(MedialPDE *);

@@ -81,11 +81,15 @@ void TestAreaAndVolume(MedialPDESolver *xSolver)
 
 void Test01()
 {
-  string fMrep = dirWork + "avg/average_mrepL_01.mpde";
+  // string fMrep = dirWork + "avg/average_mrepL_01.mpde";
+  
   
   MedialPDE *mp = new MedialPDE(3, 5, 24);
-  mp->LoadFromParameterFile(fMrep.c_str());
+  //mp->LoadFromParameterFile(fMrep.c_str());
+  
+  mp->LoadFromDiscreteMRep("/tmp/surf01.txt",-0.5,16);
   mp->Solve();
+  mp->SaveBYUMesh("temp.byu");
 
   // Make sure areas and volumes add up
   TestAreaAndVolume(mp->GetSolver());
@@ -159,7 +163,9 @@ void Test03()
 
   // Compute the gradient of the match
   cout << "Image Match = " << mp->ComputeImageMatch(img) << endl;
-  mp->GradientDescentOptimization(img, 30, 0.01);
+  mp->SetOptimizerToGradientDescent(0.01);
+  mp->SetOptimizationToAffine();
+  mp->RunOptimization(img, 30);
   mp->SaveToParameterFile((dirWork + "avg/average_mrepL_02.mpde").c_str());
   mp->SaveBYUMesh((dirWork + "avg/average_mrepL_02.byu").c_str());
 }

@@ -138,6 +138,7 @@ void ConjugateGradientMethod::performIteration() {
 	else {
     // Choose which step size to use
     double xStep = (flagAdaptStepSize) ? xWorkingStepSize : xStepSize;
+    cout << "Running Brent with Scaling " << xStep << endl;
     
     // Scale the gradient by the step size before entering Brent's method.
 		brent = new BrentLinearMethod(&p,current.x, xStep * xi);

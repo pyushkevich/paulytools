@@ -503,10 +503,51 @@ void
 MedialPDESolver
 ::SetDefaultInitialGuess(double xMagnitude)
 {
-  // Compute the initial solution
-  for(unsigned int iSite = 0; iSite < nSites; iSite++)
-    xInitSoln[iSite] = xMagnitude * xSites[iSite]->GetInitialValue();
+  for(size_t k = 0; k < nSites; k++)
+    xInitSoln[k] = xMagnitude * xSites[k]->GetInitialValue();
 }
+
+/**
+void MedialPDESolver::ComputeInitialGuess()
+{
+  // In this method, we want to assign initial values so that grad R is as 
+  // close to one as possible at the border sites
+  double xMaxDist = 0.0;
+  for(size_t i = 0; i < m; i++) for(size_t j = 0; j < n; j++)
+    {
+    // Get the site and atom locations
+    unsigned int iGrid = xGrid->GetAtomIndex(i, j);
+    unsigned int iSite = xSiteIndex[i][j];
+
+    // If the site is internal, simply set the value to equal one
+    if(xSites[iSite]->IsBorderSite())
+      {
+      unsigned int iOpp = i, jOpp = j;
+      if(i == 0) iOpp = 1;
+      if(i == m-1) iOpp = m-2;
+      if(j == 0) jOpp = 1;
+      if(j == n-1) jOpp = n-2;
+
+      size_t iGridOpp = xGrid->GetAtomIndex(iOpp, jOpp);
+      SMLVec3d X1 = xAtoms[iGridOpp].X;
+      SMLVec3d X0 = xAtoms[iGrid].X;
+      double xDist = (X0-X1).magnitude();
+      xInitSoln[iSite] = - xDist;
+
+      if(xMaxDist < xDist) xMaxDist = xDist;
+      }
+    else 
+      xInitSoln[iSite] = 0.0;
+    }
+
+  // Correct for negative distances
+  for(size_t k = 0; k < nSites; k++)
+    {
+    double r = xInitSoln[k] + xMaxDist + 0.01;
+    xInitSoln[k] = r * r;
+    }
+}
+*/
 
 void 
 MedialPDESolver
@@ -514,6 +555,7 @@ MedialPDESolver
 {
   for(unsigned int iSite = 0; iSite < nSites; iSite++)
     xInitSoln[iSite] = y[iSite];
+  flagReuseLastSolution = true;
 }
 
 void MedialPDESolver
@@ -577,6 +619,8 @@ void MedialPDESolver::InitializeSiteGeometry()
 
     // Compute the laplacian of R 
     xSurface->EvaluateAtGridIndex(i, j, 0, 0, 3, 1, &xAtom.xLapR);
+    if(xAtom.xLapR > 0 && xSites[iSite]->IsBorderSite()) 
+      cout << xAtom.xLapR << " ! " << flush;
 
     // Compute the solution at this point
     xSites[iSite]->SetGeometry( &xAtom.G, xAtom.xLapR);
@@ -615,20 +659,16 @@ MedialPDESolver
     }
 }
 
-void
-MedialPDESolver
-::Solve(double delta)
+double MedialPDESolver::SolveOnce(double delta)
 {
-  unsigned int i, j, k;
-
-  // Intialize the sites
-  InitializeSiteGeometry();
-
-  // Copy the initial solution to the current solution
-  cblas_dcopy(nSites, xInitSoln, 1, y, 1);
-
+  size_t i, j, k;
+  double epsMax, bMax;
+  
   // Initialize epsilon to zero
   memset(eps, 0, sizeof(double) * nSites);
+  
+  // Copy the initial solution to the current solution
+  cblas_dcopy(nSites, xInitSoln, 1, y, 1);
 
   // We are now ready to perform the Newton loop
   bool flagComplete = false;
@@ -664,46 +704,82 @@ MedialPDESolver
       NULL, &NRHS, IPARM, &MSGLVL, 
       b, eps, &ERROR);
 
-
-    // Test the matrix result
-    // SparseLinearTest(nSites, xRowIndex, xColIndex, xSparseValues, eps, zTest, b);
-
     // Get the largest error (eps)
-    double epsMax = fabs(eps[cblas_idamax(nSites, eps, 1)]);
-    double bMax = fabs(b[cblas_idamax(nSites, b, 1)]);
+    epsMax = fabs(eps[cblas_idamax(nSites, eps, 1)]);
+    bMax = fabs(b[cblas_idamax(nSites, b, 1)]);
     // double zMax = fabs(zTest[cblas_idamax(nSites, zTest, 1)]);
 
     // Append the epsilon vector to the result
     cblas_daxpy(nSites, 1.0, eps, 1, y, 1);
 
     // Print the statistics
+    /* cout << "-----------" << endl;
+    cout << "Step " << iIter << ": " << endl;
+    cout << "  Largest Epsilon: " << epsMax << endl;
+    cout << "  Largest Eqn Error: " << bMax << endl; */
     
-    // cout << "-----------" << endl;
-    // cout << "Step " << iIter << ": " << endl;
-    // cout << "  Largest Epsilon: " << epsMax << endl;
-    // cout << "  Largest Eqn Error: " << bMax << endl;
+    // Test the matrix result
+    // SparseLinearTest(nSites, xRowIndex, xColIndex, xSparseValues, eps, zTest, b);
     // cout << "  Largest Solver Error: " << zMax << endl;
    
-
     // Convergence is defined when epsilon is smaller than some threshold
-    flagComplete = (epsMax < delta);
+    if(bMax < delta) 
+      break;
     }
 
-  // Check for problems
-  /* 
-  MedialAtom *xAtoms = GetAtomArray();
-  double gMin = 1.0e10;
-  for(size_t i = 0; i < GetNumberOfAtoms(); i++)
+  return bMax;
+}
+
+void
+MedialPDESolver
+::Solve(double delta)
+{
+  unsigned int i, j, k;
+  vnl_vector<double> xBestInit(nSites);
+
+  // Intialize the sites
+  InitializeSiteGeometry();
+
+  // Try solving with the current initial guess
+  double xBestGuess = SolveOnce(delta);
+  if(xBestGuess > delta)
     {
-    if(xAtoms[i].G.g < gMin)
-      gMin = xAtoms[i].G.g; 
-    }
-  cout << "Lowest g = " << gMin << endl;
-  */
+    // Save the initial solution for all that it's worth
+    xBestInit.copy_in(xInitSoln);
 
-  if(!flagComplete)
-    { cerr << "*** PDE Solver Convergence Failure! ***" << endl; }
+    // Try using the following scale factors to get a decent solution
+    double xTest = 1.0e-6, xScale = 2.0, nGuesses = 20;
+    for(size_t iGuess = 0; iGuess < nGuesses; iGuess++)
+      {
+      
+      // Try solving using the current guess
+      SetDefaultInitialGuess(xTest);
+      double xGuess = SolveOnce(delta);
+      
+      cout << "PDE Solver Initialization Failure; Initializing with " << xTest 
+        << "; Result: " << xGuess << endl;
+      
+      if(xGuess < xBestGuess)
+        {
+        xBestGuess = xGuess;
+        xBestInit.copy_in(xInitSoln);
+        }
+      
+      if(xGuess < delta)
+        break;
+
+      // Scale up to the next guess
+      xTest *= xScale;
+      }
+    }
   
+  // If we never succeeded, use the best initialization that we could find
+  if(xBestGuess > delta)
+    { 
+    cerr << "Complete PDE Solver Failure!" << endl; 
+    xBestInit.copy_out(xInitSoln);
+    }
+
   // Reconstruct the medial atoms
   ReconstructAtoms(y);
 }

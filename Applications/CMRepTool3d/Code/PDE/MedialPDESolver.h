@@ -34,7 +34,7 @@ public:
 
   // Compute a Jacobi iteration (this site's R as a function of the neighbors)
   virtual double ComputeJacobiIteration(double *Y) = 0;
-  
+
 protected:
   // Position in the grid and grid dimensions
   unsigned int i, j, m, n;
@@ -53,7 +53,11 @@ public:
     unsigned int iNode, unsigned int stride_u, unsigned int stride_v);
 
   void SetGeometry(GeometryDescriptor *gd, double rho);
+
+  // Each site represents an equation F[N_i] = 0. This method computes F[N_i]
   double ComputeEquation(double *Y);
+
+  // This function computes dF[N_i]/d[N_i]
   void ComputeDerivative(double *Y, double *A, unsigned int iRow);
 
   // Compute the R, Ru and Rv given the solution - used to compute atoms
@@ -72,7 +76,7 @@ public:
 
   // Compute a Jacobi iteration (this site's R as a function of the neighbors)
   virtual double ComputeJacobiIteration(double *Y);
-  
+
 protected:
   /** Indices into the flat data array of all neighbors, indexed counterclockwise
    with the center at index 0 */
@@ -92,6 +96,8 @@ protected:
 
   /** The value of rho */
   double rho;
+
+  friend class MedialPDESolver;
 };
 
 /**
@@ -250,6 +256,9 @@ private:
   void TestJacobi();
   void ReconstructAtoms(double *ySolution);
   void InitializeSiteGeometry();
+  double SolveOnce(double delta);
+
+  bool flagReuseLastSolution;
 };
 
 /* *********************** Template Code ************************** */

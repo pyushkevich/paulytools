@@ -34,6 +34,11 @@ MedialPDE::MedialPDE(unsigned int nBasesU, unsigned int nBasesV, unsigned int xR
   xSurface = new FourierSurface(nBasesU, nBasesV);
   xSolver = new MedialPDESolver(xResolution * nBasesU + 1, xResolution * nBasesV + 1);
   xSolver->SetMedialSurface(xSurface);
+
+  eMask = FULL; eOptimizer = GRADIENT;
+  xStepSize = 0.1;
+  xCoarsenessRho = 1.0;
+  xCoarsenessX = 1.0;
 }
 
 MedialPDE::~MedialPDE()
@@ -288,67 +293,45 @@ double MedialPDE::ComputeImageMatch(FloatImage *image)
 
   return xMatch;
 }
-  
-void MedialPDE
-::GradientDescentOptimization(FloatImage *image, unsigned int nSteps, double xStep)
+
+void GradientDescentOptimization(MedialOptimizationProblem *xProblem, 
+  vnl_vector<double> &xSolution, unsigned int nSteps, double xStep)
 {
-  // Create the optimization problem
-  MedialOptimizationProblem xProblem(xSolver, xSurface);
-
-  // Create an image match term and a jacobian term
-  VolumeOverlapEnergyTerm xTermImage(image);
-  BoundaryJacobianEnergyTerm xTermJacobian;
-
-  // Add the terms to the problem
-  xProblem.AddEnergyTerm(&xTermImage, 1.0);
-  xProblem.AddEnergyTerm(&xTermJacobian, 0.005);
-
   // Create the initial solution
-  size_t nCoeff = xSurface->GetNumberOfRawCoefficients();
-  vnl_vector<double> xSolution(xSurface->GetRawCoefficientArray(), nCoeff);
+  size_t nCoeff = xSolution.size();
   vnl_vector<double> xGradient(nCoeff, 0.0);
-  
+
+  // Print report information  
+  ofstream fdump("conjgrad.txt",ios_base::out);
+  fdump << "CONJUGATE GRADIENT OPTIMIZER DUMP" << endl;
+
   // Iterate, moving in the gradient direction
   for(unsigned int p = 0; p < nSteps; p++)
     {
     // Compute the gradient and the image match
     double xMatch = 
-      xProblem.ComputeGradient( xSolution.data_block(), xGradient.data_block());
+      xProblem->ComputeGradient( xSolution.data_block(), xGradient.data_block());
 
     // Move in the gradient direction
     xSolution -= xStep * xGradient;
 
     // Report the current state
-    xProblem.PrintReport(cout);
-    }
+    fdump << "STEP " << p << endl;
+    xProblem->PrintReport(fdump);
 
-  // Store the last solution
-  xSurface->SetRawCoefficientArray(xSolution.data_block());
-  xSolver->Solve();
+    cout << "Step " << p << ", best value: " << xMatch << endl;
+    }
 }
 
-
-void MedialPDE
-::ConjugateGradientOptimization(FloatImage *image, unsigned int nSteps, double xStep)
+void ConjugateGradientOptimization(MedialPDE *pde, MedialOptimizationProblem *xProblem, 
+  vnl_vector<double> &xSolution, unsigned int nSteps, double xStep)
 {
-  // Create the optimization problem
-  MedialOptimizationProblem xProblem(xSolver, xSurface);
+  size_t nCoeff = xSolution.size();
 
-  // Create an image match term and a jacobian term
-  VolumeOverlapEnergyTerm xTermImage(image, 5);
-  BoundaryJacobianEnergyTerm xTermJacobian;
-
-  // Add the terms to the problem
-  xProblem.AddEnergyTerm(&xTermImage, 1.0);
-  xProblem.AddEnergyTerm(&xTermJacobian, 0.005);
-
-  // Create the initial solution
-  size_t nCoeff = xSurface->GetNumberOfRawCoefficients();
-  vnl_vector<double> xSolution(xSurface->GetRawCoefficientArray(), nCoeff);
-  
   // Construct the conjugate gradient optimizer
-  ConjugateGradientMethod xMethod(xProblem, Vector(nCoeff, xSolution.data_block()));
+  ConjugateGradientMethod xMethod(*xProblem, Vector(nCoeff, xSolution.data_block()));
   xMethod.setStepSize(xStep);
+  xMethod.setAdaptableStepSize(true);
   xMethod.setBrentStepTolerance(2.0e-3);
 
   // Debugging info
@@ -362,16 +345,20 @@ void MedialPDE
     xMethod.performIteration();
 
     fdump << "STEP " << p << endl;
-    xProblem.PrintReport(fdump);
+    xProblem->PrintReport(fdump);
 
     cout << "Step " << p << ", best value: " << xMethod.getBestEverValue() << endl;
+
+    // Save the file 
+    ostringstream oss;
+    oss << "iter_" << p;
+    pde->SaveToParameterFile(oss.str().c_str());
     }
 
   fdump.close();
 
   // Store the best result
-  xSurface->SetRawCoefficientArray(xMethod.getBestEverX().getDataArray());
-  xSolver->Solve();
+  xSolution.copy_in(xMethod.getBestEverX().getDataArray());
 }
 
 inline vnl_vector<double> VectorCast(const pauly::Vector &Y)
@@ -384,30 +371,20 @@ inline pauly::Vector VectorCast(vnl_vector<double> &Y)
   return pauly::Vector(Y.size(), Y.data_block());
 }
 
-void MedialPDE
-::EvolutionaryOptimization(FloatImage *image, unsigned int nSteps)
+void EvolutionaryOptimization(
+  MedialOptimizationProblem *xProblem, 
+  vnl_vector<double> &xSolution, 
+  unsigned int nSteps)
 {
-  // Create the optimization problem
-  MedialOptimizationProblem xProblem(xSolver, xSurface);
-
-  // Create an image match term and a jacobian term
-  BoundaryImageMatchTerm xTermImage(image);
-  BoundaryJacobianEnergyTerm xTermJacobian;
-
-  // Add the terms to the problem
-  xProblem.AddEnergyTerm(&xTermImage, 1.0);
-  xProblem.AddEnergyTerm(&xTermJacobian, 0.005);
-
   // Create the initial solution
-  size_t nCoeff = xSurface->GetNumberOfRawCoefficients();
-  vnl_vector<double> xSolution(xSurface->GetRawCoefficientArray(), nCoeff);
+  size_t nCoeff = xSolution.size();
   vnl_vector<double> xSigma(nCoeff, 0.01);
   
   // Create the initial search space
   GaussianSS xSearch(VectorCast(xSolution), VectorCast(xSigma));
   
   // Construct the evolutionary optimizer
-  EvolutionaryStrategy xMethod(xProblem, xSearch, 2, 4, SELECTION_MuPlusLambda);
+  EvolutionaryStrategy xMethod(*xProblem, xSearch, 2, 4, SELECTION_MuPlusLambda);
 
   // Set the factor by which the sigmas increase
   xMethod.setSigmaFactor(1.0);
@@ -427,10 +404,66 @@ void MedialPDE
     }
 
   // Store the best result
-  xSurface->SetRawCoefficientArray(xMethod.getBestEverX().getDataArray());
-  xSolver->Solve();
+  xSolution.copy_in(xMethod.getBestEverX().getDataArray());
 }
 
+void MedialPDE
+::RunOptimization(FloatImage *image, unsigned int nSteps)
+{
+  // Create a coefficient mask
+  IMedialCoefficientMask *xMask;
+  if(eMask == AFFINE) 
+    {
+    xMask = new AffineTransformCoefficientMask(xSurface);
+    }
+  else if(eMask == FULL) 
+    {
+    xMask = new PassThroughCoefficientMask(xSurface);
+    }
+  else
+    {
+    double crs[4] = { 
+      xCoarsenessX, xCoarsenessX, xCoarsenessX, xCoarsenessRho };
+    xMask = xSurface->NewCoarseToFineCoefficientMask(crs);
+    }
+
+  // Create the optimization problem
+  MedialOptimizationProblem xProblem(xSolver, xMask);
+
+  // Create an image match term and a jacobian term
+  VolumeOverlapEnergyTerm xTermImage(image, 5);
+  BoundaryJacobianEnergyTerm xTermJacobian;
+  CrestLaplacianEnergyTerm xTermCrest;
+
+  // Add the terms to the problem
+  xProblem.AddEnergyTerm(&xTermImage, 1.0);
+  xProblem.AddEnergyTerm(&xTermJacobian, 0.005);
+  xProblem.AddEnergyTerm(&xTermCrest, 0.005);
+
+  // Create the initial solution
+  size_t nCoeff = xMask->GetNumberOfCoefficients();
+  vnl_vector<double> xSolution(xMask->GetCoefficientArray(), nCoeff);
+  
+  // Initial solution report
+  cout << "INITIAL SOLUTION REPORT: " << endl;
+  xProblem.Evaluate(xSolution.data_block());
+  xProblem.PrintReport(cout);
+
+  // At this point, split depending on the method
+  if(eOptimizer == CONJGRAD)
+    ConjugateGradientOptimization(this, &xProblem, xSolution, nSteps, xStepSize);
+  else if(eOptimizer == GRADIENT)
+    GradientDescentOptimization(&xProblem, xSolution, nSteps, xStepSize);
+  else
+    EvolutionaryOptimization(&xProblem, xSolution, nSteps);
+
+  // Store the best result
+  xMask->SetCoefficientArray(xSolution.data_block());
+  xSolver->Solve();
+
+  // Delete the mask
+  delete xMask;
+}
 class FirstMomentComputer : public EuclideanFunction
 {
 public:
@@ -578,9 +611,6 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
     {
     // Set the flip/scale matrix
     vnl_matrix<double> F(3, 3, 0.0);
-    // F(0,0) = (f & 1) ? -s : s;
-    // F(1,1) = (f & 2) ? -s : s;
-    // F(2,2) = (f & 4) ? -s : s;
     F(0,0) = (f & 1) ? -sqrt(Dx(0) / Dy(0)) : sqrt(Dx(0) / Dy(0));
     F(1,1) = (f & 2) ? -sqrt(Dx(1) / Dy(1)) : sqrt(Dx(1) / Dy(1));
     F(2,2) = (f & 4) ? -sqrt(Dx(2) / Dy(2)) : sqrt(Dx(2) / Dy(2));
@@ -590,7 +620,7 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
 
     // Rotate the surface by matrix R and shift to yMean
     xSurface->SetRawCoefficientArray(xInitCoeff.data_block());
-    xSurface->ApplyAffineTransform(R, xMean, yMean);
+    xSurface->ApplyAffineTransform(R, xMean - yMean, yMean);
     xRotatedCoeff[f] = vnl_vector<double>(xSurface->GetRawCoefficientArray(), nCoeff);
 
     // Compute the boundary
