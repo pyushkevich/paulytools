@@ -22,6 +22,8 @@ SET(TRACER_SRCS
   Trackball.h
   VTKMeshShortestDistance.cxx
   VTKMeshShortestDistance.h
+  VTKMeshVoronoiDiagram.cxx
+  VTKMeshVoronoiDiagram.h
 )
 
 ADD_EXECUTABLE("binary2mesh" BinaryToMesh.cxx)

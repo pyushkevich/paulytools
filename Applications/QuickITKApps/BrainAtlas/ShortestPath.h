@@ -61,7 +61,7 @@ public:
     }
 
   /** Destructor, cleans up pointers */
-  ~DijkstraShortestPath()
+  virtual ~DijkstraShortestPath()
     {
     delete m_Heap;
     delete m_Distance;
@@ -138,13 +138,108 @@ public:
   const TWeight * GetDistanceArray()
     { return m_Distance; }
 
-private:
+protected:
   BinaryHeap<TWeight> *m_Heap;
   TWeight *m_Distance;
   TWeight *m_EdgeWeight;
   unsigned int *m_Predecessor;
   unsigned int *m_AdjacencyIndex, *m_Adjacency;
   unsigned int m_NumberOfVertices, m_NumberOfEdges;
+};
+
+template<class TWeight>
+class GraphVoronoiDiagram : public DijkstraShortestPath<TWeight>
+{
+public:
+  typedef DijkstraShortestPath<TWeight> Superclass;
+  
+  GraphVoronoiDiagram(
+    unsigned int nVertices, unsigned int *xAdjacencyIndex,
+    unsigned int *xAdjacency, TWeight *xEdgeLen) : 
+    Superclass(nVertices, xAdjacencyIndex, xAdjacency, xEdgeLen)
+    {
+      m_Source = new unsigned int[nVertices];
+      cout << "GVD : " << nVertices << " " << m_NumberOfEdges << endl;
+    }
+
+  virtual ~GraphVoronoiDiagram()
+    { delete m_Source; }
+
+  /** Compute paths from multiple sources. Use this method to construct a
+   * sort of a Voronoi diagram of the graph */ 
+  void ComputePathsFromManySources(unsigned int nSources, unsigned int *lSources)
+    {
+    unsigned int i;
+
+    cout << "Number of sources: " << nSources << endl;
+    cout << "Number of vertices: " << m_NumberOfVertices << endl;
+    cout << "Number of edges: " << m_NumberOfEdges << endl;
+
+    // Initialize the predecessor array and the source array 
+    for(i = 0; i < m_NumberOfVertices; i++)
+      { 
+      m_Predecessor[i] = NO_PATH; 
+      m_Source[i] = NO_PATH;
+      } 
+
+    // Reset the binary heap and weights
+    m_Heap->InsertAllElementsWithEqualWeights(INFINITE_WEIGHT);
+
+    // Initialize the heap with the sources
+    for(unsigned int iSource = 0; iSource < nSources; iSource++)
+      {
+      // Get the source vertex
+      unsigned int id = lSources[iSource];
+
+      // Change the weight for all the sources to 0
+      m_Heap->DecreaseElementWeight(id, 0);
+
+      // Set the predecessor of iSource to itself
+      m_Source[id] = m_Predecessor[id] = id;
+      }
+
+    // Continue while the heap is not empty
+    while(m_Heap->GetSize())
+      {
+      // Pop off the closest vertex
+      unsigned int w = m_Heap->PopMinimum();
+
+      // Relax the vertices remaining in the heap
+      for(i = m_AdjacencyIndex[w]; i < m_AdjacencyIndex[w+1]; i++)
+        {
+        // Get the neighbor of i
+        unsigned int iNbr = m_Adjacency[i];
+
+        // Get the edge weight associated with it and update it in the queue
+        if(m_Heap->ContainsElement(iNbr))
+          {
+          // If the distance to iNbr more than distance thru w, update it
+          TWeight dTest = m_Distance[w] + m_EdgeWeight[i];
+
+          if(dTest < m_Distance[iNbr])
+            {
+            // Update the weight
+            m_Heap->DecreaseElementWeight(iNbr, dTest);
+
+            // Set the predecessor
+            m_Predecessor[iNbr] = w;
+
+            // Set the source of the vertex
+            m_Source[iNbr] = m_Source[w];
+            }
+          }
+        }
+      } // while heap not empty
+    }
+
+  /** Get the source of a vertex, i.e., the source vertex that is closest to
+    the given vertex, or NO_PATH if there is no path to the given vertex from
+    any of the sources */
+  unsigned int GetVertexSource(unsigned int iVertex) const
+    { return m_Source[iVertex]; }
+
+private:
+  unsigned int *m_Source;
 };
 
 template<class TWeight>

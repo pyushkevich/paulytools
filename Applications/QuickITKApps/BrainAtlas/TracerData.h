@@ -6,6 +6,7 @@
 #include "vtkStripper.h"
 #include "vtkPolyDataNormals.h"
 #include "VTKMeshShortestDistance.h"
+#include "VTKMeshVoronoiDiagram.h"
 #include "vnl/vnl_cross.h"
 #include <list>
 #include <ctime>
@@ -54,6 +55,9 @@ public:
 
   /** Fired when the active marker changes */
   virtual void OnFocusMarkerChange(TracerDataEvent *evt) = 0;
+
+  /** Fired when the cell segmentation changes */
+  virtual void OnSegmentationChange(TracerDataEvent *evt) = 0;
 };
 
 /**
@@ -101,8 +105,12 @@ public:
     { return m_DisplayMesh; }
 
   /** Get the distance mapper */
-  const VTKMeshShortestDistance *GetDistanceMapper()
+  const VTKMeshShortestDistance *GetDistanceMapper() const 
     { return m_DistanceMapper; }
+
+  /** Get the Voronoi diagram */
+  const VTKMeshVoronoiDiagram *GetVoronoiDiagram() const
+    { return m_VoronoiDiagram; }
 
   // Get the coordinate for a given point index (in internal mesh)
   void GetPointCoordinate(vtkIdType id, Vec &target)
@@ -362,6 +370,10 @@ public:
     { return m_FocusMarker; }
   
   /** Get the number of markers */
+  unsigned int GetNumberOfMarkers() const
+    { return m_Markers.size(); }
+    
+  /** Get the list of marker ids */
   void GetMarkerIds(list<vtkIdType> &outList) const
     { 
     MarkerMap::const_iterator it = m_Markers.begin();
@@ -400,17 +412,31 @@ public:
     assert(m_Markers.find(id) != m_Markers.end());
     return m_Markers.find(id)->second.Color; 
     }
-    
+  
   /** Get the name of a marker */
   const char * GetMarkerName(vtkIdType id) const
     { 
     assert(m_Markers.find(id) != m_Markers.end());
     return m_Markers.find(id)->second.Name.c_str(); 
     }
+  
+  // Compute Voronoi segmentation using markers
+  void ComputeMarkerSegmentation();
+
+  // Check whether the Voronoi segmentation is present
+  bool IsMarkerSegmentationValid() const
+    { return m_VoronoiDiagram->IsDiagramValid(); }
+
+  // Get the marker assigned to a given cell by segmentation
+  vtkIdType GetCellLabel(vtkIdType iCell) const
+    { return m_VoronoiDiagram->GetVertexSource(iCell); }
     
 private:
   // Shortest distance computer
   VTKMeshShortestDistance *m_DistanceMapper;
+
+  // Voronoi diagram computer
+  VTKMeshVoronoiDiagram *m_VoronoiDiagram;
 
   // The edge weight function object
   MeshEdgeWeightFunction *m_EdgeWeightFunction;
@@ -466,23 +492,15 @@ private:
   pyListenerArrayMacro(TracerDataListener,ITracerDataListener);
 
   // Broadcast methods
-  pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
-    OnFocusCurveDataChange, TracerDataEvent);
-  
-  pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
-    OnFocusPointChange, TracerDataEvent);
-
-  pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
-    OnFocusCurveChange, TracerDataEvent);
-
-  pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
-    OnCurveListChange, TracerDataEvent);
-
-  pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
-    OnMeshChange, TracerDataEvent);
-
-  pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
-    OnEdgeWeightsUpdate, TracerDataEvent);
+  pyShortBroadcastEventMacro(TracerData, OnFocusCurveDataChange);
+  pyShortBroadcastEventMacro(TracerData, OnFocusPointChange);
+  pyShortBroadcastEventMacro(TracerData, OnFocusCurveChange);
+  pyShortBroadcastEventMacro(TracerData, OnCurveListChange);
+  pyShortBroadcastEventMacro(TracerData, OnMeshChange);
+  pyShortBroadcastEventMacro(TracerData, OnEdgeWeightsUpdate);
+  pyShortBroadcastEventMacro(TracerData, OnMarkerListChange);
+  pyShortBroadcastEventMacro(TracerData, OnFocusMarkerChange);
+  pyShortBroadcastEventMacro(TracerData, OnSegmentationChange);
 
   pyBroadcastEventMacro(TracerDataListener, ITracerDataListener,
     OnMarkerListChange, TracerDataEvent);
@@ -498,7 +516,7 @@ private:
 
   // Compute distances to a source point
   void ComputeDistances(int inFocusPoint);
-  
+
   /** Set the edge weight function to another mode */
   void UpdateEdgeWeightFunction(MeshEdgeWeightFunction *fnNew);
 };

@@ -133,14 +133,39 @@ TracerMainWindow
     
   glBegin(GL_TRIANGLES);
   
-  for ( polys->InitTraversal(); polys->GetNextCell(npts,pts); ) 
+  vtkIdType iLastMarker = (vtkIdType) -2;
+  for (unsigned int iCell = 0; iCell < polys->GetNumberOfCells(); iCell++)
     {
+    // Get the triangle details
+    m_Data->GetInternalMesh()->GetCellPoints(iCell, npts, pts);
+    
     // Check if the triangle qualifies
     bool qual = true;
     for(vtkIdType iPoint = 0; qual && (iPoint < npts); iPoint++)
       if(m_Data->GetDistanceMapper()->GetVertexDistance(pts[iPoint]) 
         > m_NeighborhoodSize) qual = false;
     if(!qual) continue;
+
+    // Check if we should color the triangle
+    if(m_Data->IsMarkerSegmentationValid())
+      {
+      // Get the marker associated with the cell
+      vtkIdType idMarker = m_Data->GetCellLabel(iCell);
+      //cout << "Cell " << iCell << " maps to " << idMarker ;
+      //cout << " distance " <<
+      //  m_Data->GetVoronoiDiagram()->GetDiagram()->GetDistanceArray()[iCell] << endl;
+
+      if(idMarker != iLastMarker)
+        {
+        if(idMarker != (vtkIdType) -1)
+          glColor3dv(m_Data->GetMarkerColor(idMarker).data_block());
+        else
+          glColor3d(0.0, 0.0, 0.0);
+
+        iLastMarker = idMarker;
+        }
+
+      }
 
     // Display the qualified triangle
     for(vtkIdType iPoint = 0; iPoint < npts; iPoint++)
@@ -240,7 +265,6 @@ TracerMainWindow
   // Only do something if the mode is set
   if(xActualMode != EDGE_DISPLAY_NONE)
     {
-
     // Draw the edges
     glPushAttrib(GL_LIGHTING_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT);
 
@@ -887,16 +911,20 @@ TracerMainWindow
 
       if(m_CurrentMarkerCell != -1)
         {
+        // Make up a default marker name
+        ostringstream sout;
+        sout << "Marker " << m_CurrentMarkerCell;
         
         // Prompt for the name of the marker
-        const char *sName = fl_input("Please enter the name of the marker");
+        const char *sName = 
+          fl_input("Please enter the name of the marker",sout.str().c_str());
         if(sName) 
           {
           // Pick a color for the marker
           double r, g, b;
           double h = rand() * 6.0 / RAND_MAX, s = 0.5, v = 1.0;
           Fl_Color_Chooser::hsv2rgb(h,s,v,r,g,b);
-          if(fl_color_chooser("Please select the color for the marker",r,g,b));
+          if(fl_color_chooser("Please select the color for the marker",r,g,b))
             {
             m_Data->AddMarker(m_CurrentMarkerCell, sName, r, g, b);
             }
@@ -992,5 +1020,13 @@ TracerMainWindow
 ::OnFocusMarkerChange(TracerDataEvent *evt)
 {
   m_CurrentMarkerCell = -1;
+  redraw();
+}
+
+void
+TracerMainWindow
+::OnSegmentationChange(TracerDataEvent *evt)
+{
+  m_NeighborhoodDisplayListDirty = true;
   redraw();
 }

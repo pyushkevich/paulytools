@@ -4,12 +4,12 @@ header_name {.h}
 code_name {.cxx}
 class TracerUserInterface {open : {public TracerUserInterfaceBase}
 } {
-  Function {MakeWindow()} {open selected return_type {virtual void}
+  Function {MakeWindow()} {open return_type {virtual void}
   } {
     Fl_Window m_WinMain {
       label {GeeLab Brain Tracer}
       callback {OnMenuQuit();} open
-      xywh {54 182 925 710} type Double resizable
+      xywh {54 153 925 710} type Double resizable
       code0 {\#include "TracerUserInterfaceBase.h"}
       code1 {\#include "TracerMainWindow.h"} visible
     } {
@@ -145,7 +145,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
         } {
           Fl_Group {} {
             label Curves open
-            xywh {655 320 265 385} labelfont 1 labelsize 12
+            xywh {655 320 265 385} labelfont 1 labelsize 12 hide
           } {
             Fl_Choice m_ChcCurve {
               label {Current curve:}
@@ -180,11 +180,12 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           }
           Fl_Group {} {
             label Markers open
-            xywh {655 320 265 385} labelfont 1 labelsize 12 hide
+            xywh {655 320 265 385} labelfont 1 labelsize 12
           } {
             Fl_Browser m_BrsMarkers {
               label {Region markers:}
-              xywh {665 350 245 100} labelsize 12 align 5 textsize 12
+              callback {OnSelectMarker(o->value());} selected
+              xywh {665 350 245 100} type Select labelsize 12 align 5 textsize 12
             }
             Fl_Button m_BtnDeleteMarker {
               label delete

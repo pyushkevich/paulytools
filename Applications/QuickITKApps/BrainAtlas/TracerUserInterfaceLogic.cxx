@@ -1,5 +1,62 @@
 #include "TracerUserInterfaceLogic.h"
 #include "FL/Fl_File_Chooser.H"
+#include "FL/Fl_Color_Chooser.H"
+
+// Constructor
+TracerUserInterfaceLogic 
+::TracerUserInterfaceLogic() 
+: TracerUserInterface() 
+{
+  m_Data = NULL;
+  m_CurvesFile = "";
+  m_CurvesDirty = false;
+
+  // Set up the dependences between activation flags
+  m_Activation.SetFlagImplies(AF_TRACER_DATA, AF_MESH);
+  m_Activation.SetFlagImplies(AF_CURVES_EXIST, AF_TRACER_DATA);
+  m_Activation.SetFlagImplies(AF_MARKERS_EXIST, AF_TRACER_DATA);
+  m_Activation.SetFlagImplies(AF_ACTIVE_CURVE, AF_CURVES_EXIST);
+  m_Activation.SetFlagImplies(AF_ACTIVE_CONTROL, AF_ACTIVE_CURVE);
+  m_Activation.SetFlagImplies(AF_ACTIVE_MARKER, AF_MARKERS_EXIST);
+  m_Activation.SetFlagImplies(AF_TRACER_MODE, AF_ACTIVE_CURVE);
+  m_Activation.SetFlagImplies(AF_MARKER_MODE, AF_MESH);
+}
+
+void
+TracerUserInterfaceLogic
+::MakeWindow()
+{
+  // Call the parent method that creates all the controls
+  TracerUserInterface::MakeWindow();
+
+  // Set up the state-based control activation
+  m_Activation.AddMenuItem(m_MenuLoadCurves, AF_MESH); 
+  m_Activation.AddMenuItem(m_MenuSaveCurves, AF_TRACER_DATA);
+  m_Activation.AddMenuItem(m_MenuModeTracer, AF_ACTIVE_CURVE); 
+  m_Activation.AddMenuItem(m_MenuModeMarker, AF_MESH);
+  m_Activation.AddMenuItem(m_MenuSaveCurvesAs, AF_ACTIVE_CURVE ); 
+  m_Activation.AddMenuItem(m_MenuStartCurve, AF_MESH); 
+  m_Activation.AddMenuItem(m_MenuEditCurve, AF_ACTIVE_CURVE); 
+  m_Activation.AddMenuItem(m_MenuDeleteCurve,    AF_ACTIVE_CURVE); 
+  m_Activation.AddMenuItem(m_MenuDeleteLastPoint, AF_ACTIVE_CONTROL); 
+  m_Activation.AddMenuItem(m_MenuRenameMarker, AF_ACTIVE_MARKER);
+  m_Activation.AddMenuItem(m_MenuDeleteMarker, AF_ACTIVE_MARKER);
+  m_Activation.AddMenuItem(m_MenuRecolorMarker, AF_ACTIVE_MARKER);
+  m_Activation.AddMenuItem(m_MenuComputeRegions, AF_MARKERS_EXIST);
+  
+  m_Activation.AddWidget(m_ChcCurve, AF_TRACER_DATA); 
+  m_Activation.AddWidget(m_BtnStartCurve, AF_MESH); 
+  m_Activation.AddWidget(m_BtnDeleteCurve, AF_ACTIVE_CURVE); 
+  m_Activation.AddWidget(m_BtnEditCurve, AF_ACTIVE_CURVE); 
+  m_Activation.AddWidget(m_BtnDeleteLastPoint, AF_ACTIVE_CONTROL); 
+  m_Activation.AddWidget(m_BtnModeTracer, AF_ACTIVE_CURVE); 
+  m_Activation.AddWidget(m_BtnModeMarker, AF_MESH);
+  m_Activation.AddWidget(m_BtnRenameMarker, AF_ACTIVE_MARKER);
+  m_Activation.AddWidget(m_BtnDeleteMarker, AF_ACTIVE_MARKER);
+  m_Activation.AddWidget(m_BtnRecolorMarker, AF_ACTIVE_MARKER);
+  m_Activation.AddWidget(m_BrsMarkers, AF_MARKERS_EXIST);
+  m_Activation.AddWidget(m_BtnComputeRegions, AF_MARKERS_EXIST);
+}
 
 // Constructor
 TracerUserInterfaceLogic 
@@ -452,40 +509,108 @@ void
 TracerUserInterfaceLogic
 ::OnButtonRenameMarker()
 {
+  // The marker id
+  vtkIdType id = m_Data->GetCurrentMarker();
   
+  // Show the color chooser
+  const char *name = 
+    fl_input("Please enter the name of the marker", m_Data->GetMarkerName(id));
+
+  if(name) m_Data->RenameMarker(id, name);
 }
 
 void
 TracerUserInterfaceLogic
 ::OnButtonRecolorMarker()
 {
+  // The marker id
+  vtkIdType id = m_Data->GetCurrentMarker();
+  
+  // Get the current color of the marker
+  TracerData::Vec x = m_Data->GetMarkerColor(id);
 
+  // Show the color chooser
+  if(fl_color_chooser("Please select the marker color", x[0],x[1],x[2]))
+    m_Data->RecolorMarker(id, x[0],x[1],x[2]);
 }
 
 void
 TracerUserInterfaceLogic
 ::OnButtonDeleteMarker()
 {
-
+  // Must have an active marker
+  assert(m_Data->IsCurrentMarkerValid());
+  
+  // Delete the active marker
+  m_Data->DeleteMarker(m_Data->GetCurrentMarker());
 }
 
 void
 TracerUserInterfaceLogic
 ::OnButtonComputeRegions()
 {
+  m_Data->ComputeMarkerSegmentation();
+}
 
+void
+TracerUserInterfaceLogic
+::OnSelectMarker(int value)
+{
+  // Get the id associated with the marker
+  vtkIdType id = (vtkIdType) m_BrsMarkers->data(value);
+
+  // Set the id as active id
+  m_Data->SetCurrentMarker(id);
 }
 
 void 
 TracerUserInterfaceLogic::
 OnMarkerListChange(TracerDataEvent *evt)
 {
+  // Rebuild the list of markers
+  m_BrsMarkers->clear();
+
+  // Get a list of marker ID's
+  list<vtkIdType> lMarkers;
+  m_Data->GetMarkerIds(lMarkers);
+
+  // Populate the list of markers
+  list<vtkIdType>::iterator it = lMarkers.begin();
+  while(it != lMarkers.end())
+    {
+    m_BrsMarkers->add( m_Data->GetMarkerName(*it), (void *)(*it) );
+    ++it;
+    }
   
+  // Enable/disable controls
+  m_Activation.UpdateFlag(AF_MARKERS_EXIST, m_Data->GetNumberOfMarkers() > 0);
+
+  // Select the active item (use method below)
+  OnFocusMarkerChange(evt);
 }
 
 void 
 TracerUserInterfaceLogic::
 OnFocusMarkerChange(TracerDataEvent *evt)
 {
+  // Deselect all items in the browser
+  m_BrsMarkers->deselect();
   
+  // Update the flags
+  m_Activation.UpdateFlag(AF_ACTIVE_MARKER, m_Data->IsCurrentMarkerValid());
+
+  // Select the active item
+  if(m_Data->IsCurrentMarkerValid())
+    {
+    
+    // Select the active item
+    for(unsigned int i = 1; i <= m_BrsMarkers->size(); i++)
+      {
+      if(((vtkIdType)m_BrsMarkers->data(i)) == m_Data->GetCurrentMarker())
+        {
+        m_BrsMarkers->select(i);
+        break;
+        }
+      }
+    }
 }

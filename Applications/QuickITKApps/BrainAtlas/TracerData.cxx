@@ -13,6 +13,9 @@ TracerData
 
   // Initialize the shortest distance computer
   m_DistanceMapper = new VTKMeshShortestDistance();
+
+  // Initialize the Voronoi diagram
+  m_VoronoiDiagram = new VTKMeshVoronoiDiagram();
   
   // Create the necessary filters
   m_DataReader = vtkPolyDataReader::New();
@@ -31,6 +34,7 @@ TracerData
 {
   delete m_EdgeWeightFunction;
   delete m_DistanceMapper;
+  delete m_VoronoiDiagram;
   
   m_DataReader->Delete();
   m_Stripper->Delete();
@@ -79,6 +83,10 @@ TracerData
   // Send the data to the distance mapper
   m_DistanceMapper->SetInputMesh(m_Mesh);
   m_DistanceMapper->ComputeGraph();
+
+  // Send the data to the Voronoi diagram
+  m_VoronoiDiagram->SetInputMesh(m_Mesh);
+  m_VoronoiDiagram->ComputeGraph();
   
   // Clean up the curves, because they are no longer valid
   m_Curves.RemoveAllData();
@@ -157,6 +165,58 @@ TracerData
   double tElapsed = (clock() - tStart) * 1000.0 / CLOCKS_PER_SEC;    
   cout << "Shortest paths to source " << iVertex 
     << " computed in " << tElapsed << " ms." << endl;
+}
+
+void
+TracerData
+::ComputeMarkerSegmentation()
+{
+  // Create a list of edges
+  list<pair<vtkIdType, vtkIdType> > lEdges;
+
+  // Pass the separating edges as boundaries for the segmentation
+  TracerCurves::IdList lCurves;
+  m_Curves.GetCurveIdList(lCurves);
+  TracerCurves::IdList::iterator itCurve = lCurves.begin();
+  while(itCurve != lCurves.end())
+    {
+    // Get the links associated with this curve
+    const TracerCurves::MeshCurve &curve = m_Curves.GetCurveVertices(*itCurve);
+    if(curve.size() > 1)
+      {
+      TracerCurves::MeshCurve::const_iterator it1 = curve.begin();
+      TracerCurves::MeshCurve::const_iterator it2 = it1; ++it2;
+      while(it2 != curve.end())
+        {
+        if(*it1 < *it2)
+          lEdges.push_back(make_pair(*it1, *it2));
+        else
+          lEdges.push_back(make_pair(*it2, *it1));
+        ++it1; ++it2;
+        }
+      }
+    
+    ++itCurve;
+    }
+
+  // Pass the curves to the partitioner
+  m_VoronoiDiagram->SetBarrierEdges(lEdges);
+
+  // Time the computation
+  double tStart = (double) clock();
+
+  // Compute shortest distances to that point
+  list<vtkIdType> lMarkers;
+  GetMarkerIds(lMarkers);
+  m_VoronoiDiagram->ComputeVoronoiDiagram(lMarkers);
+
+  // Get the elapsed time
+  double tElapsed = (clock() - tStart) * 1000.0 / CLOCKS_PER_SEC;    
+  cout << "Voronoi segmentation computed in " << tElapsed << " ms." << endl;
+
+  // Fire event: segmentation changed
+  TracerDataEvent evt(this);
+  BroadcastOnSegmentationChange(&evt);
 }
 
 void 

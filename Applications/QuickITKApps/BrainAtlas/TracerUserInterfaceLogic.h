@@ -43,6 +43,7 @@ public:
   void OnButtonRecolorMarker();
   void OnButtonDeleteMarker();
   void OnButtonComputeRegions();
+  void OnSelectMarker(int value);
  
   void OnCheckDisplayEdges(int value);
   void OnSelectEdgeColoring(int value);
@@ -60,6 +61,7 @@ public:
   void OnEdgeWeightsUpdate(TracerDataEvent *evt) {};
   void OnMarkerListChange(TracerDataEvent *evt);
   void OnFocusMarkerChange(TracerDataEvent *evt);
+  void OnSegmentationChange(TracerDataEvent *evt) {};
 
   void ShowWindows() 
     {

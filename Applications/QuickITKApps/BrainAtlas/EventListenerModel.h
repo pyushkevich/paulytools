@@ -41,6 +41,9 @@ virtual void Broadcast##function(event *evt) \
     (*it++)->function(evt); \
 }
 
+#define pyShortBroadcastEventMacro(name, function) \
+pyBroadcastEventMacro(name##Listener, I##name##Listener, function, name##Event);
+
 #define pySetWithNofityMacro(name, type, function, event) \
 virtual void Set##name(const type &in##name) \
 { \

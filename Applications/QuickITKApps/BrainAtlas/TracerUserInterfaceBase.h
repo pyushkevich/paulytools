@@ -24,6 +24,7 @@ public:
   virtual void OnButtonRecolorMarker() = 0;
   virtual void OnButtonDeleteMarker() = 0;
   virtual void OnButtonComputeRegions() = 0;
+  virtual void OnSelectMarker(int value) = 0;
  
   virtual void OnCheckDisplayEdges(int value) = 0;
   virtual void OnSelectEdgeColoring(int value) = 0;

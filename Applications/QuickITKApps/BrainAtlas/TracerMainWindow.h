@@ -109,6 +109,7 @@ public:
   void OnEdgeWeightsUpdate(TracerDataEvent *evt);
   void OnMarkerListChange(TracerDataEvent *evt);
   void OnFocusMarkerChange(TracerDataEvent *evt);
+  void OnSegmentationChange(TracerDataEvent *evt);
 
 private:
 
