@@ -1,0 +1,45 @@
+# data file for the Fltk User Interface Designer (fluid)
+version 1.00 
+header_name {.h} 
+code_name {.cpp} 
+gridx 5 
+gridy 5 
+snap 3
+class SketchUI {open
+} {
+  Function {makeWindow()} {open
+  } {
+    Fl_Window winMain {
+      label {Spline Editor} open
+      xywh {409 121 518 482} visible
+    } {
+      Fl_Box winSketch {
+        xywh {5 5 510 365} box EMBOSSED_FRAME
+        code0 {\#include "SketchWindow.h"}
+        class SketchWindow
+      }
+      Fl_Group {} {open selected
+        xywh {5 375 505 105} selection_color 51
+      } {
+        Fl_Slider sldSegments {
+          callback {inpSegments->value(1 << ((int)sldSegments->value()));}
+          xywh {385 420 120 20} type Horizontal align 1 minimum 4 maximum 10 step 1 value 6
+        }
+        Fl_Button {} {
+          label Close
+          callback {winMain->hide();}
+          xywh {425 450 80 25}
+        }
+        Fl_Value_Output inpSegments {
+          label {Number of Segments:}
+          xywh {330 420 50 20} align 5 maximum 0 value 64 textsize 12
+        }
+        Fl_Button bSketch {
+          label Sketch
+          callback uiStartSketch
+          xywh {15 385 110 25} type Toggle
+        }
+      }
+    }
+  }
+} 

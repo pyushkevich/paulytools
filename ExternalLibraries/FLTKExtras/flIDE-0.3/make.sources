@@ -1,0 +1,10 @@
+CPPFILES = \
+	src/TagsBrowser.cxx src/TagsBrowser2.cxx src/MakeParser.cxx src/MakeParser2.cxx src/DevToolApp.cxx src/main.cxx \
+	src/Fl_Node.cxx \
+	src/Fl_ToggleNode.cxx \
+	src/Fl_ToggleTree.cxx \
+	src/Fl_Tree.cxx
+
+CFILES = \
+	src/xpopen.c
+	

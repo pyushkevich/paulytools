@@ -1,0 +1,30 @@
+##################################################################################
+# This file should be included in your CMakeLists.txt file
+# 
+# It defines the following variables
+#
+# SOPLEX_INCLUDE_DIR 		Include directories for the library
+# SOPLEX_LIBRARY_DIR		Library directories
+# SOPLEX_LIB		        The basic set of libraries to
+#				link your program with.  This includes
+#				optima, matrix and registry.
+#################################################################################
+
+# Export directory names
+SET(SOPLEX_INCLUDE_DIR "@SOPLEX_INCLUDE_DIR@")
+SET(SOPLEX_LIBRARY_DIR "@SOPLEX_LIBRARY_DIR@")
+
+SET(SOPLEX_USE_LONG_DOUBLE @USE_LONG_DOUBLE@)
+
+IF(SOPLEX_USE_LONG_DOUBLE MATCHES ON)
+    ADD_DEFINITIONS(-DWITH_LONG_DOUBLE)
+ENDIF(SOPLEX_USE_LONG_DOUBLE MATCHES ON)
+
+SET(SOPLEX_LIB
+    soplex
+)
+
+IF(WIN32)
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4274")
+ENDIF(WIN32)
+

@@ -1,0 +1,294 @@
+# data file for the Fltk User Interface Designer (fluid)
+version 1.00 
+header_name {.H} 
+code_name {.cxx} 
+gridx 0 
+gridy 0 
+snap 1
+decl {\#include <stdio.h>} {public
+} 
+
+decl {\#include <sys/types.h>} {public
+} 
+
+decl {\#include <malloc.h>} {public
+} 
+
+decl {\#include <regex.h>} {public
+} 
+
+decl {\#include <FL/Fl.H>} {public
+} 
+
+decl {\#include <FL/fl_draw.H>} {public
+} 
+
+decl {\#include <FL/Fl_Hold_Browser.H>} {public
+} 
+
+decl {\#include "DevTool.H"} {public
+} 
+
+class NiceBrowser {: {public Fl_Hold_Browser}
+} {
+  Function {NiceBrowser(int x,int y,int w,int h,const char *l=0):Fl_Hold_Browser(x,y,w,h,l)} {open
+  } {
+    code {} {}
+  }
+  Function {item_draw(void* v, int x, int y, int w, int h) const} {open return_type void
+  } {
+    code {struct FL_BLINE {	// data is in a linked list of these
+  FL_BLINE* prev;
+  FL_BLINE* next;
+  void* data;
+  short length;		// sizeof(txt)-1, may be longer than string
+  char flags;		// selected, displayed
+  char txt[1];		// start of allocated array
+};
+const int SELECTED=1;
+
+char* str = ((FL_BLINE*)v)->txt;
+  const int* i = column_widths();
+
+  while (w > 6) {	// do each tab-seperated field
+    int w1 = w;	// width for this field
+    char* e = 0; // pointer to end of field or null if none
+    if (*i) { // find end of field and temporarily replace with 0
+      for (e = str; *e && *e != column_char(); e++);
+      if (*e) {*e = 0; w1 = *i++;} else e = 0;
+    }
+    int size = textsize();
+    Fl_Font font = textfont();
+    Fl_Color lcol = textcolor();
+    Fl_Align align = FL_ALIGN_LEFT;
+    // check for all the @-lines recognized by XForms:
+    while (*str == format_char() && *++str && *str != format_char()) {
+      switch (*str++) {
+      case 'l': case 'L': size = 24; break;
+      case 'm': case 'M': size = 18; break;
+      case 's': size = 11; break;
+      case 'b': font = (Fl_Font)(font|FL_BOLD); break;
+      case 'i': font = (Fl_Font)(font|FL_ITALIC); break;
+      case 'f': case 't': font = FL_COURIER; break;
+      case 'c': align = FL_ALIGN_CENTER; break;
+      case 'r': align = FL_ALIGN_RIGHT; break;
+      case 'B': 
+	  fl_color((Fl_Color)strtol(str, &str, 10));
+        if (!(((FL_BLINE*)v)->flags & SELECTED)) {
+	  fl_rectf(x, y, w1, h);
+	}
+        break;
+      case 'C':
+	lcol = (Fl_Color)strtol(str, &str, 10);
+	break;
+      case 'F':
+	font = (Fl_Font)strtol(str, &str, 10);
+	break;
+      case 'N':
+	lcol = FL_INACTIVE_COLOR;
+	break;
+      case 'S':
+	size = strtol(str, &str, 10);
+	break;
+      case '-':
+	fl_color(FL_DARK3);
+	fl_line(x+3, y+h/2, x+w1-3, y+h/2);
+	fl_color(FL_LIGHT3);
+	fl_line(x+3, y+h/2+1, x+w1-3, y+h/2+1);
+	break;
+      case 'u':
+      case '_':
+	fl_color(lcol);
+	fl_line(x+3, y+h-1, x+w1-3, y+h-1);
+	break;
+      case '.':
+	goto BREAK;
+      case '@':
+	str--; goto BREAK;
+      }
+    }
+  BREAK:
+    fl_font(font, size);
+    if (!active_r()) lcol = inactive(lcol);
+    if (((FL_BLINE*)v)->flags & SELECTED)
+      lcol = contrast(lcol, selection_color());
+    fl_color(lcol);
+    fl_draw(str, x+3, y, w1-6, h, e ? Fl_Align(align|FL_ALIGN_CLIP) : align);
+    if (!e) break; // no more fields...
+    *e = column_char(); // put the seperator back
+    x += w1;
+    w -= w1;
+    str = e+1;
+  }} {}
+  }
+} 
+
+class MakeParser {open : {public DevTool}
+} {
+  Function {MakeParser()} {open
+  } {
+    Fl_Window {} {open
+      xywh {284 540 502 152} resizable
+      code0 {mMainGroup=o;}
+      class Fl_Group visible
+    } {
+      Fl_Box {} {
+        label label
+        xywh {210 115 145 20} hide
+      }
+      Fl_Group mLeftMakeMenu {
+        private xywh {3 27 20 120}
+      } {
+        Fl_Button mPrevError {
+          label {@-38->}
+          user_data this
+          callback {PrevErrorMsg();}
+          xywh {3 27 20 20} box THIN_UP_BOX labeltype SYMBOL_LABEL labelcolor 1
+        }
+        Fl_Button mNextError {
+          label {@-32->}
+          user_data this
+          callback {NextErrorMsg();}
+          xywh {3 47 20 20} box THIN_UP_BOX labeltype SYMBOL_LABEL labelcolor 1
+        }
+        Fl_Button mPrevWarning {
+          label {@-38->}
+          user_data this
+          callback {PrevWarningMsg();}
+          xywh {3 75 20 20} box THIN_UP_BOX labeltype SYMBOL_LABEL labelcolor 4
+        }
+        Fl_Button mNextWarning {
+          label {@-32->}
+          user_data this
+          callback {NextWarningMsg();}
+          xywh {3 95 20 20} box THIN_UP_BOX labeltype SYMBOL_LABEL labelcolor 4
+        }
+        Fl_Box {} {
+          private xywh {3 118 20 5} resizable
+        }
+      }
+      Fl_Group mTopMakeMenu {
+        private xywh {3 3 491 20}
+      } {
+        Fl_Button mMakeButton {
+          label {&Make}
+          user_data this
+          callback {Make();}
+          xywh {3 3 55 20} box THIN_UP_BOX labelsize 12
+        }
+        Fl_Button mMakeCleanButton {
+          label {Make Clean}
+          user_data this
+          callback {MakeClean();}
+          xywh {61 3 90 20} box THIN_UP_BOX labelsize 12
+        }
+        Fl_Button mStopButton {
+          label {&Stop Make}
+          user_data this
+          callback {StopMake();}
+          xywh {154 3 67 20} box THIN_UP_BOX labelsize 12
+        }
+        Fl_Button mRunButton {
+          label {&Run}
+          user_data this
+          callback {Run();}
+          xywh {224 3 55 20} box THIN_UP_BOX labelsize 12
+        }
+        Fl_Box {} {
+          private xywh {448 3 45 17} resizable
+        }
+      }
+      Fl_Tabs mTabbedOutput {open
+        xywh {24 27 474 121} selection_color 52 resizable
+      } {
+        Fl_Group mErrorTab {
+          label Messages
+          xywh {26 30 468 102} labelsize 11
+        } {
+          Fl_Browser mErrorBrowser {
+            callback {SelectErrorLine();} selected
+            xywh {26 30 468 101} type Hold box THIN_DOWN_BOX labelsize 12 when 3 textfont 4 textsize 12 resizable
+            class NiceBrowser
+          }
+        }
+        Fl_Group mRunTab {
+          label RunTargets open
+          xywh {26 30 470 102} labelsize 11 align 2 when 1 hide resizable
+        } {
+          Fl_Browser mRunTargetsBrowser {
+            callback {if(Fl::event_button()==1)  Run();
+else if(Fl::event_button()==3) ChangeRunTargetsParams();}
+            xywh {26 30 468 101} type Hold box THIN_DOWN_BOX labelsize 12 when 3 textfont 4 textsize 12 resizable
+            class NiceBrowser
+          }
+        }
+      }
+    }
+    code {mMainGroup->resizable(mTabbedOutput);} {}
+  }
+  Function {Preferences()} {} {
+    Fl_Window {} {
+      xywh {416 398 248 100} hide
+      class Fl_Group
+    } {
+      Fl_Input {} {
+        label {Make Parameters:}
+        user_data {&mMakeArgs} user_data_type {char**}
+        xywh {3 17 240 25} box THIN_DOWN_BOX labelsize 12 align 5 textsize 12
+      }
+    }
+  }
+  decl {//------------------} {}
+  decl {void SelectErrorLine();} {}
+  decl {void Init(int argc,char** argv);} {public
+  }
+  decl {void Run();} {}
+  decl {void Make();} {}
+  decl {void MakeClean();} {}
+  decl {void StopMake();} {}
+  decl {void NextErrorMsg();} {}
+  decl {void PrevErrorMsg();} {}
+  decl {void NextWarningMsg();} {}
+  decl {void PrevWarningMsg();} {}
+  decl {void MakeThread(void);} {public
+  }
+  decl {void RunMake(char* cmdin);} {}
+  decl {//------------------} {}
+  decl {void NextMessage(const char*);} {}
+  decl {void PrevMessage(const char*);} {}
+  decl {void LookForExecutable(const char*);} {public
+  }
+  decl {char* LookForArg(const char* arg,const char* makeoutline);} {public
+  }
+  decl {const char* SplitLineRegExp(char* intext,char* filename,char *text,int* linenumber,int *msgtype,int concatdir);} {}
+  decl {void InitRegex(void);} {public
+  }
+  decl {int CompileRegEx(regex_t *preg,const char* regex);} {}
+  decl {int TestRegSet(const char *buff,int nmatch, regmatch_t pmatch[]);} {}
+  decl {//------------------} {}
+  decl {void InitMessageHeaders(void);} {public
+  }
+  decl {//------------------} {}
+  decl {int SplitRunTargetsLine(const char *text,char *exename,char *params);} {}
+  decl {void ChangeRunTargetsParams(void);} {}
+  decl {void RunWithConsole(void);} {}
+  decl {void RunInDebugger(void);} {}
+  decl {int FindTokInBrowser(Fl_Browser *mBrowser,const char *identTok)} {}
+  decl {//------------------} {}
+  decl {char mMakeArgs[1024];;} {public
+  }
+  decl {char mCurrDir[1024];} {public
+  }
+  decl {char mInvEditor[1024];} {public
+  }
+  decl {//------------------} {}
+  decl {int mNPreg;} {}
+  decl {int mWNPreg;} {}
+  decl {int mINPreg;} {}
+  decl {regex_t mPreg[64];} {}
+  decl {//----- -------------} {}
+  decl {char *mMsgHeaders[64];} {}
+  decl {int mNumMsgHeaders;} {}
+  decl {int mEditOnMsgBrowse;} {}
+  decl {int mCleanRunTargets;} {}
+} 

@@ -1,0 +1,200 @@
+# data file for the Fltk User Interface Designer (fluid)
+version 1.00 
+header_name {.H} 
+code_name {.cxx} 
+gridx 5 
+gridy 5 
+snap 3
+decl {\#include <FL/Fl_Double_Window.H>} {public
+} 
+
+class DevToolsApp {open
+} {
+  decl {void Split(void);} {public
+  }
+  decl {void Merge(void);} {public
+  }
+  decl {void DoTagsBrowser(void);} {public
+  }
+  decl {void DoMakeParser();} {public
+  }
+  decl {DevToolsApp();} {public
+  }
+  decl {class TagsBrowser* mTagsBrowser;} {public
+  }
+  decl {class MakeParser* mMakeParser;} {public
+  }
+  decl {class BasicWindow* mTagsBrowserWindow;} {public
+  }
+  decl {class BasicWindow* mMakeParserWindow;} {public
+  }
+  decl {class BasicWindow* mSharedWindow;} {public
+  }
+  decl {class BasicWindow* mEmptyWindow;} {public
+  }
+  decl {BasicWindow* DoDevTool(class DevTool* tool);} {public
+  }
+  decl {void HelpMakeParser(void);} {public
+  }
+  decl {void HelpTagsBrowser(void);} {public
+  }
+  decl {void EditPreferences(void);} {public
+  }
+} 
+
+class BasicWindow {: {public Fl_Double_Window}
+} {
+  Function {BasicWindow():Fl_Double_Window(0,0)} {open
+  } {
+    Fl_Window mGroup {open
+      xywh {354 333 421 310} resizable
+      class Fl_Group visible
+    } {
+      Fl_Menu_Bar {} {open
+        xywh {0 0 420 25} box THIN_UP_BOX
+      } {
+        submenu {} {
+          label File open
+          xywh {0 0 100 20} labelsize 12
+        } {
+          menuitem {} {
+            label Quit
+            callback {exit(0);}
+            xywh {0 0 100 20} labelsize 12
+          }
+        }
+        submenu {} {
+          label Settings open
+          xywh {10 10 100 20} labelsize 12
+        } {
+          menuitem {} {
+            label {Edit ..}
+            callback {app->EditPreferences();}
+            xywh {0 0 100 20} labelsize 12 divider
+          }
+          menuitem {} {
+            label Save
+            xywh {0 0 100 20} labelsize 12
+          }
+          menuitem {} {
+            label {Save As ..}
+            xywh {10 10 100 20} labelsize 12 divider
+          }
+          menuitem {} {
+            label {Save As Default}
+            xywh {20 20 100 20} labelsize 12
+          }
+        }
+        submenu {} {
+          label Utilities open
+          xywh {20 20 100 20} labelsize 12
+        } {
+          menuitem {} {
+            label {Tags Browser}
+            callback {app->DoTagsBrowser();}
+            xywh {10 10 100 20} labelsize 12
+          }
+          menuitem {} {
+            label {Make Parser}
+            callback {app->DoMakeParser();}
+            xywh {10 10 100 20} labelsize 12
+          }
+          menuitem {} {
+            label {Multifile Search}
+            xywh {20 20 100 20} labelsize 12 hide
+          }
+        }
+        submenu {} {
+          label Windows
+          xywh {10 10 100 20} labelsize 12
+        } {
+          menuitem {} {
+            label Split
+            callback {app->Split();}
+            xywh {30 30 100 20} labelsize 12
+          }
+          menuitem {} {
+            label Merge
+            callback {app->Merge();}
+            xywh {40 40 100 20} labelsize 12
+          }
+        }
+        submenu {} {
+          label Help open
+          xywh {45 45 100 20} labelsize 12
+        } {
+          menuitem {} {
+            label {Tags Browser ..}
+            callback {app->HelpTagsBrowser();}
+            xywh {45 45 100 20} labelsize 12
+          }
+          menuitem {} {
+            label {Make Parser ..}
+            callback {app->HelpMakeParser();}
+            xywh {55 55 100 20} labelsize 12
+          }
+          menuitem {} {
+            label {Multifile Search ..}
+            xywh {65 65 100 20} labelsize 12 hide
+          }
+        }
+      }
+      Fl_Group mMainGroup {
+        xywh {0 25 420 285} resizable
+      } {
+        Fl_Tile mTile {open
+          xywh {0 25 420 285} resizable
+        } {
+          Fl_Box {} {
+            label label
+            xywh {40 90 330 140} hide resizable
+          }
+        }
+      }
+    }
+    code {resize(x(),y(),mGroup->w(),mGroup->h());} {}
+    code {resizable(mGroup);} {}
+  }
+  decl {Fl_Box* mSplitter;} {public
+  }
+} 
+
+decl {DevToolsApp* app;} {public
+} 
+
+class PreferencesWindow {open : {public Fl_Window}
+} {
+  decl {void Done(int ok);} {}
+  Function {PreferencesWindow():Fl_Window(0,0)} {open
+  } {
+    Fl_Window mGroup {open
+      xywh {114 675 221 174} resizable
+      class Fl_Group visible
+    } {
+      Fl_Group mButtonGroup {open
+        xywh {-1 148 222 27}
+      } {
+        Fl_Button {} {
+          label OK
+          callback {Done(1);}
+          xywh {3 151 49 20} box THIN_UP_BOX labelsize 12
+        }
+        Fl_Button {} {
+          label Cancel
+          callback {Done(0);}
+          xywh {55 151 49 20} box THIN_UP_BOX labelsize 12
+        }
+      }
+      Fl_Box {} {
+        label label
+        xywh {105 0 115 149} hide resizable
+      }
+    }
+    code {resize(x(),y(),mGroup->w(),mGroup->h());} {}
+    code {resizable(mGroup);} {}
+  }
+  decl {void Init();} {public
+  }
+  decl {int done;} {selected public
+  }
+} 

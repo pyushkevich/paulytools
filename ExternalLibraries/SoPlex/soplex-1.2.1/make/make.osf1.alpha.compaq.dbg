@@ -1,0 +1,8 @@
+#--- $Id$
+CXX	=	cxx
+CPPFLAGS=	-Isrc 
+CXXFLAGS=	-O0 -w0 -std strict_ansi -gall -verbose -check \
+		-msg_disable basclsnondto,boolexprconst,constrlitnondep 
+# -ieee
+LDFLAGS	=	-lm
+ARFLAGS	=	crs

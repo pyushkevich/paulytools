@@ -1,0 +1,6 @@
+#--- $Id$
+CXX	=	icc
+CPPFLAGS=	-Isrc -DNDEBUG
+CXXFLAGS=	-O3 -tpp7 -xW -Xc -w1 #-ip => error on pilot-ja(ER) ?
+LDFLAGS	=	-lm -static
+ARFLAGS	=	crs

@@ -1,0 +1,159 @@
+# data file for the Fltk User Interface Designer (fluid)
+version 1.00 
+header_name {.H} 
+code_name {.cxx} 
+gridx 5 
+gridy 5 
+snap 3
+decl {\#include "FL/Fl_ToggleTree.H"} {public
+} 
+
+decl {\#include "FL/Fl_ToggleTreeResizer.H"} {public
+} 
+
+decl {\#include "DevTool.H"} {public
+} 
+
+class TagsBrowser {open : {public DevTool}
+} {
+  Function {TagsBrowser()} {} {
+    Fl_Window {} {open
+      xywh {293 250 282 288} resizable
+      code0 {mMainGroup=o;}
+      class Fl_Group visible
+    } {
+      Fl_Scroll scroll {
+        xywh {3 26 275 258} type BOTH_ALWAYS box THIN_DOWN_BOX align 21
+      } {}
+      Fl_Box {} {
+        xywh {270 26 7 258} hide resizable
+      }
+      Fl_Group {} {open
+        xywh {0 0 285 25}
+      } {
+        Fl_Button {} {
+          label Reload
+          callback {Reload();}
+          xywh {86 3 80 20} box THIN_UP_BOX labelsize 12
+        }
+        Fl_Button {} {
+          label {Make tags}
+          callback {MakeTagsAndReload();}
+          xywh {3 3 80 20} box THIN_UP_BOX labelsize 12
+        }
+        Fl_Choice {} {
+          label {Sort by} open
+          xywh {213 3 65 20} box THIN_UP_BOX labelsize 12 textsize 12
+        } {
+          menuitem {} {
+            label Name
+            callback {SortByName();}
+            xywh {5 5 100 20} labelsize 12
+          }
+          menuitem {} {
+            label Line
+            callback {SortByLine();}
+            xywh {15 15 100 20} labelsize 12
+          }
+        }
+        Fl_Box {} {
+          label label
+          xywh {279 3 6 19} hide resizable
+        }
+      }
+    }
+  }
+  Function {Preferences()} {} {
+    Fl_Window {} {open selected
+      xywh {305 453 254 276} hide
+      class Fl_Group
+    } {
+      Fl_Box {} {
+        label {sort members/methods/
+variables/functions by:}
+        xywh {5 5 140 35} labelsize 12 align 20
+      }
+      Fl_Round_Button mSortByName {
+        label name
+        user_data {&mSortType} user_data_type {int*}
+        xywh {145 5 95 20} type Radio down_box ROUND_DOWN_BOX value 1 color 48 selection_color 3 labelsize 12
+      }
+      Fl_Round_Button mSortByLine {
+        label {line in source}
+        xywh {145 20 95 20} type Radio down_box ROUND_DOWN_BOX color 48 selection_color 3 labelsize 12
+      }
+      Fl_Box {} {
+        label {Invoke ctags with:}
+        xywh {5 115 115 15} labelsize 12 align 20
+      }
+      Fl_Input {} {
+        user_data {&mInvokeCTagsStr} user_data_type {char**}
+        xywh {5 130 245 35} type Multiline box THIN_DOWN_BOX labelsize 12 align 1 textsize 12
+      }
+      Fl_Box {} {
+        label {make ctags with:}
+        xywh {5 50 115 15} labelsize 12 align 20
+      }
+      Fl_Input {} {
+        user_data {&mMakeCTagsStr} user_data_type {char**}
+        xywh {5 65 245 35} type Multiline box THIN_DOWN_BOX labelsize 12 align 1 textsize 12
+      }
+      Fl_Box {} {
+        label {Invoke editor with: 
+[%f for filename, %n for linenumber]}
+        xywh {5 175 230 30} labelsize 12 align 20
+      }
+      Fl_Input {} {
+        user_data {&mInvokeEditorStr} user_data_type {char**}
+        xywh {5 205 245 35} type Multiline box THIN_DOWN_BOX labelsize 12 align 1 textsize 12
+      }
+    }
+  }
+  decl {//------------------------} {}
+  decl {void Reload(int forceLoadTags = 0);} {public
+  }
+  decl {void MakeTagsAndReload(void);} {public
+  }
+  decl {//------------------------} {}
+  decl {Fl_ToggleTree* mTree;} {}
+  decl {//------------------------} {}
+  decl {char** mFiles;} {}
+  decl {int mFilesCount;;} {public
+  }
+  decl {int mSortType;} {public
+  }
+  decl {//------------------------} {}
+  decl {char* mInvokeCTagsStr;} {public
+  }
+  decl {char* mMakeCTagsStr;} {public
+  }
+  decl {char* mInvokeEditorStr;} {public
+  }
+  decl {//------------------------} {}
+  decl {void SortByName(void);} {public
+  }
+  decl {void SortByLine(void);} {public
+  }
+  decl {void InitTree(void);} {public
+  }
+  decl {void TreeSelect(void);} {public
+  }
+  decl {static void cb_tree(Fl_Widget* tree);} {public
+  }
+  decl {void Quit(void);} {public
+  }
+  decl {void SavePreferences(void);} {public
+  }
+  decl {void EditPreferences(void);} {public
+  }
+  decl {void About(void);} {public
+  }
+  decl {void Search(void);} {public
+  }
+  decl {void Init(int argc,char** argv)} {public
+  }
+  decl {void Load(char** files,int nfiles);} {public
+  }
+  decl {void _Load(char** files,int nfiles);} {public
+  }
+} 

@@ -1,0 +1,7 @@
+#--- $Id$
+CXX	=	KCC
+CPPFLAGS=	-Isrc 
+CXXFLAGS=	-g --linux_headers # --lint
+LDFLAGS	=	--static_libKCC -lm
+AR	=	KCC
+ARFLAGS	=	-o

@@ -1,0 +1,7 @@
+#--- $Id$
+CXX	=	g++
+CPPFLAGS=	-Isrc -DNDEBUG
+CXXFLAGS=	-O3 -fno-exceptions \
+		-ffast-math -fforce-addr -funroll-loops #-march=
+LDFLAGS	=	-lm
+ARFLAGS	=	crs

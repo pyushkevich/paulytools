@@ -1,0 +1,6 @@
+#--- $Id$
+CXX	=	g++
+CPPFLAGS=	-Isrc 
+CXXFLAGS=	-O -g $(GCCWARN)
+LDFLAGS	=	-lm
+ARFLAGS	=	crs

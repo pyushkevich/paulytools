@@ -1,0 +1,56 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"><html><head><meta http-equiv="content-type" content="text/html; charset=ISO-8859-1"><title>FSELECT Manual</title></head><body>
+<h2>FSELECT.EXE</h2>
+<h3>Description:<br>
+</h3>
+This program performs window selection and feature selection as described in the UNC-CS technical report TR02-044.<br>
+<br>
+<h3>Usage: </h3>
+<pre>fselect [options] input_file.txt output_file.txt<br><br>options:<br>	-r n	Repeat each experiment n times and return the <br>		result with best value of the objective function.  <br>		Default: 10<br>	<br>	-a n	Value of alpha used for feature selection. See TR.<br>		Default: 5.0<br><br>	-x 	Enable cross-validation reporting.  Takes much <br>		longer to compute. Default: off.<br><br>	-xn n	For cross-validation, the number of leave-some-out <br>		experiments performed.  Each experiment involves <br>		dividing the input classes into test and training<br>		subclasses, training a classifier on the training<br>		subclass and validating against the testing subclass.<br>		Default: 100<br><br>	-xp n	For cross-validation, the probability (0 to 1) <br>		that a particular element in the training sample <br>		is left out.  Default: p=0.5<br></pre>
+<h3>Input file format:</h3>
+The input file consists of matrices and vectors encoded using the Mathematica notation. &nbsp;A vector is represented as:<br>
+<pre>{0.2, 0.5, 0.7}<br></pre>
+and a matrix with 2 rows and 3 columns as:<br>
+<pre>{{0.2, 0.5, 0.7},{0.2, 0.5, 0.7}}</pre>
+Spaces, tabs and newlines are ignored in the input file are ignored.<br>
+<br>
+The file contains the following matrices, placed one following the other:<br>
+<ol>
+  <li><span style="font-weight: bold;">A - </span>The feature matrix representing the first class. &nbsp;It has <span style="font-style: italic;">m</span> rows and <span style="font-style: italic;">n</span> columns.</li>
+  <li><span style="font-weight: bold;">B</span> - The feature matrix representing the second class. &nbsp;It has <span style="font-style: italic;">m</span> rows and <span style="font-style: italic;">k</span><span style="font-style: italic;"></span> columns.</li>
+  <li><span style="font-weight: bold;">O </span>(Omega in tech report) - The weight matrix that describes the composition of each window in window selection. &nbsp;It has <span style="font-style: italic;">n</span> rows and <span style="font-style: italic;">N</span> rows. &nbsp;The entries in this matrix should be ones and zeros.</li>
+  <li><span style="font-weight: bold; font-style: italic;">p<small><small>1</small></small></span>&nbsp;
+- A vector of values of lambda for which the feature selection
+algorithm (a la Bradley and Mangasarian) should be applied.</li>
+  <li><span style="font-weight: bold; font-style: italic;">p<small><small>2</small></small></span>&nbsp;
+- A matrix consisting of pairs (lambda, eta) for which the window
+selection algorithm should be applied. &nbsp;The matrix has 2 columns.</li>
+</ol>
+<h3>Output file format:</h3>
+The output file contains two Mathematica matrices. &nbsp;The first
+gives the results of running feature selection. &nbsp;Each row
+represents the result of one experiment. &nbsp;A typical row looks like
+this:<br>
+<pre>{0.02,1.25906,"111111010011000",0.282763}</pre>
+The components of this vector are<br>
+<ol>
+  <li>Value of parameter <span style="font-style: italic;">lambda </span>used for this experiment</li>
+  <li>The optimal value of the objective function in the linear programming formulation.</li>
+  <li>The feature selection mask: ones represent the selected features<br>
+  </li>
+  <li>Cross-validation
+error obtained by limiting the training set to the selected features 
+and doing leave-some-out analysis. &nbsp;If cross-validation is not
+enabled (see <span style="font-weight: bold;">-x</span> option in usage), zero is returned.</li>
+</ol>
+The second matrix reports the results for window selection. &nbsp;It's rows look like this:<br>
+<pre>{0.06,0.03,1.5608,"111111000000000",0.29208}</pre>
+The components of this vector are<br>
+<ol>
+  <li>See 1 above</li>
+  <li>Value of parameter <span style="font-style: italic;">eta</span><span style="font-style: italic;"> </span>used for this experiment</li>
+  <li>See 2 above</li>
+  <li>See 3 above</li>
+  <li>See 4 above</li>
+</ol>
+
+</body></html>

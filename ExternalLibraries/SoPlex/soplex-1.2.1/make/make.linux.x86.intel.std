@@ -1,0 +1,6 @@
+#--- $Id$
+CXX	=	icc
+CPPFLAGS=	-Isrc -DNDEBUG
+CXXFLAGS=	-O2 -tpp6 -axi -mp -Xc -w1
+LDFLAGS	=	-lm
+ARFLAGS	=	crs

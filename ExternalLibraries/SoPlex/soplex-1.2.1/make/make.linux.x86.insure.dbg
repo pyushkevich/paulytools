@@ -1,0 +1,6 @@
+#--- $Id$
+CXX	=	insure g++
+CPPFLAGS=	-Isrc 
+CXXFLAGS=	-g -DNDEBUG
+LDFLAGS	=	-lm
+ARFLAGS	=	crs

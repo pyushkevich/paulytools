@@ -1,0 +1,2 @@
+flIDE is a merge of flmake and fltags. It is a FLTK based frontend on top
+of Exhuberant Ctags and make. 

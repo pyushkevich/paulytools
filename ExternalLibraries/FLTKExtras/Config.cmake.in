@@ -1,0 +1,18 @@
+##################################################################################
+# This file should be included in your CMakeLists.txt file
+# 
+# It defines the following variables
+#
+# FLTKEXTRAS_INCLUDE_DIR 		Include directories for the library
+# FLTKEXTRAS_LIBRARY_DIR		Library directories
+# FLTKEXTRAS_LIB		        The basic set of libraries to
+#		    		        link your program with.  
+#################################################################################
+
+# Export directory names
+SET(FLTKEXTRAS_INCLUDE_DIR "@FLTKEXTRAS_INCLUDE_DIR@")
+SET(FLTKEXTRAS_LIBRARY_DIR "@FLTKEXTRAS_LIBRARY_DIR@")
+
+SET(FLTKEXTRAS_LIB
+    fltkextras
+)

@@ -1,0 +1,171 @@
+# data file for the Fltk User Interface Designer (fluid)
+version 1.00 
+header_name {.h} 
+code_name {.cpp} 
+gridx 5 
+gridy 5 
+snap 3
+class Graph2DUI {open
+} {
+  Function {makeWindow()} {open
+  } {
+    Fl_Window winMain {
+      label {Graph 2D - Plotting functions in 2D Domain} open
+      xywh {576 100 602 532} color 32 resizable
+      code0 {\#include "graph2d.h"} visible
+    } {
+      Fl_Group {} {open
+        xywh {465 5 135 450} box UP_BOX
+      } {
+        Fl_Group {} {open
+          xywh {465 5 135 440}
+        } {
+          Fl_Group groupX {
+            label {X Coordinate:} open
+            xywh {470 25 125 50} align 5
+          } {
+            Fl_Value_Input inpXMin {
+              label {from:}
+              xywh {505 30 90 20} labelsize 12 textsize 10
+            }
+            Fl_Value_Input inpXMax {
+              label {to:}
+              xywh {505 50 90 20} labelsize 12 textsize 10
+            }
+          }
+          Fl_Group groupY {
+            label {Y Coordinate:} open
+            xywh {470 95 125 50} align 5
+          } {
+            Fl_Value_Input inpYMin {
+              label {from:}
+              xywh {505 100 90 20} labelsize 12 textsize 10
+            }
+            Fl_Value_Input inpYMax {
+              label {to:}
+              xywh {505 120 90 20} labelsize 12 textsize 10
+            }
+          }
+          Fl_Group {} {
+            label {Resolution:} open
+            xywh {470 165 125 40} align 5
+          } {
+            Fl_Value_Output outRes {
+              xywh {485 170 40 20} value 256 textsize 12
+            }
+            Fl_Slider inpRes {
+              callback {outRes->value(1 << ((int)inpRes->value()));}
+              xywh {530 170 65 20} type Horizontal selection_color 62 minimum 6 maximum 10 step 1 value 8
+            }
+          }
+          Fl_Group {} {
+            label {Display Options:} open
+            xywh {470 220 110 65} align 5
+          } {
+            Fl_Check_Button bSeeGrid {
+              label {show grid}
+              callback {graph->showGrid(bSeeGrid->value());}
+              xywh {490 240 85 20} down_box DIAMOND_DOWN_BOX selection_color 62 labelsize 12
+            }
+            Fl_Check_Button bSeeAxis {
+              label {show axis}
+              callback {graph->showAxis(bSeeAxis->value());}
+              xywh {490 220 85 20} down_box DIAMOND_DOWN_BOX value 1 selection_color 62 labelsize 12
+            }
+            Fl_Check_Button bSeeLabels {
+              label {show x,y}
+              callback {graph->showLabels(bSeeLabels->value());}
+              xywh {490 260 85 20} down_box DIAMOND_DOWN_BOX selection_color 62 labelsize 12
+            }
+          }
+          Fl_Group {} {
+            label {Zoom Control:} open
+            xywh {470 305 120 135} align 5
+          } {
+            Fl_Button bNext {
+              label {@->}
+              callback {graph->next();}
+              xywh {535 415 30 20} labeltype SYMBOL_LABEL labelcolor 130 deactivate
+            }
+            Fl_Button bBack {
+              label {@<-}
+              callback {graph->back();}
+              xywh {495 415 30 20} labeltype SYMBOL_LABEL labelcolor 130 deactivate
+            }
+            Fl_Button bZoomOut {
+              label {Zoom Out (2:1)}
+              callback {graph->zoomOut();}
+              xywh {480 310 100 20} labelsize 12
+            }
+            Fl_Button bZoomIn {
+              label {Zoom In (1:2)}
+              callback {graph->zoomIn();}
+              xywh {480 335 100 20} labelsize 12
+            }
+            Fl_Button bCompute {
+              label Compute
+              callback {graph->compute();}
+              xywh {490 380 80 25} labelfont 3
+            }
+          }
+        }
+        Fl_Group {} {open
+          xywh {465 445 135 10} resizable
+        } {}
+      }
+      Fl_Group {} {open selected
+        xywh {5 460 455 70} box UP_BOX
+      } {
+        Fl_Box winPalette {
+          xywh {90 465 360 60} box DOWN_BOX color 4 selection_color 4 align 133 resizable
+          class Graph2DPalette
+        }
+        Fl_Group {} {
+          label {Intensity Windowing} open
+          xywh {10 495 75 30} align 133
+        } {
+          Fl_Button bResetPalette {
+            label Reset
+            callback {winPalette->reset();}
+            xywh {20 500 55 20} labelsize 12
+          }
+        }
+      }
+      Fl_Box winGraph {
+        xywh {5 5 455 450} box UP_BOX color 220 resizable
+        code0 {\#include "Graph2DWindow.h"}
+        class Graph2DWindow
+      }
+      Fl_Group {} {open
+        xywh {465 460 135 70} box UP_BOX
+      } {
+        Fl_Value_Output outX {
+          label {x:}
+          xywh {500 465 95 20} labelsize 12 textsize 10
+        }
+        Fl_Value_Output outY {
+          label {y:}
+          xywh {500 485 95 20} labelsize 12 textsize 10
+        }
+        Fl_Value_Output outFxy {
+          label {f(x,y):}
+          xywh {500 505 95 20} labelsize 12 textsize 10
+        }
+      }
+    }
+    Fl_Window winComputing {
+      label {Graph 2D} open
+      xywh {452 453 322 75} box ENGRAVED_BOX modal noborder visible
+    } {
+      Fl_Slider sldProgress {
+        xywh {5 45 310 20} type {Horz Fill} box THIN_DOWN_BOX selection_color 137 labeltype ENGRAVED_LABEL align 5
+      }
+      Fl_Group {} {
+        label {Computing Graph.  Please Wait...} open
+        xywh {10 25 300 15} labelfont 3 align 5
+      } {}
+    }
+  }
+  decl {Graph2D *graph;} {public
+  }
+} 

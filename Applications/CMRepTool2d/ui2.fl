@@ -1,0 +1,1219 @@
+# data file for the Fltk User Interface Designer (fluid)
+version 1.00 
+header_name {.h} 
+code_name {.cpp} 
+gridx 5 
+gridy 5 
+snap 3
+Function {make_window()} {open
+} {
+  Fl_Window winMain {
+    label {MMTool 2D} open
+    xywh {375 63 630 753} resizable
+    code0 {\#include "misc.h"} visible
+  } {
+    Fl_Menu_Bar mbMenuBar {
+      xywh {0 0 630 25} box THIN_UP_BOX down_box THIN_UP_BOX selection_color 49
+    } {
+      submenu {} {
+        label Image open
+        xywh {0 0 100 20}
+      } {
+        menuitem {} {
+          label {Open...}
+          callback uiOpenImage
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label {Import PGM...}
+          callback uiOpenPGM
+          xywh {0 0 100 20}
+        }
+        menuitem miScaleSpace {
+          label {View ScaleSpace...}
+          callback {uiScript.uiCommand("show winScaleSpace");
+inSSScale->value(0);}
+          xywh {0 0 100 20}
+        }
+      }
+      submenu {} {
+        label Model open
+        xywh {0 0 100 20}
+      } {
+        menuitem miNew {
+          label {New...}
+          callback {inNewKeep->value(0);
+winNewModel->show();}
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label {Open...}
+          callback uiOpenModel
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label Save
+          callback uiSaveModel
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label {Save As...}
+          callback uiSaveModelAs
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label { }
+          xywh {0 0 100 20} labeltype SYMBOL_LABEL
+        }
+        menuitem miAddFigures {
+          label {Add Figures...}
+          callback {inNewKeep->value(1);
+winNewModel->show();}
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label {Delete Selected}
+          callback uiDeleteSelected
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label { }
+          xywh {10 10 100 20} labeltype SYMBOL_LABEL
+        }
+        menuitem miUndo {
+          label Undo
+          callback uiUndo
+          xywh {0 0 100 20}
+        }
+        menuitem miRedo {
+          label Redo
+          callback uiRedo
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label { }
+          xywh {20 20 100 20} labeltype SYMBOL_LABEL
+        }
+        menuitem miPEditor {
+          label {Show Primitive Editor}
+          callback {uiScript.uiCommand("show winPrimitive");}
+          xywh {0 0 100 20}
+        }
+      }
+      submenu {} {
+        label Settings
+        xywh {0 0 100 20}
+      } {
+        menuitem {} {
+          label {Display Settings...}
+          callback {winSettings->show();}
+          xywh {0 0 100 20}
+        }
+      }
+      submenu {} {
+        label Macros open
+        xywh {0 0 100 20}
+      } {
+        menuitem {} {
+          label {Dump Command History}
+          callback {uiScript.saveHistory("sessionhistory.macro");}
+          xywh {0 0 100 20}
+        }
+        menuitem {} {
+          label {Load-n-Run Macro}
+          callback {char *fname = fl_file_chooser("Select a macro file","*.macro",NULL);
+if(fname) {
+   uiScript.load(fname);
+   uiScript.run();
+}}
+          xywh {0 0 100 20}
+          code0 {\#include <Fl/fl_file_chooser.h>}
+        }
+      }
+    }
+    Fl_Button bUndo {
+      label UNDO
+      callback {uiUndo(NULL,NULL);}
+      xywh {595 635 30 25} labelsize 8 deactivate
+    }
+    Fl_Button bRedo {
+      label REDO
+      callback {uiRedo(NULL,NULL);}
+      xywh {595 665 30 25} labelsize 8 deactivate
+    }
+    Fl_Box winGL {
+      label label
+      xywh {5 30 620 580} box BORDER_FRAME color 41 selection_color 135 labelcolor 96
+      code0 {\#include "dslwin.h"}
+      code1 {\#include "dsltool.h"}
+      class DisplayWindow
+    }
+    Fl_Button {} {
+      label {?}
+      callback {winAbout->show();}
+      xywh {595 725 30 25} labeltype ENGRAVED_LABEL labelsize 20 labelcolor 88
+    }
+    Fl_Value_Input outMedialness {
+      label {M:}
+      xywh {555 615 70 15} box NO_BOX color 49 labelsize 12 textsize 10
+    }
+    Fl_Tabs {} {open
+      xywh {5 615 585 140}
+    } {
+      Fl_Group gToolbox {
+        label Toolbox
+        xywh {15 635 550 110} box FLAT_BOX
+      } {
+        Fl_Group {} {
+          label {Image Controls:}
+          xywh {20 655 90 30} box SHADOW_BOX color 47 labelsize 11 labelcolor 96 align 5
+        } {
+          Fl_Button bZoom {
+            label {../src/images/lens.gif}
+            callback uiZoomMode
+            xywh {20 655 30 30} box NO_BOX down_box BORDER_BOX selection_color 175 labeltype image when 1
+          }
+          Fl_Button bPan {
+            label {../src/images/hand.gif}
+            callback uiPanMode
+            xywh {50 655 30 30} box NO_BOX down_box BORDER_BOX selection_color 175 labeltype image when 1
+          }
+          Fl_Menu_Button {} {
+            label {X : Y}
+            xywh {80 660 25 20} box FLAT_BOX down_box BORDER_BOX color 47 selection_color 87 labeltype SHADOW_LABEL labelfont 9 labelsize 12 labelcolor 223
+          } {
+            menuitem {} {
+              label {1:8}
+              callback {uiSetZoom(8.0);}
+              xywh {15 15 100 20}
+            }
+            menuitem {} {
+              label {1:4}
+              callback {uiSetZoom(4.0);}
+              xywh {25 25 100 20}
+            }
+            menuitem {} {
+              label {1:2}
+              callback {uiSetZoom(2.0);}
+              xywh {35 35 100 20}
+            }
+            menuitem {} {
+              label {1:1}
+              callback {uiSetZoom(1.0);}
+              xywh {45 45 100 20}
+            }
+            menuitem {} {
+              label {2:1}
+              callback {uiSetZoom(0.5);}
+              xywh {55 55 100 20}
+            }
+            menuitem {} {
+              label {4:1}
+              callback {uiSetZoom(0.25);}
+              xywh {65 65 100 20}
+            }
+            menuitem {} {
+              label {8:1}
+              callback {uiSetZoom(0.125);}
+              xywh {75 75 100 20}
+            }
+          }
+        }
+        Fl_Group {} {
+          label {Selection and Transforms:}
+          xywh {125 655 180 30} box SHADOW_BOX color 47 selection_color 129 labelsize 11 labelcolor 96 align 5
+        } {
+          Fl_Button bSelect {
+            label {../src/images/selbox.gif}
+            callback uiSelectMode
+            xywh {125 655 30 30} box NO_BOX down_box BORDER_BOX color 46 selection_color 175 labeltype image when 1
+          }
+          Fl_Button bScale {
+            label {../src/images/scale.gif}
+            callback uiScaleMode
+            xywh {185 655 30 30} box NO_BOX down_box BORDER_BOX selection_color 175 labeltype image when 1
+          }
+          Fl_Button bRotate {
+            label {../src/images/rotate.gif}
+            callback uiRotateMode
+            xywh {215 655 30 30} box NO_BOX down_box BORDER_BOX selection_color 175 labeltype image when 1
+          }
+          Fl_Button bTranslate {
+            label {../src/images/translate.gif}
+            callback uiTranslateMode
+            xywh {155 655 30 30} box NO_BOX down_box BORDER_BOX selection_color 175 labeltype image when 1
+          }
+          Fl_Button bStretch {
+            label {../src/images/stretch.gif}
+            callback uiStretchMode
+            xywh {245 655 30 30} box NO_BOX down_box BORDER_BOX selection_color 175 labeltype image when 1
+          }
+          Fl_Button bBend {
+            label {../src/images/bend.gif}
+            callback uiBendMode
+            xywh {275 655 30 30} box NO_BOX down_box BORDER_BOX selection_color 175 labeltype image when 1
+          }
+        }
+        Fl_Group {} {
+          label {Primitive Editing:}
+          xywh {20 705 90 30} box SHADOW_BOX color 47 labelsize 11 labelcolor 96 align 5
+        } {
+          Fl_Button bPEM {
+            label {../src/images/pem.gif}
+            callback uiPEMMode
+            xywh {20 705 30 30} box NO_BOX down_box BORDER_BOX selection_color 175 labeltype image when 1
+          }
+        }
+        Fl_Group {} {
+          label {Other Tools:}
+          xywh {125 705 180 30} box SHADOW_BOX color 47 labelsize 11 labelcolor 96 align 5
+        } {
+          Fl_Button bAA {
+            label Opt
+            callback uiAssist
+            xywh {125 705 30 30} box NO_BOX down_box BORDER_BOX selection_color 175 labeltype SHADOW_LABEL labelfont 9 labelcolor 223 when 1
+          }
+        }
+        Fl_Group lContextHelp {
+          label {Ridiculously long label here goes to demonstrate just how bid of a descrpition we can provide for a tool.  I think i will write a several page description for use of each tool}
+          xywh {320 655 245 90} labelsize 11 labelcolor 96 align 149 resizable
+        } {}
+        Fl_Group lToolName {
+          label {Tool:}
+          xywh {320 655 245 5} labelfont 1 labelsize 12 align 5
+        } {}
+        Fl_Button bTrackCore {
+          label Trk
+          callback uiTrackCore
+          xywh {155 705 30 30} box NO_BOX down_box BORDER_BOX selection_color 175 labeltype SHADOW_LABEL labelfont 9 labelcolor 223 when 1
+        }
+      }
+      Fl_Group grpRegistration {
+        label Registration
+        xywh {10 635 575 120} hide
+      } {
+        Fl_Button bRegister {
+          label Register
+          callback uiRegister
+          xywh {520 720 60 25} labelfont 1 labelsize 12
+        }
+        Fl_Choice chRegOptMethod {
+          label {Optimization Method:} open
+          xywh {15 655 110 20} labelsize 12 align 5 textsize 12
+        } {
+          menuitem {} {
+            label {Evol. Strat.}
+            xywh {10 10 100 20} value 1 labelsize 12
+          }
+          menuitem {} {
+            label Simplex
+            xywh {10 10 100 20} value 1 labelsize 12
+          }
+          menuitem {} {
+            label {Conj. Grad.}
+            xywh {10 10 100 20} labelsize 12
+          }
+        }
+        Fl_Value_Input inRegEvaluations {
+          label {Max Evaluations:}
+          xywh {15 695 60 20} color 51 labelsize 12 align 5 maximum 10000 step 100 value 3000 textsize 10
+        }
+        Fl_Group {} {
+          label {Movement Allowances:} open
+          xywh {140 655 195 80} box ENGRAVED_FRAME labelsize 12 align 5
+        } {
+          Fl_Value_Slider inRegPositionSigma {
+            label {posn:}
+            xywh {185 660 145 20} type Horizontal color 51 labelsize 12 align 4 value 0.05
+          }
+          Fl_Value_Slider inRegScaleSigma {
+            label {scale:}
+            xywh {185 685 145 20} type Horizontal color 51 labelsize 12 align 4 value 0.5
+          }
+          Fl_Value_Slider inRegAngleSigma {
+            label {angle:}
+            xywh {185 710 145 20} type Horizontal color 51 labelsize 12 align 4 maximum 180 step 5 value 45
+          }
+        }
+      }
+      Fl_Group {} {
+        label AutoAssist
+        xywh {10 635 575 120} hide
+      } {
+        Fl_Group {} {
+          label {Movement Allowances:} open
+          xywh {140 655 285 90} box ENGRAVED_FRAME labelsize 12 align 5
+        } {
+          Fl_Value_Slider inAANormalShift {
+            label {normal shift:}
+            callback {uiScript.uiSliderCommand(inAANormalShift,"set aaNrmShft %lg",inAANormalShift->value());}
+            xywh {150 675 130 20} type Horizontal color 51 labelsize 12 align 5 value 0.2
+          }
+          Fl_Value_Slider inAATangentShift {
+            label {tangential shift:}
+            callback {uiScript.uiSliderCommand(inAATangentShift,"set aaTngShft %lg",inAATangentShift->value());}
+            xywh {150 715 130 20} type Horizontal color 51 labelsize 12 align 5 value 0.2
+          }
+          Fl_Value_Slider inAARotation {
+            label {normal rotation:}
+            callback {uiScript.uiSliderCommand(inAARotation,"set aaNrmRtn %lg",inAARotation->value());}
+            xywh {290 675 125 20} type Horizontal color 51 labelsize 12 align 5 maximum 180 step 5 value 15
+          }
+          Fl_Group {} {
+            label {shift units:} open
+            xywh {290 715 125 20} labelsize 12 align 5
+          } {
+            Fl_Round_Button {} {
+              label radius
+              xywh {300 715 60 20} down_box ROUND_DOWN_BOX value 1 labelsize 12
+            }
+            Fl_Round_Button {} {
+              label pixels
+              xywh {355 715 60 20} down_box ROUND_DOWN_BOX labelsize 12
+            }
+          }
+        }
+        Fl_Value_Input inAAEvaluations {
+          label {Max Evaluations:}
+          callback {uiScript.uiSliderCommand(inAAEvaluations,"set aaEval %d",(int)inAAEvaluations->value());}
+          xywh {15 695 60 20} color 51 labelsize 12 align 5 maximum 10000 step 100 value 1000 textsize 10
+        }
+      }
+    }
+    Fl_Input inScriptCommand {
+      label {input:}
+      callback {uiScript.runCommand(inScriptCommand->value());
+inScriptCommand->value("");}
+      xywh {5 760 585 20} box BORDER_BOX color 50 labeltype NO_LABEL labelsize 11 when 8 textsize 11
+    }
+  }
+  Fl_Window winSettings {
+    label {Control Panel} open
+    xywh {561 274 545 459}
+    code0 {\#include <Fl/gl.h>}
+    code1 {\#include "uibind.h"} modal visible
+  } {
+    Fl_Return_Button {} {
+      label Close
+      callback {winSettings->hide();}
+      xywh {240 430 80 25}
+    }
+    Fl_Tabs {} {open
+      xywh {0 15 545 410}
+    } {
+      Fl_Group {} {
+        label Display open
+        xywh {15 40 530 380} hide
+      } {
+        Fl_Group gInterpolation {
+          label {Image Interpolation:} open
+          xywh {20 65 180 55} box ENGRAVED_FRAME labelfont 1 labelsize 12 align 5
+          code0 {uiBind.bindRadios("display.gl.interpolation",gInterpolation);}
+        } {
+          Fl_Round_Button bDSNearest {
+            label {Nearest Neighbor}
+            user_data {"nearest"}
+            callback {uiSetCmd(bDSNearest);}
+            xywh {25 70 135 25} type Radio down_box ROUND_DOWN_BOX value 1 labelsize 12
+          }
+          Fl_Round_Button bDSLinear {
+            label Linear
+            user_data {"linear"}
+            callback {uiSetCmd(bDSLinear);}
+            xywh {25 90 135 25} type Radio down_box ROUND_DOWN_BOX labelsize 12
+          }
+        }
+        Fl_Group {} {
+          label {Line Smoothing:} open
+          xywh {20 150 180 80} box ENGRAVED_FRAME labelfont 1 labelsize 12 align 5
+        } {
+          Fl_Roller {} {
+            label {Line Width:}
+            callback {uiSetCmd(inLineWidth);}
+            xywh {110 200 75 15} type Horizontal box THIN_UP_FRAME labelsize 12 align 4 minimum 0.5 maximum 4 step 0.5 value 2
+            code0 {uiBind.bind("display.gl.lineWidth",inLineWidth);}
+          }
+          Fl_Check_Button bDSSmooth {
+            label {Draw smooth lines}
+            callback {uiSetCmd(bDSSmooth);}
+            xywh {25 155 135 25} down_box DIAMOND_DOWN_BOX value 1 labelsize 12
+            code0 {uiBind.bind("display.gl.smooth",bDSSmooth);}
+          }
+        }
+        Fl_Check_Button bDSBlend {
+          label {Allow alpha blending}
+          callback {uiSetCmd(bDSBlend);}
+          xywh {25 175 145 25} down_box DIAMOND_DOWN_BOX value 1 labelsize 12
+          code0 {uiBind.bind("display.gl.blend",bDSBlend);}
+        }
+        Fl_Group {} {
+          label {Magnifiers:} open
+          xywh {290 65 185 165} box ENGRAVED_FRAME labelfont 1 labelsize 12 align 5
+        } {
+          Fl_Choice chMagnify {
+            label {Magnifier shows:}
+            callback {uiSetCmd(chMagnify);}
+            xywh {300 90 150 20} labelsize 12 align 5 textsize 12
+            code0 {uiBind.bindChoice("display.magnifier.image",chMagnify);}
+          } {
+            menuitem {} {
+              label {Pixels from the image}
+              user_data {"pixels"}
+              xywh {45 45 100 20} value 1 labelsize 12
+            }
+            menuitem {} {
+              label {Blurred image}
+              user_data {"blurred"}
+              xywh {45 45 100 20} value 1 labelsize 12
+            }
+            menuitem {} {
+              label {Image gradient}
+              user_data {"gradient"}
+              xywh {45 45 100 20} labelsize 12
+            }
+            menuitem {} {
+              label {Directional derivative}
+              user_data {"dirderiv"}
+              xywh {55 55 100 20} labelsize 12
+            }
+            menuitem {} {
+              label {Image match}
+              user_data {"likelihood"}
+              xywh {65 65 100 20} labelsize 12
+            }
+            menuitem {} {
+              label Nothing
+              user_data {"nothing"}
+              xywh {75 75 100 20} labelsize 12
+            }
+          }
+          Fl_Value_Slider inMagScales {
+            label {Number of scales shown:}
+            callback {uiSetCmd(inMagScales);}
+            xywh {300 135 150 20} type Horizontal labelsize 12 align 5 minimum 1 maximum 5 step 1 value 2 textsize 11
+            code0 {uiBind.bind("display.magnifier.scales",inMagScales);}
+          }
+          Fl_Check_Button bMagShowGraph {
+            label {Show along-normal graphs}
+            callback {uiSetCmd(bMagShowGraph);}
+            xywh {295 170 175 25} down_box DIAMOND_DOWN_BOX value 1 labelsize 12
+            code0 {uiBind.bind("display.magnifier.normalGraph",bMagShowGraph);}
+          }
+        }
+      }
+      Fl_Group {} {
+        label Optimizer
+        xywh {15 40 530 380}
+      } {
+        Fl_Group {} {
+          label {E.S. Options:} open
+          xywh {20 120 190 75} box ENGRAVED_FRAME labelfont 1 labelsize 12 align 5
+        } {
+          Fl_Value_Input inOptESMu {
+            label {m:}
+            callback {uiSetCmd(inOptESMu);}
+            xywh {45 135 60 20} labelfont 12 labelsize 12 minimum 2 maximum 10 step 1 value 2 textsize 12
+            code0 {uiBind.bind("optimizer.es.mu",inOptESMu);}
+          }
+        }
+        Fl_Choice chOptMethod {
+          label {Optimization Method:}
+          callback {uiSetCmd(chOptMethod);} open
+          xywh {20 65 175 20} labelfont 1 labelsize 12 align 5 textsize 12
+          code0 {uiBind.bindChoice("optimizer.algorithm",chOptMethod);}
+        } {
+          menuitem {} {
+            label {Evolutionary Strategy}
+            user_data {"es"}
+            xywh {30 30 100 20} value 1 labelsize 12
+          }
+          menuitem {} {
+            label Simplex
+            user_data {"simplex"}
+            xywh {30 30 100 20} value 1 labelsize 12
+          }
+          menuitem {} {
+            label {Conjugate Gradient}
+            user_data {"conjgrad"}
+            xywh {30 30 100 20} labelsize 12
+          }
+        }
+        Fl_Value_Input inOptESLambda {
+          label {l:}
+          callback {uiSetCmd(inOptESLambda);}
+          xywh {130 135 60 20} labelfont 12 labelsize 12 minimum 2 maximum 10 step 1 value 2 textsize 12
+          code0 {uiBind.bind("optimizer.es.mu",inOptESLambda);}
+        }
+        Fl_Choice chOptESMode {
+          label {Mode:}
+          callback {uiSetCmd(chOptESMode);} open
+          xywh {130 165 60 20} labelsize 12 textsize 12
+          code0 {uiBind.bindChoice("optimizer.es.plus",chOptESMode);}
+        } {
+          menuitem {} {
+            label {m+l}
+            user_data {"1"}
+            xywh {40 40 100 20} value 1 labelfont 12 labelsize 12
+          }
+          menuitem {} {
+            label {m,l}
+            user_data {"0"}
+            xywh {40 40 100 20} value 1 labelfont 12 labelsize 12
+          }
+        }
+        Fl_Group {} {
+          label {ICM Settings:} open
+          xywh {20 225 190 160} box ENGRAVED_FRAME labelfont 1 labelsize 12 align 5
+        } {}
+        Fl_Value_Input inICMIter {
+          label {Iterations / atom:}
+          callback {uiSetCmd(inICMIter);} selected
+          xywh {140 240 60 20} labelsize 12 minimum 1 maximum 20 step 1 value 5 textsize 12
+          code0 {uiBind.bind("optimizer.nodes.icm.iterations",inICMIter);}
+        }
+        Fl_Value_Input inICMPerAtom {
+          label {Ms / Iteration:}
+          callback {uiSetCmd(inICMPerAtom);}
+          xywh {140 265 60 20} labelsize 12 maximum 10000 step 250 value 2000 textsize 12
+          code0 {uiBind.bind("optimizer.nodes.icm.msPerNode",inICMPerAtom);}
+        }
+        Fl_Value_Input inICMPerUpdate {
+          label {Ms / Screen update:}
+          callback {uiSetCmd(inICMPerUpdate);}
+          xywh {140 290 60 20} labelsize 12 minimum 250 maximum 2000 step 250 value 250 textsize 12
+          code0 {uiBind.bind("optimizer.nodes.icm.msPerUpdate",inICMPerUpdate);}
+        }
+      }
+      Fl_Group {} {
+        label {Image Match} open
+        xywh {15 40 530 385} hide
+      } {
+        Fl_Group {} {
+          label {Kernel Selection:} open
+          xywh {20 65 200 240} box ENGRAVED_FRAME labelfont 1 labelsize 12 align 5
+        } {}
+        Fl_Choice chDiscKernel {
+          label {Discrete Kernel:}
+          callback {uiSetCmd(chDiscKernel);} open
+          xywh {35 90 175 20} labelsize 12 align 5 textsize 12
+          code0 {uiBind.bindChoice("imageMatch.discrete.kernel",chDiscKernel);}
+        } {
+          menuitem {} {
+            label {Derivative of Gaussian}
+            user_data {"dog"} user_data_type long
+            xywh {15 15 100 20} value 1 labelsize 11
+          }
+          menuitem {} {
+            label {Power Kernel}
+            user_data {"power"} user_data_type long
+            xywh {25 25 100 20} value 1 labelsize 11
+          }
+          menuitem {} {
+            label {LPP Kernel}
+            user_data {"lpp"} user_data_type long
+            xywh {35 35 100 20} value 1 labelsize 11
+          }
+          menuitem {} {
+            label {Laplacean of Gaussian}
+            user_data {"laplacean"} user_data_type long
+            xywh {45 45 100 20} value 1 labelsize 11
+          }
+          menuitem {} {
+            label None
+            user_data {"none"} user_data_type long
+            xywh {55 55 100 20} value 1 labelsize 11
+          }
+        }
+        Fl_Choice chContKernel {
+          label {Continuous Kernel:}
+          callback {uiSetCmd(chContKernel);} open
+          xywh {35 135 175 20} labelsize 12 align 5 textsize 12
+          code0 {uiBind.bindChoice("imageMatch.continuous.kernel",chContKernel);}
+        } {
+          menuitem {} {
+            label {Derivative of Gaussian}
+            user_data {"dog"} user_data_type long
+            xywh {25 25 100 20} value 1 labelsize 11
+          }
+          menuitem {} {
+            label {Power Kernel}
+            user_data {"power"} user_data_type long
+            xywh {35 35 100 20} value 1 labelsize 11
+          }
+          menuitem {} {
+            label {LPP Kernel}
+            user_data {"lpp"} user_data_type long
+            xywh {45 45 100 20} value 1 labelsize 11
+          }
+          menuitem {} {
+            label {Laplacean of Gaussian}
+            user_data {"laplacean"} user_data_type long
+            xywh {55 55 100 20} value 1 labelsize 11
+          }
+          menuitem {} {
+            label None
+            user_data {"none"} user_data_type long
+            xywh {65 65 100 20} value 1 labelsize 11
+          }
+        }
+        Fl_Value_Slider inContWeight {
+          label {Continuous kernel weight:}
+          callback {uiSetCmd(inContWeight);}
+          xywh {95 180 115 20} type Horizontal color 51 labelsize 12 align 9
+          code0 {uiBind.bind("imageMatch.continuous.kernelWeight",inContWeight);}
+        }
+        Fl_Value_Slider inContSampling {
+          label {Continuous sampling:}
+          callback {uiSetCmd(inContSampling);}
+          xywh {95 225 115 20} type Horizontal color 51 labelsize 12 align 9 minimum 1 maximum 20 step 1 value 10
+          code0 {uiBind.bind("imageMatch.continuous.sampling",inContSampling);}
+        }
+        Fl_Value_Slider inPowerParm {
+          label {Power kernel parameter}
+          callback {uiSetCmd(inPowerParm);}
+          xywh {95 270 115 20} type Horizontal color 51 labelsize 12 align 9 minimum 1 maximum 16 step 1 value 4
+          code0 {uiBind.bind("imageMatch.powerParameter",inPowerParm);}
+        }
+      }
+    }
+  }
+  Fl_Window winScaleSpace {
+    label {Scale Space}
+    xywh {968 307 264 406} hide resizable
+  } {
+    Fl_Box boxScaleSpace {
+      xywh {5 4 256 256} box BORDER_FRAME color 32 resizable
+      class ScaleSpaceWindow
+    }
+    Fl_Group {} {open
+      xywh {5 265 260 135}
+    } {
+      Fl_Value_Slider inSSScale {
+        label {Scale:}
+        callback {boxScaleSpace->setScale(inSSScale->value());
+boxScaleSpace->redraw();}
+        xywh {15 285 240 20} type Horizontal box THIN_DOWN_BOX color 51 labelsize 12 align 5 maximum 20 step 0.1
+      }
+      Fl_Value_Slider inSSZoom {
+        label {Zoom:}
+        callback {boxScaleSpace->setZoom(inSSZoom->value());
+boxScaleSpace->redraw();}
+        xywh {15 375 95 20} type Horizontal box THIN_DOWN_BOX color 51 labelsize 12 align 5 minimum 1 maximum 4 step 1 value 1
+      }
+      Fl_Choice inSSDisplay {
+        label {Display:}
+        callback {boxScaleSpace->setZoom(inSSZoom->value());
+boxScaleSpace->redraw();} open
+        xywh {15 330 135 20} labelsize 12 align 5 textsize 11
+      } {
+        menuitem {} {
+          label {Original Image}
+          xywh {0 0 100 20} labelsize 11
+        }
+        menuitem {} {
+          label {Blurred Image}
+          xywh {5 5 100 20} labelsize 11
+        }
+        menuitem {} {
+          label {Gradient Magnitude}
+          xywh {5 5 100 20} labelsize 11
+        }
+        menuitem {} {
+          label {Laplacean Filter}
+          xywh {5 5 100 20} labelsize 11
+        }
+        menuitem {} {
+          label {LPP Filter}
+          xywh {5 5 100 20} labelsize 11
+        }
+      }
+      Fl_Button {} {
+        label Update
+        callback uiSSUpdateMain
+        xywh {180 315 75 25} labelfont 1 labelsize 12
+      }
+      Fl_Button {} {
+        label Help
+        callback {winScaleSpaceHelp->show();}
+        xywh {180 345 75 25} labelfont 1 labelsize 12
+      }
+      Fl_Button {} {
+        label Close
+        callback {winScaleSpace->hide();}
+        xywh {180 375 75 25} labelfont 1 labelsize 12
+      }
+    }
+  }
+  Fl_Window winPrimitive {
+    label {Primitive Editor}
+    xywh {-32000 -32000 323 458} type Double hide
+  } {
+    Fl_Group {} {
+      label {Medial Parameters:}
+      xywh {5 25 315 100} selection_color 215 labelfont 1 labelsize 12 labelcolor 56 align 5
+    } {
+      Fl_Value_Input inPWinX {
+        label {x:}
+        callback {uiPEditSet(0);}
+        xywh {55 30 70 20} box THIN_DOWN_BOX color 51 selection_color 56 labelsize 12 labelcolor 72 step 0.01 textsize 10
+        code0 {extern void uiPEditSet(int);}
+      }
+      Fl_Value_Input inPWinY {
+        label {y:}
+        callback {uiPEditSet(1);}
+        xywh {55 55 70 20} box THIN_DOWN_BOX color 51 selection_color 56 labelsize 12 labelcolor 72 step 0.01 textsize 10
+      }
+      Fl_Value_Input inPWinR {
+        label {r:}
+        callback {uiPEditSet(2);}
+        xywh {55 80 70 20} box THIN_DOWN_BOX color 51 selection_color 56 labelsize 12 labelcolor 72 step 0.01 textsize 10
+      }
+      Fl_Value_Input inPWinTA {
+        label {axial angle:}
+        callback {uiPEditSet(3);}
+        xywh {230 30 80 20} box THIN_DOWN_BOX color 51 selection_color 56 labelsize 12 labelcolor 72 minimum -180 maximum 180 step 1 textsize 10
+      }
+      Fl_Value_Input inPWinTO {
+        label {object angle:}
+        callback {uiPEditSet(4);}
+        xywh {230 55 80 20} box THIN_DOWN_BOX color 51 selection_color 56 labelsize 12 labelcolor 72 maximum 180 step 1 value 90 textsize 10
+      }
+      Fl_Value_Input inPWinEndcap {
+        label {endcap size:}
+        callback {uiPEditSet(5);}
+        xywh {230 80 80 20} box THIN_DOWN_BOX color 51 selection_color 49 labelsize 12 labelcolor 72 maximum 5 step 0.1 value 1 textsize 10
+      }
+      Fl_Slider sliderPWinEndcap {
+        callback {uiPEditSet(6);}
+        xywh {230 105 80 15} type Horizontal box THIN_DOWN_BOX color 51 maximum 4 step 0.1 value 1
+      }
+    }
+    Fl_Group gPWinSelected {
+      label {Zero primitives selected.} open
+      xywh {5 450 220 5} labelsize 12 labelcolor 35 align 5
+    } {}
+    Fl_Group {} {
+      label {Right Boundary:} open
+      xywh {165 150 150 240} color 152 selection_color 215 labelfont 1 labelsize 12 labelcolor 152 align 5
+    } {
+      Fl_Value_Input inPWinRightX {
+        label {x:}
+        xywh {185 155 55 20} box BORDER_FRAME color 46 labelsize 12 labelcolor 152 textsize 10 textcolor 56
+      }
+      Fl_Value_Input inPWinRightY {
+        label {y:}
+        xywh {185 180 55 20} box BORDER_FRAME color 46 labelsize 12 labelcolor 152 textsize 10 textcolor 56
+      }
+      Fl_Value_Input inPWinRightN {
+        label {n:}
+        xywh {255 155 55 20} box BORDER_FRAME color 46 labelsize 12 labelcolor 152 textsize 10 textcolor 56
+      }
+      Fl_Box winRightProfile {
+        label {Intensity profile:}
+        xywh {170 245 140 70} box BORDER_FRAME color 46 labeltype NO_LABEL labelsize 12 labelcolor 251 align 5
+        class IProfileWindow
+      }
+      Fl_Value_Input inPWinRightSigma {
+        label {s:}
+        xywh {255 180 55 20} box BORDER_FRAME color 46 labelfont 12 labelsize 12 labelcolor 152 textsize 10 textcolor 56
+      }
+      Fl_Value_Input inPWinRightBNess {
+        label {image match:}
+        xywh {240 365 70 20} box BORDER_FRAME color 46 labelsize 12 labelcolor 152 align 133 textsize 10 textcolor 56
+      }
+      Fl_Box winRightGradient {
+        label {Intensity profile:}
+        xywh {170 320 65 65} box BORDER_FRAME color 46 labeltype NO_LABEL labelsize 12 labelcolor 220 align 5
+        class IGradientWindow
+      }
+      Fl_Value_Slider inPWinRightPol {
+        label {polarity:}
+        callback {uiPEditSet(8);}
+        xywh {170 225 140 15} type Horizontal box THIN_DOWN_BOX color 51 labelsize 12 labelcolor 152 align 5 minimum -1 step 0.1 value 1
+      }
+    }
+    Fl_Group {} {
+      label {Left Boundary:} open
+      xywh {5 150 150 240} color 136 selection_color 215 labelfont 1 labelsize 12 labelcolor 136 align 5
+    } {
+      Fl_Value_Input inPWinLeftX {
+        label {x:}
+        xywh {25 155 55 20} box BORDER_FRAME color 45 labelsize 12 labelcolor 136 textsize 10
+      }
+      Fl_Value_Input inPWinLeftY {
+        label {y:}
+        xywh {25 180 55 20} box BORDER_FRAME color 45 labelsize 12 labelcolor 136 textsize 10
+      }
+      Fl_Value_Input inPWinLeftN {
+        label {n:}
+        xywh {95 155 55 20} box BORDER_FRAME color 45 labelsize 12 labelcolor 136 textsize 10
+      }
+      Fl_Box winLeftProfile {
+        label {Intensity profile:}
+        xywh {10 245 140 70} box BORDER_FRAME color 46 labeltype NO_LABEL labelsize 12 labelcolor 220 align 5
+        class IProfileWindow
+      }
+      Fl_Value_Input inPWinLeftSigma {
+        label {s:}
+        xywh {95 180 55 20} box BORDER_FRAME color 45 labelfont 12 labelsize 12 labelcolor 136 textsize 10
+      }
+      Fl_Value_Input inPWinLeftBNess {
+        label {image match:}
+        xywh {80 365 70 20} box BORDER_FRAME color 45 labelsize 12 labelcolor 136 align 133 textsize 10
+      }
+      Fl_Box winLeftGradient {
+        label {Intensity profile:}
+        xywh {10 320 65 65} box BORDER_FRAME color 46 labeltype NO_LABEL labelsize 12 labelcolor 220 align 5
+        class IGradientWindow
+      }
+      Fl_Value_Slider inPWinLeftPol {
+        label {polarity:}
+        callback {uiPEditSet(7);}
+        xywh {10 225 140 15} type Horizontal box THIN_DOWN_BOX color 51 labelsize 12 labelcolor 136 align 5 minimum -1 step 0.1 value 1
+      }
+    }
+    Fl_Button {} {
+      label {?}
+      callback {winPrimitiveHelp->show();}
+      xywh {295 435 20 20} box THIN_UP_FRAME down_box THIN_UP_FRAME color 134 selection_color 56 labeltype ENGRAVED_LABEL labelsize 20 labelcolor 88
+    }
+    Fl_Button {} {
+      label {...}
+      callback {winGradientOptions->show();}
+      xywh {270 435 20 20} box THIN_UP_BOX labeltype ENGRAVED_LABEL labelcolor 80
+    }
+  }
+  Fl_Window winPrimitiveHelp {
+    label {Primitive Editor Help}
+    xywh {122 254 324 499} hide
+  } {
+    Fl_Group {} {
+      label {Boundariness Plots:}
+      xywh {5 300 295 60} labelfont 1 labelsize 12 align 5
+    } {
+      Fl_Group {} {
+        label {This graph plots boundariness along the vector normal to the boundary.  The function is plotted from three standard deviations along the normal.} open
+        xywh {10 350 280 10} labelsize 12 align 133
+      } {}
+    }
+    Fl_Group {} {
+      label {Gradient Direction Dials:}
+      xywh {5 375 290 90} labelfont 1 labelsize 12 align 5
+    } {
+      Fl_Group {} {
+        label {This round graph shows the direction in which the image derivative is strongest (gradient direction) in yellow.  The current direction of the primitive is plotted in red.  Boundariness is greatest when the arrows coinside.} open
+        xywh {10 455 280 5} labelsize 12 align 133
+      } {}
+    }
+    Fl_Group {} {
+      label {Left/Right Boundary Attributes:}
+      xywh {5 175 295 105} labelfont 1 labelsize 12 align 5
+    } {
+      Fl_Group {} {
+        label {Information about the left and right boundary sites is displayed here.  The boundary sites are distinguished by color in the main window (left=cyan and right=purple).  Position, direction of the normal and aperture of the boundariness filter are shown here.} open
+        xywh {10 270 280 10} labelsize 12 align 133
+      } {}
+    }
+    Fl_Group {} {
+      label {Medial Primitive Attributes:}
+      xywh {5 20 295 135} labelfont 1 labelsize 12 align 5
+    } {
+      Fl_Group {} {
+        label {This part of the editor contains the attributes of a medial primitive that can be edited.  Besides position (x,y) and radius (r) there are four attributes.  Axial angle is the direction of the bisector of the primitive; object angle determines the narrowing rate of the object; polarity reverses the direction of the boundary filter and endcap distance (in units of radius) affects the elongation of the end primitive.  } open
+        xywh {10 145 280 10} labelsize 12 align 133
+      } {}
+    }
+  }
+  Fl_Window winScaleSpaceHelp {
+    label {Scale Space Viewer Help}
+    xywh {150 323 324 192} hide
+  } {
+    Fl_Group {} {
+      label {Scale Space Display:}
+      xywh {5 20 295 135} labelfont 1 labelsize 12 align 5
+    } {
+      Fl_Group {} {
+        label {In this window the slices of the scale space generated by the image can be seen.  The scale slider changes the aperture of the Gaussian blurring kernel.  The zoom slider causes the window to compute only every 4th,9th or 16th pixel for faster display.} open
+        xywh {10 115 280 10} labelsize 12 align 133
+      } {}
+    }
+  }
+  Fl_Window winNewModel {
+    label {Create New Model}
+    xywh {154 509 197 227} resizable modal visible
+  } {
+    Fl_Return_Button {} {
+      label Create
+      callback {uiNewModel(inNewModelFigs->value(),inNewModelPrims->value(),inNewKeep->value()==1);
+winNewModel->hide();}
+      xywh {105 165 85 25} labelfont 1 labelsize 12 hotspot
+    }
+    Fl_Group {} {
+      label {Create A New Model:} open
+      xywh {15 30 190 10} color 175 labelfont 1 labelsize 12 align 5
+    } {}
+    Fl_Button {} {
+      label Cancel
+      callback {winNewModel->hide();}
+      xywh {105 195 85 25} labelfont 1 labelsize 12
+    }
+    Fl_Value_Slider inNewModelPrims {
+      label {Primitives per figure:}
+      xywh {20 95 170 20} type Horizontal color 51 labelsize 12 align 5 maximum 20 step 1 value 10
+    }
+    Fl_Value_Slider inNewModelFigs {
+      label {Number of figures:}
+      xywh {20 55 170 20} type Horizontal color 51 labelsize 12 align 5 maximum 10 step 1 value 1
+    }
+    Fl_Check_Button inNewKeep {
+      label {  Keep existing figures}
+      xywh {15 125 145 25} down_box DIAMOND_DOWN_BOX color 51 selection_color 175 labelsize 12
+    }
+  }
+  Fl_Window winAbout {
+    label {About DSLTool}
+    xywh {20 623 296 163} align 5 visible
+  } {
+    Fl_Group {} {
+      label {This program was developed under support under NIH Grants \#\#\# and \#\#\#.  Special Thanks to Steve Pizer, Dan Fritsch, Nikki Levine and other MIDAG members .} open
+      xywh {5 160 245 10} labelsize 10 align 133
+    } {}
+    Fl_Group {} {
+      label {MMTool 2D} open
+      xywh {0 -5 135 10} labeltype EMBOSSED_LABEL labelfont 3 labelsize 24 labelcolor 229 align 2
+    } {}
+    Fl_Group {} {
+      label {Department of Computer Science} open
+      xywh {5 80 295 5} labelsize 12 labelcolor 136 align 133
+    } {}
+    Fl_Group {} {
+      label {images/tarheel.gif} open
+      xywh {205 0 95 65} labeltype image labelcolor 49 align 17
+    } {}
+    Fl_Group {} {
+      label {(C) 1999 by Paul A. Yushkevich} open
+      xywh {5 65 295 5} labelsize 12 labelcolor 136 align 133
+    } {}
+    Fl_Group {} {
+      label {University of North Carolina at Chapel Hill.} open
+      xywh {5 95 295 5} labelsize 12 labelcolor 136 align 133
+    } {}
+    Fl_Group {} {
+      label {Version 0.1} open
+      xywh {5 50 295 5} labelsize 12 labelcolor 136 align 133
+    } {}
+  }
+  Fl_Window winImageProgress {
+    label {Image Load Progress}
+    xywh {658 346 286 100} box EMBOSSED_BOX labelcolor 135 align 4 modal noborder visible
+  } {
+    Fl_Group {} {
+      label {Computing Scale Space...} open
+      xywh {10 35 275 60} labeltype ENGRAVED_LABEL align 5
+    } {
+      Fl_Slider inILoadProgress {
+        label { s = 0.25}
+        xywh {20 55 250 20} type {Horz Fill} box THIN_DOWN_BOX color 51 selection_color 229 labelfont 12 labelsize 12 labelcolor 96 align 6 value 0.5
+      }
+    }
+  }
+  Fl_Window winGradientOptions {
+    label {Magnifier Options}
+    xywh {910 737 272 131} visible
+  } {
+    Fl_Choice choiceMagImage {
+      label {Magnify:} open
+      xywh {5 25 260 20} labelsize 12 align 5 textsize 12
+    } {
+      menuitem {} {
+        label {Image pixels}
+        callback {uiScript.uiCommand("set magImage 0");}
+        xywh {0 0 100 20} labelsize 12
+      }
+      menuitem {} {
+        label {Image blurred at primitive scale}
+        callback {uiScript.uiCommand("set magImage 1");}
+        xywh {10 10 100 20} labelsize 12
+      }
+      menuitem {} {
+        label {Gradient magnitude}
+        callback {uiScript.uiCommand("set magImage 2");}
+        xywh {20 20 100 20} labelsize 12
+      }
+      menuitem {} {
+        label {Derivative in normal direction}
+        callback {uiScript.uiCommand("set magImage 3");}
+        xywh {30 30 100 20} labelsize 12
+      }
+      menuitem {} {
+        label {Power b-ness function}
+        callback {uiScript.uiCommand("set magImage 4");}
+        xywh {40 40 100 20} labelsize 12
+      }
+      menuitem {} {
+        label Nothing
+        callback {uiScript.uiCommand("set magImage 5");}
+        xywh {50 50 100 20} labelsize 12
+      }
+    }
+    Fl_Value_Slider inMagScales {
+      label {Number of scales shown:}
+      callback {uiScript.uiSliderCommand(inMagScales,"set magScales %d",(int)inMagScales->value());}
+      xywh {5 70 150 20} type Horizontal labelsize 12 align 5 minimum 1 maximum 5 step 1 value 2 textsize 11
+    }
+    Fl_Check_Button cbPEShowGraphs {
+      label {Show Along-Normal Graphs }
+      callback {uiScript.uiCommand("set showPEGraphs %d",(int)cbPEShowGraphs->value());}
+      xywh {0 100 190 25} down_box DIAMOND_DOWN_BOX value 1 labelsize 12
+    }
+  }
+  Fl_Window winCoreWizard {
+    label {Core Wizard}
+    xywh {-32000 -32000 276 642} hide
+  } {
+    Fl_Group {} {
+      label {Step 1.  Place Seed Primitive} open
+      xywh {5 25 265 125} color 43 labelfont 1 align 5
+    } {
+      Fl_Group {} {
+        label {Your model has been temporarily hidden and a seed primitive was inserted into the scene.  Place the seed primitive at a position in the image where you want to start extracting the core.  The radius, axial and boundary angles of the primitive will be used to initialize core extraction.} open
+        xywh {10 140 255 5} labelsize 12 align 133
+      } {}
+    }
+    Fl_Group {} {
+      label {Step 2.  Configure Core} open
+      xywh {5 175 265 90} box BORDER_FRAME labelfont 1 align 5
+    } {}
+    Fl_Group {} {
+      label {Specify the following settings for the core:} open
+      xywh {10 195 255 65} box BORDER_FRAME color 41 labelsize 12 align 133
+    } {
+      Fl_Value_Input inCoreInterval {
+        label {Intervals at which the core will be searched for (pixels):}
+        callback {uiScript.uiCommand("set coreInterval &lg",inCoreInterval->value());}
+        xywh {170 200 60 20} labelsize 11 align 132 minimum 0.1 maximum 5 step 0.1 value 1 textsize 11
+      }
+    }
+    Fl_Group {} {
+      label {Step 3. Extract Core} open
+      xywh {5 295 265 95} color 43 labelfont 1 align 5
+    } {
+      Fl_Group {} {
+        label {Click the 'Start' button to start core extraction.  Click the 'Stop' button to stop tracing in either direction.  Use 'Clear' to remove the core.} open
+        xywh {10 345 255 5} labelsize 12 align 133
+      } {}
+      Fl_Button bCoreStart {
+        label Start
+        callback uiCoreStart
+        xywh {40 360 65 25} labelsize 12
+      }
+      Fl_Button bCoreStop {
+        label Stop
+        callback uiCoreStop
+        xywh {110 360 65 25} labelsize 12 deactivate
+      }
+      Fl_Button bCoreClear {
+        label Clear
+        callback uiCoreClear
+        xywh {180 360 65 25} labelsize 12 deactivate
+      }
+    }
+    Fl_Group {} {
+      label {Step 4. Create Model from Core} open
+      xywh {5 415 265 155} color 43 labelfont 1 align 5
+    } {
+      Fl_Group {} {
+        label {Use sliders below to set the end points on the core and the number of primitives in the resulting model.  Click 'Finish' when done.} open
+        xywh {10 465 255 5} labelsize 12 align 133
+      } {}
+      Fl_Value_Slider inCoreStart {
+        label {Start and End Positions in the Core}
+        callback uiCoreEndChange
+        xywh {20 485 245 20} type Horizontal labelsize 11 align 5 maximum 200 step 1 textsize 11 deactivate
+      }
+      Fl_Value_Slider inCoreEnd {
+        callback uiCoreEndChange
+        xywh {20 505 245 20} type Horizontal labelsize 11 align 4 maximum 200 step 1 value 200 textsize 11 deactivate
+      }
+      Fl_Value_Slider inCoreSample {
+        label {Model Size:}
+        xywh {20 540 245 20} type Horizontal labelsize 11 align 5 minimum 1 maximum 200 step 1 value 10 textsize 11 deactivate
+      }
+    }
+    Fl_Button bCoreFinish {
+      label Finish
+      callback uiCoreFinish
+      xywh {65 610 70 25} labelfont 1 labelsize 12
+    }
+    Fl_Button bCoreCancel {
+      label Cancel
+      callback uiCoreCancel
+      xywh {145 610 70 25} labelfont 1 labelsize 12
+    }
+  }
+} 
+
+class OptimizeUI {} {
+  Function {makeWindow()} {open
+  } {
+    Fl_Window winControl {
+      label {Optimization Controls} open
+      xywh {556 279 342 413} hide
+    } {
+      Fl_Group {} {
+        label {Solution Space:} open
+        xywh {5 150 235 95} box EMBOSSED_FRAME labeltype ENGRAVED_LABEL align 5
+      } {
+        Fl_Value_Input {} {
+          label {Standard Deviation:}
+          xywh {160 215 75 25} labelsize 12 textsize 10
+        }
+        Fl_Value_Slider {} {
+          xywh {15 160 20 75} box THIN_DOWN_BOX maximum 5 step 1 value 3
+        }
+        Fl_Output {} {
+          label {Parameter Description:}
+          xywh {50 170 185 40} type Multiline box FLAT_BOX color 49 labelsize 12 align 5 textsize 10 textcolor 136
+        }
+      }
+      Fl_Button {} {
+        label Start
+        xywh {250 150 85 25} labelfont 1
+      }
+      Fl_Group {} {
+        label {Optimization Graph:} open
+        xywh {5 270 335 140} box EMBOSSED_FRAME labeltype ENGRAVED_LABEL align 5
+      } {}
+      Fl_Group {} {
+        label {General Settings:} open
+        xywh {5 25 335 100} box EMBOSSED_FRAME labeltype ENGRAVED_LABEL align 5
+      } {
+        Fl_Choice {} {
+          label {Optimization Method:} open
+          xywh {25 50 100 20} labelsize 12 align 9 textsize 12
+        } {
+          menuitem {} {
+            label Simplex
+            xywh {0 0 100 20} labelfont 2 labelsize 12 labelcolor 136
+          }
+          menuitem {} {
+            label Evolutionary
+            xywh {0 0 100 20} labelfont 2 labelsize 12 labelcolor 136
+          }
+        }
+        Fl_Value_Input {} {
+          label {Max. Evaluations:}
+          xywh {60 95 65 20} labelsize 12 align 9 maximum 20000 step 1000 value 3000 textsize 12
+        }
+      }
+      Fl_Button {} {
+        label {Save Settings}
+        xywh {250 200 85 20} box THIN_UP_BOX labelsize 12
+      }
+      Fl_Button {} {
+        label {Load Settings}
+        xywh {250 225 85 20} box THIN_UP_BOX labelsize 12
+      }
+    }
+  }
+} 

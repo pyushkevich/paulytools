@@ -1,0 +1,8 @@
+#--- $Id$
+CXX	=	CC
+CPPFLAGS=	-Isrc -DNDEBUG -DWITH_LONG_DOUBLE
+CXXFLAGS=	-fast -xprefetch=auto
+LDFLAGS	=	-lm
+RANLIB	=	true
+AR	=	CC
+ARFLAGS	=	$(CXXFLAGS) -xar -o
