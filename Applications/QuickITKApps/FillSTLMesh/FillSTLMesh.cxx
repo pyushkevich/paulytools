@@ -41,6 +41,8 @@ int usage()
   cout << "   -o NN NN NN                 Image origin in x,y,z in mesh space" << endl;
   cout << "   -s NN NN NN                 Image size in x,y,z in mesh space" << endl;
   cout << "   -r NN NN NN                 Image resolution in x,y,z in pixels" << endl;
+  cout << "   -a NN NN NN XX              Automatic bounding box computation. First three " << endl;
+  cout << "                               parameters are the voxel size, the last is the margin in mm" << endl;
   cout << "   -v                          Visualize (render) the STL mesh on the screen" << endl;
   return -1;
 }
@@ -79,8 +81,10 @@ int main(int argc, char **argv)
 {
   // Parameter values
   double bb[2][3] = {{0.,0.,0.},{128.,128.,128.}};
+  double xAutoSpacing[3] = {0,0,0};
+  double xAutoMargin = 0;
   int res[3] = {128,128,128};
-  bool doRender = false, doFloodFill = false, flagInputGiven = false;
+  bool doRender = false, doFloodFill = false, flagInputGiven = false, flagAutoSize = false;
 
   // Input specifications
   enum MeshType {NONE, BYU, STL} iMeshType = NONE;
@@ -126,6 +130,14 @@ int main(int argc, char **argv)
         res[1] = atoi(argv[++i]);
         res[2] = atoi(argv[++i]);
         }      
+      else if(arg == "-a")
+        {
+        xAutoSpacing[0] = atof(argv[++i]);
+        xAutoSpacing[1] = atof(argv[++i]);
+        xAutoSpacing[2] = atof(argv[++i]);
+        xAutoMargin = atof(argv[++i]);
+        flagAutoSize = true;
+        }      
       else if(arg == "-v")
         {
         doRender = true;
@@ -156,11 +168,20 @@ int main(int argc, char **argv)
 
   // Print the parameters
   cout << endl << "Parameters:" << endl;
-  cout << "   Image resolution  : " << res[0] << " by " << res[1] << " by " << res[2] << endl;
-  cout << "   Image box origin  : {" << bb[0][0] << ", " << bb[0][1] << ", " << bb[0][2] << "}" 
-    << endl;
-  cout << "   Image box size    : {" << bb[1][0] << ", " << bb[1][1] << ", " << bb[1][2] << "}" 
-    << endl << endl;
+  if(!flagAutoSize)
+    {
+    cout << "   Image resolution  : " << res[0] << " by " << res[1] << " by " << res[2] << endl;
+    cout << "   Image box origin  : {" << bb[0][0] << ", " << bb[0][1] << ", " << bb[0][2] << "}" 
+      << endl;
+    cout << "   Image box size    : {" << bb[1][0] << ", " << bb[1][1] << ", " << bb[1][2] << "}" 
+      << endl << endl;
+    }
+  else
+    {
+    cout << "   Image spacing     : " << xAutoSpacing[0] << " by " << xAutoSpacing[1] 
+      << " by " << xAutoSpacing[2] << endl;
+    cout << "   Margin            : " << xAutoMargin << endl;
+    }
 
   // The real program begins here
 
@@ -206,6 +227,34 @@ int main(int argc, char **argv)
   cout << "   Y : " << pd->GetBounds()[2] << " to " << pd->GetBounds()[3] << endl;
   cout << "   Z : " << pd->GetBounds()[4] << " to " << pd->GetBounds()[5] << endl;
 
+  if(flagAutoSize)
+    {
+    // Compute the bounding box and resolution automatically
+    bb[1][0] = 2.0 * xAutoMargin + pd->GetBounds()[1] - pd->GetBounds()[0];
+    bb[1][1] = 2.0 * xAutoMargin + pd->GetBounds()[3] - pd->GetBounds()[2];
+    bb[1][2] = 2.0 * xAutoMargin + pd->GetBounds()[5] - pd->GetBounds()[4];
+    bb[0][0] = pd->GetBounds()[0] - xAutoMargin;
+    bb[0][1] = pd->GetBounds()[2] - xAutoMargin;
+    bb[0][2] = pd->GetBounds()[4] - xAutoMargin;
+
+    // Compute the resolution
+    res[0] = (int) ceil(bb[1][0] / xAutoSpacing[0]);
+    res[1] = (int) ceil(bb[1][1] / xAutoSpacing[1]);
+    res[2] = (int) ceil(bb[1][2] / xAutoSpacing[2]);
+
+    // Rescompute the size
+    bb[1][0] = res[0] * xAutoSpacing[0];
+    bb[1][1] = res[1] * xAutoSpacing[1];
+    bb[1][2] = res[2] * xAutoSpacing[2];
+
+    // Report the bounds
+    cout << "   Image resolution  : " << res[0] << " by " << res[1] << " by " << res[2] << endl;
+    cout << "   Image box origin  : {" << bb[0][0] << ", " << bb[0][1] << ", " << bb[0][2] << "}" 
+      << endl;
+    cout << "   Image box size    : {" << bb[1][0] << ", " << bb[1][1] << ", " << bb[1][2] << "}" 
+      << endl << endl;
+    }
+
   if(pd->GetBounds()[0] < bb[0][0] || pd->GetBounds()[1] > bb[0][0] + bb[1][0] ||
     pd->GetBounds()[2] < bb[0][1] || pd->GetBounds()[3] > bb[0][1] + bb[1][1] ||
     pd->GetBounds()[4] < bb[0][2] || pd->GetBounds()[5] > bb[0][2] + bb[1][2])
@@ -225,8 +274,8 @@ int main(int argc, char **argv)
     {
     for(unsigned int i=0;i<3;i++)
       {
-      // double *x = pd->GetPoints()->GetPoint(pts[i]);
-      float *x = pd->GetPoints()->GetPoint(pts[i]);
+      double *x = pd->GetPoints()->GetPoint(pts[i]);
+      // float *x = pd->GetPoints()->GetPoint(pts[i]);
       vtx[it] = (double *) malloc(3*sizeof(double));
       for(unsigned int j=0;j<3;j++)
         {
@@ -267,10 +316,15 @@ int main(int argc, char **argv)
   for(unsigned int d = 0; d < 3; d++)
     {
     xOrigin[d] = bb[0][d];
-    xSpacing[d] = bb[1][d] / res[d];
+    if(flagAutoSize)
+      xSpacing[d] = xAutoSpacing[d];
+    else
+      xSpacing[d] = bb[1][d] / res[d];
     }
   img->SetOrigin(xOrigin);
   img->SetSpacing(xSpacing);
+
+  cout << "ORIGIN: " << img->GetOrigin() << endl;
 
   // Save the image to disk
   typedef ImageFileWriter<ImageType> WriterType;
