@@ -3,6 +3,8 @@
 #include "imatch.h"
 #include <fvec.h>
 
+using namespace std;
+
 SplineImageMatcher::SplineImageMatcher() {
     spline = NULL;
     cache = NULL;
@@ -134,9 +136,9 @@ float BoundaryImageMatcher::getMatch() {
 void SplineDistanceMatcher::printMatchInfo(std::ostream &out) 
 {
   float match = getMatch();
-  out << "Distance Match" << std::endl;
-  out << "   mean square distance  : " << match << std::endl;
-  out << "   surface area          : " << totalArea << std::endl;
+  out << "Distance Image Match" << std::endl;
+  out << "   mean squared distance  : " << match << std::endl;
+  out << "   surface area           : " << totalArea << std::endl;
 }
 
 /**

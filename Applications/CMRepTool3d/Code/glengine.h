@@ -6,7 +6,8 @@
 //#include <Fl\fl_file_chooser.h>
 // #include <GL\gl.h>
 // #include <GL\glu.h>
-#include <GL/glut.h>
+#include <stdlib.h>
+#include <glut.h>
 #include <smlmath.h>
 
 #include <vector>

@@ -17,7 +17,7 @@
 #include <math.h>
 #include <stdlib.h>       
 #include <string.h>     
-#include <iostream.h> 
+#include <iostream> 
 
 #include "DrawTriangles.h"
 

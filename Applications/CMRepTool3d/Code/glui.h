@@ -762,7 +762,8 @@ private:
     // Pointers to different matchers
     SplineBinaryVolumeMatcher *mVolume;
     SplineDistanceMatcher *mDistance;
-    ProfileMatcher *mProfile;
+    // ProfileMatcher *mProfile;
+    GradientImageMatcher *mGradient;
     
     // Discard the current image
     void discard();

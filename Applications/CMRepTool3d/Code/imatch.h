@@ -15,6 +15,7 @@ class DistanceTransform;
 class SplineImageMatcher {
 public:
     SplineImageMatcher();
+    virtual ~SplineImageMatcher() {};
 
     virtual float getMatch() = 0;
     virtual void printMatchInfo(std::ostream &out) = 0;
@@ -37,6 +38,10 @@ protected:
  */
 class BoundaryImageMatcher : public SplineImageMatcher, public BoundaryMeasure {
 public:
+
+    BoundaryImageMatcher() {};
+    virtual ~BoundaryImageMatcher() {};
+
 
     // Set the spline
     void setSpline(MSpline *spline, SplineDataCache *cache);
@@ -64,6 +69,7 @@ protected:
 class SplineDistanceMatcher : public BoundaryImageMatcher {
 public:
     SplineDistanceMatcher(DistanceTransform *distMap);
+    virtual ~SplineDistanceMatcher() {};
 
     // Boundary and crest measurements
     float computeBoundaryMeasure(const MedialPoint &mp,int side);
@@ -87,6 +93,7 @@ private:
 class ProfileMatcher : public BoundaryImageMatcher {
 public:
     ProfileMatcher(GrayImage *image);
+    virtual ~ProfileMatcher() {};
 
     // The rho constant for profile matching
     float rho;
@@ -112,6 +119,63 @@ private:
     float computeProfile(const SMLVec3f &X, const SMLVec3f &N, float r);
 };
 
+/** 
+ * Grayscale/binary image gradient image match
+ */
+class GradientImageMatcher : public BoundaryImageMatcher {
+public:
+    // Constructor
+    GradientImageMatcher(GrayImage *image)
+      {
+      this->image = image;
+      }
+
+    virtual ~GradientImageMatcher() {};
+
+    // Boundary and crest measurements
+    float computeBoundaryMeasure(const MedialPoint &mp,int side)
+      {
+        // Compute the image gradient at the point
+        SMLVec3f G;
+        image->interpolateVoxelGradient(
+          mp.bp[side].X[0],
+          mp.bp[side].X[1],
+          mp.bp[side].X[2],
+          G.data_block());
+
+        // Dot the image gradient with the m-rep boundary normal
+        return dot_product(mp.bp[side].N,G);
+      }
+
+    float computeCrestBoundaryMeasure(const MedialPoint &mp)
+      {
+        // Compute the image gradient at the point
+        SMLVec3f G;
+        image->interpolateVoxelGradient(
+          mp.bp[0].X[0],
+          mp.bp[0].X[1],
+          mp.bp[0].X[2],
+          G.data_block());
+
+        // Dot the image gradient with the m-rep boundary normal
+        return dot_product(mp.bp[0].N,G);
+      }
+
+    // Print out match information
+    void printMatchInfo(std::ostream &out)
+      {
+      float match = getMatch();
+      out << "Gradient Image Match" << std::endl;
+      out << "   total advection force  : " << match << std::endl;
+      out << "   surface area           : " << totalArea << std::endl;
+      }
+
+private:
+
+    // The image
+    GrayImage *image;
+
+};
 
 /**
  *
@@ -120,6 +184,7 @@ class SplineBinaryVolumeMatcher : public SplineImageMatcher {
 public:
     // Volume match object
     SplineBinaryVolumeMatcher(BinaryImage *bim);
+    virtual ~SplineBinaryVolumeMatcher() {};
 
     // Set the spline
     void setSpline(MSpline *spline, SplineDataCache *cache);

@@ -500,7 +500,7 @@ void BSplineRenderer::makeBoundaryColorPatch(PatchDataCache *pdc, int d, int iPa
         // Map the ratio to a value between -1 and 1
         if (r >= 0)
           {
-          float r1 = 2 * atan(log(fabs(r))/log(2)) / M_PI;                
+          float r1 = 2 * atan(log(fabs(r))/log(2.0)) / M_PI;                
           float hue = fmod((60 + 120*hueBase+60*r1),360);
           float sat = 1.0f;
           float val = 0.75f;
@@ -508,7 +508,7 @@ void BSplineRenderer::makeBoundaryColorPatch(PatchDataCache *pdc, int d, int iPa
           }
         else
           {
-          float hue = fmod(240 + 120*hueBase,360);
+          float hue = fmod(240.0 + 120.0*hueBase,360.0);
           float sat = 1.0f;
           float val = 1.0f;
           HSVtoRGB(&rgb[0],&rgb[1],&rgb[2],hue,sat,val);
@@ -548,6 +548,10 @@ void BSplineRenderer::makeBoundaryColorPatch(PatchDataCache *pdc, int d, int iPa
     else if (imaging.getType() == ImagingSystem::GRAYSCALE || imaging.getType() == ImagingSystem::BINARY)
       {
 
+      // Get the scaling factor for the display
+      int scale = settings->getIntValue("colormap.gradientMatchScale",0xffff);
+      float scaleFactorVal = 1.0f / scale;
+
       SMLVec3f rgb;
 
       // Go through all the trimmed points
@@ -561,9 +565,9 @@ void BSplineRenderer::makeBoundaryColorPatch(PatchDataCache *pdc, int d, int iPa
         // Interpolate the image match at the point
         SMLVec3f G;
         img->interpolateVoxelGradient(bp.X[0],bp.X[1],bp.X[2],G.data_block());
-        float g = dot_product(G,bp.N) / 65536;
+        float g = dot_product(G,bp.N) * scaleFactorVal;
 
-        float hue = fmod((120*hueBase+120*g),360);
+        float hue = fmod(120 * (hueBase + g), 360);
         float sat = 1.0f;
         float val = 0.5 + 0.5 * g;
 
@@ -2516,7 +2520,7 @@ void LevelSetRenderer::computeLevelSet() {
           {
           for (int x=0;x<img->size(0)-1;x++)
             {
-            if (fabs(img->getVoxelNBC(x+1,y,z) - img->getVoxelNBC(x,y,z)) > 128)
+            if (fabs((double)(img->getVoxelNBC(x+1,y,z) - img->getVoxelNBC(x,y,z))) > 128.0)
               {
               SMLVec3f istart(x,y,z);
               start = TransformPoint(img->IS,istart);
@@ -2877,7 +2881,7 @@ ImagingSystem::ImagingSystem() {
   gray = NULL;
   mVolume = NULL;
   mDistance = NULL;
-  mProfile = NULL;
+  mGradient = NULL;
 }
 
 ImagingSystem::~ImagingSystem() {
@@ -2897,7 +2901,7 @@ void ImagingSystem::discard() {
       break;
     case GRAYSCALE :
       delete gray;
-      delete mProfile;
+      delete mGradient;
       break;
     }
   type = NONE;
@@ -3005,7 +3009,7 @@ void ImagingSystem::loadGrayscale(const char *fname,IFiles ftype,ostream &out) {
         throw "Unknown binary image format";
       }
 
-    mProfile = new ProfileMatcher(gray);
+    mGradient = new GradientImageMatcher(gray);
     }
 }
 
@@ -3031,7 +3035,7 @@ void ImagingSystem::toGrayscale() {
     {
     gray = new GrayImage();
     gray->loadFromBinary(*bim);
-    mProfile = new ProfileMatcher(gray);
+    mGradient = new GradientImageMatcher(gray);
     discard();
     type = GRAYSCALE;
     }
@@ -3096,7 +3100,7 @@ SplineImageMatcher *ImagingSystem::getImageMatch() {
     {
     case BINARY : return mVolume;
     case DISTANCE : return mDistance;
-    case GRAYSCALE : return mProfile;
+    case GRAYSCALE : return mGradient;
     }
   return NULL;
 }
@@ -3113,8 +3117,8 @@ void ImagingSystem::resetImageMatch() {
       mDistance = new SplineDistanceMatcher(dt);
       break;
     case GRAYSCALE : 
-      delete mProfile;
-      mProfile = new ProfileMatcher(gray);
+      delete mGradient;
+      mGradient = new GradientImageMatcher(gray);
       break;
     }
 }
@@ -5368,7 +5372,7 @@ void main(int argc,char *argv[]) {
   GLDisplayDriver::addRenderer(rndSpline);
 #ifndef COLOR_SET_1
 
-  // GLDisplayDriver::addRenderer(new StarfieldRenderer());
+  GLDisplayDriver::addRenderer(new StarfieldRenderer());
 #endif
   GLDisplayDriver::addRenderer(rndSpline,GLDisplayDriver::TRAN);
   GLDisplayDriver::addRenderer(new FrameRateCountRenderer(),GLDisplayDriver::EYE);

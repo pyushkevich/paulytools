@@ -787,9 +787,22 @@ bool ImageCube<T>::getEightVoxels(float x,float y,float z,F32vec4 &r0,F32vec4 &r
   // This places the fractional part of the voxel computation into r0
   r0 -= r1;
 
-  // Get the data from the cube   
-  r1 = F32vec4((float)C(x0,y0,z1),(float)C(x0,y1,z0),(float)C(x1,y0,z0),(float)C(x0,y0,z0));
-  r2 = F32vec4((float)C(x1,y1,z1),(float)C(x0,y1,z1),(float)C(x1,y0,z1),(float)C(x1,y1,z0));
+  // Clear the MMX registers
+  _mm_empty();
+
+  // Get the data from the cube
+  float c000 = (float) C(x0,y0,z0);
+  float c001 = (float) C(x0,y0,z1);
+  float c010 = (float) C(x0,y1,z0);
+  float c011 = (float) C(x0,y1,z1);
+  float c100 = (float) C(x1,y0,z0);
+  float c101 = (float) C(x1,y0,z1);
+  float c110 = (float) C(x1,y1,z0);
+  float c111 = (float) C(x1,y1,z1);
+
+  // Create the return values
+  r1 = F32vec4(c001,c010,c100,c000);
+  r2 = F32vec4(c111,c011,c101,c110);
 
   // Clear the MMX registers
   _mm_empty();
@@ -857,7 +870,7 @@ void ImageCube<T>::interpolateVoxelGradient(float xs,float ys,float zs, float *G
   r0 = _mm_add_ps(r0,r1);
 
   // Scale by the max value
-  r0 = _mm_mul_ps(r0,r8);
+  // r0 = _mm_mul_ps(r0,r8);
 
   // SMLVec3f T;
   // float G0 = ((V100-V000)*Y*Z + (V101-V001)*Y*z + (V110-V010)*y*Z + (V111-V011)*y*z) * mmData[0];

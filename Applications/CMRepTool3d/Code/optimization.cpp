@@ -894,7 +894,7 @@ void SplineOptDriver::initEvolution(Registry *settings) {
 
   // Set the delta sigmas - the amount by which each sigma can change.  This will make it very unlikely that any
   // sigma will change by more than a factor of 2
-  delta.setAll(log(2) / 3.0);
+  delta.setAll(log(2.0) / 3.0);
   es->setDeltaSigma(delta);
 
   // Bound the sigmas

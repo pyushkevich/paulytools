@@ -254,7 +254,7 @@ public:
 
   // Get a pixel, no bounds checking
   short getVoxelNBC(int x,int y,int z) {
-    return cube(x >> LDCUBE,y >> LDCUBE, z >> LDCUBE)(x % res, y % res, z % res);
+    return (short) cube(x >> LDCUBE,y >> LDCUBE, z >> LDCUBE)(x % res, y % res, z % res);
   }
 
   float getVoxelNBCFloat(int x,int y,int z) {
@@ -309,7 +309,7 @@ protected:
 
   // Method used to convert T to pixel for slice computation
   virtual unsigned char genSlicePixel(const T& pixel) {
-    return pixel;
+    return (unsigned char) pixel;
   };
 
   // Image background : value for pixels outside of the image

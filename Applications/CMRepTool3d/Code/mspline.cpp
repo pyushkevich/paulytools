@@ -4,6 +4,8 @@
 #include <fvec.h>
 #include <matrix.h>
 
+using namespace std;
+
 inline SMLVec3f& cast3f(const SMLVec4f &in) {
   return *((SMLVec3f*)&in);
 }
