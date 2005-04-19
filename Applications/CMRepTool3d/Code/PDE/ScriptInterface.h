@@ -75,6 +75,7 @@ private:
 
   // Allow the medial PDE to access this class
   friend class MedialPDE;
+  friend class MedialPCA;
   friend class FloatImageEuclideanFunctionAdapter;
 };
 
@@ -193,6 +194,12 @@ public:
    * a separate image. */
   void SampleImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zSamples);
 
+  /** Assign an intensity image to the cm-rep */
+  void SetIntensityImage(FloatImage *imgIntensity);
+
+  /** Get an intensity image from the cm-rep */
+  void GetIntensityImage(FloatImage *imgIntensity);
+
 private:
   // Optimization modes and optimizers
   enum OptimizerType { CONJGRAD, GRADIENT, EVOLUTION };
@@ -217,6 +224,12 @@ private:
   MaskType eMask;
   MatchType eMatch;
 
+  // An image containing grayscale intensities for this m-rep
+  FloatImage imgIntensity;
+
+  // Whether the intensities have been loaded
+  bool flagIntensityPresent;
+
   // Friend functions
   void ExportIterationToVTK(unsigned int iIter);
   void ConjugateGradientOptimization(MedialOptimizationProblem *xProblem, 
@@ -225,10 +238,13 @@ private:
   friend class MedialPCA;
 };
 
-
+class PrincipalComponents;
 class MedialPCA
 {
 public:
+  MedialPCA();
+  ~MedialPCA();
+  
   // Add a sample to the PCA
   void AddSample(MedialPDE *pde);
   
@@ -236,17 +252,21 @@ public:
   void ComputePCA();
   
   // Move current sample location to the mean
-  void SetFSLocationToMean() {};
+  void SetFSLocationToMean();
   
   // Move along a given mode a certain number of S.D.
   void SetFSLocation(unsigned int iMode, double xSigma);
   
   // Generate a sample at the current location
-  MedialPDE *GetShapeAtFSLocation();
+  void GetShapeAtFSLocation(MedialPDE *target);
 
 private:
+  std::vector< FloatImage* > xAppearance;
   std::vector< FourierSurface* > xSurfaces;
   vnl_vector<double> xPCALocation;  
+  vnl_vector<double> xAppearancePCALocation;  
+
+  PrincipalComponents *xPCA, *xAppearancePCA;
 };
 
 /** Function to visualize the medial PDE result */

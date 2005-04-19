@@ -8,6 +8,8 @@
 #include "Registry.h"
 
 #include "itkImageRegionConstIteratorWithIndex.h"
+#include "itkNearestNeighborInterpolateImageFunction.h"
+#include "itkBSplineInterpolateImageFunction.h"
 #include "vnl/algo/vnl_symmetric_eigensystem.h"
 #include "ConjugateGradientMethod.h"
 #include "EvolutionaryStrategy.h"
@@ -17,6 +19,8 @@
 
 void ExportMedialMeshToVTK(MedialAtomGrid *xGrid, MedialAtom *xAtoms, const char *file);
 void ExportBoundaryMeshToVTK(MedialAtomGrid *xGrid, MedialAtom *xAtoms, const char *file);
+//void ExportIntensityFieldToVTK(MedialAtomGrid *xGrid, MedialAtom *xAtoms, 
+//  ITKImageWrapper<float> *imgField, const char *file);
 using namespace std;
 
 
@@ -48,6 +52,8 @@ MedialPDE::MedialPDE(unsigned int nBasesU, unsigned int nBasesV,
   xCoarsenessRho = 1.0;
   xCoarsenessX = 1.0;
   xMeshDumpImprovementPercentage = 0.0;
+
+  flagIntensityPresent = false;
 }
 
 MedialPDE::~MedialPDE()
@@ -793,14 +799,14 @@ void MedialPDE::SaveBYUMesh(const char *file)
   fout.close();
 }
 
-void MedialPDE::SampleImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zSamples)
+void MedialPDE::SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamples)
 {
-  // Allocate the output image
+  // Allocate the flattened intensity output image
   typedef FloatImage::WrapperType::ImageType ImageType;
-  ImageType::Pointer imgOutputInternal = ImageType::New();
+  ImageType::Pointer imgOutSmall = ImageType::New();
   ImageType::RegionType regOutput;
 
-  // Iterate over the samples in the m-rep
+  // Get the image dimensions
   size_t m = xSolver->GetNumberOfUPoints();
   size_t n = xSolver->GetNumberOfVPoints();
     
@@ -810,13 +816,36 @@ void MedialPDE::SampleImage(FloatImage *imgInput, FloatImage *imgOutput, size_t 
   regOutput.SetSize(2, zSamples * 2 + 1);
   
   // Continue creating the image
-  imgOutputInternal->SetRegions(regOutput);
-  imgOutputInternal->Allocate();
-  imgOutputInternal->FillBuffer(0.0f);
+  imgOutSmall->SetRegions(regOutput);
+  imgOutSmall->Allocate();
+  imgOutSmall->FillBuffer(0.0f);
+
+  // Get the input image
+  ImageType::Pointer imgInput = fiInput->xImage->GetInternalImage();
+
+  // Create the output images for U, V, Tau coordinates
+  ImageType::Pointer imgCoord[3];
+  for(size_t d = 0; d < 3; d++)
+    {
+    imgCoord[d] = ImageType::New();
+    imgCoord[d]->SetRegions(imgInput->GetBufferedRegion());
+    imgCoord[d]->SetSpacing(imgInput->GetSpacing());
+    imgCoord[d]->SetOrigin(imgInput->GetOrigin());
+    imgCoord[d]->Allocate();
+    imgCoord[d]->FillBuffer(-2.0);
+    }
+
+  // Create a nearest neighbor interpolator
+  //typedef itk::NearestNeighborInterpolateImageFunction<
+  //  ImageType, double> InterpolatorType;
+  typedef itk::BSplineInterpolateImageFunction<
+    ImageType, double> InterpolatorType;
+  InterpolatorType::Pointer fInterp = InterpolatorType::New();
+  fInterp->SetInputImage(imgInput);
 
   // Get an internal point iterator
   MedialInternalPointIterator *itPoint = 
-    xSolver->GetAtomGrid()->NewInternalPointIterator(zSamples);
+    xSolver->GetAtomGrid()->NewInternalPointIterator(zSamples - 1);
   for(; !itPoint->IsAtEnd(); ++(*itPoint))
     {
     // Interpolate the position in 3-space
@@ -829,8 +858,8 @@ void MedialPDE::SampleImage(FloatImage *imgInput, FloatImage *imgOutput, size_t 
     size_t i = (size_t) round(xAtom.u * (m - 1));
     size_t j = (size_t) round(xAtom.v * (n - 1));
     size_t k = itPoint->GetBoundarySide() ? 
-      zSamples + 1 - itPoint->GetDepth() :
-       zSamples + 1 + itPoint->GetDepth();
+      zSamples - itPoint->GetDepth() :
+       zSamples + itPoint->GetDepth();
 
     // Create an index into the output image
     ImageType::IndexType idxTarget;
@@ -838,15 +867,64 @@ void MedialPDE::SampleImage(FloatImage *imgInput, FloatImage *imgOutput, size_t 
     idxTarget.SetElement(1, j); 
     idxTarget.SetElement(2, k); 
 
+    // Get the point at which to sample the image
+    double tau = itPoint->GetDepth() * 1.0 / itPoint->GetMaxDepth();
+    SMLVec3d Z = 
+      xAtom.X + tau * xAtom.R * xAtom.xBnd[itPoint->GetBoundarySide()].N;
+    
+    // Create a point and a continuous index
+    itk::Point<double, 3> ptZ(Z.data_block());
+    itk::ContinuousIndex<double, 3> idxZ;
+    imgInput->TransformPhysicalPointToContinuousIndex(ptZ, idxZ);
+    float f = fInterp->EvaluateAtContinuousIndex(idxZ);
+
     // Sample the input image
-    float f = imgInput->xImage->Interpolate(xAtom.X[0], xAtom.X[1], xAtom.X[2], 0.0f);
-    imgOutputInternal->SetPixel(idxTarget, f); 
+    // float f = imgInput->xImage->Interpolate(Z[0], Z[1], Z[2], 0.0f);
+    imgOutSmall->SetPixel(idxTarget, f); 
+
+    // This is junk!
+    SMLVec3d Z1 = Z + 0.5;
+    ImageType::IndexType idxCoord;
+    itk::Point<double, 3> ptZ1(Z1.data_block());
+    imgCoord[0]->TransformPhysicalPointToIndex(ptZ1, idxCoord);
+    imgCoord[0]->SetPixel(idxCoord, xAtom.u);
+    imgCoord[1]->SetPixel(idxCoord, xAtom.v);
+    imgCoord[2]->SetPixel(idxCoord, itPoint->GetBoundarySide() ? tau : -tau);
+
+    //if(rand() % 80 == 0)
+    //  {
+    //  cout << "Sample " << Z << " value " << f << endl;
+    //  }
+
+    // If the index is at the edge, there are two output pixels
+    if(itPoint->IsEdgeAtom())
+      {
+      idxTarget.SetElement(2, zSamples * 2 - k);
+      imgOutSmall->SetPixel(idxTarget, f);
+      }
     }
 
   delete itPoint;
 
   // Store the output image
-  imgOutput->xImage->SetInternalImage(imgOutputInternal);
+  fiOut->xImage->SetInternalImage(imgOutSmall);
+  fiOut->xGradient[0]->SetInternalImage(imgCoord[0]);
+  fiOut->xGradient[1]->SetInternalImage(imgCoord[1]);
+  fiOut->xGradient[2]->SetInternalImage(imgCoord[2]);
+}
+
+void MedialPDE::SetIntensityImage(FloatImage *imgSource)
+{
+  // Copy the internal image
+  imgIntensity.xImage->SetInternalImage(imgSource->xImage->GetInternalImage());
+
+  // Set the flag
+  flagIntensityPresent = true;
+}
+
+void MedialPDE::GetIntensityImage(FloatImage *imgTarget)
+{
+  imgTarget->xImage->SetInternalImage(imgIntensity.xImage->GetInternalImage());
 }
 
 
@@ -858,12 +936,131 @@ void MedialPDE::SampleImage(FloatImage *imgInput, FloatImage *imgOutput, size_t 
 
 
 
+class PrincipalComponents
+{
+public:
+  typedef vnl_matrix<double> Mat;
+  typedef vnl_vector<double> Vec;
 
+  PrincipalComponents(const Mat &A);
 
+  /** Get the number of principal modes */
+  size_t GetNumberOfModes() 
+    { return nModes; }
 
+  /** Get the eigenvalues in decreasing order */
+  double GetEigenvalue(size_t i) const
+    { return lambda[i]; }
 
+  /** Get the eigenvectors in decreasing order of eigenvalue */
+  Vec GetEigenvector(size_t i) const
+    { return Q.get_row(i); }
 
+  /** Get the shape at a certain position in PCA space. The coordinates in this
+   * space are the eigenvectors of PCA and the units are standard deviations
+   * (sqrt of the eigenvalues). The input vector can be shorter than the number
+   * of modes; the remaining modes will be treated as zero */
+  Vec MapToFeatureSpace(const Vec &xComponent) const
+    {
+    Vec x = mu;
+    for(size_t i = 0; i < xComponent.size(); i++)
+      x += xComponent[i] * sdev[i] * GetEigenvector(i);
+    return x;
+    }
 
+  /** Project a point in feature (shape) space into the coefficient space */
+  Vec MatToCoefficientSpace(const Vec &xFeature, size_t nCoeff) const
+    {
+    Vec z(m, 0.0);
+    if(nCoeff > nModes) nCoeff = nModes;
+    for(size_t i = 0; i < nCoeff; i++)
+      z[i] = dot_product(xFeature - mu, GetEigenvector(i)) / sdev[i];
+    return z;
+    }
+
+  /** Get a feature space vector along one of the principal modes. Useful for 
+   * animating the PCA modes */
+  Vec MapToFeatureSpace(size_t iComponent, double xComponentValue)
+    {
+    return mu + xComponentValue * sdev[iComponent] * GetEigenvector(iComponent);
+    }
+
+private:
+  // The mean vector
+  Vec mu;
+
+  // The principal component vectors (rows)
+  Mat Q;
+
+  // The eigenvalues
+  Vec lambda, sdev;
+
+  // The dimensions of the data
+  size_t m, n, nModes;
+};
+
+PrincipalComponents::PrincipalComponents(const Mat &A)
+{
+  size_t i, j;
+  m = A.columns();
+  n = A.rows();
+
+  // Compute the mean
+  mu.set_size(m); mu.fill(0.0);
+  for(i = 0; i < n; i++) for(j = 0; j < m; j++)
+    mu[j] += A(i,j);
+  mu /= n;
+
+  // Compute the zero mean matrix
+  Mat Z(n, m);
+  for(i = 0; i < n; i++) for(j = 0; j < m; j++)
+    Z(i,j) = A(i,j) - mu[j];
+
+  // Split, depending on if m > n or not
+  if(m > n)
+    {
+    // Compute the covariance matrix Z Zt
+    Mat Zt = Z.transpose();
+    Mat K = ( Z * Zt ) / n;
+
+    // Get the eigensystem of K
+    vnl_symmetric_eigensystem<double> eig(K);
+
+    // Take the eigenvalues
+    lambda.set_size(n); Q.set_size(n, m); 
+    lambda.fill(0.0); Q.fill(0.0);
+    
+    for(i = 0; i < n; i++) 
+      {
+      lambda[i] = eig.get_eigenvalue(n - 1 - i);
+      if(lambda[i] > 0.0)
+        Q.set_row(i, (Zt * eig.get_eigenvector(n - 1 - i)).normalize());
+      else break;
+      }
+    }
+  else
+    {
+    // Compute the real covariance matrix At Z
+    Mat K = (Z.transpose() * Z) / n;
+    vnl_symmetric_eigensystem<double> eig(K);
+
+    // Copy the eigenvalues and vectors
+    lambda.set_size(m); Q.set_size(m,m); 
+    lambda.fill(0.0); Q.fill(0.0);
+    
+    for(i = 0; i < m; i++) 
+      {
+      lambda[i] = eig.get_eigenvalue(m - 1 - i);
+      if(lambda[i] > 0.0)
+        Q.set_row(i, eig.get_eigenvector(n - 1 - i));
+      else break;
+      }
+    }
+
+  // Finish up
+  nModes = i;
+  sdev = lambda.apply(sqrt);
+}
 
 /**
  * MEDIAL PCA CODE
@@ -878,8 +1075,29 @@ void MedialPCA::AddSample(MedialPDE *pde)
   // Get the coefficients from this medial PDE
   FourierSurface *xNew = new FourierSurface(*(pde->xSurface));
   xSurfaces.push_back(xNew);
+  
+  // Make a copy of the intensity values associated with this PDE
+  if(pde->flagIntensityPresent)
+    {
+    // Make a copy of the image
+    FloatImage *img = new FloatImage();
+    img->xImage->SetInternalImage(
+      pde->imgIntensity.xImage->GetInternalImage());
+    xAppearance.push_back(img);
+    }
 }
 
+MedialPCA::MedialPCA()
+{
+  xPCA = NULL;
+  xAppearancePCA = NULL;
+}
+
+MedialPCA::~MedialPCA()
+{
+  if(xPCA) delete xPCA;
+  if(xAppearancePCA) delete xAppearancePCA;
+}
 
 void MedialPCA::ComputePCA()
 {
@@ -945,60 +1163,70 @@ void MedialPCA::ComputePCA()
     xJunk.xSolver->SetMedialSurface(xJunk.xSurface);
     xJunk.xSurface->SetRawCoefficientArray(xSurfaces[i]->GetRawCoefficientArray());
     xJunk.Solve();
-    
-    ostringstream sJunk1, sJunk2;
-    sJunk1 << "/tmp/alignmed_" << (i / 10) << (i % 10) << ".vtk";
-    sJunk2 << "/tmp/alignbnd_" << (i / 10) << (i % 10) << ".vtk";    
-    xJunk.SaveVTKMesh(sJunk1.str().c_str(), sJunk2.str().c_str());
     }
+
+  // Create a principal components object
 
   // Compute the mean shape and the covariance matrix on the fourier
   // parameters. Since the Fourier basis is orthonormal, doing PCA on the
   // surface and on the Fourier components is identical
   size_t m = xSurfaces[0]->GetNumberOfRawCoefficients();
   size_t n = xSurfaces.size();
-  Mat K(n, m, 0.0);
-  Vec mu(m, 0.0);
 
-  // Populate the matrix A
+  // Populate the data matrix D
+  Mat D(n, m, 0.0);
   for(i = 0; i < n; i++) for(j = 0; j < m; j++)
+    D[i][j] = xSurfaces[i]->GetRawCoefficient(j);
+
+  // Compute the principal components of D
+  if(xPCA) delete xPCA;
+  xPCA = new PrincipalComponents(D);
+  xPCALocation.set_size(xPCA->GetNumberOfModes());
+  xPCALocation.fill(0.0);
+
+  // If there is appearance information, also compute the appearance PCA
+  if(xAppearance.size() == n)
     {
-    K[i][j] = xSurfaces[i]->GetRawCoefficient(j);
-    mu[j] += K[i][j];
+    // Create a matrix of appearance values
+    typedef FloatImage::WrapperType::ImageType ImageType;
+    ImageType::Pointer imgFirst = 
+      xAppearance.front()->xImage->GetInternalImage();
+    size_t mpix = imgFirst->GetBufferedRegion().GetNumberOfPixels();
+    Mat B(n, mpix);
+
+    // Populate the matrix from the image
+    for(i = 0; i < n; i++)
+      {
+      float *pix = xAppearance[i]->xImage->GetInternalImage()->GetBufferPointer();
+      for(j = 0; j < mpix; j++)
+        B(i, j) = pix[j];
+      }
+
+    // Compute the PCA from the image array
+    if(xAppearancePCA) delete xAppearancePCA;
+    xAppearancePCA = new PrincipalComponents(B);
+    xAppearancePCALocation.set_size(xAppearancePCA->GetNumberOfModes());
+    xAppearancePCALocation.fill(0.0);
     }
-  mu /= n;
+
+  // Report the principal components
+  cout << "EIGENVALUES: " << endl;
+  for(size_t l = 0; l < xPCA->GetNumberOfModes(); l++)
+    { cout << xPCA->GetEigenvalue(l) << " "; }
+  cout << endl;
   
-  // Subtract out the mean
-  for(i = 0; i < n; i++) for(j = 0; j < m; j++)
-    K[i][j] -= mu[j];
-
-  // Compute the covariance matrix
-  Mat Sigma = (K.transpose() * K) / (n-1.0);
-  vnl_symmetric_eigensystem<double> eig(Sigma);
-
-  // Let's see the eigenvalues
-  for(i = 0; i < m; i++)
-    cout << eig.get_eigenvalue(i) << ", ";
-  cout << endl;
-
-  // Check that the projection on the eigenvectors is on the same order as
-  // the eigenvalue square roots
-  for(i = 0; i < n; i++)
-    {
-    Vec a(xSurfaces[i]->GetRawCoefficientArray(), m);
-    cout << dot_product(a - mu, eig.get_eigenvector(m-1)) << " ";
-    }
-  cout << endl;
-
+  /*
   // Generate shapes along the first four eigenvectors
   for(i = 0; i < 4; i++)
     {
-    double sigma0 = sqrt(eig.get_eigenvalue(m-(i+1)));
-    Vec ev0 = eig.get_eigenvector(m-(i+1));
     for(int y = 0; y < 60; y++)
       {
       // A shape!
-      Vec z = 0.1 * (y - 30) * sigma0 * ev0 + mu;
+      double c = 0.1 * (y - 30);
+      Vec z = xPCA->MapToFeatureSpace(i, c);
+
+      cout << "MODE " << i << ", COEFF " << c << ", LAMBDA " << 
+        xPCA->GetEigenvalue(i) << endl;
 
       MedialPDE xJunk(8,12,32,80);
       xJunk.xSurface = new FourierSurface(*xSurfaces[0]);
@@ -1012,20 +1240,58 @@ void MedialPCA::ComputePCA()
       xJunk.SaveVTKMesh(sJunk1.str().c_str(), sJunk2.str().c_str());
       }
     }
+  */
 }
+
+// Move along a given mode a certain number of S.D.
+void MedialPCA::SetFSLocationToMean()
+{
+  xPCALocation.fill(0.0);
+  if(xAppearancePCALocation.size())
+    xAppearancePCALocation.fill(0.0);
+}
+
 
 // Move along a given mode a certain number of S.D.
 void MedialPCA::SetFSLocation(unsigned int iMode, double xSigma)
 {
-
+  xPCALocation(iMode) = xSigma;
+  if(xAppearancePCALocation.size())
+    xAppearancePCALocation(iMode) = xSigma;
 }
 
 // Generate a sample at the current location
-MedialPDE *MedialPCA::GetShapeAtFSLocation()
+void MedialPCA::GetShapeAtFSLocation(MedialPDE *target)
 {
-  return NULL;
-}
+  typedef vnl_matrix<double> Mat;
+  typedef vnl_vector<double> Vec;
 
+  // Compute the shape space point
+  Vec z = xPCA->MapToFeatureSpace(xPCALocation);
+
+  // Compute the shape
+  target->xSurface = new FourierSurface(*xSurfaces[0]);
+  target->xSolver->SetMedialSurface(target->xSurface);
+  target->xSurface->SetRawCoefficientArray(z.data_block());
+  target->Solve();
+
+  // Compute the feature image
+  if(xAppearance.size() == xSurfaces.size())
+    {
+    FloatImage *imgJunk = new FloatImage();
+    FloatImage::WrapperType::ImageType *img = imgJunk->xImage->GetInternalImage();
+    img->SetRegions(
+      xAppearance[0]->xImage->GetInternalImage()->GetBufferedRegion());
+    img->Allocate();
+
+    Vec z1 = xAppearancePCA->MapToFeatureSpace(xAppearancePCALocation);
+    for(size_t i = 0; i < z1.size(); i++)
+      img->GetBufferPointer()[i] = z1[i];
+
+    target->SetIntensityImage(imgJunk);
+    delete imgJunk;
+    }
+}
 
 void RenderMedialPDE(MedialPDE *model)
 {

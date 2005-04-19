@@ -9,7 +9,7 @@ def MakeImages(dirWork, id):
   """ Blur binary image to floating point """
   # Create a binary image
   bin = BinaryImage()
-  bin.LoadFromFile(dirWork + "img/" + id + ".mha")
+  bin.LoadFromFile(dirWork + "img/iso/" + id + ".mha")
   
   # Convert into the floating point image with gradient
   img = FloatImage()
@@ -17,17 +17,17 @@ def MakeImages(dirWork, id):
   # Apply different levels of blurring to the image
   img.SetToBlurredBinary(bin, 1.2)
   img.SetOutsideValue(-1.0)
-  img.SaveToPath(dirWork + "img/" + id + "_hi","mha")
+  img.SaveToPath(dirWork + "img/bluriso/" + id + "_hi","mha")
 
   # Apply different levels of blurring to the image
   img.SetToBlurredBinary(bin, 0.6)
   img.SetOutsideValue(-1.0)
-  img.SaveToPath(dirWork + "img/" + id + "_med","mha")
+  img.SaveToPath(dirWork + "img/bluriso/" + id + "_med","mha")
 
   # Apply different levels of blurring to the image
   img.SetToBlurredBinary(bin, 0.2)
   img.SetOutsideValue(-1.0)
-  img.SaveToPath(dirWork + "img/" + id + "_low","mha")
+  img.SaveToPath(dirWork + "img/bluriso/" + id + "_low","mha")
 
 # Function to save an m-rep and the meshes too
 def SaveMRep(mp, id, spec):

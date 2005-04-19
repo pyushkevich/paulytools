@@ -8,7 +8,7 @@ import os
 id = sys.argv[1]
 
 # Bail out if the data does not exist
-if(not os.access(dirWork + "img/" + id + ".mha", os.R_OK) ):
+if(not os.access(dirWork + "img/iso/" + id + ".mha", os.R_OK) ):
   print "Can not find appropriate image file!"
   sys.exit(1)
 
@@ -30,7 +30,7 @@ mp.LoadFromParameterFile(dirWork + "init/init.mpde")
 
 # Load the coarsest image
 img = FloatImage()
-img.LoadFromFile(dirWork + "img/" + id + "_med.mha")
+img.LoadFromFile(dirWork + "img/bluriso/" + id + "_med.mha")
 img.SetOutsideValue(-1.0);
 
 # Match the m-rep by moments
@@ -65,7 +65,7 @@ mp.RunOptimization(img, 600)
 SaveMRep(mp, id, "ctf03")
 
 # Load the low-resolution image
-img.LoadFromFile(dirWork + "img/" + id + "_low.mha")
+img.LoadFromFile(dirWork + "img/bluriso/" + id + "_low.mha")
 img.SetOutsideValue(-1.0);
 
 # Scale up to 6 by 10 optimization
