@@ -11,6 +11,7 @@
 #include "itkNearestNeighborInterpolateImageFunction.h"
 #include "itkBSplineInterpolateImageFunction.h"
 #include "vnl/algo/vnl_symmetric_eigensystem.h"
+#include "vnl/vnl_matlab_filewrite.h"
 #include "ConjugateGradientMethod.h"
 #include "EvolutionaryStrategy.h"
 
@@ -985,6 +986,12 @@ public:
     return mu + xComponentValue * sdev[iComponent] * GetEigenvector(iComponent);
     }
 
+  /**
+   * Perform leave-one-out analysis, i.e., how well the PCA can predict the 
+   * individual members.
+   */
+  // static void LeaveOneOutAnalysis(const Mat &A);
+
 private:
   // The mean vector
   Vec mu;
@@ -998,6 +1005,29 @@ private:
   // The dimensions of the data
   size_t m, n, nModes;
 };
+
+/*
+PrincipalComponents::LeaveOneOutAnalysis(const Mat &A)
+{
+  // Repeat for each element of A
+  unsigned int i, n = A.rows();
+  for(i = 0; i < n; i++)
+    {
+    // Create a matrix with row i taken out
+    Mat B(A.rows()-1, A.columns());
+    if(i > 0) B.update(0,0,A.get_n_rows(0, i));
+    if(i < n-1) B.update(i,0,A.get_n_rows(i+1,n-i-1));
+
+    // Compute the PCA of B
+    PrincipalComponents p(B);
+
+    // Project the left out guy on the principal components
+    p.
+
+    }
+}
+*/
+
 
 PrincipalComponents::PrincipalComponents(const Mat &A)
 {
@@ -1173,14 +1203,14 @@ void MedialPCA::ComputePCA()
   size_t m = xSurfaces[0]->GetNumberOfRawCoefficients();
   size_t n = xSurfaces.size();
 
-  // Populate the data matrix D
-  Mat D(n, m, 0.0);
+  // Populate the data matrix 
+  xDataShape.set_size(n, m);
   for(i = 0; i < n; i++) for(j = 0; j < m; j++)
-    D[i][j] = xSurfaces[i]->GetRawCoefficient(j);
+    xDataShape[i][j] = xSurfaces[i]->GetRawCoefficient(j);
 
-  // Compute the principal components of D
+  // Compute the principal components of xDataShape
   if(xPCA) delete xPCA;
-  xPCA = new PrincipalComponents(D);
+  xPCA = new PrincipalComponents(xDataShape);
   xPCALocation.set_size(xPCA->GetNumberOfModes());
   xPCALocation.fill(0.0);
 
@@ -1192,19 +1222,19 @@ void MedialPCA::ComputePCA()
     ImageType::Pointer imgFirst = 
       xAppearance.front()->xImage->GetInternalImage();
     size_t mpix = imgFirst->GetBufferedRegion().GetNumberOfPixels();
-    Mat B(n, mpix);
+    xDataAppearance.set_size(n, mpix);
 
     // Populate the matrix from the image
     for(i = 0; i < n; i++)
       {
       float *pix = xAppearance[i]->xImage->GetInternalImage()->GetBufferPointer();
       for(j = 0; j < mpix; j++)
-        B(i, j) = pix[j];
+        xDataAppearance(i, j) = pix[j];
       }
 
     // Compute the PCA from the image array
     if(xAppearancePCA) delete xAppearancePCA;
-    xAppearancePCA = new PrincipalComponents(B);
+    xAppearancePCA = new PrincipalComponents(xDataAppearance);
     xAppearancePCALocation.set_size(xAppearancePCA->GetNumberOfModes());
     xAppearancePCALocation.fill(0.0);
     }
@@ -1249,6 +1279,13 @@ void MedialPCA::SetFSLocationToMean()
   xPCALocation.fill(0.0);
   if(xAppearancePCALocation.size())
     xAppearancePCALocation.fill(0.0);
+}
+
+// Export shape matrix
+void MedialPCA::ExportShapeMatrix(const char *filename)
+{
+  vnl_matlab_filewrite writer(filename);
+  writer.write(xDataShape, "xShape");
 }
 
 

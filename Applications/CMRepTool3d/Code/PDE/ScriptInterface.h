@@ -260,11 +260,19 @@ public:
   // Generate a sample at the current location
   void GetShapeAtFSLocation(MedialPDE *target);
 
+  // Perform leave-one-out analysis using PCA
+  // void LeaveOneOutAnalysis();
+
+  // Export the PCA data for use in Mathematica, etc
+  void ExportShapeMatrix(const char *filename);
+
 private:
   std::vector< FloatImage* > xAppearance;
   std::vector< FourierSurface* > xSurfaces;
   vnl_vector<double> xPCALocation;  
   vnl_vector<double> xAppearancePCALocation;  
+
+  vnl_matrix<double> xDataShape, xDataAppearance;
 
   PrincipalComponents *xPCA, *xAppearancePCA;
 };

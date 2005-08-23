@@ -33,6 +33,9 @@ for file in samples:
 # Compute the PCA proper
 pca.ComputePCA();
 
+# Export the PCA matrix in matlab format
+pca.ExportShapeMatrix(dirWork + "pca/matrix/shapemat.mat");
+
 # Sample along the first four modes
 for i in range(4):
   for j in range(-30,30,1):
