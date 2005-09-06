@@ -8,30 +8,23 @@ import os
 id = sys.argv[1]
 
 # Bail out if the data does not exist
-if(not os.access(dirWork + "img/iso/" + id + ".mha", os.R_OK) ):
+if(not os.access(dirWork + "hippo/imgiso/" + id + ".mha", os.R_OK) ):
   print "Can not find appropriate image file!"
   sys.exit(1)
 
-# Create the mesh dump directory
-dirMesh = dirWork + "meshdump/" + id;
-if( os.access(dirMesh, os.X_OK) ):
-  for name in os.listdir(dirMesh):
-    print name
-    os.remove(os.path.join(dirMesh, name))
-else:
-  os.mkdir(dirMesh)
+# Set the mesh dump directory
+dirMesh = dirWork + "tmp/meshdump/" + id;
 
 # Create the necessary images
-MakeImages(dirWork, id)
+MakeImages(id)
 
 # Create a medial PDE object
 mp = MedialPDE(2, 4, 32, 80)
-mp.LoadFromParameterFile(dirWork + "init/init.mpde")
+print "Loading template from " + dirInput + "init/init.mpde" 
+mp.LoadFromParameterFile(dirInput + "init/init.mpde")
 
 # Load the coarsest image
-img = FloatImage()
-img.LoadFromFile(dirWork + "img/bluriso/" + id + "_med.mha")
-img.SetOutsideValue(-1.0);
+img = LoadBlurImage(id, "med")
 
 # Match the m-rep by moments
 mp.MatchImageByMoments(img, 5)
@@ -65,8 +58,7 @@ mp.RunOptimization(img, 600)
 SaveMRep(mp, id, "ctf03")
 
 # Load the low-resolution image
-img.LoadFromFile(dirWork + "img/bluriso/" + id + "_low.mha")
-img.SetOutsideValue(-1.0);
+img = LoadBlurImage(id, "low")
 
 # Scale up to 6 by 10 optimization
 mp.SetNumberOfCoefficients(6, 8)

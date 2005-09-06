@@ -190,7 +190,8 @@ IF(BUILD_PDE)
   TARGET_LINK_LIBRARIES("testpde" ${PDE_LIBS})
 
   # Specify the data root
-  FIND_PATH(MPDE_DATA_ROOT "data/init/surf01.txt")
+  FIND_PATH(MPDE_INPUTDATA_ROOT "init/surf01.txt")
+  FIND_PATH(MPDE_DATA_ROOT "t1")
   
   # Copy the script files
   SET(SCRIPT_FILES 
@@ -204,6 +205,7 @@ IF(BUILD_PDE)
     imageprep.py
     segment.py
     pca.py
+    sample.py
     )
   
   FOREACH(FILE ${SCRIPT_FILES})  
