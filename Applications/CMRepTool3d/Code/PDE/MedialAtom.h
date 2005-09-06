@@ -2,6 +2,7 @@
 #define __MedialAtom_h_
 
 #include <smlmath.h>
+#include <vnl/vnl_cross.h>
 
 #include "MedialAtomGrid.h"
 #include "GeometryDescriptor.h"
@@ -110,7 +111,7 @@ public:
  */
 inline double TriangleArea(const SMLVec3d &A, const SMLVec3d &B, const SMLVec3d &C)
 {
-  return 0.5 * cross_3d(B - A, C - A).magnitude();
+  return 0.5 * vnl_cross_3d(B - A, C - A).magnitude();
 }
 
 /**

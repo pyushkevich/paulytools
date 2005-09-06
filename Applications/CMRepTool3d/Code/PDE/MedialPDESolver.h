@@ -18,6 +18,9 @@ public:
   virtual void ComputeDerivative(double *Y, double *A, unsigned int iRow) = 0;
   virtual void SetGeometry(GeometryDescriptor *gd, double rho) = 0;
 
+  virtual void ComputeVariationalDerivativeX(double *Y, double *A, double *b, 
+    MedialAtom *xAtom, SMLVec3d NJet[6]) = 0;
+
   // Returns the number of boundaries that a site touches (0 - int, 1 - border, 2 - corner)
   virtual bool IsBorderSite() = 0;
   virtual bool IsBorderSite(unsigned int dim) = 0;
@@ -77,6 +80,10 @@ public:
   // Compute a Jacobi iteration (this site's R as a function of the neighbors)
   virtual double ComputeJacobiIteration(double *Y);
 
+  // Compute the variational derivative with respect to X-variation N
+  void ComputeVariationalDerivativeX(double *Y, double *A, double *b, 
+    MedialAtom *xAtom, SMLVec3d NJet[6]);
+
 protected:
   /** Indices into the flat data array of all neighbors, indexed counterclockwise
    with the center at index 0 */
@@ -96,6 +103,9 @@ protected:
 
   /** The value of rho */
   double rho;
+
+  /** Finite differences */
+  double _du2, _dv2, _duv;
 
   friend class MedialPDESolver;
 };
@@ -132,6 +142,10 @@ public:
 
   // Compute a Jacobi iteration (this site's R as a function of the neighbors)
   double ComputeJacobiIteration(double *Y);
+
+  // Compute the variational derivative with respect to X-variation N
+  void ComputeVariationalDerivativeX(double *Y, double *A, double *b, 
+    MedialAtom *xAtom, SMLVec3d NJet[6]);
   
 protected:
   /** Is this a corner site? */
@@ -150,7 +164,7 @@ protected:
   double CuCu, CuCv, CvCv, C0;
 
   /** Weight scalings in X and Y */
-  double wu, wv;
+  double wu, wv, _du2, _dv2, _duv;
 };
 
 class MedialPDESolver
@@ -180,6 +194,13 @@ public:
    * level of accuracy.
    */
   void Solve(double delta = 1e-12);
+
+  /**
+   * Compute the 'jet' of the equation with respect to the basis functions
+   * that constitute the medial surface. This means solving the PDEs that define
+   * the gradient of the phi function with respect to the basis functions, as 
+   * well as computing the other partial derivatives */
+  vnl_vector<double> ComputeVariationalDerivativeX(IHyperSurface2D *xVariation);
 
   /** Alternative, very slow method to solve the equation */
   // void SolveByJacobiMethod(double delta = 1e-8);

@@ -10,7 +10,7 @@ MedialAtom
 
 void MedialAtom ::ComputeNormalVector()
 {
-  N = cross_3d(Xu, Xv) * sqrt(G.gInv);
+  N = vnl_cross_3d(Xu, Xv) * sqrt(G.gInv);
 }
 
 bool MedialAtom::ComputeBoundaryAtoms()
@@ -80,23 +80,23 @@ double CellVolume(
 
   // Compute each of the twelve tetrahedra inside the cuboid (group by the
   // face of the cell)
-  double v00 = dot_product(cross_3d(X001 - X000, X100 - X000), C - X000);
-  double v01 = dot_product(cross_3d(X100 - X101, X001 - X101), C - X101);
+  double v00 = dot_product(vnl_cross_3d(X001 - X000, X100 - X000), C - X000);
+  double v01 = dot_product(vnl_cross_3d(X100 - X101, X001 - X101), C - X101);
 
-  double v10 = dot_product(cross_3d(X101 - X100, X110 - X100), C - X100);
-  double v11 = dot_product(cross_3d(X110 - X111, X101 - X111), C - X111);
+  double v10 = dot_product(vnl_cross_3d(X101 - X100, X110 - X100), C - X100);
+  double v11 = dot_product(vnl_cross_3d(X110 - X111, X101 - X111), C - X111);
   
-  double v20 = dot_product(cross_3d(X111 - X110, X010 - X110), C - X110);
-  double v21 = dot_product(cross_3d(X010 - X011, X111 - X011), C - X011);
+  double v20 = dot_product(vnl_cross_3d(X111 - X110, X010 - X110), C - X110);
+  double v21 = dot_product(vnl_cross_3d(X010 - X011, X111 - X011), C - X011);
   
-  double v30 = dot_product(cross_3d(X011 - X010, X000 - X010), C - X010);
-  double v31 = dot_product(cross_3d(X000 - X001, X011 - X001), C - X001);
+  double v30 = dot_product(vnl_cross_3d(X011 - X010, X000 - X010), C - X010);
+  double v31 = dot_product(vnl_cross_3d(X000 - X001, X011 - X001), C - X001);
   
-  double v40 = dot_product(cross_3d(X111 - X011, X001 - X011), C - X011);
-  double v41 = dot_product(cross_3d(X001 - X101, X111 - X101), C - X101);
+  double v40 = dot_product(vnl_cross_3d(X111 - X011, X001 - X011), C - X011);
+  double v41 = dot_product(vnl_cross_3d(X001 - X101, X111 - X101), C - X101);
   
-  double v50 = dot_product(cross_3d(X000 - X010, X110 - X010), C - X010);
-  double v51 = dot_product(cross_3d(X110 - X100, X000 - X100), C - X100);
+  double v50 = dot_product(vnl_cross_3d(X000 - X010, X110 - X010), C - X010);
+  double v51 = dot_product(vnl_cross_3d(X110 - X100, X000 - X100), C - X100);
 
   // Return a sixth of these sums
   static const double SIXTH = 1.0 / 6.0;

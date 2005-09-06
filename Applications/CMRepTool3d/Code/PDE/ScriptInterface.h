@@ -200,6 +200,9 @@ public:
   /** Get an intensity image from the cm-rep */
   void GetIntensityImage(FloatImage *imgIntensity);
 
+  /** A method to test derivative computation */
+  void TestDerivativeComputation();
+
 private:
   // Optimization modes and optimizers
   enum OptimizerType { CONJGRAD, GRADIENT, EVOLUTION };

@@ -928,7 +928,39 @@ void MedialPDE::GetIntensityImage(FloatImage *imgTarget)
   imgTarget->xImage->SetInternalImage(imgIntensity.xImage->GetInternalImage());
 }
 
+void MedialPDE::TestDerivativeComputation()
+{
+  // Get the number of coefficients in use
+  unsigned int ncu, ncv;
+  xSurface->GetNumberOfCoefficientsUV(ncu, ncv);
+  
+  // Create a dummy fourier surface
+  FourierSurface *xEta = new FourierSurface(ncu, ncu);
+  xEta->SetRawCoefficient( 5, 1.0 );
+  vnl_vector<double> dphi = xSolver->ComputeVariationalDerivativeX(xEta);
 
+  // Now, use central differences to compute the same
+  double cc = xSurface->GetRawCoefficient(5), eps = 0.001;
+  xSurface->SetRawCoefficient(5, cc + eps);
+  xSolver->Solve();
+
+  unsigned int n = xSolver->GetAtomGrid()->GetNumberOfAtoms();
+  vnl_vector<double> dCentral(n, 0.0);
+  for(unsigned int i = 0; i < n; i++)
+    dCentral[i] = xSolver->GetAtomArray()[i].R * 
+      xSolver->GetAtomArray()[i].R;
+
+  xSurface->SetRawCoefficient(5, cc - eps);
+  xSolver->Solve();
+  for(unsigned int i = 0; i < n; i++) 
+    {
+    dCentral[i] -= xSolver->GetAtomArray()[i].R * xSolver->GetAtomArray()[i].R;
+    dCentral[i] /= 2.0 * eps;
+    }
+
+  cout << dphi << endl;
+  cout << dCentral << endl;
+}
 
 
 

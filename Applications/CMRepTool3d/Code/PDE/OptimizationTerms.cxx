@@ -340,17 +340,17 @@ double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionData *S)
     MedialAtom &A11 = S->xAtoms[itQuad->GetAtomIndex(1, 1)];
 
     // Compute area element vectors on the medial surface
-    SMLVec3d NM00 = cross_3d(A01.X - A00.X, A10.X - A00.X);
-    SMLVec3d NM11 = cross_3d(A11.X - A10.X, A11.X - A01.X);
+    SMLVec3d NM00 = vnl_cross_3d(A01.X - A00.X, A10.X - A00.X);
+    SMLVec3d NM11 = vnl_cross_3d(A11.X - A10.X, A11.X - A01.X);
     
     // Compute the jacobians for each boundary side
     for(size_t k = 0; k < 2; k++)
       {
       // Compute area element vectors on the boundary side
       SMLVec3d NB00 = 
-        cross_3d(A01.xBnd[k].X - A00.xBnd[k].X, A10.xBnd[k].X - A00.xBnd[k].X);
+        vnl_cross_3d(A01.xBnd[k].X - A00.xBnd[k].X, A10.xBnd[k].X - A00.xBnd[k].X);
       SMLVec3d NB11 = 
-        cross_3d(A11.xBnd[k].X - A10.xBnd[k].X, A11.xBnd[k].X - A01.xBnd[k].X);
+        vnl_cross_3d(A11.xBnd[k].X - A10.xBnd[k].X, A11.xBnd[k].X - A01.xBnd[k].X);
 
       // Compute the 'Jacobians'
       double xSign = (k == 0) ? 1 : -1;

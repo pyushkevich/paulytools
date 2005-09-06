@@ -42,6 +42,11 @@ FDInternalSite::FDInternalSite(
   unsigned int stride_u, unsigned int stride_v)
 : FDAbstractSite(m, n, i, j)
 {
+  // Compute the squares of the finite differences
+  _du2 = _du * _du;
+  _dv2 = _dv * _dv;
+  _duv = _du * _dv;
+
   // Set the indices of the eight neighbors in the array, go around a circle
   i0 = iNode;
   i1 = i0 + stride_u; 
@@ -113,6 +118,13 @@ FDBorderSite::FDBorderSite(
 
   // Check whether we are at a corner
   corner = (nDistinctSites == 3);
+
+  // Compute the finite difference premultipliers (they depend on the orientation)
+  _du = wu * (m - 1);
+  _dv = wv * (n - 1);
+  _du2 = _du * _du;
+  _dv2 = _dv * _dv;
+  _duv = _du * _dv;
 
   // Now, sort the entries in xNeighbor
   unsigned int k, p;
@@ -298,11 +310,6 @@ void FDInternalSite::SetGeometry(GeometryDescriptor *g, double rho)
   this->rho = rho;
 
   // Compute the finite difference premultipliers
-  _du = m - 1;
-  _dv = n - 1;
-  double _du2 = _du * _du;
-  double _dv2 = _dv * _dv;
-  double _duv = _du * _dv;
   
   // Here we need to compute the coefficients for the site
   Cuu = g->xContravariantTensor[0][0] * _du2;
@@ -329,15 +336,153 @@ void FDInternalSite::SetGeometry(GeometryDescriptor *g, double rho)
   b8 = -Cuv;
 }
 
+/** 
+ * Compute the variational derivative with respect to N
+ */
+void
+FDInternalSite::
+ComputeVariationalDerivativeX(double *Y, double *A, double *b, 
+  MedialAtom *xAtom, SMLVec3d NJet[6])
+{
+  // Simply copy the values of the b's into A
+  A[ xEntry[0] ] = b0;
+  A[ xEntry[1] ] = b1;
+  A[ xEntry[2] ] = b2;
+  A[ xEntry[3] ] = b3;
+  A[ xEntry[4] ] = b4;
+  A[ xEntry[5] ] = b5;
+  A[ xEntry[6] ] = b6;
+  A[ xEntry[7] ] = b7;
+  A[ xEntry[8] ] = b8;
+
+  // Now, compute the right hand side
+  SMLVec3d &N = NJet[0];
+  SMLVec3d &Nu = NJet[1];
+  SMLVec3d &Nv = NJet[2];
+  SMLVec3d &Nuu = NJet[3];
+  SMLVec3d &Nuv = NJet[4];
+  SMLVec3d &Nvv = NJet[5];
+  SMLVec3d &Xu = xAtom->Xu;
+  SMLVec3d &Xv = xAtom->Xv;
+  SMLVec3d &Xuu = xAtom->Xuu;
+  SMLVec3d &Xuv = xAtom->Xuv;
+  SMLVec3d &Xvv = xAtom->Xvv;
+
+  double (*G)[2] = xAtom->G.xContravariantTensor;
+  double (*K)[2][2] = xAtom->G.xChristoffelFirst;
+  double (*K2)[2][2] = xAtom->G.xChristoffelSecond;
+  double &g = xAtom->G.g;
+  
+  // Compute the derivatives of the contravariant tensor
+  double NuXu = dot_product(Nu, Xu);
+  double NvXu = dot_product(Nv, Xu);
+  double NuXv = dot_product(Nu, Xv);
+  double NvXv = dot_product(Nv, Xv);
+  double dgdN = 2 * ( NuXu * G[1][1] + NvXv * G[0][0] - (NuXv + NvXu) * G[0][1] );
+
+  double z[2][2], g2 = g * g; 
+  z[0][0] = (2 * NvXv * g - G[1][1] * dgdN) / g2;
+  z[1][1] = (2 * NuXu * g - G[0][0] * dgdN) / g2;
+  z[0][1] = z[1][0] = - ((NuXv + NvXu) * g - G[1][0] * dgdN) / g2;
+
+  // Compute the derivative of the Christoffel symbols of the second kind
+  double NuXuu = dot_product(Nu, Xuu), NvXuu = dot_product(Nv, Xuu);
+  double NuXuv = dot_product(Nu, Xuv), NvXuv = dot_product(Nv, Xuv);
+  double NuXvv = dot_product(Nu, Xvv), NvXvv = dot_product(Nv, Xvv);
+  double NuuXu = dot_product(Nuu, Xu), NuuXv = dot_product(Nuu, Xv);
+  double NuvXu = dot_product(Nuv, Xu), NuvXv = dot_product(Nuv, Xv);
+  double NvvXu = dot_product(Nvv, Xu), NvvXv = dot_product(Nvv, Xv);
+    
+  double Q[2][2][2];
+  Q[0][0][0] = 
+    z[0][0] * K[0][0][0] + G[0][0] * ( NuXuu + NuuXu ) +
+    z[0][1] * K[0][0][1] + G[0][1] * ( NvXuu + NuuXv );
+  Q[0][0][1] = 
+    z[1][0] * K[0][0][0] + G[1][0] * ( NuXuu + NuuXu ) +
+    z[1][1] * K[0][0][1] + G[1][1] * ( NvXuu + NuuXv );
+  
+  Q[0][1][0] = Q[1][0][0] = 
+    z[0][0] * K[1][0][0] + G[0][0] * ( NuXuv + NuvXu ) +
+    z[0][1] * K[1][0][1] + G[0][1] * ( NvXuv + NuvXv );
+  Q[0][1][1] = Q[1][0][1] = 
+    z[1][0] * K[1][0][0] + G[1][0] * ( NuXuv + NuvXu ) +
+    z[1][1] * K[1][0][1] + G[1][1] * ( NvXuv + NuvXv );
+
+  Q[1][1][0] = 
+    z[0][0] * K[1][1][0] + G[0][0] * ( NuXvv + NvvXu ) +
+    z[0][1] * K[1][1][1] + G[0][1] * ( NvXvv + NvvXv );
+  Q[1][1][1] = 
+    z[1][0] * K[1][1][0] + G[1][0] * ( NuXvv + NvvXu ) +
+    z[1][1] * K[1][1][1] + G[1][1] * ( NvXvv + NvvXv );
+
+  // Compute the partials of phi
+  double Fu = 0.5 * _du * ( Y[i1] - Y[i5] );
+  double Fv = 0.5 * _dv * ( Y[i3] - Y[i7] );
+  double Fuu = _du2 * ( Y[i1] + Y[i5] - Y[i0] - Y[i0] );
+  double Fuv = _duv * ( Y[i2] + Y[i6] - Y[i4] - Y[i8] );
+  double Fvv = _dv2 * ( Y[i3] + Y[i7] - Y[i0] - Y[i0] );
+  double HPhi[2][2] = {{Fuu,Fuv},{Fuv,Fvv}};
+  double GPhi[2] = { Fu, Fv };
+
+  // Compute the right hand side
+  *b = 0;
+  for(i = 0; i < 2; i++) for(j = 0; j < 2; j++) 
+    {
+    *b -= z[i][j] * HPhi[i][j];
+    *b -= z[i][j] * ( K2[i][j][0] * GPhi[0] + K2[i][j][1] * GPhi[1] );
+    *b -= G[i][j] * ( Q[i][j][0] * GPhi[0] + Q[i][j][1] * GPhi[1]);
+    }
+}
+
+void
+FDBorderSite::ComputeVariationalDerivativeX(double *Y, double *A, double *b, 
+  MedialAtom *xAtom, SMLVec3d NJet[6]) 
+{
+  // First, let's compute grad phi
+  double Fu = _du * (Y[ xNeighbor[1] ] - Y[ xNeighbor[3] ]);
+  double Fv = _dv * (Y[ xNeighbor[2] ] - Y[ xNeighbor[4] ]);
+
+  // Next, compute the weights for Hu and Hv and H
+  double (*G)[2] = xAtom->G.xContravariantTensor;
+  double whu = 2.0 * (G[0][0] * Fu + G[0][1] * Fv);
+  double whv = 2.0 * (G[1][0] * Fu + G[1][1] * Fv);
+  double wh = -4.0;
+
+  // Clear all the entries to zero
+  for(unsigned int j = 0; j < nDistinctSites; j++)
+    A[j] = 0.0;
+  A[ xEntry[0] ] += wh;
+  A[ xEntry[1] ] += whu;
+  A[ xEntry[2] ] += whv;
+  A[ xEntry[3] ] -= whu;
+  A[ xEntry[4] ] -= whv;
+
+  // Compute the derivatives of the contravariant tensor
+  SMLVec3d &Nu = NJet[1];
+  SMLVec3d &Nv = NJet[2];
+  SMLVec3d &Xu = xAtom->Xu;
+  SMLVec3d &Xv = xAtom->Xv;
+
+  double NuXu = dot_product(Nu, Xu);
+  double NvXu = dot_product(Nv, Xu);
+  double NuXv = dot_product(Nu, Xv);
+  double NvXv = dot_product(Nv, Xv);
+  double dgdN = 2 * ( NuXu * G[1][1] + NvXv * G[0][0] - (NuXv + NvXu) * G[0][1] );
+
+  // Compute the right hand side 
+  double &g = xAtom->G.g;
+  double z[2][2], g2 = g * g; 
+  z[0][0] = (2 * NvXv * g - G[1][1] * dgdN) / g2;
+  z[1][1] = (2 * NuXu * g - G[0][0] * dgdN) / g2;
+  z[0][1] = z[1][0] = - ((NuXv + NvXu) * g - G[1][0] * dgdN) / g2;
+
+  *b = z[0][0] * Fu * Fu + 2.0 * z[0][1] * Fu * Fv + z[1][1] * Fv * Fv;
+}
+
+
 /** Initialize the border site */
 void FDBorderSite::SetGeometry(GeometryDescriptor *g, double)
 {
-  // Compute the finite difference premultipliers (they depend on the orientation)
-  _du = wu * (m - 1);
-  _dv = wv * (n - 1);
-  double _du2 = _du * _du;
-  double _dv2 = _dv * _dv;
-  double _duv = _du * _dv;
   
   // Here we need to compute the coefficients for the site
   CuCu = g->xContravariantTensor[0][0] * _du2;
@@ -760,4 +905,66 @@ MedialPDESolver
 
   // Reconstruct the medial atoms
   ReconstructAtoms(y.data_block());
+}
+
+vnl_vector<double> 
+MedialPDESolver
+::ComputeVariationalDerivativeX(IHyperSurface2D *xVariation)
+{
+  // First thing is to define the PDE's that will give us the variational
+  // derivative of the function phi.
+  xVariation->SetEvaluationGrid(m, n, xGridU, xGridV);
+
+  // Create an array for the jet of eta
+  /*
+   * SMLVec3d *N = new SMLVec3d[nSites];
+  SMLVec3d *Nu = new SMLVec3d[nSites];
+  SMLVec3d *Nv = new SMLVec3d[nSites];
+  SMLVec3d *Nuu = new SMLVec3d[nSites];
+  SMLVec3d *Nuv = new SMLVec3d[nSites];
+  SMLVec3d *Nvv = new SMLVec3d[nSites]; */
+
+  // Create an array of the output atoms
+  MedialAtom *xDAtoms = new MedialAtom[nSites];
+  double *xSparseDValues = new double[nSparseEntries];
+
+  // Compute the jet of nu at each site
+  for(size_t i = 0; i < m; i++) for(size_t j = 0; j < n; j++)
+    {
+    // Get the index of the site
+    unsigned int iGrid = xGrid->GetAtomIndex(i, j);
+    unsigned int iSite = xSiteIndex[i][j];
+
+    // Access the medial atom underneath
+    MedialAtom &xDAtom = xDAtoms[iGrid];
+
+    // Set the atoms' domain coordinates
+    xDAtom.u = xGridU[i]; xDAtom.v = xGridV[j];
+
+    // Compute the surface jet and the laplacian
+    SMLVec3d NJet[6];
+    xVariation->EvaluateAtGridIndex(i, j, 0, 0, 0, 3, NJet[0].data_block());
+    xVariation->EvaluateAtGridIndex(i, j, 1, 0, 0, 3, NJet[1].data_block());
+    xVariation->EvaluateAtGridIndex(i, j, 0, 1, 0, 3, NJet[2].data_block());
+    xVariation->EvaluateAtGridIndex(i, j, 2, 0, 0, 3, NJet[3].data_block());
+    xVariation->EvaluateAtGridIndex(i, j, 1, 1, 0, 3, NJet[4].data_block());
+    xVariation->EvaluateAtGridIndex(i, j, 0, 2, 0, 3, NJet[5].data_block());
+
+    // Now, we need to set up the partial differential equation at each site
+    xSites[iSite]->ComputeVariationalDerivativeX(
+      y.data_block(), xSparseDValues + xRowIndex[iSite] - 1, &b[iSite],
+      &xAtoms[iGrid], NJet);
+    }
+
+  // Solve the partial differential equation
+  int MAXFCT = 1, MNUM = 1, PHASE = 13, N = nSites, NRHS = 1, MSGLVL = 0, ERROR = 0; 
+  pardiso_(PT, &MAXFCT, &MNUM, &MTYPE, &PHASE, &N, 
+    xSparseDValues, (int *) xRowIndex, (int *) xColIndex, 
+    NULL, &NRHS, IPARM, &MSGLVL, 
+    b.data_block(), eps.data_block(), &ERROR);
+
+  // Now, eps holds the df/deta values. These can be used to compute the remaining
+  // derivatives and what not.
+
+  return eps;
 }
