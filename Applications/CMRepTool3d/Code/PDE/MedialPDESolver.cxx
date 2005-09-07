@@ -368,7 +368,8 @@ ComputeVariationalDerivativeX(double *Y, double *A, double *b,
   SMLVec3d &Xuv = xAtom->Xuv;
   SMLVec3d &Xvv = xAtom->Xvv;
 
-  double (*G)[2] = xAtom->G.xContravariantTensor;
+  double (*G1)[2] = xAtom->G.xCovariantTensor;
+  double (*G2)[2] = xAtom->G.xContravariantTensor;
   double (*K)[2][2] = xAtom->G.xChristoffelFirst;
   double (*K2)[2][2] = xAtom->G.xChristoffelSecond;
   double &g = xAtom->G.g;
@@ -378,12 +379,13 @@ ComputeVariationalDerivativeX(double *Y, double *A, double *b,
   double NvXu = dot_product(Nv, Xu);
   double NuXv = dot_product(Nu, Xv);
   double NvXv = dot_product(Nv, Xv);
-  double dgdN = 2 * ( NuXu * G[1][1] + NvXv * G[0][0] - (NuXv + NvXu) * G[0][1] );
+  double dgdN = 
+    2 * ( NuXu * G1[1][1] + NvXv * G1[0][0] - (NuXv + NvXu) * G1[0][1] );
 
   double z[2][2], g2 = g * g; 
-  z[0][0] = (2 * NvXv * g - G[1][1] * dgdN) / g2;
-  z[1][1] = (2 * NuXu * g - G[0][0] * dgdN) / g2;
-  z[0][1] = z[1][0] = - ((NuXv + NvXu) * g - G[1][0] * dgdN) / g2;
+  z[0][0] = (2 * NvXv * g - G1[1][1] * dgdN) / g2;
+  z[1][1] = (2 * NuXu * g - G1[0][0] * dgdN) / g2;
+  z[0][1] = z[1][0] = - ((NuXv + NvXu) * g - G1[1][0] * dgdN) / g2;
 
   // Compute the derivative of the Christoffel symbols of the second kind
   double NuXuu = dot_product(Nu, Xuu), NvXuu = dot_product(Nv, Xuu);
@@ -395,25 +397,27 @@ ComputeVariationalDerivativeX(double *Y, double *A, double *b,
     
   double Q[2][2][2];
   Q[0][0][0] = 
-    z[0][0] * K[0][0][0] + G[0][0] * ( NuXuu + NuuXu ) +
-    z[0][1] * K[0][0][1] + G[0][1] * ( NvXuu + NuuXv );
+    z[0][0] * K[0][0][0] + G2[0][0] * ( NuXuu + NuuXu ) +
+    z[0][1] * K[0][0][1] + G2[0][1] * ( NvXuu + NuuXv );
   Q[0][0][1] = 
-    z[1][0] * K[0][0][0] + G[1][0] * ( NuXuu + NuuXu ) +
-    z[1][1] * K[0][0][1] + G[1][1] * ( NvXuu + NuuXv );
+    z[1][0] * K[0][0][0] + G2[1][0] * ( NuXuu + NuuXu ) +
+    z[1][1] * K[0][0][1] + G2[1][1] * ( NvXuu + NuuXv );
   
   Q[0][1][0] = Q[1][0][0] = 
-    z[0][0] * K[1][0][0] + G[0][0] * ( NuXuv + NuvXu ) +
-    z[0][1] * K[1][0][1] + G[0][1] * ( NvXuv + NuvXv );
+    z[0][0] * K[1][0][0] + G2[0][0] * ( NuXuv + NuvXu ) +
+    z[0][1] * K[1][0][1] + G2[0][1] * ( NvXuv + NuvXv );
   Q[0][1][1] = Q[1][0][1] = 
-    z[1][0] * K[1][0][0] + G[1][0] * ( NuXuv + NuvXu ) +
-    z[1][1] * K[1][0][1] + G[1][1] * ( NvXuv + NuvXv );
+    z[1][0] * K[1][0][0] + G2[1][0] * ( NuXuv + NuvXu ) +
+    z[1][1] * K[1][0][1] + G2[1][1] * ( NvXuv + NuvXv );
 
   Q[1][1][0] = 
-    z[0][0] * K[1][1][0] + G[0][0] * ( NuXvv + NvvXu ) +
-    z[0][1] * K[1][1][1] + G[0][1] * ( NvXvv + NvvXv );
+    z[0][0] * K[1][1][0] + G2[0][0] * ( NuXvv + NvvXu ) +
+    z[0][1] * K[1][1][1] + G2[0][1] * ( NvXvv + NvvXv );
   Q[1][1][1] = 
-    z[1][0] * K[1][1][0] + G[1][0] * ( NuXvv + NvvXu ) +
-    z[1][1] * K[1][1][1] + G[1][1] * ( NvXvv + NvvXv );
+    z[1][0] * K[1][1][0] + G2[1][0] * ( NuXvv + NvvXu ) +
+    z[1][1] * K[1][1][1] + G2[1][1] * ( NvXvv + NvvXv );
+
+  cout << "Q[1][1][1] : " << Q[1][1][1] << "  ";
 
   // Compute the partials of phi
   double Fu = 0.5 * _du * ( Y[i1] - Y[i5] );
@@ -428,10 +432,18 @@ ComputeVariationalDerivativeX(double *Y, double *A, double *b,
   *b = 0;
   for(i = 0; i < 2; i++) for(j = 0; j < 2; j++) 
     {
-    *b -= z[i][j] * HPhi[i][j];
+    *b += z[i][j] * HPhi[i][j];
     *b -= z[i][j] * ( K2[i][j][0] * GPhi[0] + K2[i][j][1] * GPhi[1] );
-    *b -= G[i][j] * ( Q[i][j][0] * GPhi[0] + Q[i][j][1] * GPhi[1]);
+    *b -= G2[i][j] * ( Q[i][j][0] * GPhi[0] + Q[i][j][1] * GPhi[1]);
     }
+  
+  // First we need the derivative of grad phi
+  SMLVec3d dGradPhi = 
+    ( z[0][0] * Fu + z[0][1] * Fv ) * Xu +
+    ( z[1][0] * Fu + z[1][1] * Fv ) * Xv +
+    ( G2[0][0] * Fu + G2[0][1] * Fv ) * Nu +
+    ( G2[1][0] * Fu + G2[1][1] * Fv ) * Nv;
+  cout << " dGradPhi (*) : " << dGradPhi;
 }
 
 void
@@ -443,9 +455,10 @@ FDBorderSite::ComputeVariationalDerivativeX(double *Y, double *A, double *b,
   double Fv = _dv * (Y[ xNeighbor[2] ] - Y[ xNeighbor[4] ]);
 
   // Next, compute the weights for Hu and Hv and H
-  double (*G)[2] = xAtom->G.xContravariantTensor;
-  double whu = 2.0 * (G[0][0] * Fu + G[0][1] * Fv);
-  double whv = 2.0 * (G[1][0] * Fu + G[1][1] * Fv);
+  double (*G1)[2] = xAtom->G.xCovariantTensor;
+  double (*G2)[2] = xAtom->G.xContravariantTensor;
+  double whu = 2.0 * (G2[0][0] * Fu + G2[0][1] * Fv);
+  double whv = 2.0 * (G2[1][0] * Fu + G2[1][1] * Fv);
   double wh = -4.0;
 
   // Clear all the entries to zero
@@ -467,16 +480,20 @@ FDBorderSite::ComputeVariationalDerivativeX(double *Y, double *A, double *b,
   double NvXu = dot_product(Nv, Xu);
   double NuXv = dot_product(Nu, Xv);
   double NvXv = dot_product(Nv, Xv);
-  double dgdN = 2 * ( NuXu * G[1][1] + NvXv * G[0][0] - (NuXv + NvXu) * G[0][1] );
+  double dgdN = 
+    2 * ( NuXu * G1[1][1] + NvXv * G1[0][0] - (NuXv + NvXu) * G1[0][1] );
 
   // Compute the right hand side 
   double &g = xAtom->G.g;
   double z[2][2], g2 = g * g; 
-  z[0][0] = (2 * NvXv * g - G[1][1] * dgdN) / g2;
-  z[1][1] = (2 * NuXu * g - G[0][0] * dgdN) / g2;
-  z[0][1] = z[1][0] = - ((NuXv + NvXu) * g - G[1][0] * dgdN) / g2;
+  z[0][0] = (2 * NvXv * g - G1[1][1] * dgdN) / g2;
+  z[1][1] = (2 * NuXu * g - G1[0][0] * dgdN) / g2;
+  z[0][1] = z[1][0] = - ((NuXv + NvXu) * g - G1[1][0] * dgdN) / g2;
 
-  *b = z[0][0] * Fu * Fu + 2.0 * z[0][1] * Fu * Fv + z[1][1] * Fv * Fv;
+  *b = - (z[0][0] * Fu * Fu + 2.0 * z[0][1] * Fu * Fv + z[1][1] * Fv * Fv);
+
+  cout << Y[ xNeighbor[0] ] << " <?> " << xAtom->R * xAtom->R << " ??? ";
+  cout << " d2 : " << *b;
 }
 
 
@@ -950,10 +967,16 @@ MedialPDESolver
     xVariation->EvaluateAtGridIndex(i, j, 1, 1, 0, 3, NJet[4].data_block());
     xVariation->EvaluateAtGridIndex(i, j, 0, 2, 0, 3, NJet[5].data_block());
 
+    cout << "DEBUGGING " << iGrid << " : ";
+
     // Now, we need to set up the partial differential equation at each site
     xSites[iSite]->ComputeVariationalDerivativeX(
       y.data_block(), xSparseDValues + xRowIndex[iSite] - 1, &b[iSite],
       &xAtoms[iGrid], NJet);
+
+    cout << endl;
+
+    // cout << "Test 1 : " << iGrid << " -- " << b[iSite] << endl;
     }
 
   // Solve the partial differential equation

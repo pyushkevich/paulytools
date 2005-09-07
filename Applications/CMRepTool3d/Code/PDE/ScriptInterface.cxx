@@ -931,35 +931,64 @@ void MedialPDE::GetIntensityImage(FloatImage *imgTarget)
 void MedialPDE::TestDerivativeComputation()
 {
   // Get the number of coefficients in use
-  unsigned int ncu, ncv;
+  unsigned int ncu, ncv, nu, nv;
   xSurface->GetNumberOfCoefficientsUV(ncu, ncv);
+  nu = xSolver->GetNumberOfUPoints();
+  nv = xSolver->GetNumberOfVPoints();
   
   // Create a dummy fourier surface
   FourierSurface *xEta = new FourierSurface(ncu, ncu);
   xEta->SetRawCoefficient( 5, 1.0 );
+  xSolver->Solve();
   vnl_vector<double> dphi = xSolver->ComputeVariationalDerivativeX(xEta);
 
   // Now, use central differences to compute the same
   double cc = xSurface->GetRawCoefficient(5), eps = 0.001;
-  xSurface->SetRawCoefficient(5, cc + eps);
-  xSolver->Solve();
 
+  // Create the first solution
+  xSurface->SetRawCoefficient(5, cc + eps);
+  MedialPDESolver S1(nu, nv);
+  S1.SetMedialSurface(xSurface);
+  S1.Solve();
+  MedialAtom *A1 = S1.GetAtomArray();
+
+  // Create the second solution
+  xSurface->SetRawCoefficient(5, cc - eps);
+  MedialPDESolver S2(nu, nv);
+  S2.SetMedialSurface(xSurface);
+  S2.Solve();
+  MedialAtom *A2 = S2.GetAtomArray();
+
+  // Compute the deriv
   unsigned int n = xSolver->GetAtomGrid()->GetNumberOfAtoms();
   vnl_vector<double> dCentral(n, 0.0);
   for(unsigned int i = 0; i < n; i++)
-    dCentral[i] = xSolver->GetAtomArray()[i].R * 
-      xSolver->GetAtomArray()[i].R;
+    dCentral[i] = (A1[i].R * A1[i].R - A2[i].R * A2[i].R) * 0.5 / eps;
 
-  xSurface->SetRawCoefficient(5, cc - eps);
-  xSolver->Solve();
-  for(unsigned int i = 0; i < n; i++) 
+  cout << "Analytic : " <<  dphi << endl;
+  cout << "Central Diff : " << dCentral << endl;
+
+  // Compute the right hand side for the boundary equation
+  for(unsigned int j = 0; j < n; j++)
     {
-    dCentral[i] -= xSolver->GetAtomArray()[i].R * xSolver->GetAtomArray()[i].R;
-    dCentral[i] /= 2.0 * eps;
+    double g1 = dot_product(A1[j].xGradR, A1[j].xGradR);
+    double g2 = dot_product(A2[j].xGradR, A2[j].xGradR);
+    double d2 = 0.5 * (
+      g1 * 4.0 * A1[j].R * A1[j].R - 
+      g2 * 4.0 * A2[j].R * A2[j].R ) / eps;
+    // cout << "Test 2 : " << j << " -- " << d2 << endl;
+    
+    // SMLVec3d G1 = 2.0 * A1[j].R * A1[j].xGradR;
+    // SMLVec3d G2 = 2.0 * A2[j].R * A2[j].xGradR;
+    // cout << "Test 2 : " << j << " -- " << 0.5 * (G1 - G2) / eps << endl;
+    
+    g1 = A1[j].G.xContravariantTensor[0][1];
+    g2 = A2[j].G.xContravariantTensor[0][1];
+    g1 = A1[j].G.xChristoffelSecond[1][1][1];
+    g2 = A2[j].G.xChristoffelSecond[1][1][1];
+    
+    cout << "Test 2 : " << j << " -- " << 0.5 * (g1 - g2) / eps << endl;
     }
-
-  cout << dphi << endl;
-  cout << dCentral << endl;
 }
 
 
