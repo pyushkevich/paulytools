@@ -150,7 +150,7 @@ IF(BUILD_PDE)
     ${CMREPS_BINARY_DIR}/Code/PDE/ScriptInterface_wrap.cxx)
 
   # Create the executable
-  ADD_EXECUTABLE(testpde ${PDE_COMMON_SRCS} Code/PDE/ScriptTest.cxx)
+  # ADD_EXECUTABLE(testpde ${PDE_COMMON_SRCS} Code/PDE/ScriptTest.cxx)
 
   # Create the shared library
   ADD_LIBRARY("_medialpdemodule" SHARED ${PDE_LIB_SRCS})
@@ -187,7 +187,7 @@ IF(BUILD_PDE)
   # Create the executable
   # TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS})
   TARGET_LINK_LIBRARIES("_medialpdemodule" ${PDE_LIBS})
-  TARGET_LINK_LIBRARIES("testpde" ${PDE_LIBS})
+  # TARGET_LINK_LIBRARIES("testpde" ${PDE_LIBS})
 
   # Specify the data root
   FIND_PATH(MPDE_INPUTDATA_ROOT "init/surf01.txt")

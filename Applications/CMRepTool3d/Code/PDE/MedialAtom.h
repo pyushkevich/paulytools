@@ -29,6 +29,9 @@ struct MedialAtom
   // The differential geometry descriptor of the medial surface
   GeometryDescriptor G;
 
+  // The phi function and its first partial derivatives
+  double F, Fu, Fv;
+
   // The radius function and its partial derivatives
   double R, Ru, Rv, Ruu, Ruv, Rvv;
 

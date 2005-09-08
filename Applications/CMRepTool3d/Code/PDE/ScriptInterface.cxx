@@ -928,8 +928,28 @@ void MedialPDE::GetIntensityImage(FloatImage *imgTarget)
   imgTarget->xImage->SetInternalImage(imgIntensity.xImage->GetInternalImage());
 }
 
-void MedialPDE::TestDerivativeComputation()
+class Timer 
 {
+public:
+  void Start()
+    { tStart = clock(); }
+  
+  void Stop()
+    { tElapsed = (clock() - tStart) * 1.0 / CLOCKS_PER_SEC; }
+
+  double Read()
+    { return tElapsed; }
+
+private:
+  clock_t tStart;
+  double tElapsed;
+};
+
+void MedialPDE::TestDerivativeComputation(unsigned int iComp)
+{
+  // Timers for different routines
+  Timer tCentral, tAnalytic;
+  
   // Get the number of coefficients in use
   unsigned int ncu, ncv, nu, nv;
   xSurface->GetNumberOfCoefficientsUV(ncu, ncv);
@@ -938,36 +958,99 @@ void MedialPDE::TestDerivativeComputation()
   
   // Create a dummy fourier surface
   FourierSurface *xEta = new FourierSurface(ncu, ncu);
-  xEta->SetRawCoefficient( 5, 1.0 );
+  xEta->SetRawCoefficient( iComp, 1.0 );
+
+  // Create an array of atoms to hold the derivative
+  MedialAtom *dAtoms = 
+    new MedialAtom[xSolver->GetAtomGrid()->GetNumberOfAtoms()];
+  
+  // Solve for Phi 
   xSolver->Solve();
-  vnl_vector<double> dphi = xSolver->ComputeVariationalDerivativeX(xEta);
 
+  // Compute the variational derivative
+  tAnalytic.Start();
+  xSolver->ComputeVariationalDerivative(xEta, (iComp % 4) == 3, dAtoms);
+  tAnalytic.Stop();
+  
   // Now, use central differences to compute the same
-  double cc = xSurface->GetRawCoefficient(5), eps = 0.001;
+  double cc = xSurface->GetRawCoefficient(iComp), eps = 0.001;
 
-  // Create the first solution
-  xSurface->SetRawCoefficient(5, cc + eps);
+  // Create the first problem
   MedialPDESolver S1(nu, nv);
   S1.SetMedialSurface(xSurface);
-  S1.Solve();
-  MedialAtom *A1 = S1.GetAtomArray();
 
-  // Create the second solution
-  xSurface->SetRawCoefficient(5, cc - eps);
+  // Create the second problem
   MedialPDESolver S2(nu, nv);
   S2.SetMedialSurface(xSurface);
+  
+  // Solve both problems
+  tCentral.Start();
+  xSurface->SetRawCoefficient(iComp, cc + eps);
+  S1.Solve();
+
+  xSurface->SetRawCoefficient(iComp, cc - eps);
   S2.Solve();
+  tCentral.Stop();
+  
+  // Get the atom arrays
+  MedialAtom *A1 = S1.GetAtomArray();
   MedialAtom *A2 = S2.GetAtomArray();
 
-  // Compute the deriv
+  // Compute the values of dPhi/dC between central difference and analytic
+  // derivatives
   unsigned int n = xSolver->GetAtomGrid()->GetNumberOfAtoms();
-  vnl_vector<double> dCentral(n, 0.0);
+  double xMaxPhiDiff = 0.0;
+  double xMaxBndDiff = 0.0;
+
   for(unsigned int i = 0; i < n; i++)
-    dCentral[i] = (A1[i].R * A1[i].R - A2[i].R * A2[i].R) * 0.5 / eps;
+    {
+    // Point to the atoms
+    MedialAtom &a1 = S1.GetAtomArray()[i];
+    MedialAtom &a2 = S2.GetAtomArray()[i];
+    MedialAtom &a0 = dAtoms[i];
 
-  cout << "Analytic : " <<  dphi << endl;
-  cout << "Central Diff : " << dCentral << endl;
+    // Take the largest difference in Phi
+    double dcPhi = 0.5 * (a1.F - a2.F) / eps;
+    double daPhi = a0.F;
+    if(fabs(dcPhi - daPhi) > xMaxPhiDiff)
+      xMaxPhiDiff = fabs(dcPhi - daPhi);
 
+    // Take the largest difference in boundary derivs
+    for(unsigned int k = 0; k < 2; k++)
+      {
+      SMLVec3d dcBnd = (0.5 / eps) * (a1.xBnd[k].X - a2.xBnd[k].X);
+      SMLVec3d daBnd = a0.xBnd[k].X;
+      double xBndDiff = (dcBnd - daBnd).two_norm();
+      if(xBndDiff > xMaxBndDiff) xMaxBndDiff = xBndDiff;
+      }
+    }
+
+  // Print out the max difference
+  cout << "Max difference between numeric and analytic derivs (Phi) : " 
+    <<  xMaxPhiDiff << endl;
+
+  cout << "Max difference between numeric and analytic derivs (Bnd) : " 
+    <<  xMaxBndDiff << endl;
+
+  cout << "Central difference computed in " << tCentral.Read() 
+    << " sec., Analytic in " << tAnalytic.Read() << " sec." << endl; 
+
+  /* 
+  // Take a look at the atoms themselves
+  for(unsigned int j = 0; j < n; j++)
+    {
+    MedialAtom &a1 = S1.GetAtomArray()[j];
+    MedialAtom &a2 = S2.GetAtomArray()[j];
+    MedialAtom &a0 = dAtoms[j];
+    
+    SMLVec3d dcX1 = (0.5 / eps) * (a1.xBnd[0].X - a2.xBnd[0].X);
+    SMLVec3d daX1 = a0.xBnd[0].X;
+
+    cout << j << " :: " << dcX1 << "  ---  " << daX1 << endl;
+    }
+  */
+
+  /* 
   // Compute the right hand side for the boundary equation
   for(unsigned int j = 0; j < n; j++)
     {
@@ -984,11 +1067,16 @@ void MedialPDE::TestDerivativeComputation()
     
     g1 = A1[j].G.xContravariantTensor[0][1];
     g2 = A2[j].G.xContravariantTensor[0][1];
-    g1 = A1[j].G.xChristoffelSecond[1][1][1];
-    g2 = A2[j].G.xChristoffelSecond[1][1][1];
+
     
-    cout << "Test 2 : " << j << " -- " << 0.5 * (g1 - g2) / eps << endl;
+    
+    // cout << "Test 2 : " << j << " -- " << 0.5 * (g1 - g2) / eps << endl;
     }
+    
+  double g1 = S1.ComputeLaplaceBeltrami(0, 4, xSolver->GetPhiField());
+  double g2 = S2.ComputeLaplaceBeltrami(0, 4, xSolver->GetPhiField());
+  cout << "Test 2 : (0, 4) -- " << 0.5 * (g1 - g2) / eps << endl;
+  */
 }
 
 

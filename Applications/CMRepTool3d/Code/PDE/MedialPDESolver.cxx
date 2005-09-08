@@ -166,27 +166,6 @@ double FDInternalSite::ComputeEquation(double *Y)
   return Cuu * Fuu + Cuv * Fuv + Cvv * Fvv + Cu * Fu + Cv * Fv - rho;
 }
 
-double FDInternalSite::ComputeJacobiIteration(double *Y)
-{
-   // Get the components
-  double 
-    F0 = Y[i0], F1 = Y[i1], F2 = Y[i2], 
-    F3 = Y[i3], F4 = Y[i4], F5 = Y[i5], 
-    F6 = Y[i6], F7 = Y[i7], F8 = Y[i8];
-  
-  // Compute the finite differences, without scaling factors
-  double Fu = F1 - F5;
-  double Fv = F3 - F7;
-  double Fuu = F1 + F5;
-  double Fvv = F3 + F7;
-  double Fuv = F2 + F6 - F4 - F8;
-
-  // Compute the generalized laplacian using precomputed coefficients
-  
-  return (Cuu * Fuu + Cuv * Fuv + Cvv * Fvv + Cu * Fu + Cv * Fv - rho) 
-    / (2.0 * (Cuu + Cvv));
-}
-
 double FDBorderSite::ComputeEquation(double *Y)
 {
   // Compute the finite differences, without scaling factors
@@ -195,47 +174,6 @@ double FDBorderSite::ComputeEquation(double *Y)
 
   // Compute the generalized gradient magnitude using precomputed values
   return CuCu * Fu * Fu + CuCv * Fu * Fv + CvCv * Fv * Fv - C0 * Y[ xNeighbor[0] ];
-}
-
-double FDBorderSite::ComputeJacobiIteration(double *Y)
-{
-  // An array of weights for all combinations of parameters
-  double A = CuCu, C = CvCv, B = 0.5 * CuCv;
-  double Z[4][4] = {
-    {  A,  B, -A, -B }, 
-    {  B,  C, -B, -C },
-    { -A, -B,  A,  B },
-    { -B, -C,  B,  C }}; 
-
-  // Create accumulators to hold coefficients of X0^2, X0 and const
-  double a = 0.0, b = -C0, c = 0.0;
-
-  // Loop over all the products
-  for(unsigned int i = 0; i < 4; i++)
-    for(unsigned int j = 0; j < 4; j++)
-      {
-      bool ti = (xNeighbor[i+1] == xNeighbor[0]);
-      bool tj = (xNeighbor[j+1] == xNeighbor[0]);
-      if(ti && tj)
-        a += Z[i][j];
-      else if(ti)
-        b += Z[i][j] * Y[xNeighbor[j+1]];
-      else if(tj)
-        b += Z[i][j] * Y[xNeighbor[i+1]];
-      else 
-        c += Z[i][j] * Y[xNeighbor[i+1]] * Y[xNeighbor[j+1]];
-      }
-
-  // Solve the quadratic equation ax^2 + bx + c = 0
-  double D = b * b - 4 * a * c;
-  if(D < 0)
-    return 0; // Solution does not exist
-
-  // Get the two roots of the quadratic equation
-  double x = ( - b - sqrt(D) ) * 0.5 / a; 
-
-  // Select the root that results in the outward gradient
-  return x;
 }
 
 /** Compute the derivatives for Newton's method */
@@ -276,32 +214,22 @@ void FDBorderSite::ComputeDerivative(double *Y, double *A, unsigned int iRow)
   A[ xEntry[4] ] -= d2;
 }
 
-// Compute the R, Ru and Rv given the solution - used to compute atoms
-void FDInternalSite::ComputeRJet(double *Y, double &R, double &Ru, double &Rv)
+void FDInternalSite::ComputePhiJet(double *Y, double &F, double &Fu, double &Fv)
 {
   // Compute the derivatives in the U and V directions
-  double Fu = 0.5 * _du * (Y[i1] - Y[i5]);
-  double Fv = 0.5 * _dv * (Y[i3] - Y[i7]);
-  
-  // Convert to the derivatives of R
-  R = sqrt( Y[i0] );
-  Ru = Fu / (2.0 * R);
-  Rv = Fv / (2.0 * R);     
+  F = Y[i0];
+  Fu = 0.5 * _du * (Y[i1] - Y[i5]);
+  Fv = 0.5 * _dv * (Y[i3] - Y[i7]);
 }
 
 // Compute the R, Ru and Rv given the solution - used to compute atoms
-void FDBorderSite::ComputeRJet(double *Y, double &R, double &Ru, double &Rv)
+void FDBorderSite::ComputePhiJet(double *Y, double &F, double &Fu, double &Fv)
 {
   // Compute the derivatives in the U and V directions
-  double Fu = _du * (Y[ xNeighbor[1] ] - Y[ xNeighbor[3] ]);
-  double Fv = _dv * (Y[ xNeighbor[2] ] - Y[ xNeighbor[4] ]);
-  
-  // Convert to the derivatives of R
-  R = sqrt( Y[xNeighbor[0]] );
-  Ru = Fu / (2.0 * R);
-  Rv = Fv / (2.0 * R);
+  F = Y[xNeighbor[0]]; 
+  Fu = _du * (Y[ xNeighbor[1] ] - Y[ xNeighbor[3] ]);
+  Fv = _dv * (Y[ xNeighbor[2] ] - Y[ xNeighbor[4] ]);
 }
-
 
 /** Initialize internal site */
 void FDInternalSite::SetGeometry(GeometryDescriptor *g, double rho)
@@ -342,32 +270,23 @@ void FDInternalSite::SetGeometry(GeometryDescriptor *g, double rho)
 void
 FDInternalSite::
 ComputeVariationalDerivativeX(double *Y, double *A, double *b, 
-  MedialAtom *xAtom, SMLVec3d NJet[6])
+  MedialAtom *xAtom, MedialAtom *dAtom)
 {
   // Simply copy the values of the b's into A
-  A[ xEntry[0] ] = b0;
-  A[ xEntry[1] ] = b1;
-  A[ xEntry[2] ] = b2;
-  A[ xEntry[3] ] = b3;
-  A[ xEntry[4] ] = b4;
-  A[ xEntry[5] ] = b5;
-  A[ xEntry[6] ] = b6;
-  A[ xEntry[7] ] = b7;
-  A[ xEntry[8] ] = b8;
+  A[ xEntry[0] ] = b0; A[ xEntry[1] ] = b1; A[ xEntry[2] ] = b2;
+  A[ xEntry[3] ] = b3; A[ xEntry[4] ] = b4; A[ xEntry[5] ] = b5;
+  A[ xEntry[6] ] = b6; A[ xEntry[7] ] = b7; A[ xEntry[8] ] = b8;
 
-  // Now, compute the right hand side
-  SMLVec3d &N = NJet[0];
-  SMLVec3d &Nu = NJet[1];
-  SMLVec3d &Nv = NJet[2];
-  SMLVec3d &Nuu = NJet[3];
-  SMLVec3d &Nuv = NJet[4];
-  SMLVec3d &Nvv = NJet[5];
-  SMLVec3d &Xu = xAtom->Xu;
-  SMLVec3d &Xv = xAtom->Xv;
-  SMLVec3d &Xuu = xAtom->Xuu;
-  SMLVec3d &Xuv = xAtom->Xuv;
-  SMLVec3d &Xvv = xAtom->Xvv;
+  // The rest of this routine computes the right hand side
 
+  // First get shorthands for the relevant vectors
+  SMLVec3d &Nu = dAtom->Xu; SMLVec3d &Xu = xAtom->Xu;
+  SMLVec3d &Nv = dAtom->Xv; SMLVec3d &Xv = xAtom->Xv;
+  SMLVec3d &Nuu = dAtom->Xuu; SMLVec3d &Xuu = xAtom->Xuu;
+  SMLVec3d &Nuv = dAtom->Xuv; SMLVec3d &Xuv = xAtom->Xuv;
+  SMLVec3d &Nvv = dAtom->Xvv; SMLVec3d &Xvv = xAtom->Xvv;
+
+  // Get shorthand for the differential geometric operators
   double (*G1)[2] = xAtom->G.xCovariantTensor;
   double (*G2)[2] = xAtom->G.xContravariantTensor;
   double (*K)[2][2] = xAtom->G.xChristoffelFirst;
@@ -379,10 +298,14 @@ ComputeVariationalDerivativeX(double *Y, double *A, double *b,
   double NvXu = dot_product(Nv, Xu);
   double NuXv = dot_product(Nu, Xv);
   double NvXv = dot_product(Nv, Xv);
-  double dgdN = 
-    2 * ( NuXu * G1[1][1] + NvXv * G1[0][0] - (NuXv + NvXu) * G1[0][1] );
 
-  double z[2][2], g2 = g * g; 
+  // The derivative of 'g'
+  double dgdN = dAtom->G.g = 
+    2 * ( NuXu * G1[1][1] + NvXv * G1[0][0] - (NuXv + NvXu) * G1[0][1] );
+  double g2 = g * g;
+
+  // The derivative of the contravariant tensor
+  double (*z)[2] = dAtom->G.xContravariantTensor; 
   z[0][0] = (2 * NvXv * g - G1[1][1] * dgdN) / g2;
   z[1][1] = (2 * NuXu * g - G1[0][0] * dgdN) / g2;
   z[0][1] = z[1][0] = - ((NuXv + NvXu) * g - G1[1][0] * dgdN) / g2;
@@ -394,8 +317,9 @@ ComputeVariationalDerivativeX(double *Y, double *A, double *b,
   double NuuXu = dot_product(Nuu, Xu), NuuXv = dot_product(Nuu, Xv);
   double NuvXu = dot_product(Nuv, Xu), NuvXv = dot_product(Nuv, Xv);
   double NvvXu = dot_product(Nvv, Xu), NvvXv = dot_product(Nvv, Xv);
-    
-  double Q[2][2][2];
+  
+  // The derivative of Christofel symbols of second kind  
+  double (*Q)[2][2] = dAtom->G.xChristoffelSecond;
   Q[0][0][0] = 
     z[0][0] * K[0][0][0] + G2[0][0] * ( NuXuu + NuuXu ) +
     z[0][1] * K[0][0][1] + G2[0][1] * ( NvXuu + NuuXv );
@@ -417,38 +341,41 @@ ComputeVariationalDerivativeX(double *Y, double *A, double *b,
     z[1][0] * K[1][1][0] + G2[1][0] * ( NuXvv + NvvXu ) +
     z[1][1] * K[1][1][1] + G2[1][1] * ( NvXvv + NvvXv );
 
-  cout << "Q[1][1][1] : " << Q[1][1][1] << "  ";
-
   // Compute the partials of phi
   double Fu = 0.5 * _du * ( Y[i1] - Y[i5] );
   double Fv = 0.5 * _dv * ( Y[i3] - Y[i7] );
   double Fuu = _du2 * ( Y[i1] + Y[i5] - Y[i0] - Y[i0] );
-  double Fuv = _duv * ( Y[i2] + Y[i6] - Y[i4] - Y[i8] );
+  double Fuv = 0.25 * _duv * ( Y[i2] + Y[i6] - Y[i4] - Y[i8] );
   double Fvv = _dv2 * ( Y[i3] + Y[i7] - Y[i0] - Y[i0] );
-  double HPhi[2][2] = {{Fuu,Fuv},{Fuv,Fvv}};
-  double GPhi[2] = { Fu, Fv };
 
-  // Compute the right hand side
-  *b = 0;
-  for(i = 0; i < 2; i++) for(j = 0; j < 2; j++) 
-    {
-    *b += z[i][j] * HPhi[i][j];
-    *b -= z[i][j] * ( K2[i][j][0] * GPhi[0] + K2[i][j][1] * GPhi[1] );
-    *b -= G2[i][j] * ( Q[i][j][0] * GPhi[0] + Q[i][j][1] * GPhi[1]);
-    }
-  
-  // First we need the derivative of grad phi
-  SMLVec3d dGradPhi = 
-    ( z[0][0] * Fu + z[0][1] * Fv ) * Xu +
-    ( z[1][0] * Fu + z[1][1] * Fv ) * Xv +
-    ( G2[0][0] * Fu + G2[0][1] * Fv ) * Nu +
-    ( G2[1][0] * Fu + G2[1][1] * Fv ) * Nv;
-  cout << " dGradPhi (*) : " << dGradPhi;
+  // Compute the derivative (this should be the derivative)
+  *b = -( 
+    z[0][0] * (Fuu - K2[0][0][0] * Fu - K2[0][0][1] * Fv) - 
+    G2[0][0] * (Q[0][0][0] * Fu + Q[0][0][1] * Fv) +
+    z[1][1] * (Fvv - K2[1][1][0] * Fu - K2[1][1][1] * Fv) - 
+    G2[1][1] * (Q[1][1][0] * Fu + Q[1][1][1] * Fv) +
+    2.0 * ( 
+      z[0][1] * (Fuv - K2[0][1][0] * Fu - K2[0][1][1] * Fv) - 
+      G2[0][1] * (Q[0][1][0] * Fu + Q[0][1][1] * Fv) ));
+}
+
+void
+FDInternalSite::
+ComputeVariationalDerivativeRho(double *Y, double *A, double *b, 
+  MedialAtom *xAtom, MedialAtom *dAtom)
+{
+  // Simply copy the values of the b's into A
+  A[ xEntry[0] ] = b0; A[ xEntry[1] ] = b1; A[ xEntry[2] ] = b2;
+  A[ xEntry[3] ] = b3; A[ xEntry[4] ] = b4; A[ xEntry[5] ] = b5;
+  A[ xEntry[6] ] = b6; A[ xEntry[7] ] = b7; A[ xEntry[8] ] = b8;
+
+  // The right hand side is just the derivative of rho
+  *b = dAtom->xLapR;
 }
 
 void
 FDBorderSite::ComputeVariationalDerivativeX(double *Y, double *A, double *b, 
-  MedialAtom *xAtom, SMLVec3d NJet[6]) 
+  MedialAtom *xAtom, MedialAtom *dAtom)
 {
   // First, let's compute grad phi
   double Fu = _du * (Y[ xNeighbor[1] ] - Y[ xNeighbor[3] ]);
@@ -457,8 +384,8 @@ FDBorderSite::ComputeVariationalDerivativeX(double *Y, double *A, double *b,
   // Next, compute the weights for Hu and Hv and H
   double (*G1)[2] = xAtom->G.xCovariantTensor;
   double (*G2)[2] = xAtom->G.xContravariantTensor;
-  double whu = 2.0 * (G2[0][0] * Fu + G2[0][1] * Fv);
-  double whv = 2.0 * (G2[1][0] * Fu + G2[1][1] * Fv);
+  double whu = 2.0 * _du * (G2[0][0] * Fu + G2[0][1] * Fv);
+  double whv = 2.0 * _dv * (G2[1][0] * Fu + G2[1][1] * Fv);
   double wh = -4.0;
 
   // Clear all the entries to zero
@@ -471,31 +398,57 @@ FDBorderSite::ComputeVariationalDerivativeX(double *Y, double *A, double *b,
   A[ xEntry[4] ] -= whv;
 
   // Compute the derivatives of the contravariant tensor
-  SMLVec3d &Nu = NJet[1];
-  SMLVec3d &Nv = NJet[2];
-  SMLVec3d &Xu = xAtom->Xu;
-  SMLVec3d &Xv = xAtom->Xv;
+  SMLVec3d &Nu = dAtom->Xu; SMLVec3d &Nv = dAtom->Xv;
+  SMLVec3d &Xu = xAtom->Xu; SMLVec3d &Xv = xAtom->Xv;
 
   double NuXu = dot_product(Nu, Xu);
   double NvXu = dot_product(Nv, Xu);
   double NuXv = dot_product(Nu, Xv);
   double NvXv = dot_product(Nv, Xv);
-  double dgdN = 
-    2 * ( NuXu * G1[1][1] + NvXv * G1[0][0] - (NuXv + NvXu) * G1[0][1] );
-
-  // Compute the right hand side 
+  
+  // The derivative of 'g'
   double &g = xAtom->G.g;
-  double z[2][2], g2 = g * g; 
+  double dgdN = dAtom->G.g = 
+    2 * ( NuXu * G1[1][1] + NvXv * G1[0][0] - (NuXv + NvXu) * G1[0][1] );
+  double g2 = g * g;
+
+  // The derivative of the contravariant tensor
+  double (*z)[2] = dAtom->G.xContravariantTensor; 
   z[0][0] = (2 * NvXv * g - G1[1][1] * dgdN) / g2;
   z[1][1] = (2 * NuXu * g - G1[0][0] * dgdN) / g2;
   z[0][1] = z[1][0] = - ((NuXv + NvXu) * g - G1[1][0] * dgdN) / g2;
 
+  // Compute the right hand side
   *b = - (z[0][0] * Fu * Fu + 2.0 * z[0][1] * Fu * Fv + z[1][1] * Fv * Fv);
-
-  cout << Y[ xNeighbor[0] ] << " <?> " << xAtom->R * xAtom->R << " ??? ";
-  cout << " d2 : " << *b;
 }
 
+void
+FDBorderSite::ComputeVariationalDerivativeRho(double *Y, double *A, double *b, 
+  MedialAtom *xAtom, MedialAtom *dAtom)
+{
+  // First, let's compute grad phi
+  double Fu = _du * (Y[ xNeighbor[1] ] - Y[ xNeighbor[3] ]);
+  double Fv = _dv * (Y[ xNeighbor[2] ] - Y[ xNeighbor[4] ]);
+
+  // Next, compute the weights for Hu and Hv and H
+  double (*G1)[2] = xAtom->G.xCovariantTensor;
+  double (*G2)[2] = xAtom->G.xContravariantTensor;
+  double whu = _du * (G2[0][0] * Fu + G2[0][1] * Fv);
+  double whv = _dv * (G2[1][0] * Fu + G2[1][1] * Fv);
+  double wh = -2.0;
+
+  // Clear all the entries to zero
+  for(unsigned int j = 0; j < nDistinctSites; j++)
+    A[j] = 0.0;
+  A[ xEntry[0] ] += wh;
+  A[ xEntry[1] ] += whu;
+  A[ xEntry[2] ] += whv;
+  A[ xEntry[3] ] -= whu;
+  A[ xEntry[4] ] -= whv;
+
+  // The right hand side is just 0
+  *b = 0.0;
+}
 
 /** Initialize the border site */
 void FDBorderSite::SetGeometry(GeometryDescriptor *g, double)
@@ -524,14 +477,16 @@ void SparseMultiply(unsigned int n, unsigned int *rowIndex, unsigned int *colInd
     	}	
 }
 
-/*
-void SparseLinearTest(unsigned int n, unsigned int *rowIndex, unsigned int *colIndex, 
+double SparseLinearTest(unsigned int n, unsigned int *rowIndex, unsigned int *colIndex, 
 	double *values, double *x, double *y,double *b)
 {
   SparseMultiply(n, rowIndex, colIndex, values, x, y);
-  mydaxpy(n, -1.0, b, 1, y, 1);
+  double maxdiff = 0.0;
+  for(unsigned int i = 0; i < n; i++)
+    if(fabs(b[i] - y[i]) > maxdiff)
+      maxdiff = fabs(b[i] - y[i]);
+  return maxdiff;
 }
-*/
 
 void DumpSparseMatrix(unsigned int n, unsigned int *rowIndex, unsigned int *colIndex, double *values)
 {
@@ -783,7 +738,7 @@ MedialPDESolver
     if(ySolution[iLocal] > 0)
       {
       // Compute the derivatives of R using finite differences
-      xSites[iLocal]->ComputeRJet(ySolution, xAtom.R, xAtom.Ru, xAtom.Rv);
+      xSites[iLocal]->ComputePhiJet(ySolution, xAtom.F, xAtom.Fu, xAtom.Fv);
 
       // Compute the boundary properties of the medial point
       xAtom.ComputeBoundaryAtoms();
@@ -924,70 +879,154 @@ MedialPDESolver
   ReconstructAtoms(y.data_block());
 }
 
-vnl_vector<double> 
-MedialPDESolver
-::ComputeVariationalDerivativeX(IHyperSurface2D *xVariation)
+void ComputeMedialAtomBoundaryDerivative(
+  MedialAtom *xAtom, MedialAtom *dAtom, bool isEdge)
 {
+  // Get the relevant elements of the atoms
+  SMLVec3d &X = xAtom->X, &Xu = xAtom->Xu, &Xv = xAtom->Xv;
+  SMLVec3d &N = dAtom->X, &Nu = dAtom->Xu, &Nv = dAtom->Xv;
+  
+  // Get the elements of the first fundamental form and its derivative
+  double g11 = xAtom->G.xContravariantTensor[0][0];
+  double g12 = xAtom->G.xContravariantTensor[0][1];
+  double g22 = xAtom->G.xContravariantTensor[1][1];
+  double z11 = dAtom->G.xContravariantTensor[0][0];
+  double z12 = dAtom->G.xContravariantTensor[0][1];
+  double z22 = dAtom->G.xContravariantTensor[1][1];
+
+  // Get the g's
+  double g = xAtom->G.g; double z = dAtom->G.g;
+
+  // Get the partials of Phi and its variational derivative
+  double F = xAtom->F, Fu = xAtom->Fu, Fv = xAtom->Fv;
+  double H = dAtom->F, Hu = dAtom->Fu, Hv = dAtom->Fv;
+  
+  // This is the derivative of the normal vector
+  dAtom->N = (vnl_cross_3d(Xu, Nv) + vnl_cross_3d(Nu, Xv)) / sqrt(g) - 
+    ( 0.5 * z / g ) * xAtom->N;
+
+  // We will compute several intermediate terms
+  // This is the derivative of - grad phi
+  SMLVec3d T2 = -(
+    z11 * Fu * Xu + z12 * (Fu * Xv + Fv * Xu) + z22 * Fv * Xv +
+    g11 * Hu * Xu + g12 * (Hu * Xv + Hv * Xu) + g22 * Hv * Xv +
+    g11 * Fu * Nu + g12 * (Fu * Nv + Fv * Nu) + g22 * Fv * Nv );
+
+  // Address the edge case first
+  if(isEdge) 
+    {
+    dAtom->xBnd[1].X = dAtom->xBnd[0].X = N + 0.5 * T2;
+    return;
+    }
+
+  // Compute the intermediate terms:
+  // This is the coefficient of the normal before differentiation
+  double T1 = sqrt(4.0 * F - 
+    (g11 * Fu * Fu + 2.0 * g12 * Fu * Fv + g22 * Fv * Fv));
+
+  // This is the ugly term
+  double T3 = 4.0 * H - ( 
+    z11 * Fu * Fu + 2.0 * z12 * Fu * Fv + z22 * Fv * Fv +
+    2.0 * ( g11 * Hu * Fu + g12 * (Hu * Fv + Hv * Fu) + g22 * Hv * Fv ) );
+
+  // The derivative of the out-out-tangent term
+  SMLVec3d T4 = ( 0.5 * T3 / T1 ) * xAtom->N + T1 * dAtom->N;
+
+  // Compute the Y atoms
+  dAtom->xBnd[0].X = N + 0.5 * ( T2 - T4 );
+  dAtom->xBnd[1].X = N + 0.5 * ( T2 + T4 );
+}
+
+void
+MedialPDESolver
+::ComputeVariationalDerivative(
+  IHyperSurface2D *xVariation, bool flagRhoVariation, MedialAtom *dAtoms)
+{
+  size_t i, j;
+
   // First thing is to define the PDE's that will give us the variational
   // derivative of the function phi.
   xVariation->SetEvaluationGrid(m, n, xGridU, xGridV);
 
-  // Create an array for the jet of eta
-  /*
-   * SMLVec3d *N = new SMLVec3d[nSites];
-  SMLVec3d *Nu = new SMLVec3d[nSites];
-  SMLVec3d *Nv = new SMLVec3d[nSites];
-  SMLVec3d *Nuu = new SMLVec3d[nSites];
-  SMLVec3d *Nuv = new SMLVec3d[nSites];
-  SMLVec3d *Nvv = new SMLVec3d[nSites]; */
-
-  // Create an array of the output atoms
-  MedialAtom *xDAtoms = new MedialAtom[nSites];
-  double *xSparseDValues = new double[nSparseEntries];
-
   // Compute the jet of nu at each site
-  for(size_t i = 0; i < m; i++) for(size_t j = 0; j < n; j++)
+  for(i = 0; i < m; i++) for(j = 0; j < n; j++)
     {
     // Get the index of the site
-    unsigned int iGrid = xGrid->GetAtomIndex(i, j);
-    unsigned int iSite = xSiteIndex[i][j];
+    size_t iGrid = xGrid->GetAtomIndex(i, j);
+    size_t iSite = xSiteIndex[i][j];
 
     // Access the medial atom underneath
-    MedialAtom &xDAtom = xDAtoms[iGrid];
+    MedialAtom &dAtom = dAtoms[iGrid];
 
     // Set the atoms' domain coordinates
-    xDAtom.u = xGridU[i]; xDAtom.v = xGridV[j];
+    dAtom.u = xGridU[i]; dAtom.v = xGridV[j];
 
-    // Compute the surface jet and the laplacian
-    SMLVec3d NJet[6];
-    xVariation->EvaluateAtGridIndex(i, j, 0, 0, 0, 3, NJet[0].data_block());
-    xVariation->EvaluateAtGridIndex(i, j, 1, 0, 0, 3, NJet[1].data_block());
-    xVariation->EvaluateAtGridIndex(i, j, 0, 1, 0, 3, NJet[2].data_block());
-    xVariation->EvaluateAtGridIndex(i, j, 2, 0, 0, 3, NJet[3].data_block());
-    xVariation->EvaluateAtGridIndex(i, j, 1, 1, 0, 3, NJet[4].data_block());
-    xVariation->EvaluateAtGridIndex(i, j, 0, 2, 0, 3, NJet[5].data_block());
+    // Split depending on the type of variation
+    if(flagRhoVariation)
+      {
+      // Compute the rho derivative with respect to the variation
+      xVariation->EvaluateAtGridIndex(i, j, 0, 0, 3, 1, &dAtom.xLapR);
 
-    cout << "DEBUGGING " << iGrid << " : ";
+      // Prepare the matrices for the linear solver
+      xSites[iSite]->ComputeVariationalDerivativeRho(
+        y.data_block(), xSparseValues + xRowIndex[iSite] - 1, &b[iSite],
+        &xAtoms[iGrid], &dAtom);
+      }
+    else
+      {
+      // Compute the derivative of the surface with respect to the variation
+      xVariation->EvaluateAtGridIndex(i, j, 0, 0, 0, 3, dAtom.X.data_block());
+      xVariation->EvaluateAtGridIndex(i, j, 1, 0, 0, 3, dAtom.Xu.data_block());
+      xVariation->EvaluateAtGridIndex(i, j, 0, 1, 0, 3, dAtom.Xv.data_block());
+      xVariation->EvaluateAtGridIndex(i, j, 2, 0, 0, 3, dAtom.Xuu.data_block());
+      xVariation->EvaluateAtGridIndex(i, j, 1, 1, 0, 3, dAtom.Xuv.data_block());
+      xVariation->EvaluateAtGridIndex(i, j, 0, 2, 0, 3, dAtom.Xvv.data_block());
 
-    // Now, we need to set up the partial differential equation at each site
-    xSites[iSite]->ComputeVariationalDerivativeX(
-      y.data_block(), xSparseDValues + xRowIndex[iSite] - 1, &b[iSite],
-      &xAtoms[iGrid], NJet);
-
-    cout << endl;
-
-    // cout << "Test 1 : " << iGrid << " -- " << b[iSite] << endl;
+      // Prepare the matrices for the linear solver
+      xSites[iSite]->ComputeVariationalDerivativeX(
+        y.data_block(), xSparseValues + xRowIndex[iSite] - 1, &b[iSite],
+        &xAtoms[iGrid], &dAtom);
+      }
     }
 
   // Solve the partial differential equation
   int MAXFCT = 1, MNUM = 1, PHASE = 13, N = nSites, NRHS = 1, MSGLVL = 0, ERROR = 0; 
   pardiso_(PT, &MAXFCT, &MNUM, &MTYPE, &PHASE, &N, 
-    xSparseDValues, (int *) xRowIndex, (int *) xColIndex, 
+    xSparseValues, (int *) xRowIndex, (int *) xColIndex, 
     NULL, &NRHS, IPARM, &MSGLVL, 
     b.data_block(), eps.data_block(), &ERROR);
 
-  // Now, eps holds the df/deta values. These can be used to compute the remaining
-  // derivatives and what not.
+  // For each atom, compute the boundary derivatives
+  for(i = 0; i < m; i++) for(j = 0; j < n; j++)
+    {
+    // Get the index of the site
+    size_t iGrid = xGrid->GetAtomIndex(i, j);
+    size_t iSite = xSiteIndex[i][j];
 
-  return eps;
+    // Access the medial atom underneath
+    MedialAtom &dAtom = dAtoms[iGrid];
+
+    // Compute the gradient of phi for the new atom
+    xSites[iSite]->ComputePhiJet(eps.data_block(), dAtom.F, dAtom.Fu, dAtom.Fv);
+
+    // Compute the rest of the atom derivative
+    ComputeMedialAtomBoundaryDerivative(
+      &xAtoms[iGrid], &dAtom, xSites[iSite]->IsBorderSite());
+    }
+}
+
+/** Remove this later */
+double MedialPDESolver
+::ComputeLaplaceBeltrami(unsigned int i, unsigned int j, vnl_vector<double> xField)
+{
+  // Get the index of the site
+  unsigned int iGrid = xGrid->GetAtomIndex(i, j);
+  unsigned int iSite = xSiteIndex[i][j];
+
+  cout << "Computing Lappy at " << iSite << endl;
+
+  return xSites[iSite]->ComputeEquation(xField.data_block());
+  
+  // Compute the Laplacian
+  // return xSites[iSite]->ComputeLaplaceBeltrami(&xAtoms[iGrid], xField.data_block());
 }

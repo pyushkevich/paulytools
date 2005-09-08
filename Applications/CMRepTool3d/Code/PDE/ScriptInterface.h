@@ -201,7 +201,7 @@ public:
   void GetIntensityImage(FloatImage *imgIntensity);
 
   /** A method to test derivative computation */
-  void TestDerivativeComputation();
+  void TestDerivativeComputation(unsigned int iComponent);
 
 private:
   // Optimization modes and optimizers

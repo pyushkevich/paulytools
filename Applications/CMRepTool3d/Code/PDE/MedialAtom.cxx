@@ -15,6 +15,11 @@ void MedialAtom ::ComputeNormalVector()
 
 bool MedialAtom::ComputeBoundaryAtoms()
 {
+  // Compute the partials of R
+  R = sqrt(F);
+  Ru = 0.5 * Fu / R;
+  Rv = 0.5 * Fv / R;
+  
   // Terms going into gradR
   double CXu = 
     Ru * G.xContravariantTensor[0][0] + Rv * G.xContravariantTensor[0][1]; 

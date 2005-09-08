@@ -18,8 +18,15 @@ public:
   virtual void ComputeDerivative(double *Y, double *A, unsigned int iRow) = 0;
   virtual void SetGeometry(GeometryDescriptor *gd, double rho) = 0;
 
+  // Setup the equation for computing variational derivative of Phi for a
+  // variation of the surface
   virtual void ComputeVariationalDerivativeX(double *Y, double *A, double *b, 
-    MedialAtom *xAtom, SMLVec3d NJet[6]) = 0;
+    MedialAtom *xAtom, MedialAtom *dAtom) = 0;
+
+  // Setup the equation for computing variational derivative of Phi for a
+  // variation of the rho function
+  virtual void ComputeVariationalDerivativeRho(double *Y, double *A, double *b, 
+    MedialAtom *xAtom, MedialAtom *dAtom) = 0;
 
   // Returns the number of boundaries that a site touches (0 - int, 1 - border, 2 - corner)
   virtual bool IsBorderSite() = 0;
@@ -27,16 +34,13 @@ public:
   virtual double GetInitialValue();
   
   // Compute the R, Ru and Rv given the solution - used to compute atoms
-  virtual void ComputeRJet(double *Y, double &R, double &Ru, double &Rv) = 0;
+  virtual void ComputePhiJet(double *Y, double &F, double &Fu, double &Fv) = 0;
 
   // Return the number of columns in each row of the matrix A used in Newton's method
   virtual unsigned int GetNumberOfNetwonColumns() = 0;
 
   // Return the i-th column number that is non-zero in this equation
   virtual unsigned int GetNewtonColumnAtIndex(unsigned int index) = 0;
-
-  // Compute a Jacobi iteration (this site's R as a function of the neighbors)
-  virtual double ComputeJacobiIteration(double *Y) = 0;
 
 protected:
   // Position in the grid and grid dimensions
@@ -64,7 +68,7 @@ public:
   void ComputeDerivative(double *Y, double *A, unsigned int iRow);
 
   // Compute the R, Ru and Rv given the solution - used to compute atoms
-  void ComputeRJet(double *Y, double &R, double &Ru, double &Rv);
+  void ComputePhiJet(double *Y, double &F, double &Fu, double &Fv);
 
   // This site touches no boundaries
   bool IsBorderSite() { return false; }
@@ -77,12 +81,13 @@ public:
   unsigned int GetNewtonColumnAtIndex(unsigned int index)
     { return xColumns[index]; }
 
-  // Compute a Jacobi iteration (this site's R as a function of the neighbors)
-  virtual double ComputeJacobiIteration(double *Y);
-
-  // Compute the variational derivative with respect to X-variation N
+  // Compute the variational derivative with respect to X-variation 
   void ComputeVariationalDerivativeX(double *Y, double *A, double *b, 
-    MedialAtom *xAtom, SMLVec3d NJet[6]);
+    MedialAtom *xAtom, MedialAtom *dAtom);
+
+  // Compute the variational derivative with respect to Rho-variation 
+  void ComputeVariationalDerivativeRho(double *Y, double *A, double *b, 
+    MedialAtom *xAtom, MedialAtom *dAtom);
 
 protected:
   /** Indices into the flat data array of all neighbors, indexed counterclockwise
@@ -125,7 +130,7 @@ public:
   void SetGeometry(GeometryDescriptor *gd, double rho);
   
   // Compute the R, Ru and Rv given the solution - used to compute atoms
-  void ComputeRJet(double *Y, double &R, double &Ru, double &Rv);
+  void ComputePhiJet(double *Y, double &F, double &Fu, double &Fv);
   
   // This site touches one or two boundaries
   bool IsBorderSite() { return true; } 
@@ -140,13 +145,14 @@ public:
   unsigned int GetNewtonColumnAtIndex(unsigned int index)
     { return xDistinctSites[index]; }
 
-  // Compute a Jacobi iteration (this site's R as a function of the neighbors)
-  double ComputeJacobiIteration(double *Y);
-
-  // Compute the variational derivative with respect to X-variation N
+  // Compute the variational derivative with respect to X-variation 
   void ComputeVariationalDerivativeX(double *Y, double *A, double *b, 
-    MedialAtom *xAtom, SMLVec3d NJet[6]);
+    MedialAtom *xAtom, MedialAtom *dAtom);
   
+  // Compute the variational derivative with respect to Rho-variation 
+  void ComputeVariationalDerivativeRho(double *Y, double *A, double *b, 
+    MedialAtom *xAtom, MedialAtom *dAtom);
+
 protected:
   /** Is this a corner site? */
   bool corner;
@@ -200,7 +206,8 @@ public:
    * that constitute the medial surface. This means solving the PDEs that define
    * the gradient of the phi function with respect to the basis functions, as 
    * well as computing the other partial derivatives */
-  vnl_vector<double> ComputeVariationalDerivativeX(IHyperSurface2D *xVariation);
+  void ComputeVariationalDerivative(
+    IHyperSurface2D *xVariation, bool flagRhoVariation, MedialAtom *dAtoms);
 
   /** Alternative, very slow method to solve the equation */
   // void SolveByJacobiMethod(double delta = 1e-8);
@@ -231,6 +238,13 @@ public:
   /** Get the number of atoms in u dimension */
   unsigned int GetNumberOfVPoints()
     { return n; }
+
+  /** Compute the laplace-beltrami operator of a field at some point */
+  double ComputeLaplaceBeltrami(unsigned int i, unsigned int j, 
+    vnl_vector<double> xField);
+
+  /** Get the radius field */
+  vnl_vector<double> GetPhiField() { return y; }
 
 private:
   /** Number of points in u and v */
