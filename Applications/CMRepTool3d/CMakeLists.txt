@@ -206,6 +206,7 @@ IF(BUILD_PDE)
     segment.py
     pca.py
     sample.py
+    testdphi.py
     )
   
   FOREACH(FILE ${SCRIPT_FILES})  
