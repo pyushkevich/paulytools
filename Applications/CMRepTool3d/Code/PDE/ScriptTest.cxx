@@ -81,7 +81,7 @@ void TestAreaAndVolume(MedialPDESolver *xSolver)
   delete it;
   
   // Check the Jacobian
-  SolutionData S(xSolver, false);
+  SolutionData S(xSolver);
   BoundaryJacobianEnergyTerm termJac;
   termJac.ComputeEnergy(&S);
   termJac.PrintReport(cout);
@@ -200,11 +200,19 @@ void TestCellVolume()
     SMLVec3d(1,0,0),SMLVec3d(1,0,3),SMLVec3d(1,2,0),SMLVec3d(1,2,3)) << endl;
 }
 
+void TestVisualization()
+{
+  MedialPDE mp(8, 12, 32, 80);
+  mp.LoadFromParameterFile((dirWork + "/cmrep/st1001L/st1001L.ctf02.mpde").c_str());
+  mp.Solve();
+                                                                                                                                                   
+  RenderMedialPDE(&mp);  
+}
+
 int main(int argc, char *argv[])
 {
   // TestCellVolume();
-  TestCartesianGrid();
-  Test01();
+  TestVisualization();
   
   return 0;
 }
