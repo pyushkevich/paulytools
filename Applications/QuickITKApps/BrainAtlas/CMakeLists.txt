@@ -4,34 +4,10 @@ INCLUDE_DIRECTORIES(
 
 OPTION(USE_ITK_FFTW "Set this option if ITK has FFTW support" OFF)
 
-# Tracer application GUI
-SET(TRACER_SRCS
-  BinaryHeap.h
-  ShortestPath.cxx
-  ShortestPath.h
-  TracerCurves.cxx
-  TracerCurves.h
-  TracerData.cxx
-  TracerData.h
-  TracerMain.cxx
-  TracerMainWindow.h
-  TracerMainWindow.cxx
-  TracerUserInterfaceBase.h
-  TracerUserInterfaceLogic.cxx
-  TracerUserInterfaceLogic.h
-  Trackball.cxx
-  Trackball.h
-  VTKMeshShortestDistance.cxx
-  VTKMeshShortestDistance.h
-  VTKMeshVoronoiDiagram.cxx
-  VTKMeshVoronoiDiagram.h
-)
-
 ADD_EXECUTABLE(binary2mesh BinaryToMesh.cxx)
 ADD_EXECUTABLE(viewmesh MeshViewer.cxx)
 ADD_EXECUTABLE(maskimage MaskImage.cxx)
 ADD_EXECUTABLE(threshimage ThresholdImage.cxx)
-ADD_EXECUTABLE(braintracer ${TRACER_SRCS})
 ADD_EXECUTABLE(dumpmeshpoints DumpMeshPoints.cxx)
 
 # Use FFTW from ITK if requested
@@ -64,10 +40,6 @@ LINK_LIBRARIES(
   ${FLTK_LIBRARY}
 )
 
-SET(TRACER_FLUIDS TracerUserInterface.fl)
-
-FLTK_WRAP_UI(braintracer ${TRACER_FLUIDS})
-
 # Add the option to use OpenMesh
 OPTION(USE_OPENMESH "Use OpenMesh meshing library" OFF)
 IF(USE_OPENMESH)
@@ -90,10 +62,6 @@ SET(BATLAS_SCRIPTS
   metispartition.sh
 )
   
-CONFIGURE_FILE(
-  ${PAULY_SOURCE_DIR}/Applications/QuickITKApps/BrainAtlas/Utilities/InnoSetup/InstallBrainTracer.iss.in
-  ${PAULY_BINARY_DIR}/Applications/QuickITKApps/BrainAtlas/Utilities/InnoSetup/InstallBrainTracer.iss)
-
 FOREACH(SCRIPT ${BATLAS_SCRIPTS})
   CONFIGURE_FILE(
     ${PAULY_SOURCE_DIR}/Applications/QuickITKApps/BrainAtlas/Scripts/${SCRIPT}.in
