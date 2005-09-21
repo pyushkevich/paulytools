@@ -1,65 +1,71 @@
-OPTION(BUILD_CMRepTool2d "Build the tool for 2D mrep/cmrep fitting" OFF)
-OPTION(BUILD_CMRepTool3d "Build the tool for 3D mrep/cmrep fitting" OFF)
-OPTION(BUILD_FeatureSelection "Build the feature selection toolkit" OFF)
-OPTION(BUILD_QuickITKApps "Build small ITK applications (ITK QuickApps)" OFF)
-OPTION(BUILD_GraphPartition "Build graph partitioning code" OFF)
-OPTION(BUILD_MedialPDE "Build the PDE CM-Reps code" OFF)
+OPTION(BUILD_APP_CMRepTool2d "Build the tool for 2D mrep/cmrep fitting" OFF)
+OPTION(BUILD_APP_CMRepTool3d "Build the tool for 3D mrep/cmrep fitting" OFF)
+OPTION(BUILD_APP_FeatureSelection "Build the feature selection toolkit" OFF)
+OPTION(BUILD_APP_QuickITKApps "Build small ITK applications (ITK QuickApps)" OFF)
+OPTION(BUILD_APP_GraphPartition "Build graph partitioning code" OFF)
+OPTION(BUILD_APP_MedialPDE "Build the PDE CM-Reps code" OFF)
+OPTION(BUILD_APP_BrainTracer "Build the BrainTracer Application" OFF)
 
-SET(DO_BUILD_MedialPDE 1 CACHE INTERNAL "MedialPDE can be built")
-
-VARIABLE_REQUIRES(BUILD_CMRepTool2d DO_BUILD_CMRepTool2d 
+VARIABLE_REQUIRES(BUILD_APP_CMRepTool2d DO_BUILD_CMRepTool2d 
   BUILD_EXTERNAL
   USE_OPENGL
   USE_FLTK
-  USE_ITK
+  ITK_FOUND
 )
 
-VARIABLE_REQUIRES(BUILD_CMRepTool3d DO_BUILD_CMRepTool3d 
+VARIABLE_REQUIRES(BUILD_APP_CMRepTool3d DO_BUILD_CMRepTool3d 
   USE_OPENGL
-  USE_ITK
+  USE_GLUT
+  ITK_FOUND
 )
 
-VARIABLE_REQUIRES(BUILD_MedialPDE DO_BUILD_MedialPDE 
+VARIABLE_REQUIRES(BUILD_APP_MedialPDE DO_BUILD_MedialPDE 
   USE_OPENGL
   USE_SWIG 
+  USE_GLUT
   VTK_FOUND
   ITK_FOUND
   LAPACK_OR_MKL_FOUND
+  PARDISO_FOUND
 ) 
 
-VARIABLE_REQUIRES(BUILD_FeatureSelection DO_BUILD_FeatureSelection
+VARIABLE_REQUIRES(BUILD_APP_FeatureSelection DO_BUILD_FeatureSelection
   BUILD_EXTERNAL
   USE_ITK
 )
 
-VARIABLE_REQUIRES(BUILD_QuickITKApps DO_BUILD_QuickITKApps
+VARIABLE_REQUIRES(BUILD_APP_QuickITKApps DO_BUILD_QuickITKApps
   USE_ITK
   USE_VTK
   USE_OPENGL
   USE_FLTK
 )
 
-IF(BUILD_CMRepTool2d)
+IF(BUILD_APP_CMRepTool2d)
   SUBDIRS(CMRepTool2d)
-ENDIF(BUILD_CMRepTool2d)
+ENDIF(BUILD_APP_CMRepTool2d)
 
-IF(BUILD_CMRepTool3d)
+IF(BUILD_APP_CMRepTool3d)
   SUBDIRS(CMRepTool3d)
-ENDIF(BUILD_CMRepTool3d)
+ENDIF(BUILD_APP_CMRepTool3d)
 
-IF(BUILD_FeatureSelection)
+IF(BUILD_APP_FeatureSelection)
   SUBDIRS(FeatureSelection)
-ENDIF(BUILD_FeatureSelection)
+ENDIF(BUILD_APP_FeatureSelection)
 
-IF(BUILD_QuickITKApps)
+IF(BUILD_APP_QuickITKApps)
   SUBDIRS(QuickITKApps)
-ENDIF(BUILD_QuickITKApps)
+ENDIF(BUILD_APP_QuickITKApps)
 
-IF(BUILD_GraphPartition)
+IF(BUILD_APP_GraphPartition)
   SUBDIRS(GraphPartitioning)
-ENDIF(BUILD_GraphPartition)
+ENDIF(BUILD_APP_GraphPartition)
 
-IF(DO_BUILD_MedialPDE)
+IF(BUILD_APP_MedialPDE)
   SUBDIRS(MedialPDE)
-ENDIF(DO_BUILD_MedialPDE)
+ENDIF(BUILD_APP_MedialPDE)
+
+IF(BUILD_APP_BrainTracer)
+  SUBDIRS(BrainTracer)
+ENDIF(BUILD_APP_BrainTracer)
 

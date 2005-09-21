@@ -48,21 +48,10 @@ INCLUDE_DIRECTORIES(${PYTHON_INCLUDE_PATH})
 SET(LIB_SRCS ${COMMON_SRCS}
   ${MedialPDE_BINARY_DIR}/Code/ScriptInterface_wrap.cxx)
 
-# Create the shared library
-ADD_LIBRARY("_medialpdemodule" SHARED ${LIB_SRCS})
-SET_TARGET_PROPERTIES("_medialpdemodule" PROPERTIES PREFIX "")
-
-# Create the executable
-ADD_EXECUTABLE(testpde Code/ScriptTest.cxx)
-
-# Locate the PARDISO library
-FIND_LIBRARY(PARDISO_LIBRARY NAMES pardiso DOC 
-  "Location of the PARDISO library")
-
 # Set the library set
 SET(PDE_LIBS
   ${PAULY_CORE_LIBS}
-  ${PARDISO_LIBRARY} 
+  ${PARDISO_LIB} 
   ITKNumerics
   ITKIO
   ITKCommon
@@ -73,10 +62,19 @@ SET(PDE_LIBS
   ${LAPACK_OR_MKL_LIBS}
   )
 
-# Create the executable
-# TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS})
-TARGET_LINK_LIBRARIES("_medialpdemodule" ${PDE_LIBS})
-TARGET_LINK_LIBRARIES("testpde" "_medialpdemodule.so" ${PDE_LIBS})
+# Create a common library
+ADD_LIBRARY(medialpde SHARED ${COMMON_SRCS})
+#TARGET_LINK_LIBRARIES(medialpde ${PDE_LIBS})
+TARGET_LINK_LIBRARIES(medialpde ${PDE_LIBS})
+
+# Create the Python module
+ADD_LIBRARY("_medialpdemodule" SHARED ${SWIG_TARGET})
+TARGET_LINK_LIBRARIES("_medialpdemodule" medialpde)
+SET_TARGET_PROPERTIES("_medialpdemodule" PROPERTIES PREFIX "")
+
+# Create the test executable
+ADD_EXECUTABLE(testpde Code/ScriptTest.cxx ${COMMON_SRCS})
+TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS})
 
 # Specify the data root
 FIND_PATH(MPDE_INPUTDATA_ROOT "init/surf01.txt")

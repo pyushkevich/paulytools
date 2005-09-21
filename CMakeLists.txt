@@ -12,15 +12,14 @@ OPTION(USE_GLUT "Use GLUT Library for OpenGL" OFF)
 OPTION(USE_MMA "Use Mathematica MathLink Libraries" OFF)
 OPTION(USE_CLUTO "Use Cluto Clustering Libraries" OFF)
 OPTION(USE_SWIG "Use the SWIG wrapper" OFF)
-OPTION(USE_INTEL_MKL 
-  "Use Intel's MKL Numerics Library (Alternative to Lapack)" OFF)
-OPTION(USE_LAPACK 
-  "Use the Lapack Numerics Library" OFF)
+OPTION(USE_INTEL_MKL "Use Intel's MKL Numerics Library (Alternative to Lapack)" OFF)
+OPTION(USE_LAPACK "Use the Lapack Numerics Library" OFF)
+OPTION(USE_PARDISO "Use the PARDISO sparse solver library" OFF)
 
 # Define the optional inclusion (BUILD) variables 
-OPTION(BUILD_APPLICATIONS "Should I build standalone applications?" ON)
+OPTION(BUILD_APPLICATIONS "Should I build standalone applications?" OFF)
 OPTION(BUILD_EXTERNAL "Should I build external libraries?" OFF)
-OPTION(BUILD_TESTING "Should I build the test code?" ON)
+OPTION(BUILD_TESTING "Should I build the test code?" OFF)
 
 # Set the path for the CMake modules
 FIND_PATH(PAULY_CMAKE_DIR "FindMathematica.cmake" PATHS ${PAULY_SOURCE_DIR}/CMake)
@@ -110,12 +109,17 @@ ENDIF(USE_LAPACK)
 
 # Set up INTEL MKL
 IF(USE_INTEL_MKL)
-  INCLUDE(${PAULY_SOURCE_DIR}/CMake/FindMKL.cmake)
+  INCLUDE(${PAULY_CMAKE_DIR}/FindMKL.cmake)
   IF(MKL_FOUND)
     SET(LAPACK_OR_MKL_FOUND 1 CACHE INTERNAL "Lapack or MKL are available")
     SET(LAPACK_OR_MKL_LIBS ${MKL_LIBS})
   ENDIF(MKL_FOUND)
 ENDIF(USE_INTEL_MKL)
+
+# Set up PARDISO
+IF(USE_PARDISO)
+  INCLUDE(${PAULY_CMAKE_DIR}/FindPARDISO.cmake)
+ENDIF(USE_PARDISO)
 
 # Set up the includes 
 SET(PAULY_INCLUDE_DIRS
