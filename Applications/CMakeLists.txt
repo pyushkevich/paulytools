@@ -3,6 +3,9 @@ OPTION(BUILD_CMRepTool3d "Build the tool for 3D mrep/cmrep fitting" OFF)
 OPTION(BUILD_FeatureSelection "Build the feature selection toolkit" OFF)
 OPTION(BUILD_QuickITKApps "Build small ITK applications (ITK QuickApps)" OFF)
 OPTION(BUILD_GraphPartition "Build graph partitioning code" OFF)
+OPTION(BUILD_MedialPDE "Build the PDE CM-Reps code" OFF)
+
+SET(DO_BUILD_MedialPDE 1 CACHE INTERNAL "MedialPDE can be built")
 
 VARIABLE_REQUIRES(BUILD_CMRepTool2d DO_BUILD_CMRepTool2d 
   BUILD_EXTERNAL
@@ -15,6 +18,14 @@ VARIABLE_REQUIRES(BUILD_CMRepTool3d DO_BUILD_CMRepTool3d
   USE_OPENGL
   USE_ITK
 )
+
+VARIABLE_REQUIRES(BUILD_MedialPDE DO_BUILD_MedialPDE 
+  USE_OPENGL
+  USE_SWIG 
+  VTK_FOUND
+  ITK_FOUND
+  LAPACK_OR_MKL_FOUND
+) 
 
 VARIABLE_REQUIRES(BUILD_FeatureSelection DO_BUILD_FeatureSelection
   BUILD_EXTERNAL
@@ -47,4 +58,8 @@ ENDIF(BUILD_QuickITKApps)
 IF(BUILD_GraphPartition)
   SUBDIRS(GraphPartitioning)
 ENDIF(BUILD_GraphPartition)
+
+IF(DO_BUILD_MedialPDE)
+  SUBDIRS(MedialPDE)
+ENDIF(DO_BUILD_MedialPDE)
 

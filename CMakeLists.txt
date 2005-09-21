@@ -8,9 +8,14 @@ OPTION(USE_ITK "Use ITK Libraries" OFF)
 OPTION(USE_VTK "Use VTK Libraries" OFF)
 OPTION(USE_FLTK "Use FLTK Libraries" OFF)
 OPTION(USE_OPENGL "Use OpenGL Libraries" OFF)
+OPTION(USE_GLUT "Use GLUT Library for OpenGL" OFF)
 OPTION(USE_MMA "Use Mathematica MathLink Libraries" OFF)
 OPTION(USE_CLUTO "Use Cluto Clustering Libraries" OFF)
 OPTION(USE_SWIG "Use the SWIG wrapper" OFF)
+OPTION(USE_INTEL_MKL 
+  "Use Intel's MKL Numerics Library (Alternative to Lapack)" OFF)
+OPTION(USE_LAPACK 
+  "Use the Lapack Numerics Library" OFF)
 
 # Define the optional inclusion (BUILD) variables 
 OPTION(BUILD_APPLICATIONS "Should I build standalone applications?" ON)
@@ -77,15 +82,40 @@ IF(USE_MMA)
   INCLUDE_DIRECTORIES(${MMA_INCLUDE_DIR})
 ENDIF(USE_MMA)
 
+# CLUTO Clustering package
 IF(USE_CLUTO)
   INCLUDE(${PAULY_CMAKE_DIR}/FindCluto.cmake)
   INCLUDE_DIRECTORIES(${CLUTO_INCLUDE_DIR})
 ENDIF(USE_CLUTO)
 
+# Set up SWIG (not the ITK version)
 IF(USE_SWIG)
   INCLUDE(${PAULY_CMAKE_DIR}/FindSWIG.cmake)
 ENDIF(USE_SWIG)
 
+# Set up GLUT library
+IF(USE_GLUT)
+  INCLUDE(${CMAKE_ROOT}/Modules/FindGLUT.cmake)
+  INCLUDE_DIRECTORIES(${GLUT_INCLUDE_DIR})
+ENDIF(USE_GLUT)
+
+# Set up LAPACK
+IF(USE_LAPACK)
+  INCLUDE(${PAULY_CMAKE_DIR}/FindLapack.cmake)
+  IF(LAPACK_FOUND)
+    SET(LAPACK_OR_MKL_FOUND 1 CACHE INTERNAL "Lapack or MKL are available")
+    SET(LAPACK_OR_MKL_LIBS ${LAPACK_LIBS})
+  ENDIF(LAPACK_FOUND)
+ENDIF(USE_LAPACK)
+
+# Set up INTEL MKL
+IF(USE_INTEL_MKL)
+  INCLUDE(${PAULY_SOURCE_DIR}/CMake/FindMKL.cmake)
+  IF(MKL_FOUND)
+    SET(LAPACK_OR_MKL_FOUND 1 CACHE INTERNAL "Lapack or MKL are available")
+    SET(LAPACK_OR_MKL_LIBS ${MKL_LIBS})
+  ENDIF(MKL_FOUND)
+ENDIF(USE_INTEL_MKL)
 
 # Set up the includes 
 SET(PAULY_INCLUDE_DIRS
