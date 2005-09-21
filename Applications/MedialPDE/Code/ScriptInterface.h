@@ -111,6 +111,7 @@ public:
    * surface coefficients and a given number of samples */
   MedialPDE(unsigned int nBasesU, unsigned int nBasesV, 
     unsigned int xResU, unsigned int xResV, 
+    double xFineScale = 0.0, 
     unsigned int xFineU = 0, unsigned int xFineV = 0);
 
   ~MedialPDE();

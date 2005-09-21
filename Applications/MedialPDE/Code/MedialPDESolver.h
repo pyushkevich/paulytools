@@ -30,7 +30,8 @@ public:
    * the boundary and are used to make sure that the m-rep boundary is sampled
    * densely near the endcaps. The exponent is currenly 2, but that may change
    */
-  MedialPDESolver(size_t nu, size_t nv, size_t pu = 0, size_t pv = 0);
+  MedialPDESolver(size_t nu, size_t nv, 
+    double xScale = 0.0, size_t pu = 0, size_t pv = 0);
 
   /** 
    * Store the current solution vector as the initialization vector

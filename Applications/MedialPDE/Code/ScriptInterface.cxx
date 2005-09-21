@@ -39,10 +39,11 @@ struct DiscreteAtom
  *  This is the main application code
  **************************************************************************/
 MedialPDE::MedialPDE(unsigned int nBasesU, unsigned int nBasesV, 
-  unsigned int xResU, unsigned int xResV, unsigned int xFineU, unsigned int xFineV)
+  unsigned int xResU, unsigned int xResV, double xFineScale,
+  unsigned int xFineU, unsigned int xFineV)
 {
   xSurface = new FourierSurface(nBasesU, nBasesV);
-  xSolver = new MedialPDESolver(xResU, xResV, xFineU, xFineV);
+  xSolver = new MedialPDESolver(xResU, xResV, xFineScale, xFineU, xFineV);
   xSolver->SetMedialSurface(xSurface);
 
   eMask = FULL; 

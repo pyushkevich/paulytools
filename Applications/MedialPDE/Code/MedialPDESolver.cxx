@@ -7,8 +7,9 @@
 
 using namespace std;
 
-void SparseMultiply(unsigned int n, unsigned int *rowIndex, unsigned int *colIndex, 
-	double *values, double *x, double *y)
+void SparseMultiply(
+  unsigned int n, unsigned int *rowIndex, unsigned int *colIndex, 
+  double *values, double *x, double *y)
 {
 	for(unsigned int r = 1; r <=n ; r++)
     	{
@@ -23,8 +24,8 @@ void SparseMultiply(unsigned int n, unsigned int *rowIndex, unsigned int *colInd
     	}	
 }
 
-double SparseLinearTest(unsigned int n, unsigned int *rowIndex, unsigned int *colIndex, 
-	double *values, double *x, double *y,double *b)
+double SparseLinearTest(unsigned int n, unsigned int *rowIndex, 
+  unsigned int *colIndex, double *values, double *x, double *y,double *b)
 {
   SparseMultiply(n, rowIndex, colIndex, values, x, y);
   double maxdiff = 0.0;
@@ -34,7 +35,8 @@ double SparseLinearTest(unsigned int n, unsigned int *rowIndex, unsigned int *co
   return maxdiff;
 }
 
-void DumpSparseMatrix(unsigned int n, unsigned int *rowIndex, unsigned int *colIndex, double *values)
+void DumpSparseMatrix(unsigned int n, unsigned int *rowIndex, 
+  unsigned int *colIndex, double *values)
 {
   char ch = '{';
   cout << "SparseArray[";
@@ -53,7 +55,7 @@ void DumpSparseMatrix(unsigned int n, unsigned int *rowIndex, unsigned int *colI
 }
 
 MedialPDESolver
-::MedialPDESolver(size_t nu, size_t nv, size_t pu, size_t pv)
+::MedialPDESolver(size_t nu, size_t nv, double xScale, size_t pu, size_t pv)
 {
   // Compute the total number of grid points
   size_t tu = nu + 2 * pu;
@@ -80,17 +82,16 @@ MedialPDESolver
     vvGrid[iv + pv] = zv;
 
   // Set the irregularly spaced points
-  double xBase = 0.5;
   for(iu = 0; iu < pu; iu++)
     {
-    double duScaled = du * pow(xBase, iu+1.0); 
+    double duScaled = du * pow(xScale, iu+1.0); 
     uuGrid[pu - iu] = duScaled;
     uuGrid[(tu - 1) - (pu - iu)] = 1.0 - duScaled; 
     }
   
   for(iv = 0; iv < pv; iv++)
     {
-    double dvScaled = dv * pow(xBase, iv+1.0); 
+    double dvScaled = dv * pow(xScale, iv+1.0); 
     vvGrid[pv - iv] = dvScaled;
     vvGrid[(tv - 1) - (pv - iv)] = 1.0 - dvScaled; 
     }

@@ -202,7 +202,7 @@ void TestCellVolume()
 
 void TestVisualization()
 {
-  MedialPDE mp(8, 12, 81, 121, 4, 4);
+  MedialPDE mp(8, 12, 81, 121, 0.5, 4, 4);
   // mp.LoadFromParameterFile((dirWork + "/init/init.mpde").c_str());
   // mp.GetSolver()->SetSolutionAsInitialGuess();
   // mp.GetSolver()->TestFiniteDifferenceConvergence();
