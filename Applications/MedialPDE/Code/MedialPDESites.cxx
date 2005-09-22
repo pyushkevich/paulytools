@@ -155,6 +155,19 @@ ComputeVariationalDerivativeRho(const Mat &Y, double *A, double *b,
   *b = dAtom->xLapR;
 }
 
+void 
+FDInternalSite::PrintReport()
+{
+	cout << "Internal Site at " << xMask->GetLocationU() 
+		<< "," << xMask->GetLocationV() << endl;
+	cout << "LB(F) = " 
+		<< Cuu << " * Fuu + " 
+		<< Cuv << " * Fuv + "
+		<< Cvv << " * Fvv + "
+		<< Cu  << " * Fu + "
+		<< Cv  << " * Fv " << endl;
+}
+
 double FDBorderSite::ComputeEquation(const Mat &Y)
 {
   double F, Fu, Fv;
@@ -295,5 +308,16 @@ void FDBorderSite::SetGeometry(GeometryDescriptor *g, double)
     // The derivative of F with respect to neighbor i
     xDerivativeF[i] = -4.0 * W;
     }
-
 }
+
+void 
+FDBorderSite::PrintReport()
+{
+	cout << "Border Site at " << xMask->GetLocationU() 
+		<< "," << xMask->GetLocationV() << endl;
+	cout << "LB(F) = " 
+		<< CuCu << " * Fu * Fu + " 
+		<< CuCv << " * Fu * Fv + "
+		<< CvCv << " * Fv * Fv + " << endl;
+}
+

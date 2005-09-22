@@ -44,6 +44,9 @@ public:
   // virtual bool IsBorderSite(unsigned int dim) = 0;
   virtual double GetInitialValue()
     { return IsBorderSite() ? 0.0 : 1.0; }
+    
+ 	// Print a report describing this site
+ 	virtual void PrintReport() = 0;
   
 protected:
 
@@ -88,6 +91,9 @@ public:
   // Compute the variational derivative with respect to Rho-variation 
   void ComputeVariationalDerivativeRho(const Mat &Y, 
     double *A, double *b, MedialAtom *xAtom, MedialAtom *dAtom);
+
+	// Print a report
+	void PrintReport();
 
 protected:
 
@@ -143,6 +149,9 @@ public:
   // Compute the variational derivative with respect to Rho-variation 
   void ComputeVariationalDerivativeRho(const Mat &Y, 
     double *A, double *b, MedialAtom *xAtom, MedialAtom *dAtom);
+
+	// Print a report
+	void PrintReport();
 
 protected:
 

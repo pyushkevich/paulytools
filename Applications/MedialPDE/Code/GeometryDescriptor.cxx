@@ -34,23 +34,11 @@ GeometryDescriptor
   xChristoffelFirst[1][0][1] = xChristoffelFirst[0][1][1];
 
   // Compute the Christoffel symbols of the second kind
-  xChristoffelSecond[0][0][0] = xContravariantTensor[0][0] * xChristoffelFirst[0][0][0] + 
-    xContravariantTensor[1][0] * xChristoffelFirst[0][0][1];
-  xChristoffelSecond[0][0][1] = xContravariantTensor[0][1] * xChristoffelFirst[0][0][0] + 
-    xContravariantTensor[1][1] * xChristoffelFirst[0][0][1];
-  
-  xChristoffelSecond[0][1][0] = xContravariantTensor[0][0] * xChristoffelFirst[0][1][0] + 
-    xContravariantTensor[1][0] * xChristoffelFirst[0][1][1];
-  xChristoffelSecond[0][1][1] = xContravariantTensor[0][1] * xChristoffelFirst[0][1][0] + 
-    xContravariantTensor[1][1] * xChristoffelFirst[0][1][1];
-
-  xChristoffelSecond[1][1][0] = xContravariantTensor[0][0] * xChristoffelFirst[1][1][0] + 
-    xContravariantTensor[1][0] * xChristoffelFirst[1][1][1];
-  xChristoffelSecond[1][1][1] = xContravariantTensor[0][1] * xChristoffelFirst[1][1][0] + 
-    xContravariantTensor[1][1] * xChristoffelFirst[1][1][1];
-
-  xChristoffelSecond[1][0][0] = xChristoffelSecond[0][1][0];
-  xChristoffelSecond[1][0][1] = xChristoffelSecond[0][1][1];
+  size_t i, j, k;
+  for(i = 0; i < 2; i++) for(j = 0; j < 2; j++) for(k = 0; k < 2; k++)
+  	xChristoffelSecond[i][j][k] = 
+	  	xContravariantTensor[k][0] * xChristoffelFirst[i][j][0] + 
+	  	xContravariantTensor[k][1] * xChristoffelFirst[i][j][1]; 	  	 
 }
 
 void 

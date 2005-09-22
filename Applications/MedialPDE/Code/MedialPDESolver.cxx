@@ -185,8 +185,6 @@ MedialPDESolver
         {
         // Create a non-uniform mask, and orient it correctly
         // cout << "Nonuniform Mask" << endl;
-        // cout << uGrid[i+1] - uGrid[i] << " <> " << uGrid[i] - uGrid[i-1] << endl;
-        // cout << vGrid[j+1] - vGrid[j] << " <> " << vGrid[j] - vGrid[j-1] << endl;
         xMasks[iSite] = new DoublyNonuniformFDMask();
         xMasks[iSite]->FlipMask( i > m/2, j > n/2 );
         }
@@ -306,15 +304,15 @@ void MedialPDESolver::InitializeSiteGeometry()
   size_t i, j;
   
   // Generate a matrix of x, y, z values
-  Mat vx(m, n), vy(m, n), vz(m, n);
+  // Mat vx(m, n), vy(m, n), vz(m, n);
 
   // Sample the surface along the current grid
-  for(i = 0; i < m; i++) for(j = 0; j < n; j++)
-    {
-    double X[3];
-    xSurface->EvaluateAtGridIndex(i, j, 0, 0, 0, 3, X);
-    vx[i][j] = X[0]; vy[i][j] = X[1]; vz[i][j] = X[2];
-    }
+	//  for(i = 0; i < m; i++) for(j = 0; j < n; j++)
+	//    {
+	//    double X[3];
+	//    xSurface->EvaluateAtGridIndex(i, j, 0, 0, 0, 3, X);
+	//    vx[i][j] = X[0]; vy[i][j] = X[1]; vz[i][j] = X[2];
+	//    }
 
   // Initialize each site with the current surface properties
   for(i = 0; i < m; i++) for(j = 0; j < n; j++)
@@ -328,20 +326,40 @@ void MedialPDESolver::InitializeSiteGeometry()
 
     // Set the atoms' domain coordinates
     xAtom.u = uGrid[i]; xAtom.v = vGrid[j];
+    double u = uGrid[i], v = vGrid[j];
     
-    // Compute the surface jet and the laplacian
-    /* 
+    // Compute the surface jet and the laplacian    
     xSurface->EvaluateAtGridIndex(i, j, 0, 0, 0, 3, xAtom.X.data_block());
     xSurface->EvaluateAtGridIndex(i, j, 1, 0, 0, 3, xAtom.Xu.data_block());
     xSurface->EvaluateAtGridIndex(i, j, 0, 1, 0, 3, xAtom.Xv.data_block());
     xSurface->EvaluateAtGridIndex(i, j, 2, 0, 0, 3, xAtom.Xuu.data_block());
     xSurface->EvaluateAtGridIndex(i, j, 1, 1, 0, 3, xAtom.Xuv.data_block());
     xSurface->EvaluateAtGridIndex(i, j, 0, 2, 0, 3, xAtom.Xvv.data_block());
-    */
-    
+
+		xSurface->EvaluateDerivative(u, v, 0, 0, 0, 3, xAtom.X.data_block());    
+		xSurface->EvaluateDerivative(u, v, 1, 0, 0, 3, xAtom.Xu.data_block());    
+		xSurface->EvaluateDerivative(u, v, 0, 1, 0, 3, xAtom.Xv.data_block());    
+		xSurface->EvaluateDerivative(u, v, 2, 0, 0, 3, xAtom.Xuu.data_block());    
+		xSurface->EvaluateDerivative(u, v, 1, 1, 0, 3, xAtom.Xuv.data_block());    
+		xSurface->EvaluateDerivative(u, v, 0, 2, 0, 3, xAtom.Xvv.data_block());    
+
+		/*    
     xAtom.X[0] = xMasks[iSite]->ComputeTwoJet(vx, xAtom.Xu[0], xAtom.Xv[0], xAtom.Xuu[0], xAtom.Xuv[0], xAtom.Xvv[0]);
     xAtom.X[1] = xMasks[iSite]->ComputeTwoJet(vy, xAtom.Xu[1], xAtom.Xv[1], xAtom.Xuu[1], xAtom.Xuv[1], xAtom.Xvv[1]);
     xAtom.X[2] = xMasks[iSite]->ComputeTwoJet(vz, xAtom.Xu[2], xAtom.Xv[2], xAtom.Xuu[2], xAtom.Xuv[2], xAtom.Xvv[2]);
+    */
+/*
+		double u = uGrid[i], v = vGrid[j];
+    xAtom.X[0]   = 10 * u; 
+    xAtom.X[1]   = 10 * v; 
+    xAtom.X[2]   = sin(u * v) + cos(u*u + v*v);
+
+    xAtom.Xu[0]  = 10;       xAtom.Xu[1]  = 0;        xAtom.Xu[2]  = v*cos(u*v) - 2*u*sin(u*u+v*v);
+    xAtom.Xv[0]  = 0;        xAtom.Xv[1]  = 10;       xAtom.Xv[2]  = u*cos(u*v) - 2*v*sin(u*u+v*v);
+    xAtom.Xuu[0] = 0;        xAtom.Xuu[1] = 0;        xAtom.Xuu[2] = -v*v*sin(u*v) - 2*sin(u*u+v*v) - 4*u*u*cos(u*u+v*v);
+    xAtom.Xuv[0] = 0;        xAtom.Xuv[1] = 0;        xAtom.Xuv[2] = cos(u*v)-u*v*sin(u+v) - 4*u*v*cos(u*u+v*v);
+    xAtom.Xvv[0] = 0;        xAtom.Xvv[1] = 0;        xAtom.Xvv[2] = -u*u*sin(u+v) - 2*sin(u*u+v*v) - 4*v*v*cos(u*u+v*v);
+  */
 
     // Compute the differential geometric tensors
     xAtom.ComputeDifferentialGeometry();
@@ -354,9 +372,44 @@ void MedialPDESolver::InitializeSiteGeometry()
     if(xAtom.xLapR > 0 && xSites[iSite]->IsBorderSite()) 
       cout << xAtom.xLapR << " ! " << flush;
 
+    xAtom.xLapR = 0;
+
     // Compute the solution at this point
     xSites[iSite]->SetGeometry( &xAtom.G, xAtom.xLapR);
     }
+    
+  // Define test function
+	Mat phitest(m, n, 0.0);
+	for(i = 0; i < m; i++) for(j = 0; j < n; j++)
+		{
+		double u = uGrid[i], v = vGrid[j];
+		phitest(i, j) = sinh(u) + cosh(v * u);
+		}
+		
+	Mat LB1(m, n, 0.0), LB2(m, n, 0.0);
+	for(i = 1; i < m-1; i++) for(j = 1; j < n-1; j++)
+		{
+		LB1[i][j] = xSites[xSiteIndex[i][j]]->ComputeEquation(phitest);
+		LB2[i][j] = EstimateLBOperator(phitest, i, j);
+		}
+		
+  cout << "AT 0.03, 0.03 " << endl;
+  MedialAtom &A = xAtoms[xSiteIndex[4][4]];
+  cout << A.u << " " << A.v << endl;
+  cout << "X : " << A.X << endl;
+  cout << "Xu : " << A.Xu << endl;
+  cout << "Xv : " << A.Xv << endl;
+  cout << "Xuu : " << A.Xuu << endl;
+  cout << "Xuv : " << A.Xuv << endl;
+  cout << "Xvv : " << A.Xvv << endl;
+		
+	cout << "ANALYTIC: " << endl;
+	cout << LB1.extract(12,12) << endl;
+
+	cout << "NUMERIC: " << endl;
+	cout << LB2.extract(12,12) << endl;
+	
+	
 }
 
 void
@@ -394,6 +447,16 @@ MedialPDESolver
     }
 }
 
+double ArrayMinMax(double *array, size_t n, double &xMin, double &xMax)
+{
+	xMax = 0, xMin = 1e100;
+  for(size_t q = 0; q < n; q++)
+  	{
+    if(xMax < fabs(array[q])) xMax = fabs(array[q]);
+    if(xMin > fabs(array[q])) xMin = fabs(array[q]);
+    }
+}
+
 double MedialPDESolver::SolveOnce(double delta)
 {
   size_t i, j, k;
@@ -419,21 +482,22 @@ double MedialPDESolver::SolveOnce(double delta)
       xSites[iSite]->
         ComputeDerivative(y, xSparseValues + xRowIndex[iSite] - 1, iSite+1);
 
+			//if(iIter == 0)        
+	    //  {
+	    //  double xMin, xMax;
+  	  //  ArrayMinMax(xSparseValues + xRowIndex[iSite] - 1, xMasks[iSite]->Size(), xMin, xMax);
+    	//  cout << "Site " << i << " , " << j << "  Range: " << xMin << " -- " << xMax << endl;				
+	    //  }
+
       // Compute the value of b
       b[i][j] = -xSites[iSite]->ComputeEquation(y);
       }
       
     // Report the largest and smallest values in A and b
-    Vec xSparse(xSparseValues, xRowIndex[nSites]-1);
-    double xMax = 0, xMin = 1e100;
-    for(size_t q = 0; q < xSparse.size(); q++)
-      {
-      if(xMax < fabs(xSparse[q])) xMax = fabs(xSparse[q]);
-      if(xMin > fabs(xSparse[q])) xMin = fabs(xSparse[q]);
-      }
-    
+    double xMin, xMax;
+    ArrayMinMax(xSparseValues, xRowIndex[nSites]-1, xMin, xMax);
     cout << "max(A) = " << xMax << "; min(A) = " << xMin << endl;
-
+    
     // Perform the symbolic factorization only for the first iteration
     if(iIter == 0)
       xPardiso.SymbolicFactorization(nSites, xRowIndex, xColIndex, xSparseValues);
@@ -479,6 +543,20 @@ double MedialPDESolver::SolveOnce(double delta)
   cout << y.extract(6, 6) << endl;
   cout << "B piece: " << endl;
   cout << b.extract(6, 6) << endl;
+
+  // Estimate the LBO for 1..5
+  Mat LBO(m, n, 0.0);
+  for(i = 1; i < m-1; i++) for(j = 1; j < n-1; j++)
+    {
+    LBO[i][j] = EstimateLBOperator(y, i, j);
+    }
+
+  cout << "LBO Estimate: " << endl;
+  cout << LBO.extract(16, 16) << endl;
+  
+
+  xSites[xSiteIndex[1][1]]->PrintReport();
+  xMasks[xSiteIndex[1][1]]->PrintReport();
 
   return bMax;
 }
@@ -733,3 +811,58 @@ void MedialPDESolver
 
   cout << "MedialPDESolver FD Test: " << xMaxDiff << endl;
 }
+
+double MedialPDESolver::EstimateLBOperator(const Mat &F, size_t i, size_t j)
+{
+  size_t iGrid = xGrid->GetAtomIndex(i, j);
+  size_t iSite = xSiteIndex[i][j];
+  
+  SMLVec3d X0 = xAtoms[iGrid].X;
+  
+  int n = 8;
+  int nu[] = { 1, 1,  1,  0, -1, -1, -1, 0 };
+  int nv[] = { 1, 0, -1, -1, -1,  0,  1, 1 };
+  // int nu[] = { 1, 1,  1,  -1, -1, -1 };
+  // int nv[] = { 1, 0, -1,  -1,  0,  1 };
+
+  double LBO = 0.0, xArea = 0.0;
+
+  // Compute the contribution of each term
+  for(int k = 0; k < n; k++)
+    {
+    int km = (k + n - 1) % n, kp = (k + 1) % n;
+    size_t iGridOpp   = xGrid->GetAtomIndex(i + nu[k],  j + nv[k]);
+    size_t iGridMinus = xGrid->GetAtomIndex(i + nu[km], j + nv[km]);
+    size_t iGridPlus  = xGrid->GetAtomIndex(i + nu[kp], j + nv[kp]);
+    
+    SMLVec3d X1 = xAtoms[iGridMinus].X;
+    SMLVec3d X2 = xAtoms[iGridOpp].X;
+    SMLVec3d X3 = xAtoms[iGridPlus].X;
+
+    SMLVec3d ac = X0 - X1, bc = X2 - X1, ad = X0 - X3, bd = X2 - X3;
+    double A1 = 0.5 * sqrt(
+      dot_product(ac,ac) * dot_product(bc,bc) - 
+      dot_product(ac,bc) * dot_product(ac,bc));
+    double A2 = 0.5 * sqrt(
+      dot_product(ad,ad) * dot_product(bd,bd) - 
+      dot_product(ad,bd) * dot_product(ad,bd));
+
+    double ca = dot_product(ac,bc) / sqrt(dot_product(ac,ac) * dot_product(bc,bc));
+    double sa = sqrt(1 - ca * ca);
+    double cota = ca / sa;
+    
+    double cb = dot_product(ad,bd) / sqrt(dot_product(ad,ad) * dot_product(bd,bd));
+    double sb = sqrt(1 - cb * cb);
+    double cotb = cb / sb;
+
+    double w = cota + cotb;
+
+    LBO += (F[i+nu[k]][j+nv[k]] - F[i][j]) * w;
+    xArea += 0.5 * (A1 + A2);
+    }
+
+  // Compute the operator
+  return 2.0 * LBO / xArea;
+}
+
+  

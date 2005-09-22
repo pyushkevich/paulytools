@@ -11,7 +11,8 @@
 using namespace std;
 using namespace medialpde;
 
-string dirWork = "/home/pauly/data2005/Stanley/data/";
+//string dirWork = "/home/pauly/data2005/Stanley/data/";
+string dirWork = "/mnt/data2/PUBLIC/Data/Input/StanleySchizophrenia/";
 
 class TestFunction01 : public EuclideanFunction
 {
@@ -202,11 +203,11 @@ void TestCellVolume()
 
 void TestVisualization()
 {
-  MedialPDE mp(8, 12, 81, 121, 0.5, 4, 4);
+  MedialPDE mp(2, 4, 101, 101, 0.5, 0, 0);
   // mp.LoadFromParameterFile((dirWork + "/init/init.mpde").c_str());
   // mp.GetSolver()->SetSolutionAsInitialGuess();
   // mp.GetSolver()->TestFiniteDifferenceConvergence();
-  mp.LoadFromParameterFile((dirWork + "/init/init2.mpde").c_str());
+  mp.LoadFromParameterFile((dirWork + "/init/init.mpde").c_str());
   // mp.Solve();
 
   // mp.TestDerivativeComputation(3);

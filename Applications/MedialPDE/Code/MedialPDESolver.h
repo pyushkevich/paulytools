@@ -141,6 +141,7 @@ private:
   void ReconstructAtoms(const Mat &ySolution);
   void InitializeSiteGeometry();
   double SolveOnce(double delta);
+  double EstimateLBOperator(const Mat &F, size_t i, size_t j);
 
   bool flagReuseLastSolution;
 };

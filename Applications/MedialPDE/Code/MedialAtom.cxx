@@ -37,7 +37,9 @@ bool MedialAtom::ComputeBoundaryAtoms()
   // cout << (Fu * Fu * G2[0][0] + 2.0 * Fu * Fv * G2[0][1] + Fv * Fv * G2[1][1]) - 4 * F << endl;
   double xMagGradR2 = (Fu * Fu * G2[0][0] + 2.0 * Fu * Fv * G2[0][1] + Fv * Fv * G2[1][1]) / ( 4 * F );
   
-  double sinTheta2 = 1.0f - xMagGradR2; cout << sinTheta2 << endl;
+  double sinTheta2 = 1.0f - xMagGradR2;
+  
+  // cout << u << ", " << v << " : " << xMagGradR2 << endl;
   
   // Correct the floating point / solver error
   if(fabs(sinTheta2) < 1e-8) sinTheta2 = 0.0;

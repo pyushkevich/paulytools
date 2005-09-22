@@ -17,8 +17,8 @@ double CosineBasisFunction::Evaluate(double u, size_t k, size_t d)
   switch(d) 
     {
   case 0: return cos(T2);
-  case 1: return -T1 * sin(T2);
-  case 2: return T1 * T1 * cos(T2);
+  case 1: return - T1 * sin(T2);
+  case 2: return - T1 * T1 * cos(T2);
   default: return 0.0;
     }
 }

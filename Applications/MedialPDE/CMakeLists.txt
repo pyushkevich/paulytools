@@ -73,8 +73,9 @@ TARGET_LINK_LIBRARIES("_medialpdemodule" medialpde)
 SET_TARGET_PROPERTIES("_medialpdemodule" PROPERTIES PREFIX "")
 
 # Create the test executable
-ADD_EXECUTABLE(testpde Code/ScriptTest.cxx ${COMMON_SRCS})
+ADD_EXECUTABLE(testpde Code/ScriptTest.cxx)
 TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS})
+TARGET_LINK_LIBRARIES(testpde medialpde)
 
 # Specify the data root
 FIND_PATH(MPDE_INPUTDATA_ROOT "init/surf01.txt")
