@@ -15,6 +15,7 @@ OPTION(USE_SWIG "Use the SWIG wrapper" OFF)
 OPTION(USE_INTEL_MKL "Use Intel's MKL Numerics Library (Alternative to Lapack)" OFF)
 OPTION(USE_LAPACK "Use the Lapack Numerics Library" OFF)
 OPTION(USE_PARDISO "Use the PARDISO sparse solver library" OFF)
+OPTION(USE_DART "Whether this project should be configured to use Dart" OFF)
 
 # Define the optional inclusion (BUILD) variables 
 OPTION(BUILD_APPLICATIONS "Should I build standalone applications?" OFF)
@@ -120,6 +121,12 @@ ENDIF(USE_INTEL_MKL)
 IF(USE_PARDISO)
   INCLUDE(${PAULY_CMAKE_DIR}/FindPARDISO.cmake)
 ENDIF(USE_PARDISO)
+
+# Dart Support
+IF(USE_DART)
+  # Include the standard Dart testing module
+  INCLUDE (${CMAKE_ROOT}/Modules/Dart.cmake)
+ENDIF(USE_DART)
 
 # Set up the includes 
 SET(PAULY_INCLUDE_DIRS
