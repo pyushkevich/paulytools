@@ -1154,12 +1154,12 @@ MedialRegularityTerm::MedialRegularityTerm(
     MedialAtom &a11 = xTempAtoms[itQuad->GetAtomIndex(1, 1)];
 
     // Record the distances (repeat in this order later)
-    xEdgeLength.push_back( vnl_vector_ssd(a00.X, a01.X) );
-    xEdgeLength.push_back( vnl_vector_ssd(a01.X, a11.X) );
-    xEdgeLength.push_back( vnl_vector_ssd(a11.X, a10.X) );
-    xEdgeLength.push_back( vnl_vector_ssd(a10.X, a00.X) );
-    xEdgeLength.push_back( vnl_vector_ssd(a00.X, a11.X) );
-    xEdgeLength.push_back( vnl_vector_ssd(a01.X, a10.X) );
+    xEdgeLength.push_back( (a00.X - a01.X).two_norm() );
+    xEdgeLength.push_back( (a01.X - a11.X).two_norm() );
+    xEdgeLength.push_back( (a11.X - a10.X).two_norm() );
+    xEdgeLength.push_back( (a10.X - a00.X).two_norm() );
+    xEdgeLength.push_back( (a00.X - a11.X).two_norm() );
+    xEdgeLength.push_back( (a01.X - a10.X).two_norm() );
     }
 
   delete itQuad;
@@ -1182,7 +1182,7 @@ double MedialRegularityTerm::DistortionPenalty(
 double MedialRegularityTerm::DistortionPenaltyAndDerivative(
   double dTemplate, const SMLVec3d &A, const SMLVec3d &B, double &xGradTerm)
 {
-  double dSubject = vnl_vector_ssd(A, B);
+  double dSubject = (A - B).two_norm();
   double xDistortion = dSubject - dTemplate;
   double xPenalty = xDistortion * xDistortion;
   
@@ -1209,8 +1209,7 @@ double MedialRegularityTerm::ComputeEnergy(SolutionDataBase *data)
   
   // Iterate over the quads
   MedialQuadIterator *itQuad = data->xAtomGrid->NewQuadIterator();
-  vector<double>::iterator itDist = xEdgeLength.begin();
-  for(; !itQuad->IsAtEnd(); ++(*itQuad))
+  for(size_t i = 0; !itQuad->IsAtEnd(); ++(*itQuad), i+=6)
     {
     // Get the four atoms at the corner of the quad
     MedialAtom &a00 = data->xAtoms[itQuad->GetAtomIndex(0, 0)];
@@ -1219,12 +1218,12 @@ double MedialRegularityTerm::ComputeEnergy(SolutionDataBase *data)
     MedialAtom &a11 = data->xAtoms[itQuad->GetAtomIndex(1, 1)];
 
     // Record the distances (repeat in this order later)
-    xTotalPenalty += DistortionPenalty( *itDist++, vnl_vector_ssd(a00.X, a01.X) );
-    xTotalPenalty += DistortionPenalty( *itDist++, vnl_vector_ssd(a01.X, a11.X) );
-    xTotalPenalty += DistortionPenalty( *itDist++, vnl_vector_ssd(a11.X, a10.X) );
-    xTotalPenalty += DistortionPenalty( *itDist++, vnl_vector_ssd(a10.X, a00.X) );
-    xTotalPenalty += DistortionPenalty( *itDist++, vnl_vector_ssd(a00.X, a11.X) );
-    xTotalPenalty += DistortionPenalty( *itDist++, vnl_vector_ssd(a01.X, a10.X) );
+    xTotalPenalty += DistortionPenalty(xEdgeLength[i]  , (a00.X - a01.X).two_norm());
+    xTotalPenalty += DistortionPenalty(xEdgeLength[i+1], (a01.X - a11.X).two_norm());
+    xTotalPenalty += DistortionPenalty(xEdgeLength[i+2], (a11.X - a10.X).two_norm());
+    xTotalPenalty += DistortionPenalty(xEdgeLength[i+3], (a10.X - a00.X).two_norm());
+    xTotalPenalty += DistortionPenalty(xEdgeLength[i+4], (a00.X - a11.X).two_norm());
+    xTotalPenalty += DistortionPenalty(xEdgeLength[i+5], (a01.X - a10.X).two_norm());
     }
 
   // Compute the average error
@@ -1248,9 +1247,7 @@ double MedialRegularityTerm::BeginGradientComputation(SolutionData *data)
   
   // Iterate over the quads
   MedialQuadIterator *itQuad = data->xAtomGrid->NewQuadIterator();
-  vector<double>::iterator itDist = xEdgeLength.begin();
-  vector<double>::iterator itGrad = xGradientCommon.begin();
-  for(; !itQuad->IsAtEnd(); ++(*itQuad))
+  for(size_t i = 0; !itQuad->IsAtEnd(); ++(*itQuad), i+=6)
     {
     // Get the four atoms at the corner of the quad
     MedialAtom &a00 = data->xAtoms[itQuad->GetAtomIndex(0, 0)];
@@ -1259,12 +1256,18 @@ double MedialRegularityTerm::BeginGradientComputation(SolutionData *data)
     MedialAtom &a11 = data->xAtoms[itQuad->GetAtomIndex(1, 1)];
 
     // Record the distances (repeat in this order later)
-    xTotalPenalty += DistortionPenaltyAndDerivative(*itDist++, a00.X, a01.X, *itGrad++ );
-    xTotalPenalty += DistortionPenaltyAndDerivative(*itDist++, a01.X, a11.X, *itGrad++ );
-    xTotalPenalty += DistortionPenaltyAndDerivative(*itDist++, a11.X, a10.X, *itGrad++ );
-    xTotalPenalty += DistortionPenaltyAndDerivative(*itDist++, a10.X, a00.X, *itGrad++ );
-    xTotalPenalty += DistortionPenaltyAndDerivative(*itDist++, a00.X, a11.X, *itGrad++ );
-    xTotalPenalty += DistortionPenaltyAndDerivative(*itDist++, a01.X, a10.X, *itGrad++ );
+    xTotalPenalty += DistortionPenaltyAndDerivative(
+      xEdgeLength[i+0], a00.X, a01.X, xGradientCommon[i+0]);
+    xTotalPenalty += DistortionPenaltyAndDerivative(
+      xEdgeLength[i+1], a01.X, a11.X, xGradientCommon[i+1]);
+    xTotalPenalty += DistortionPenaltyAndDerivative(
+      xEdgeLength[i+2], a11.X, a10.X, xGradientCommon[i+2]);
+    xTotalPenalty += DistortionPenaltyAndDerivative(
+      xEdgeLength[i+3], a10.X, a00.X, xGradientCommon[i+3]);
+    xTotalPenalty += DistortionPenaltyAndDerivative(
+      xEdgeLength[i+4], a00.X, a11.X, xGradientCommon[i+4]);
+    xTotalPenalty += DistortionPenaltyAndDerivative(
+      xEdgeLength[i+5], a01.X, a10.X, xGradientCommon[i+5]);
     }
 
   // Compute the average error
@@ -1285,9 +1288,7 @@ double MedialRegularityTerm
   
   // Iterate over the quads
   MedialQuadIterator *itQuad = S->xAtomGrid->NewQuadIterator();
-  vector<double>::iterator itDist = xEdgeLength.begin();
-  vector<double>::iterator itGrad = xGradientCommon.begin();
-  for(; !itQuad->IsAtEnd(); ++(*itQuad))
+  for(size_t i = 0; !itQuad->IsAtEnd(); ++(*itQuad), i+=6)
     {
     // Get the four atoms at the corner of the quad
     MedialAtom &a00 = S->xAtoms[itQuad->GetAtomIndex(0, 0)];
@@ -1301,15 +1302,13 @@ double MedialRegularityTerm
     MedialAtom &d10 = dS->xAtoms[itQuad->GetAtomIndex(1, 0)];
     MedialAtom &d11 = dS->xAtoms[itQuad->GetAtomIndex(1, 1)];
 
-    // Compute the atom distances
-
     // Record the distances (repeat in this order later)
-    dTotalPenalty += (*itGrad++) * dot_product(a00.X - a01.X, d00.X - d01.X);
-    dTotalPenalty += (*itGrad++) * dot_product(a01.X - a11.X, d01.X - d11.X);
-    dTotalPenalty += (*itGrad++) * dot_product(a11.X - a10.X, d11.X - d10.X);
-    dTotalPenalty += (*itGrad++) * dot_product(a10.X - a00.X, d10.X - d00.X);
-    dTotalPenalty += (*itGrad++) * dot_product(a00.X - a11.X, d00.X - d11.X);
-    dTotalPenalty += (*itGrad++) * dot_product(a01.X - a10.X, d01.X - d10.X);
+    dTotalPenalty += xGradientCommon[i+0] * dot_product(a00.X - a01.X, d00.X - d01.X);
+    dTotalPenalty += xGradientCommon[i+1] * dot_product(a01.X - a11.X, d01.X - d11.X);
+    dTotalPenalty += xGradientCommon[i+2] * dot_product(a11.X - a10.X, d11.X - d10.X);
+    dTotalPenalty += xGradientCommon[i+3] * dot_product(a10.X - a00.X, d10.X - d00.X);
+    dTotalPenalty += xGradientCommon[i+4] * dot_product(a00.X - a11.X, d00.X - d11.X);
+    dTotalPenalty += xGradientCommon[i+5] * dot_product(a01.X - a10.X, d01.X - d10.X);
     }
 
   // Compute the average error
