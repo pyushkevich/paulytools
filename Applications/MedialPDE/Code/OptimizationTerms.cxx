@@ -15,84 +15,93 @@ class FloatImageEuclideanFunctionAdapter : public EuclideanFunction
 {
 public:
   FloatImageEuclideanFunctionAdapter(FloatImage *image)
-    { this->image = image; this->xBackground = image->xOutsideValue; }
+    { this->image = image; }
 
   double Evaluate(const SMLVec3d &X)
-    { return image->xImage->Interpolate(X[0], X[1], X[2], xBackground); }
-
-  SMLVec3d ComputeGradient(const SMLVec3d &X)
-    {
-    return SMLVec3d(
-      image->xGradient[0]->Interpolate(X[0], X[1], X[2], 0.0f),
-      image->xGradient[1]->Interpolate(X[0], X[1], X[2], 0.0f),
-      image->xGradient[2]->Interpolate(X[0], X[1], X[2], 0.0f));
-    }
+    { return (double) image->Interpolate(X); }
+  
+  void ComputeGradient(const SMLVec3d &X, SMLVec3d &G)
+    { image->InterpolateImageGradient(X, G); }
+  
 protected:
   FloatImage *image;
-  float xBackground;
-};
-
-/** An image adapter used for volume computations. For images in the -1.0 to
- * 1.0 range, this adapter shifts it into a 0.0 to 1.0 range */
-class FloatImageVolumeElementFunctionAdapter :
-  public FloatImageEuclideanFunctionAdapter
-{
-public:
-  FloatImageVolumeElementFunctionAdapter(FloatImage *image) :
-    FloatImageEuclideanFunctionAdapter(image) {}
-
-  // Y = 0.5 (X + 1)
-  double Evaluate(const SMLVec3d &X)
-    { 
-    // return FloatImageEuclideanFunctionAdapter::Evaluate(X); 
-    return FloatImageEuclideanFunctionAdapter::Evaluate(X);
-    }
-
-  SMLVec3d ComputeGradient(const SMLVec3d &X)
-    { return FloatImageEuclideanFunctionAdapter::ComputeGradient(X); }
 };
 
 /** A function that computes the match as (I(x) - I0)^2, where I0 is some
  * level set in the image. Used for blurred binary images */
-class FloatImageLevelSetFunctionAdapter : 
-  public FloatImageEuclideanFunctionAdapter
+class FloatImageSquareValueFunctionAdapter : public EuclideanFunction
 {
 public:
-  FloatImageLevelSetFunctionAdapter(FloatImage *image, float xLevelSet = 0.0f) : 
-    FloatImageEuclideanFunctionAdapter(image) 
-    { this->xLevelSet = xLevelSet; }
+  FloatImageSquareValueFunctionAdapter(FloatImage *image, float xLevelSet = 0.0f) 
+    { this->image = image; this->xLevelSet = xLevelSet; }
 
   double Evaluate(const SMLVec3d &X)
     { 
     // Get the image match from the superclass
-    double I = FloatImageEuclideanFunctionAdapter::Evaluate(X);
-    double d = I - xLevelSet;
-    return d * d * d * d;
+    double I = (double) image->Interpolate(X);
+    double d = I - xLevelSet; 
+    return d * d;
     }
 
-  SMLVec3d ComputeGradient(const SMLVec3d &X)
+  void ComputeGradient(const SMLVec3d &X, SMLVec3d &G)
     {
     // Get the gradient and match from the superclass
-    SMLVec3d G = FloatImageEuclideanFunctionAdapter::ComputeGradient(X);
-    double I = FloatImageEuclideanFunctionAdapter::Evaluate(X);
+    double I = (double) image->Interpolate(X);
     double d = I - xLevelSet;
-
-    // Scale the gradient by the match
-    return (4.0 * d * d * d) * G;
+    image->InterpolateImageGradient(X, G);
+    G *= 2.0 * d;
     }
+
 private:
+  FloatImage *image;
   float xLevelSet;
 };
 
 } // namespace
 using namespace medialpde;
 
+/*********************************************************************************
+ * SOLUTION DATA BASE CLASS
+ ********************************************************************************/
+SolutionDataBase::SolutionDataBase()
+{
+  // Set the flags
+  flagInternalWeights = false;
+  flagBoundaryWeights = false;
+  flagOwnAtoms = false;
+  
+  xAtomGrid = NULL;
+  xAtoms = NULL;
+  xInternalPoints = NULL;
+  xBoundaryWeights = NULL;
+  xBoundaryArea = 0.0;
+  xInternalWeights = NULL;
+  xInternalVolume = 0.0;
+  xInternalProfileWeights = NULL;  
+}
 
-
+SolutionDataBase::~SolutionDataBase()
+{
+  if(flagBoundaryWeights)
+    { 
+    delete xBoundaryWeights; 
+    }
+  if(flagInternalWeights)
+    { 
+    delete xInternalWeights; 
+    delete xInternalPoints; 
+    delete xInternalProfileWeights; 
+    }
+  if(flagOwnAtoms)
+    {
+    delete xAtoms;
+    }
+}
 /*********************************************************************************
  * SOLUTION DATA                  
  ********************************************************************************/
 SolutionData::SolutionData(MedialPDESolver *xSolver)
+: SolutionDataBase()
 {
   // Point to the atom grid
   xAtomGrid = xSolver->GetAtomGrid();
@@ -103,6 +112,7 @@ SolutionData::SolutionData(MedialPDESolver *xSolver)
   // Set the flags
   flagInternalWeights = false;
   flagBoundaryWeights = false;
+  flagOwnAtoms = false;
 }
 
 void SolutionData::UpdateBoundaryWeights()
@@ -150,31 +160,16 @@ void SolutionData::UpdateInternalWeights(size_t nCuts)
   nInternalCuts = nCuts;
 }
 
-SolutionData::~SolutionData()
-{
-  if(flagBoundaryWeights)
-    { 
-    delete xBoundaryWeights; 
-    }
-  if(flagInternalWeights)
-    { 
-    delete xInternalWeights; 
-    delete xInternalPoints; 
-    delete xInternalProfileWeights; 
-    }
-}
-
 /*********************************************************************************
  * PARTIAL DERIVATIVE SOLUTION DATA
  ********************************************************************************/
 PartialDerivativeSolutionData
 ::PartialDerivativeSolutionData(SolutionData *xReference, MedialAtom *dAtoms)
+: SolutionDataBase()
 {
   this->xReference = xReference;
   xAtomGrid = xReference->xAtomGrid;
   xAtoms = dAtoms;
-  flagInternalWeights = false;
-  flagBoundaryWeights = false;
 }
 
 void
@@ -236,28 +231,120 @@ PartialDerivativeSolutionData::UpdateInternalWeights(size_t nCuts)
 }
 
 /*********************************************************************************
- * ENERGY TERM
+ * OFFSET SOLUTION DATA
  ********************************************************************************/
-double EnergyTerm::BeginGradientComputation(SolutionData *SCenter)
+ 
+OffsetSolutionData::OffsetSolutionData(
+  SolutionData *sRef, 
+  PartialDerivativeSolutionData *sDeriv,
+  double eps)
 {
-  return ComputeEnergy(SCenter);
+  // Create pointers to reference objects
+  xReference = sRef;
+  xDerivative = sDeriv;
+  xEpsilon = eps;
+  
+  // Point to the atom grid
+  xAtomGrid = xReference->xAtomGrid;
+  
+  // Create a copy of the medial atoms
+  xAtoms = new MedialAtom[xAtomGrid->GetNumberOfAtoms()];
+  for(size_t iAtom = 0; iAtom < xAtomGrid->GetNumberOfAtoms(); iAtom++)
+    AddScaleMedialAtoms(xReference->xAtoms[iAtom], 
+      xDerivative->xAtoms[iAtom], xEpsilon, xAtoms[iAtom]);
+
+  // Set the ownership flag
+  flagOwnAtoms = true;    
+}
+  
+void
+OffsetSolutionData::UpdateBoundaryWeights()
+{
+  // Only run this method once
+  if(flagBoundaryWeights) return;
+
+  // Ensure that the reference weights exist
+  xReference->UpdateBoundaryWeights();
+  xDerivative->UpdateBoundaryWeights();
+
+  // Create boundary weights
+  xBoundaryWeights = new double[xAtomGrid->GetNumberOfBoundaryPoints()];
+
+  // Compute the boundary weights by addition
+  for(size_t i = 0; i < xAtomGrid->GetNumberOfBoundaryPoints(); i++)
+    xBoundaryWeights[i] = xReference->xBoundaryWeights[i]
+      + xEpsilon * xDerivative->xBoundaryWeights[i];
+  
+  // Compute the boundary area same way
+  xBoundaryArea = xReference->xBoundaryArea
+      + xEpsilon * xDerivative->xBoundaryArea;
+  
+  // Set the flag
+  flagBoundaryWeights = true;
 }
 
-double EnergyTerm::ComputePartialDerivative(
-  SolutionData *SCenter, SolutionData *SFwd, SolutionData *SBck,
-  double xEpsilon)
+void 
+OffsetSolutionData::UpdateInternalWeights(size_t nCuts)
 {
-  // Take the finite difference
-  double xDelta = ComputeEnergy(SFwd) - ComputeEnergy(SBck);
-  return 0.5 * xDelta / xEpsilon;
+  // Only run this method once
+  if(flagInternalWeights && nCuts == nInternalCuts) return;
+
+  // Delete the old data if necessary
+  if(flagInternalWeights) 
+    { 
+    delete xInternalWeights; 
+    delete xInternalPoints; 
+    delete xInternalProfileWeights; 
+    }
+
+  // Make sure the reference has the internal data available
+  xReference->UpdateInternalWeights(nCuts);
+  xDerivative->UpdateInternalWeights(nCuts);
+  
+  // Allocate the internal points and weights
+  nInternalPoints = xAtomGrid->GetNumberOfInternalPoints(nCuts);
+  nProfileIntervals = xAtomGrid->GetNumberOfProfileIntervals(nCuts);
+  
+  xInternalPoints = new SMLVec3d[nInternalPoints];
+  xInternalWeights = new double[nInternalPoints];
+  xInternalProfileWeights = new double[nProfileIntervals];
+
+  // Compute the internal weights by addition
+  for(size_t i = 0; i < nInternalPoints; i++)
+    xInternalWeights[i] = xReference->xInternalWeights[i]
+      + xEpsilon * xDerivative->xInternalWeights[i];
+
+  // Compute the profile interval weights
+  for(size_t i = 0; i < nProfileIntervals; i++)
+    xInternalProfileWeights[i] = xReference->xInternalProfileWeights[i]
+      + xEpsilon * xDerivative->xInternalProfileWeights[i];
+
+  // Compute the total weights
+  xInternalVolume = xReference->xInternalVolume
+      + xEpsilon * xDerivative->xInternalVolume;
+
+  // Set the flag and store the nCuts
+  flagInternalWeights = true;
+  nInternalCuts = nCuts;
 }
+
+
+/*********************************************************************************
+ * ENERGY TERM
+ ********************************************************************************/
 
 double 
 NumericalGradientEnergyTerm
 ::ComputePartialDerivative(SolutionData *S, PartialDerivativeSolutionData *dS)
 {
-  // Shouldn't the epsilon be passed in as well?
-  return 0.0;
+  OffsetSolutionData s1(S, dS, xEpsilon), s2(S, dS, -xEpsilon);
+  
+  // Compute the two energy values
+  double f1 = ComputeEnergy(&s1);
+  double f2 = ComputeEnergy(&s2);
+  
+  // Return the central difference derivative
+  return 0.5 * (f1 - f2) / xEpsilon;
 }
 
 /*********************************************************************************
@@ -265,27 +352,25 @@ NumericalGradientEnergyTerm
  ********************************************************************************/
 double 
 BoundaryImageMatchTerm
-::ComputeEnergy(SolutionData *S) 
+::ComputeEnergy(SolutionDataBase *S) 
 {
   // Create the image adapter for image / gradient interpolation
-  FloatImageLevelSetFunctionAdapter fImage(xImage);
+  FloatImageSquareValueFunctionAdapter fImage(xImage);
 
   // Make sure the weights exist in the solution
   S->UpdateBoundaryWeights();
 
   // Integrate the image match
-  // xImageMatch = IntegrateFunctionOverBoundary(
-  //  S->xAtomGrid, S->xAtoms, 
-  //  S->xBoundaryWeights, &fImage);
+  xImageMatch = IntegrateFunctionOverBoundary(
+    S->xAtomGrid, S->xAtoms, S->xBoundaryWeights, &fImage);
 
   // Compute the adaptive match, making sure the interpolation works
-  double xMinArea = 0.5 * S->xBoundaryArea / S->xAtomGrid->GetNumberOfBoundaryQuads();
-  xImageMatch = AdaptivelyIntegrateFunctionOverBoundary(
-    S->xAtomGrid, S->xAtoms, xMinArea, &fImage);
+  // double xMinArea = 0.5 * S->xBoundaryArea / S->xAtomGrid->GetNumberOfBoundaryQuads();
+  // xImageMatch = AdaptivelyIntegrateFunctionOverBoundary(
+  //   S->xAtomGrid, S->xAtoms, xMinArea, &fImage);
 
   xBoundaryArea = S->xBoundaryArea;
-  xFinalMatch = xImageMatch / xBoundaryArea;
-  xFinalMatch = sqrt(sqrt(xFinalMatch));
+  xFinalMatch = sqrt( xImageMatch / xBoundaryArea );
 
   // Scale by area
   return xFinalMatch;
@@ -301,12 +386,12 @@ BoundaryImageMatchTerm
   sout << "    boundary area : " << xBoundaryArea << endl;
   sout << "    ratio         : " << xFinalMatch << endl;
 }
-/*
+
 double
 BoundaryImageMatchTerm::BeginGradientComputation(SolutionData *S)
 {
   // Create the image adapter for image / gradient interpolation
-  FloatImageLevelSetFunctionAdapter fImage(xImage);
+  FloatImageSquareValueFunctionAdapter fImage(xImage);
 
   // Boundary weights will be needed
   S->UpdateBoundaryWeights();
@@ -314,82 +399,86 @@ BoundaryImageMatchTerm::BeginGradientComputation(SolutionData *S)
   // Compute the image and image gradient at each point in the image
   xGradI = new SMLVec3d[S->xAtomGrid->GetNumberOfBoundaryPoints()];
   xImageVal = new double[S->xAtomGrid->GetNumberOfBoundaryPoints()];
-  xMatch = 0.0;
+  xImageMatch = 0.0;
 
   MedialBoundaryPointIterator *itBnd = S->xAtomGrid->NewBoundaryPointIterator();
   while(!itBnd->IsAtEnd())
     {
     // Compute the image gradient
     SMLVec3d &X = GetBoundaryPoint(itBnd, S->xAtoms).X;
-    xGradI[itBnd->GetIndex()] = fImage.ComputeGradient(X);
+    fImage.ComputeGradient(X, xGradI[itBnd->GetIndex()]);
 
     // Compute the image value
     xImageVal[itBnd->GetIndex()] = fImage.Evaluate(X);
 
     // Accumulate to get weighted match
-    xMatch += xImageVal[itBnd->GetIndex()] * S->xBoundaryWeights[itBnd->GetIndex()];
+    xImageMatch += 
+      xImageVal[itBnd->GetIndex()] * S->xBoundaryWeights[itBnd->GetIndex()];
     
     ++(*itBnd);
     }
   
   // We will need the area in many calculations
-  xArea = S->xBoundaryArea;
+  xBoundaryArea = S->xBoundaryArea;
+
+  // Compute the final match
+  xFinalMatch = sqrt( xImageMatch / xBoundaryArea );
   
   // Clean up
   delete itBnd;
 
   // Return the solution
-  return xMatch / xArea;
+  return xFinalMatch;
 }
 
 double
-BoundaryImageMatchTerm::ComputePartialDerivative(
-    SolutionData *SCenter, SolutionData *SFwd, SolutionData *SBck,
-    double xEpsilon)
+BoundaryImageMatchTerm
+::ComputePartialDerivative(SolutionData *S, PartialDerivativeSolutionData *DS)
 {
   // Create the image adapter for image / gradient interpolation
-  FloatImageLevelSetFunctionAdapter fImage(xImage);
+  FloatImageSquareValueFunctionAdapter fImage(xImage);
 
   // Accumulator for the partial derivative of the weighted match function
   double dMatchdC = 0.0;
 
   // We need the weights for the derivative terms
-  SFwd->UpdateBoundaryWeights();
-  SBck->UpdateBoundaryWeights();
+  S->UpdateBoundaryWeights();
+  DS->UpdateBoundaryWeights();
 
   // Compute the partial derivative for this coefficient
-  MedialBoundaryPointIterator *itBnd = 
-    SCenter->xAtomGrid->NewBoundaryPointIterator();
-  
+  MedialBoundaryPointIterator *itBnd = S->xAtomGrid->NewBoundaryPointIterator();
   for( ; !itBnd->IsAtEnd(); ++(*itBnd))
     {
     // Get the index of this boundary point
     size_t iPoint = itBnd->GetIndex();
 
-    // Get the boundary point before and after small deformation
-    SMLVec3d X2 = GetBoundaryPoint(itBnd, SFwd->xAtoms).X;
-    SMLVec3d X1 = GetBoundaryPoint(itBnd, SBck->xAtoms).X;
-    SMLVec3d dX = 0.5 * (X2 - X1);
+    // Get the change in the boundary point
+    SMLVec3d dX = GetBoundaryPoint(itBnd, DS->xAtoms).X;
 
     // Get the area weights for this point
-    double w0 = SCenter->xBoundaryWeights[ iPoint ];
-    double w1 = SBck->xBoundaryWeights[ iPoint ];
-    double w2 = SFwd->xBoundaryWeights[ iPoint ];
-    double dw = 0.5 * (w2 - w1);
+    double w = S->xBoundaryWeights[ iPoint ];
+    double dw = DS->xBoundaryWeights[ iPoint ];
 
     // Compute the change in intensity per change in coefficient
+    double I = xImageVal[iPoint];
     double dIdC = dot_product( xGradI[iPoint] , dX);
-    dMatchdC += dIdC * w0 + xImageVal[iPoint] * dw;
+    
+    // Increment the partial derivative of the weighted match
+    dMatchdC += dw * I + w * dIdC;
     }
   
   delete itBnd;
 
-  // Scale by epsilon to get the derivative
-  dMatchdC /= xEpsilon;
+  // Compute the derivative
+  double dFinaldC = 
+    ( dMatchdC * S->xBoundaryArea - xImageMatch * DS->xBoundaryArea ) / 
+    ( S->xBoundaryArea * S->xBoundaryArea );
 
-  // Compute the derivative of M / A
-  double dAdC = 0.5 * (SFwd->xBoundaryArea - SBck->xBoundaryArea) / xEpsilon;
-  return (dMatchdC * xArea - dAdC * xMatch) / (xArea * xArea);
+  // Account for the square root
+  dFinaldC *= 0.5 / xFinalMatch;
+
+  // Return the final match derivative
+  return dFinaldC;
 }
 
 void BoundaryImageMatchTerm::EndGradientComputation()
@@ -398,11 +487,175 @@ void BoundaryImageMatchTerm::EndGradientComputation()
   delete xGradI;
   delete xImageVal;
 }
-*/
+
 /*********************************************************************************
  * BOUNDARY JACOBIAN TERM
  ********************************************************************************/
-double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionData *S)
+
+inline double ComputeJacobian(const SMLVec3d &Xu, const SMLVec3d &Xv, 
+  const SMLVec3d &Yu, const SMLVec3d &Yv)
+{
+  return 
+    ( dot_product(Yu,Xu) * dot_product(Yv,Xv) - 
+      dot_product(Yu,Xv) * dot_product(Yv,Xu) ) / 
+    ( dot_product(Xu,Xu) * dot_product(Xv,Xv) - 
+      dot_product(Xu,Xv) * dot_product(Xu,Xv) );
+}
+
+double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
+{
+  // Place to store the Jacobian
+  xTotalPenalty = 0.0;
+  xMaxJacobian = 1.0, xMinJacobian = 1.0, xAvgJacobian = 0.0;
+  
+  // Create a Quad-iterator through the atoms
+  MedialQuadIterator *itQuad = S->xAtomGrid->NewQuadIterator();
+  for(; !itQuad->IsAtEnd(); ++(*itQuad))
+    {
+    // Get the four atoms in this quad
+    MedialAtom &A00 = S->xAtoms[itQuad->GetAtomIndex(0, 0)];
+    MedialAtom &A01 = S->xAtoms[itQuad->GetAtomIndex(0, 1)];
+    MedialAtom &A10 = S->xAtoms[itQuad->GetAtomIndex(1, 0)];
+    MedialAtom &A11 = S->xAtoms[itQuad->GetAtomIndex(1, 1)];
+
+    // Compute the average Xu and Xv vectors
+    SMLVec3d XU = 0.5 * ((A11.X - A01.X) + (A10.X - A00.X));
+    SMLVec3d XV = 0.5 * ((A11.X - A10.X) + (A01.X - A00.X));
+
+    // Compute the same for the upper and lower boundaries
+    SMLVec3d Y0U = 
+      0.5 * ((A11.xBnd[0].X - A01.xBnd[0].X) + (A10.xBnd[0].X - A00.xBnd[0].X));
+    SMLVec3d Y0V = 
+      0.5 * ((A11.xBnd[0].X - A10.xBnd[0].X) + (A01.xBnd[0].X - A00.xBnd[0].X));
+    SMLVec3d Y1U = 
+      0.5 * ((A11.xBnd[1].X - A01.xBnd[1].X) + (A10.xBnd[1].X - A00.xBnd[1].X));
+    SMLVec3d Y1V = 
+      0.5 * ((A11.xBnd[1].X - A10.xBnd[1].X) + (A01.xBnd[1].X - A00.xBnd[1].X));
+
+    // Compute the scaled normal vectors
+    SMLVec3d NX = vnl_cross_3d(XU, XV);
+    SMLVec3d NY0 = vnl_cross_3d(Y0U, Y0V);
+    SMLVec3d NY1 = vnl_cross_3d(Y1U, Y1V);
+
+    // Compute the Jacobians
+    double J0 = dot_product(NY0, NX) / dot_product(NX, NX);
+    double J1 = dot_product(NY1, NX) / dot_product(NX, NX);
+
+    // Store the smallest and largest Jacobian values
+    if(J0 < xMinJacobian) xMinJacobian = J0;
+    if(J1 < xMinJacobian) xMinJacobian = J1;
+    if(J0 > xMaxJacobian) xMaxJacobian = J0;
+    if(J1 > xMaxJacobian) xMaxJacobian = J1;
+
+    // Add to the average Jacobian
+    xAvgJacobian += J0 + J1;
+
+    // Compute the penalty function
+    xTotalPenalty += PenaltyFunction(J0, 10, 40);
+    xTotalPenalty += PenaltyFunction(J1, 10, 40);
+    }
+  delete itQuad;
+
+  // Scale the average jacobian
+  xAvgJacobian /= S->xAtomGrid->GetNumberOfBoundaryQuads();
+
+  // Return the total value
+  return xTotalPenalty;
+}
+
+double BoundaryJacobianEnergyTerm
+::ComputePartialDerivative(
+  SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  // Place to store the Jacobian
+  double dTotalPenalty = 0.0;
+  
+  // Create a Quad-iterator through the atoms
+  MedialQuadIterator *itQuad = S->xAtomGrid->NewQuadIterator();
+  for(; !itQuad->IsAtEnd(); ++(*itQuad))
+    {
+    // Get the four atoms in this quad
+    MedialAtom &A00 = S->xAtoms[itQuad->GetAtomIndex(0, 0)];
+    MedialAtom &A01 = S->xAtoms[itQuad->GetAtomIndex(0, 1)];
+    MedialAtom &A10 = S->xAtoms[itQuad->GetAtomIndex(1, 0)];
+    MedialAtom &A11 = S->xAtoms[itQuad->GetAtomIndex(1, 1)];
+
+    // Get the derivative atoms too
+    MedialAtom &dA00 = dS->xAtoms[itQuad->GetAtomIndex(0, 0)];
+    MedialAtom &dA01 = dS->xAtoms[itQuad->GetAtomIndex(0, 1)];
+    MedialAtom &dA10 = dS->xAtoms[itQuad->GetAtomIndex(1, 0)];
+    MedialAtom &dA11 = dS->xAtoms[itQuad->GetAtomIndex(1, 1)];
+    
+    // Compute the average Xu and Xv vectors and derivatives
+    SMLVec3d XU = 0.5 * ((A11.X - A01.X) + (A10.X - A00.X));
+    SMLVec3d XV = 0.5 * ((A11.X - A10.X) + (A01.X - A00.X));
+    SMLVec3d dXU = 0.5 * ((dA11.X - dA01.X) + (dA10.X - dA00.X));
+    SMLVec3d dXV = 0.5 * ((dA11.X - dA10.X) + (dA01.X - dA00.X));
+
+    // Compute the same for the upper and lower boundaries
+    SMLVec3d Y0U = 
+      0.5 * ((A11.xBnd[0].X - A01.xBnd[0].X) + (A10.xBnd[0].X - A00.xBnd[0].X));
+    SMLVec3d Y0V = 
+      0.5 * ((A11.xBnd[0].X - A10.xBnd[0].X) + (A01.xBnd[0].X - A00.xBnd[0].X));
+    SMLVec3d Y1U = 
+      0.5 * ((A11.xBnd[1].X - A01.xBnd[1].X) + (A10.xBnd[1].X - A00.xBnd[1].X));
+    SMLVec3d Y1V = 
+      0.5 * ((A11.xBnd[1].X - A10.xBnd[1].X) + (A01.xBnd[1].X - A00.xBnd[1].X));
+
+    SMLVec3d dY0U = 
+      0.5 * ((dA11.xBnd[0].X - dA01.xBnd[0].X) + (dA10.xBnd[0].X - dA00.xBnd[0].X));
+    SMLVec3d dY0V = 
+      0.5 * ((dA11.xBnd[0].X - dA10.xBnd[0].X) + (dA01.xBnd[0].X - dA00.xBnd[0].X));
+    SMLVec3d dY1U = 
+      0.5 * ((dA11.xBnd[1].X - dA01.xBnd[1].X) + (dA10.xBnd[1].X - dA00.xBnd[1].X));
+    SMLVec3d dY1V = 
+      0.5 * ((dA11.xBnd[1].X - dA10.xBnd[1].X) + (dA01.xBnd[1].X - dA00.xBnd[1].X));
+
+    // Compute the scaled normal vectors and derivatives
+    SMLVec3d NX  = vnl_cross_3d(XU,  XV);
+    SMLVec3d NY0 = vnl_cross_3d(Y0U, Y0V);
+    SMLVec3d NY1 = vnl_cross_3d(Y1U, Y1V);
+
+    SMLVec3d dNX  = vnl_cross_3d(dXU,  XV)  + vnl_cross_3d(XU,  dXV);
+    SMLVec3d dNY0 = vnl_cross_3d(dY0U, Y0V) + vnl_cross_3d(Y0U, dY0V);
+    SMLVec3d dNY1 = vnl_cross_3d(dY1U, Y1V) + vnl_cross_3d(Y1U, dY1V);
+
+    // Compute G and its derivative
+    double GX = dot_product(NX, NX);
+    double dGX = 2.0 * dot_product(dNX, NX);
+
+    // Compute the Jacobians
+    double J0 = dot_product(NY0, NX) / GX;
+    double J1 = dot_product(NY1, NX) / GX;
+    
+    // Compute the derivatives of the Jacobians
+    double dJ0 = (dot_product(dNY0, NX) + dot_product(NY0, dNX) - J0 *dGX) / GX;
+    double dJ1 = (dot_product(dNY1, NX) + dot_product(NY1, dNX) - J1 *dGX) / GX;
+
+    // Compute the penalty function
+    dTotalPenalty += PenaltyFunctionDerivative(J0, 10, 40) * dJ0;
+    dTotalPenalty += PenaltyFunctionDerivative(J1, 10, 40) * dJ1;
+    }
+  delete itQuad;
+
+  // Return the total value
+  return dTotalPenalty;
+}
+    
+// Print a verbose report
+void 
+BoundaryJacobianEnergyTerm
+::PrintReport(ostream &sout)
+{
+  sout << "  Boundary Jacobian Term " << endl;
+  sout << "    total match  : " << xTotalPenalty << endl;
+  sout << "    min jacobian : " << xMinJacobian << endl;  
+  sout << "    max jacobian : " << xMaxJacobian << endl;  
+  sout << "    avg jacobian : " << xAvgJacobian << endl;  
+}
+
+/* 
+double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
 {
   // Place to store the Jacobian
   xTotalPenalty = 0.0;
@@ -471,94 +724,204 @@ BoundaryJacobianEnergyTerm
   sout << "    max jacobian : " << xMaxJacobian << endl;  
   sout << "    avg jacobian : " << xAvgJacobian << endl;  
 }
+*/
 
 /*********************************************************************************
  * VOLUME OVERLAP IMAGE MATCH TERM
  ********************************************************************************/
-VolumeOverlapEnergyTerm::VolumeOverlapEnergyTerm( FloatImage *xImage, size_t nCuts)
+ProbabilisticEnergyTerm::ProbabilisticEnergyTerm(FloatImage *xImage, size_t nCuts)
 {
   // Store the inputs
   this->nCuts = nCuts;
   this->xImage = xImage;
 
   // Compute the image volume (it remains a constant throughout)
-  xImageVolume = xImage->ComputeObjectVolume();
+  xImageIntegral = xImage->IntegratePositiveVoxels();
 }
 
-double VolumeOverlapEnergyTerm::ComputeEnergy(SolutionData *data)
+double ProbabilisticEnergyTerm::ComputeEnergy(SolutionDataBase *data)
 {
-  // Clear the intersection volume accumulator
-  xIntersect = 0;
-  
   // Make sure that the solution data has internal weights and points
   data->UpdateInternalWeights(nCuts);
 
-  // Construct the 'match with the image' function
-  FloatImageVolumeElementFunctionAdapter fImage(xImage);
+  // Construct the 'match with the image' function. We simply use the raw
+  // image intensity here
+  FloatImageEuclideanFunctionAdapter fImage(xImage);
 
-  // Interpolate the image at each internal point
-  size_t nInternal = data->xAtomGrid->GetNumberOfInternalPoints(nCuts);
-  double *xImageValue = new double[nInternal];
-  for(size_t i = 0; i < nInternal; i++)
-    xImageValue[i] = fImage.Evaluate(data->xInternalPoints[i]);
+  // Clear the intersection volume accumulator
+  xObjectIntegral = 0;
 
-  // Iterate over all the profiles (intervals of the sail vectors)
-  /* 
-  MedialProfileIntervalIterator *itProfile = 
-    data->xAtomGrid->NewProfileIntervalIterator(nCuts);
-  
-  for( ; !itProfile->IsAtEnd(); ++(*itProfile) )
-    {
-    // Get the two points on this profile stick
-    size_t i1 = itProfile->GetInnerPointIndex();
-    size_t i2 = itProfile->GetOuterPointIndex();
-    double m1 = xImageValue[i1], m2 = xImageValue[i2];
-    
-    // Compute the fraction of the profile that lies inside the positive
-    // range of the image. 
-    double xLocal;    
-    if(m1 > 0 && m2 > 0)
-      xLocal = 1.0;
-    else if(m1 <= 0 && m2 <= 0)
-      xLocal = 0.0;
-    else if(m1 > 0)
-      xLocal = m1 / (m1 - m2);
-    else
-      xLocal = m2 / (m2 - m1);
+  // double xVolume = 0.0;
 
-    // Get the weight assigned to this profile
-    double w = data->xInternalProfileWeights[itProfile->GetIndex()];
-
-    // Add the weighted sum to the match
-    xIntersect += w * xLocal;
-    }
-  
-  delete itProfile; 
-  */
-  
+  // Iterate over all the points inside the object and take the image value
   MedialInternalPointIterator *it = data->xAtomGrid->NewInternalPointIterator(nCuts);
   for(; !it->IsAtEnd(); ++(*it))
     {
-    double xLocal = 0.5 * (1.0 + xImageValue[it->GetIndex()]);
-    double w = data->xInternalWeights[it->GetIndex()];
-    xIntersect += xLocal * w;
+    size_t i = it->GetIndex();
+    xObjectIntegral += 
+      data->xInternalWeights[i] * fImage.Evaluate(data->xInternalPoints[i]);
+    // xVolume += data->xInternalWeights[i];
     }
   delete it;
+
+  // cout << "Bonehead Volume : " << xVolume << endl;
+
+  // Compute the ratio of image integral and maximum possible value
+  return xRatio = 1.0 - xObjectIntegral / xImageIntegral;
+}
+
+double ProbabilisticEnergyTerm::BeginGradientComputation(SolutionData *S)
+{
+  // FloatImageTestFunction fImage;
+  FloatImageEuclideanFunctionAdapter fImage(xImage);
+
+  // Compute boundary weights
+  S->UpdateBoundaryWeights();
+
+  // double xVolume = 0.0;
   
+  // Allocate the array of boundary normal vectors, scaled by area element
+  xBndNrm = new SMLVec3d[S->xAtomGrid->GetNumberOfBoundaryPoints()];
+
+  // Also, allocate an array of image intensities along the boundary
+  xImageVal = new double[S->xAtomGrid->GetNumberOfBoundaryPoints()];
+
+  // Compute the boundary normal vectors
+  MedialBoundaryPointIterator *it = S->xAtomGrid->NewBoundaryPointIterator();
+  for(; !it->IsAtEnd(); ++(*it))
+    {
+    size_t i = it->GetIndex();
+    BoundaryAtom &bat = GetBoundaryPoint(it, S->xAtoms);
+    xImageVal[i] = fImage.Evaluate(bat.X);
+    xBndNrm[i] = S->xBoundaryWeights[i] * bat.N;
+
+    // xVolume += dot_product(bat.X, xBndNrm[i]);
+    }
+  delete it;
+
+  // cout << "Green's Theorem Volume: " << xVolume / 3.0 << endl;
+
+  // Finally, compute the actual volume overlap measure
+  return ComputeEnergy(S);
+}
+  
+double ProbabilisticEnergyTerm::ComputePartialDerivative(
+  SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  // Main thing to compute is the derivative of the intersect region
+  double dObjectIntegral = 0.0;
+
+  // Iterate over boundary points, computing Green's Law derivative
+  MedialBoundaryPointIterator *it = S->xAtomGrid->NewBoundaryPointIterator();
+  for(; !it->IsAtEnd(); ++(*it))
+    {
+    size_t i = it->GetIndex();
+    double NdX = dot_product(xBndNrm[i], GetBoundaryPoint(it, dS->xAtoms).X);
+    dObjectIntegral += xImageVal[i] * NdX;
+    }
+  delete it;
+
+  // Take the derivative of the relative overlap measure
+  return - dObjectIntegral / xImageIntegral;
+}
+
+void ProbabilisticEnergyTerm::EndGradientComputation()
+{
+  delete xBndNrm;
+  delete xImageVal;
+}
+
+void ProbabilisticEnergyTerm::PrintReport(ostream &sout)
+{
+  sout << "  Probabilistic Energy Term: " << endl;
+  sout << "    object integral: " << xObjectIntegral << endl;
+  sout << "    image integral : " << xImageIntegral << endl;
+  sout << "    ratio          : " << xObjectIntegral / xImageIntegral << endl;
+  sout << "    final value    : " << xRatio << endl;
+}
+
+
+/*
+double VolumeOverlapEnergyTerm::BeginGradientComputation(SolutionData *S)
+{
+  // Clear the intersection volume accumulator
+  xIntersect = 0;
+
+  // Make sure that the solution data has internal weights and points
+  S->UpdateInternalWeights(nCuts);
+
+  // Construct the 'match with the image' function
+  // FloatImageVolumeElementFunctionAdapter fImage(xImage);
+  FloatImageTestFunction fImage;
+
+  // Initialize the array of image values and gradients
+  xImageVal = new double[S->xAtomGrid->GetNumberOfInternalPoints(nCuts)];
+  xImageGrad = new SMLVec3d[S->xAtomGrid->GetNumberOfInternalPoints(nCuts)];
+
+  // Iterate over all the points inside the object and take the image value
+  MedialInternalPointIterator *it = S->xAtomGrid->NewInternalPointIterator(nCuts);
+  for(; !it->IsAtEnd(); ++(*it))
+    {
+    size_t iPoint = it->GetIndex();
+
+    // Take the image value and store it for later
+    xImageVal[iPoint] = fImage.Evaluate(S->xInternalPoints[iPoint]);
+
+    // Compute the image gradient as well
+    xImageGrad[iPoint] = fImage.ComputeGradient(S->xInternalPoints[iPoint]);
+
+    // Compute the weight and the weighted image value
+    double w = S->xInternalWeights[iPoint];
+    xIntersect += xImageVal[iPoint] * w; 
+    }
+  delete it;
+
   // Get (remember) the object volume 
-  xObjectVolume = data->xInternalVolume;
+  xObjectVolume = S->xInternalVolume;
 
   // Compute the volume overlap measure
-  xOverlap = xIntersect / (xImageVolume + xObjectVolume - xIntersect); 
-
-  // Clean up
-  delete xImageValue;
+  xUnion = xImageVolume + xObjectVolume - xIntersect;
+  xOverlap = xIntersect / xUnion;
 
   // Return a value that can be minimized
   return 1.0 - xOverlap;
 }
 
-/*
+double VolumeOverlapEnergyTerm::ComputePartialDerivative(
+  SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  // Make sure the weights are computed in the derivative data
+  dS->UpdateInternalWeights(nCuts);
+
+  // Compute the derivative of the intersection volume
+  double dIntersect = 0.0;
+
+  for(size_t i = 0; i < S->xAtomGrid->GetNumberOfInternalPoints(nCuts); i++)
+    {
+    // Simple chain rule applies
+    dIntersect += dS->xInternalWeights[i] * xImageVal[i] + 
+      S->xInternalWeights[i] * dot_product(dS->xInternalPoints[i], xImageGrad[i]);
+    }
+
+  // Now compute the derivative of the overlap volume
+  double dObjectVolume = dS->xInternalVolume;
+  double dUnion = dObjectVolume - dIntersect;
+  double dOverlap = 
+    ( dIntersect * xUnion - xIntersect * dUnion ) / (xUnion * xUnion );
+
+  // Done!
+  return -dOverlap;
+}
+
+void VolumeOverlapEnergyTerm::EndGradientComputation()
+{
+  delete xImageVal;
+  delete xImageGrad;
+}
+*/
+  
+  
+  /*
 double VolumeOverlapEnergyTerm::BeginGradientComputation(SolutionData *S)
 {
   // Get info about the problem
@@ -645,7 +1008,7 @@ void VolumeOverlapEnergyTerm::EndGradientComputation()
   delete xImageVal;
 }
 */
-
+/*
 void VolumeOverlapEnergyTerm::PrintReport(ostream &sout)
 {
   sout << "  Volume Overlap Term: " << endl;
@@ -654,11 +1017,12 @@ void VolumeOverlapEnergyTerm::PrintReport(ostream &sout)
   sout << "    intersection   : " << xIntersect << endl;
   sout << "    overlap ratio  : " << xOverlap << endl;
 }
+*/
   
 /*********************************************************************************
  * Crest Laplacian Penalty Term: Assure negative Rho on the crest
  ********************************************************************************/
-double CrestLaplacianEnergyTerm::ComputeEnergy(SolutionData *data)
+double CrestLaplacianEnergyTerm::ComputeEnergy(SolutionDataBase *data)
 {
   // Initialize the accumulators
   xMaxLaplacian = -1e10;
@@ -710,39 +1074,53 @@ void CrestLaplacianEnergyTerm::PrintReport(ostream &sout)
 /*********************************************************************************
  * Atom Badness Penalty term
  ********************************************************************************/
-double AtomBadnessTerm::ComputeEnergy(SolutionData *data)
+double AtomBadnessTerm::ComputeEnergy(SolutionDataBase *data)
 {
   // Initialize the accumulators
   xMaxBadness = 0;
   xTotalPenalty = xAvgBadness = 0.0;
-  nBadAtoms = nAtoms = 0;
+  nBadAtoms = 0;
   
   // Iterate over all crest atoms
   MedialAtomIterator *itAtom = data->xAtomGrid->NewAtomIterator();
   for( ; !itAtom->IsAtEnd(); ++(*itAtom) )
     {
-    double x = data->xAtoms[itAtom->GetIndex()].xBadness;
-
-    // Update the minimum value
-    if(x > xMaxBadness) xMaxBadness = x;
-
-    // Update the bad atom counter 
-    if(x > 0) nBadAtoms++;
-    nAtoms++;
-
-    // Update the average
-    xAvgBadness += x;
-
-    // Update the total penalty
-    xTotalPenalty += 100 * x;
+    // We only care about invalid atoms
+    MedialAtom &A = data->xAtoms[itAtom->GetIndex()];
+    if(!A.flagValid)
+      {
+      nBadAtoms++;
+      xTotalPenalty += A.xGradRMagSqr - 1.0;
+      }
     }
   delete itAtom;
 
   // Finish up
-  xAvgBadness /= nBadAtoms;
+  nAtoms = data->xAtomGrid->GetNumberOfAtoms();
+  xAvgBadness = xTotalPenalty / nBadAtoms;
 
+  // Return the total penalty
   return xTotalPenalty;
 }  
+
+double AtomBadnessTerm::ComputePartialDerivative(
+  SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  // Initialize the accumulators
+  double dTotalPenalty = 0.0;
+  
+  // Iterate over all crest atoms
+  MedialAtomIterator *itAtom = S->xAtomGrid->NewAtomIterator();
+  for( ; !itAtom->IsAtEnd(); ++(*itAtom) )
+    {
+    size_t i = itAtom->GetIndex();
+    if(!S->xAtoms[i].flagValid)
+      dTotalPenalty += dS->xAtoms[i].xGradRMagSqr;
+    }
+  delete itAtom;
+
+  return dTotalPenalty;
+}
 
 void AtomBadnessTerm::PrintReport(ostream &sout)
 {
@@ -798,7 +1176,7 @@ double MedialRegularityTerm::ComputeDistortionPenalty(
   return xPenalty;
 }
 
-double MedialRegularityTerm::ComputeEnergy(SolutionData *data)
+double MedialRegularityTerm::ComputeEnergy(SolutionDataBase *data)
 {
   // The prior is based on the distortion in terms of distances between adjacent 
   // atoms as compared to the template. We iterate over the edges on the medial 
@@ -873,8 +1251,8 @@ double MedialOptimizationProblem::Evaluate(double *X)
   for(size_t iTerm = 0; iTerm < xTerms.size(); iTerm++)
     { xSolution += xTerms[iTerm]->ComputeEnergy(&S0) * xWeights[iTerm]; }
 
-  cout << "RESULT:" << xSolution << endl;
-  PrintReport(cout);
+  // cout << "RESULT:" << xSolution << endl;
+  // PrintReport(cout);
 
   // Return the result
   return xSolution;
@@ -894,57 +1272,54 @@ MedialOptimizationProblem
   // xSolver->SetDefaultInitialGuess();
   xSolver->Solve(xPrecision);
 
-  // Use current solution as the guess
-  xSolver->SetSolutionAsInitialGuess();
-
   // Create a solution data object representing current solution
-  SolutionData *SCenter = new SolutionData(xSolver);
-  
+  SolutionData S(xSolver);
+
   // Compute the value at the solution and init gradient computation
   xSolution = 0.0;
   for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
     xSolution += 
-      xWeights[iTerm] * xTerms[iTerm]->BeginGradientComputation(SCenter);
+      xWeights[iTerm] * xTerms[iTerm]->BeginGradientComputation(&S);
+
+  // Allocate an array of derivative atoms
+  MedialAtom *dAtoms = new MedialAtom[xSolver->GetAtomGrid()->GetNumberOfAtoms()];
 
   // Repeat for each coefficient
   for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)
     {
-    // Increment the coefficient by epsilon
-    double xOldValue = xCoeff->GetCoefficient(iCoeff);
+    // Get an adapter for evaluating the function
+    IHyperSurface2D *xVariation = xCoeff->GetComponentSurface(iCoeff);
 
-    // Compute the forward difference
-    xCoeff->SetCoefficient(iCoeff, xOldValue + xEpsilon);
-    xSolver->Solve(xPrecision); 
-    SolutionData *SFwd = new SolutionData(xSolver);
+    // Compute the partial derivatives with respect to the coefficients
+    xSolver->ComputeVariationalDerivative(xVariation, dAtoms); 
 
-    // Compute the backward difference
-    xCoeff->SetCoefficient(iCoeff, xOldValue - xEpsilon);
-    xSolver->Solve(xPrecision); 
-    SolutionData *SBck = new SolutionData(xSolver);
-
-    // Restore the old solution value
-    xCoeff->SetCoefficient(iCoeff, xOldValue);
-
+    // Create a solution partial derivative object
+    PartialDerivativeSolutionData dS(&S, dAtoms);
+    
     // Compute the partial derivatives for each term
     XGradient[iCoeff] = 0.0;
     for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
       XGradient[iCoeff] += xWeights[iTerm] *
-        xTerms[iTerm]->ComputePartialDerivative(SCenter, SFwd, SBck, xEpsilon);
+        xTerms[iTerm]->ComputePartialDerivative(&S, &dS);
 
     // Dump the gradient
     // cout << iCoeff << "; " << XGradient[iCoeff] << endl;
     cout << "." << flush;
 
-    // Delete the solutions
-    delete SFwd; delete SBck;
+    // Release the component surface
+    xCoeff->ReleaseComponentSurface(xVariation);
     }
+
+  // Clear up gradient computation
+  for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
+    xTerms[iTerm]->EndGradientComputation();
+
+  // Delete the derivative atoms array
+  delete dAtoms;
 
   // Increment the evaluation counter
   cout << endl;
   evaluationCost += nCoeff;
-
-  // Clean up everything
-  delete SCenter;
 
   // Return the solution value
   return xSolution;

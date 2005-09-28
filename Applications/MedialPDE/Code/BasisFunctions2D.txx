@@ -76,6 +76,28 @@ GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV
     }
 }
 
+
+template< size_t NComponents, size_t NOrder, typename BasisFunctionU, typename BasisFunctionV >
+void
+GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV>
+::PrintReport()
+{
+  size_t iu, iv, c0;
+
+  for(c0 = 0; c0 < NComponents; c0++)
+    {
+    unsigned int iOffset = 0;
+    cout << "F_" << c0 << "[u,v] = "; 
+    for(iv = 0; iv < ncv; iv++) for(iu = 0; iu < ncu; iu++) 
+      {
+      if(iOffset > 0) cout << " + ";
+      cout << C[iOffset + c0] << " * f[u," << iu << "] * f[v," << iv << "]";
+      iOffset += NComponents;
+      }
+    cout << endl;
+    }
+}
+
 template< size_t NComponents, size_t NOrder, typename BasisFunctionU, typename BasisFunctionV >
 void
 GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV>
@@ -312,24 +334,26 @@ GenericBasisRepresentation2D<NComponents,NOrder,BasisFunctionU,BasisFunctionV>
   xParent->GetEvaluationGrid(uu, vv);
 }
 
-template< size_t NComponents, size_t NOrder, typename BasisFunctionU, typename BasisFunctionV >
-typename GenericBasisRepresentation2D<NComponents,NOrder,BasisFunctionU,BasisFunctionV>
-::SingleFunctionAdapter 
+template<
+  size_t NComponents, size_t NOrder, 
+  typename BasisFunctionU, typename BasisFunctionV >
+IHyperSurface2D *
 GenericBasisRepresentation2D<NComponents,NOrder,BasisFunctionU,BasisFunctionV>
 ::GetComponentSurface(size_t icu, size_t icv, size_t iComp)
 {
-  SingleFunctionAdapter xAdapt;
-  xAdapt.xParent = this;
-  xAdapt.icu = icu;
-  xAdapt.icv = icv;
-  xAdapt.iComp = iComp;
+  SingleFunctionAdapter *xAdapt = new SingleFunctionAdapter;
+  xAdapt->xParent = this;
+  xAdapt->icu = icu;
+  xAdapt->icv = icv;
+  xAdapt->iComp = iComp;
 
   return xAdapt;
 }
 
-template< size_t NComponents, size_t NOrder, typename BasisFunctionU, typename BasisFunctionV >
-typename GenericBasisRepresentation2D<NComponents,NOrder,BasisFunctionU,BasisFunctionV>
-::SingleFunctionAdapter 
+template<
+  size_t NComponents, size_t NOrder, 
+  typename BasisFunctionU, typename BasisFunctionV >
+IHyperSurface2D*
 GenericBasisRepresentation2D<NComponents,NOrder,BasisFunctionU,BasisFunctionV>
 ::GetComponentSurface(size_t iRawComponent)
 {
@@ -338,3 +362,12 @@ GenericBasisRepresentation2D<NComponents,NOrder,BasisFunctionU,BasisFunctionV>
   return GetComponentSurface(icu, icv, iComp);
 }
 
+template< 
+  size_t NComponents, size_t NOrder, 
+  typename BasisFunctionU, typename BasisFunctionV >
+void
+GenericBasisRepresentation2D<NComponents,NOrder,BasisFunctionU,BasisFunctionV>
+::ReleaseComponentSurface(IHyperSurface2D *xSurface)
+{
+  delete xSurface;
+}

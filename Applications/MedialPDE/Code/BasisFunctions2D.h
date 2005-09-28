@@ -34,6 +34,9 @@ public:
 
   /** Get the number of dimensions of the surface */
   virtual size_t GetNumberOfDimensions() = 0;
+
+  /** Print a report about this surface */
+  virtual void PrintReport() {};
 };
 
 class IMutableHyperSurface2D : virtual public IHyperSurface2D
@@ -79,6 +82,10 @@ public:
    * Coarseness of zero should mean minimal number of coefficients, and
    * coarseness of one is the maximal numner of coefficients */
   virtual IMedialCoefficientMask *NewCoarseToFineCoefficientMask(double *xCoarseness) = 0;
+
+  /** Get a component surface corresponding to a coefficient */
+  virtual IHyperSurface2D *GetComponentSurface(size_t iRawCoefficient) = 0;
+  virtual void ReleaseComponentSurface(IHyperSurface2D *xSurface) = 0;
 };
   
 /**
@@ -213,9 +220,17 @@ public:
   void GetNumberOfCoefficientsUV(size_t &ncu, size_t &ncv)
     { ncu = this->ncu; ncv = this->ncv; }
 
+  /** Debug report */
+  void PrintReport();
+
   /** Get one of the components as a surface */
-  SingleFunctionAdapter GetComponentSurface(size_t icu, size_t icv, size_t iComp);
-  SingleFunctionAdapter GetComponentSurface(size_t iRawComponent);
+  IHyperSurface2D *GetComponentSurface(size_t iRawCoefficient);
+
+  /** Free the memory associated with the component surface */
+  void ReleaseComponentSurface(IHyperSurface2D *xSurface);
+
+  /** Get the component by u, v, comp index */
+  IHyperSurface2D *GetComponentSurface(size_t icu, size_t icv, size_t iComp);
 
 protected:
   // The raw array of coefficients (without pointers)

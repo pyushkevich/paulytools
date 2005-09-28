@@ -202,11 +202,11 @@ PDESplineRenderer
   glBegin(GL_POINTS);
   for(size_t i = 0; i < solver->GetAtomGrid()->GetNumberOfAtoms(); i++)
     {
-    if(mp[i].xBadness > 0)
-        glColor3d(0,1,0);
-    else 
+    if(mp[i].flagValid)
         glColor3d(1,1,0);
-    glVertex3d(20 * mp[i].u - 10, 20 * mp[i].v - 10, mp[i].xBadness);
+    else 
+        glColor3d(0,1,0);
+    glVertex3d(20 * mp[i].u - 10, 20 * mp[i].v - 10, mp[i].xGradRMagSqr - 1.0);
     }
   glEnd();
   

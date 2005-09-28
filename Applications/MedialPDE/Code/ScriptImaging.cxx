@@ -30,6 +30,31 @@ FloatImage::~FloatImage()
   delete xGradient[2];
 }
 
+
+// Interpolate the image at a given position
+float FloatImage::Interpolate(const SMLVec3d &x)
+{ 
+  return xImage->Interpolate(x[0], x[1], x[2], xOutsideValue); 
+}
+
+// Interpolate the image gradient
+void FloatImage::InterpolateImageGradient(const SMLVec3d &x, SMLVec3f &g)
+{
+  g[0] = xGradient[0]->Interpolate(x[0], x[1], x[2], 0.0f);
+  g[1] = xGradient[1]->Interpolate(x[0], x[1], x[2], 0.0f);
+  g[2] = xGradient[2]->Interpolate(x[0], x[1], x[2], 0.0f);
+}
+
+// Interpolate the image gradient
+void FloatImage::InterpolateImageGradient(const SMLVec3d &x, SMLVec3d &g)
+{
+  g[0] = xGradient[0]->Interpolate(x[0], x[1], x[2], 0.0f);
+  g[1] = xGradient[1]->Interpolate(x[0], x[1], x[2], 0.0f);
+  g[2] = xGradient[2]->Interpolate(x[0], x[1], x[2], 0.0f);
+}
+
+
+
 void FloatImage::LoadFromFile(const char *file)
 {
   // Load an image from ITK
@@ -191,6 +216,32 @@ void FloatImage
     fltDerivative->Update();
     xGradient[d]->SetInternalImage(fltDerivative->GetOutput());
     }
+}
+
+double FloatImage::IntegratePositiveVoxels()
+{
+  // Create an iterator
+  typedef itk::Image<float, 3> FloatImageType;
+  typedef itk::ImageRegionConstIterator<FloatImageType> IteratorType;
+
+  // Take the sum of all positive voxels in the image
+  double xPositiveSum = 0.0;
+
+  FloatImageType::Pointer img = xImage->GetInternalImage();
+  IteratorType it(img, img->GetBufferedRegion());
+  while(!it.IsAtEnd())
+    {
+    if(it.Get() > 0)
+      xPositiveSum += it.Get();
+    ++it;
+    }
+
+  // Scale the positive sum by the volume of the voxel
+  double xVoxelVolume = 
+    img->GetSpacing()[0] * img->GetSpacing()[1] * img->GetSpacing()[2];
+
+  // Return the total probability of the positive region
+  return xPositiveSum * xVoxelVolume;
 }
 
 double FloatImage::ComputeObjectVolume()

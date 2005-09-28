@@ -4,6 +4,9 @@
 #include "MedialPDESolver.h"
 #include "CartesianMedialAtomGrid.h"
 #include "OptimizationTerms.h"
+#include "CoefficientMask.h"
+#include "TestSolver.h"
+#include "vnl/vnl_erf.h"
 
 #include <string>
 #include <iostream>
@@ -11,8 +14,67 @@
 using namespace std;
 using namespace medialpde;
 
-//string dirWork = "/home/pauly/data2005/Stanley/data/";
-string dirWork = "/mnt/data2/PUBLIC/Data/Input/StanleySchizophrenia/";
+string dirWork = "/home/pauly/data2005/Stanley/data/";
+//string dirWork = "/mnt/data2/PUBLIC/Data/Input/StanleySchizophrenia/";
+
+/**
+ * This is a test class that is a sphere that pretends to be a floating
+ * point image. The idea is to use this ellipsoid for testing image-based
+ * derivative code, as the derivatives computed here are exact rather than
+ * numerical.
+ */
+class TestFloatImage : public FloatImage
+{
+public:
+  TestFloatImage(const SMLVec3d &C, double R, double sigma)
+    {
+    this->C = C;
+    this->R = R;
+    this->sigma = sigma;
+    } 
+
+  // Interpolate the image at a given position
+  float Interpolate(const SMLVec3d &x)
+    { 
+    double u = ( R - (x - C).two_norm() ) / sigma;
+    return vnl_erf(u);
+    }
+    
+  // Interpolate the image gradient
+  void InterpolateImageGradient(const SMLVec3d &x, SMLVec3f &g)
+    {
+    SMLVec3d g1;
+    InterpolateImageGradient(x, g1);
+    g[0] = (float) g1[0];
+    g[1] = (float) g1[1];
+    g[2] = (float) g1[2];
+    }
+
+  // Interpolate the image gradient
+  void InterpolateImageGradient(const SMLVec3d &x, SMLVec3d &g)
+    {
+    double z = (x - C).two_norm();
+    double u = ( R - z ) / sigma;
+    double a = 2.0 * exp(-u * u) / sqrt(M_PI);
+    
+    g[0] = a * (- (x[0] - C[0]) / z) / sigma;
+    g[1] = a * (- (x[1] - C[1]) / z) / sigma;
+    g[2] = a * (- (x[2] - C[2]) / z) / sigma;
+    }
+
+  // Integrate positive voxels in the image volume
+  double IntegratePositiveVoxels()
+    {
+    // This is a hack!
+    return 4.0 * M_PI * R * R * R / 3.0;
+    }
+
+private:
+  SMLVec3d C;
+  double R, sigma;
+};
+
+
 
 class TestFunction01 : public EuclideanFunction
 {
@@ -201,20 +263,82 @@ void TestCellVolume()
     SMLVec3d(1,0,0),SMLVec3d(1,0,3),SMLVec3d(1,2,0),SMLVec3d(1,2,3)) << endl;
 }
 
-void TestVisualization()
+/**
+ * This test routine makes sure that the derivatives computed in the MedialPDE
+ * solver and related classes are correct, bt comparing them to central
+ * difference derivatives
+ */
+void TestDerivativesNoImage()
 {
-  MedialPDE mp(2, 4, 101, 101, 0.5, 0, 0);
-  // mp.LoadFromParameterFile((dirWork + "/init/init.mpde").c_str());
-  // mp.GetSolver()->SetSolutionAsInitialGuess();
-  // mp.GetSolver()->TestFiniteDifferenceConvergence();
-  mp.LoadFromParameterFile((dirWork + "/init/init.mpde").c_str());
-  // mp.Solve();
+  MedialPDE mp(2, 4, 33, 65, 0.5, 0, 0);
+  mp.LoadFromParameterFile((dirWork + "/init/init2.mpde").c_str());
 
-  // mp.TestDerivativeComputation(3);
-  // mp.TestDerivativeComputation(9);
-                                                                                                                                                   
-  RenderMedialPDE(&mp);  
+  // Test straight-through gradient computation
+  PassThroughCoefficientMask xMask(mp.GetSurface());
+  TestGradientComputation(mp.GetSolver(), &xMask);
+
+  // Test affine transform gradient computation
+  AffineTransformCoefficientMask xAffineMask(mp.GetSurface());
+  TestGradientComputation(mp.GetSolver(), &xAffineMask);
 }
+
+void TestDerivativesWithImage()
+{
+  string fnCMRep = dirWork + "cmrep/st1001L/st1001L.align.mpde";
+  string fnImage = dirWork + "hippo/imgblur/st1001L_med";
+  // Load the Medial PDE
+  MedialPDE mp(2, 4, 33, 81, 0.5, 0, 0);
+  mp.LoadFromParameterFile(fnCMRep.c_str());
+  
+  // Load an image and its derivatives
+  // FloatImage img;
+  // img.LoadFromPath(fnImage.c_str(),"mha");
+  
+  SMLVec3d C = mp.GetSurface()->GetCenterOfRotation().extract(3);
+  TestFloatImage img( C, 7.0, 4.0 );
+
+  // Create an array of image match terms
+  vector<EnergyTerm *> vt;
+  vt.push_back(new BoundaryJacobianEnergyTerm());
+  vt.push_back(new BoundaryImageMatchTerm(&img));
+  vt.push_back(new ProbabilisticEnergyTerm(&img, 4));
+
+  // Create an array of masks
+  vector<IMedialCoefficientMask *> vm;
+  vm.push_back(new PassThroughCoefficientMask(mp.GetSurface()));
+  vm.push_back(new AffineTransformCoefficientMask(mp.GetSurface()));
+
+  // Create labels
+  char *nt[] = {
+    "BoundaryJacobianEnergyTerm", 
+    "BoundaryImageMatchTerm",
+    "ProbabilisticEnergyTerm" };
+  char *nm[] = {
+    "PassThroughCoefficientMask",
+    "AffineTransformCoefficientMask" };
+
+  // Loop over both options
+  size_t i, j;
+  for(i = 0; i < vt.size(); i++) for(j = 0; j < vm.size(); j++)
+    {
+    cout << "-------------------------------------------------------------------" << endl;
+    cout << " TESTING " << nt[i] << " ON " << nm[j] << endl;
+    cout << "-------------------------------------------------------------------" << endl;
+    
+    // Set up the test
+    MedialOptimizationProblem mop(mp.GetSolver(), vm[j]);
+    mop.AddEnergyTerm(vt[i], 1.0);
+    TestOptimizerGradientComputation(mop, *vm[j], mp.GetSolver());
+    }
+
+  // Delete both pointers
+  for(i = 0; i < vt.size(); i++) 
+    delete vt[i];
+  
+  for(j = 0; j < vm.size(); j++)
+    delete vm[j];
+}
+
 
 void TestFDMasksInMedialSolver()
 {
@@ -228,8 +352,25 @@ void TestFDMasksInMedialSolver()
 
 int main(int argc, char *argv[])
 {
-  // TestCellVolume();
-  TestVisualization();
+  // Different tests that can be executed
+  if(argc == 1)
+    {
+    cout << "testpde: MedialPDE Test Module" << endl;
+    cout << "  usage: testpde TEST_ID [parameters] " << endl;
+    cout << "  tests: " << endl;
+    cout << "    DERIV1            Check analytic derivative PDEs." << endl;
+    cout << "    DERIV2            Check gradient computation in image match terms." << endl;
+    cout << endl;
+    return -1;
+    }
+
+  // Choose a test depending on the parameters
+  if(0 == strcmp(argv[1], "DERIV1"))
+    TestDerivativesNoImage();
+  else if(0 == strcmp(argv[1], "DERIV2"))
+    TestDerivativesWithImage();
+  else 
+    return -1;
   
   return 0;
 }

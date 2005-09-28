@@ -17,6 +17,9 @@ using medialpde::FloatImage;
 class SolutionDataBase
 {
 public:
+  SolutionDataBase();
+  virtual ~SolutionDataBase();
+  
   // The grid on which atoms are sampled
   MedialAtomGrid *xAtomGrid;
 
@@ -36,7 +39,7 @@ public:
   double *xInternalProfileWeights;
 
   // Whether the boundary/internal weights have been computed
-  bool flagBoundaryWeights, flagInternalWeights;
+  bool flagBoundaryWeights, flagInternalWeights, flagOwnAtoms;
 
   // Number of internal cuts at which the weights have been computed
   size_t nInternalCuts, nInternalPoints, nProfileIntervals;
@@ -61,7 +64,7 @@ public:
   // Initialize the solution data using a grid and an array of derivative
   // atoms
   SolutionData(MedialPDESolver *xSolver);
-  ~SolutionData();
+  virtual ~SolutionData() {}
 
   /** This method makes sure that the boundary area information is computed.
    * If the information has already been computed, it will not be computed
@@ -71,6 +74,8 @@ public:
   /** This method makes sure that the volume information is computed at the
    * resolution (nCuts = number of cuts in medial sail) given */
   void UpdateInternalWeights(size_t nCuts);
+  
+  
 };
 
 class PartialDerivativeSolutionData : public SolutionDataBase
@@ -79,7 +84,7 @@ public:
 
   // Initialize the solution data using a grid
   PartialDerivativeSolutionData(SolutionData *xReference, MedialAtom *dAtoms);
-  ~PartialDerivativeSolutionData();
+  virtual ~PartialDerivativeSolutionData() {}
 
   /** This method makes sure that the boundary area information is computed.
    * If the information has already been computed, it will not be computed
@@ -94,25 +99,49 @@ private:
   SolutionData *xReference;
 };
 
+class OffsetSolutionData : public SolutionDataBase
+{
+public:
+
+  // Initialize the solution data using a grid
+  OffsetSolutionData(
+    SolutionData *sReference, 
+    PartialDerivativeSolutionData *sDerivative, 
+    double eps);
+    
+  virtual ~OffsetSolutionData() {}
+
+  /** This method makes sure that the boundary area information is computed.
+   * If the information has already been computed, it will not be computed
+   * again. */
+  void UpdateBoundaryWeights();
+
+  /** This method makes sure that the volume information is computed at the
+   * resolution (nCuts = number of cuts in medial sail) given */
+  void UpdateInternalWeights(size_t nCuts);
+
+private:
+  SolutionData *xReference;
+  PartialDerivativeSolutionData *xDerivative;
+  double xEpsilon;
+};
+
+
+
 class EnergyTerm 
 {
 public:
   // Compute the energy term 
-  virtual double ComputeEnergy(SolutionData *data) = 0;
+  virtual double ComputeEnergy(SolutionDataBase *data) = 0;
 
   // Initialize gradient computation and return the value of the solution
   // at the current state
-  virtual double BeginGradientComputation(SolutionData *SCenter);
-  
-  // Compute the partial derivative (must be called in the middle of Begin and
-  // End of GradientComputation.
-  virtual double ComputePartialDerivative(
-    SolutionData *SCenter, SolutionData *SFwd, SolutionData *SBck,
-    double xEpsilon); 
+  virtual double BeginGradientComputation(SolutionData *SCenter)
+    { return ComputeEnergy(SCenter); }
 
-  // Compute the partial derivative given the partial derivative of the atoms
-  // virtual double ComputePartialDerivative(
-  //  SolutionData *S, SolutionData *dS) = 0;
+  // Compute the partial derivative of the energy function
+  virtual double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS) = 0;
 
   // Finish gradient computation, remove all temporary data
   virtual void EndGradientComputation() {};
@@ -134,7 +163,7 @@ public:
     { return xEpsilon; }
   
   // Compute the finite difference gradient using epsilon
-  double ComputePartialDerivative(
+  virtual double ComputePartialDerivative(
     SolutionData *S, PartialDerivativeSolutionData *dS);
 
 private:
@@ -149,8 +178,8 @@ public:
     { this->xImage = image; }
 
   // Compute the image match
-  double ComputeEnergy(SolutionData *data);
-/*
+  double ComputeEnergy(SolutionDataBase *data);
+
   // Initialize gradient computation and return the value of the solution
   // at the current state
   double BeginGradientComputation(SolutionData *SCenter);
@@ -158,12 +187,11 @@ public:
   // Compute the partial derivative (must be called in the middle of Begin and
   // End of GradientComputation.
   double ComputePartialDerivative(
-    SolutionData *SCenter, SolutionData *SFwd, SolutionData *SBck,
-    double xEpsilon);
+    SolutionData *S, PartialDerivativeSolutionData *dS);
 
   // Finish gradient computation, remove all temporary data
   void EndGradientComputation();
-*/
+
   // Print a verbose report
   void PrintReport(ostream &sout);
 
@@ -175,7 +203,7 @@ private:
 
   // Temporaries for gradient computation
   SMLVec3d *xGradI;
-  double *xImageVal, xMatch, xArea;
+  double *xImageVal;
 };
 
 /**
@@ -185,16 +213,16 @@ private:
  * voxels, where values between 0 and 1 represent partial volume or
  * uncertainty
  */
-class VolumeOverlapEnergyTerm : public EnergyTerm
+class ProbabilisticEnergyTerm : public EnergyTerm
 {
 public:
   /** Initialize with an image and a number of sample points on each
    * medial sail vector */
-  VolumeOverlapEnergyTerm(FloatImage *image, size_t nCuts = 10);
+  ProbabilisticEnergyTerm(FloatImage *image, size_t nCuts = 10);
   
   /** Compute the volume overlap fraction between image and m-rep */
-  double ComputeEnergy(SolutionData *data);
-/*
+  double ComputeEnergy(SolutionDataBase *data);
+
   // Initialize gradient computation and return the value of the solution
   // at the current state
   double BeginGradientComputation(SolutionData *SCenter);
@@ -202,12 +230,60 @@ public:
   // Compute the partial derivative (must be called in the middle of Begin and
   // End of GradientComputation.
   double ComputePartialDerivative(
-    SolutionData *SCenter, SolutionData *SFwd, SolutionData *SBck,
-    double xEpsilon);
+    SolutionData *S, PartialDerivativeSolutionData *dS);
 
   // Finish gradient computation, remove all temporary data
   void EndGradientComputation();
-*/
+
+  // Print a verbose report
+  void PrintReport(ostream &sout);
+  
+private:
+  size_t nCuts;
+  FloatImage *xImage;
+
+  // Integral of object probability over the image
+  double xImageIntegral;
+
+  // Image values at the boundary
+  double *xImageVal;
+
+  // Scaled normal vectors along the boundary
+  SMLVec3d *xBndNrm;
+
+  // Cached Terms for reporting match details
+  double xObjectIntegral, xRatio;
+};
+
+/**
+ * This term computes the amount of volume overlap between an image and the
+ * m-rep. The image represents the object of interest with voxels of intensity
+ * 1.0 and background with intensity 0.0. The image should have floating point
+ * voxels, where values between 0 and 1 represent partial volume or
+ * uncertainty
+ */
+/*
+class VolumeOverlapEnergyTerm : public EnergyTerm
+{
+public:
+  // Initialize with an image and a number of sample points
+  VolumeOverlapEnergyTerm(FloatImage *image, size_t nCuts = 10);
+  
+  // Compute the volume overlap fraction between image and m-rep
+  double ComputeEnergy(SolutionDataBase *data);
+
+  // Initialize gradient computation and return the value of the solution
+  // at the current state
+  double BeginGradientComputation(SolutionData *SCenter);
+  
+  // Compute the partial derivative (must be called in the middle of Begin and
+  // End of GradientComputation.
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
+
+  // Finish gradient computation, remove all temporary data
+  void EndGradientComputation();
+
   // Print a verbose report
   void PrintReport(ostream &sout);
   
@@ -218,20 +294,27 @@ private:
 
   // Temporary for gradient computation
   double *xImageVal;
+  SMLVec3d *xImageGrad;
+  SMLVec3d *xBndNrm;
 
   // Cached Terms for reporting match details
-  double xIntersect, xObjectVolume, xOverlap;
+  double xIntersect, xObjectVolume, xOverlap, xUnion;
 };
+*/
 
-class BoundaryJacobianEnergyTerm : public EnergyTerm
+class BoundaryJacobianEnergyTerm : public NumericalGradientEnergyTerm
 {
 public:
   // Compute the energy
-  double ComputeEnergy(SolutionData *data);
+  double ComputeEnergy(SolutionDataBase *data);
 
   // Print a verbose report
   void PrintReport(ostream &sout);
 
+  // Compute the partial derivative term
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
+  
 private:
   // Maximum and minimum values of the Jacobian encountered during
   // optimization
@@ -239,13 +322,17 @@ private:
 
   /** Penalty function applied to the squared jacobian */
   double PenaltyFunction(double x, double a, double b)
-    { return exp( - a * x ) + exp( x - b ); }
+    { return exp(-a * x) + exp(x - b); }
+
+  /** The derivative of the penalty function */
+  double PenaltyFunctionDerivative(double x, double a, double b)
+    { return exp(x - b) - a * exp (-a * x); }
 };
 
-class CrestLaplacianEnergyTerm : public EnergyTerm
+class CrestLaplacianEnergyTerm : public NumericalGradientEnergyTerm
 {
 public:
-  double ComputeEnergy(SolutionData *data);
+  double ComputeEnergy(SolutionDataBase *data);
   void PrintReport(ostream &sout);
 private:
   double xMaxLaplacian, xAvgLaplacian, xTotalPenalty;
@@ -257,19 +344,23 @@ private:
 class AtomBadnessTerm : public EnergyTerm
 {
 public:
-  double ComputeEnergy(SolutionData *data);
+  double ComputeEnergy(SolutionDataBase *data);
   void PrintReport(ostream &sout);
+
+  // Compute the partial derivative
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
 private:
   double xMaxBadness, xAvgBadness, xTotalPenalty;
   size_t nBadAtoms, nAtoms;
 };
 
-class MedialRegularityTerm : public EnergyTerm
+class MedialRegularityTerm : public NumericalGradientEnergyTerm
 {
 public:
   /** Initialize the term with the template info */
   MedialRegularityTerm(MedialAtom *xTempAtoms, MedialAtomGrid *xTempGrid);
-  double ComputeEnergy(SolutionData *data);
+  double ComputeEnergy(SolutionDataBase *data);
   void PrintReport(ostream &sout);
 private:
   double ComputeDistortionPenalty(double, double);

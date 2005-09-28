@@ -197,11 +197,11 @@ MedialPDESolver
 
     // Compute the initial solution value as the distance from the nearest
     // edge
-    double uMin = i > m/2 ? uGrid[m-(i+1)] : uGrid[i];
-    double vMin = j > n/2 ? vGrid[n-(j+1)] : vGrid[j];
+    double uMin = i > m/2 ? uGrid[m-(i+1)] - uGrid[m-(i+2)] : uGrid[i+1] - uGrid[i];
+    double vMin = j > n/2 ? vGrid[n-(j+1)] - uGrid[n-(j+2)] : vGrid[j+1] - vGrid[j];
     
-    // xDefaultInitSoln[i][j] = 0.1 + uMin * uMin + vMin * vMin;
-    xDefaultInitSoln[i][j] = 1.0;
+    xDefaultInitSoln[i][j] = sqrt( uMin * uMin + vMin * vMin );
+    // xDefaultInitSoln[i][j] = 1.0;
 
     // xMasks[iSite]->PrintReport();
 
@@ -303,16 +303,18 @@ void MedialPDESolver::InitializeSiteGeometry()
 {
   size_t i, j;
   
+  /*
   // Generate a matrix of x, y, z values
-  // Mat vx(m, n), vy(m, n), vz(m, n);
+  Mat vx(m, n), vy(m, n), vz(m, n);
 
   // Sample the surface along the current grid
-	//  for(i = 0; i < m; i++) for(j = 0; j < n; j++)
-	//    {
-	//    double X[3];
-	//    xSurface->EvaluateAtGridIndex(i, j, 0, 0, 0, 3, X);
-	//    vx[i][j] = X[0]; vy[i][j] = X[1]; vz[i][j] = X[2];
-	//    }
+	for(i = 0; i < m; i++) for(j = 0; j < n; j++)
+	  {
+	  double X[3];
+	  xSurface->EvaluateAtGridIndex(i, j, 0, 0, 0, 3, X);
+	  vx[i][j] = X[0]; vy[i][j] = X[1]; vz[i][j] = X[2];
+	  }
+  */
 
   // Initialize each site with the current surface properties
   for(i = 0; i < m; i++) for(j = 0; j < n; j++)
@@ -335,13 +337,6 @@ void MedialPDESolver::InitializeSiteGeometry()
     xSurface->EvaluateAtGridIndex(i, j, 2, 0, 0, 3, xAtom.Xuu.data_block());
     xSurface->EvaluateAtGridIndex(i, j, 1, 1, 0, 3, xAtom.Xuv.data_block());
     xSurface->EvaluateAtGridIndex(i, j, 0, 2, 0, 3, xAtom.Xvv.data_block());
-
-		xSurface->EvaluateDerivative(u, v, 0, 0, 0, 3, xAtom.X.data_block());    
-		xSurface->EvaluateDerivative(u, v, 1, 0, 0, 3, xAtom.Xu.data_block());    
-		xSurface->EvaluateDerivative(u, v, 0, 1, 0, 3, xAtom.Xv.data_block());    
-		xSurface->EvaluateDerivative(u, v, 2, 0, 0, 3, xAtom.Xuu.data_block());    
-		xSurface->EvaluateDerivative(u, v, 1, 1, 0, 3, xAtom.Xuv.data_block());    
-		xSurface->EvaluateDerivative(u, v, 0, 2, 0, 3, xAtom.Xvv.data_block());    
 
 		/*    
     xAtom.X[0] = xMasks[iSite]->ComputeTwoJet(vx, xAtom.Xu[0], xAtom.Xv[0], xAtom.Xuu[0], xAtom.Xuv[0], xAtom.Xvv[0]);
@@ -372,12 +367,11 @@ void MedialPDESolver::InitializeSiteGeometry()
     if(xAtom.xLapR > 0 && xSites[iSite]->IsBorderSite()) 
       cout << xAtom.xLapR << " ! " << flush;
 
-    xAtom.xLapR = 0;
-
     // Compute the solution at this point
     xSites[iSite]->SetGeometry( &xAtom.G, xAtom.xLapR);
     }
     
+  /*
   // Define test function
 	Mat phitest(m, n, 0.0);
 	for(i = 0; i < m; i++) for(j = 0; j < n; j++)
@@ -389,27 +383,31 @@ void MedialPDESolver::InitializeSiteGeometry()
 	Mat LB1(m, n, 0.0), LB2(m, n, 0.0);
 	for(i = 1; i < m-1; i++) for(j = 1; j < n-1; j++)
 		{
-		LB1[i][j] = xSites[xSiteIndex[i][j]]->ComputeEquation(phitest);
+		LB1[i][j] = xSites[xSiteIndex[i][j]]->ComputeEquation(phitest) + xAtoms[xSiteIndex[i][j]].xLapR;
 		LB2[i][j] = EstimateLBOperator(phitest, i, j);
 		}
-		
-  cout << "AT 0.03, 0.03 " << endl;
-  MedialAtom &A = xAtoms[xSiteIndex[4][4]];
-  cout << A.u << " " << A.v << endl;
-  cout << "X : " << A.X << endl;
-  cout << "Xu : " << A.Xu << endl;
-  cout << "Xv : " << A.Xv << endl;
-  cout << "Xuu : " << A.Xuu << endl;
-  cout << "Xuv : " << A.Xuv << endl;
-  cout << "Xvv : " << A.Xvv << endl;
-		
-	cout << "ANALYTIC: " << endl;
-	cout << LB1.extract(12,12) << endl;
 
-	cout << "NUMERIC: " << endl;
-	cout << LB2.extract(12,12) << endl;
-	
-	
+  cout << "SURFACE INFO" << endl;
+  xSurface->PrintReport();
+
+  MedialAtom B;
+  B.X[0] = xMasks[xSiteIndex[8][8]]->ComputeTwoJet(vx, B.Xu[0], B.Xv[0], B.Xuu[0], B.Xuv[0], B.Xvv[0]);
+  B.X[1] = xMasks[xSiteIndex[8][8]]->ComputeTwoJet(vy, B.Xu[1], B.Xv[1], B.Xuu[1], B.Xuv[1], B.Xvv[1]);
+  B.X[2] = xMasks[xSiteIndex[8][8]]->ComputeTwoJet(vz, B.Xu[2], B.Xv[2], B.Xuu[2], B.Xuv[2], B.Xvv[2]);
+		
+  cout << "AT 0.04, 0.04 " << endl;
+  MedialAtom &A = xAtoms[xSiteIndex[8][8]];
+  cout << A.u << " " << A.v << endl;
+  cout << "X : " << A.X << " " << B.X << endl;
+  cout << "Xu : " << A.Xu << " " << B.Xu << endl;
+  cout << "Xv : " << A.Xv << " " << B.Xv << endl;
+  cout << "Xuu : " << A.Xuu << " " << B.Xuu << endl;
+  cout << "Xuv : " << A.Xuv << " " << B.Xuv << endl;
+  cout << "Xvv : " << A.Xvv << " " << B.Xvv << endl;
+		
+	cout << "ANALYTIC: " << LB1[8][8] << endl;
+	cout << "NUMERIC: " << LB2[8][8] << endl;
+  */
 }
 
 void
@@ -434,14 +432,13 @@ MedialPDESolver
       xAtom.F = xMasks[iLocal]->ComputeOneJet(ySolution, xAtom.Fu, xAtom.Fv);
 
       // Compute the boundary properties of the medial point
-      xAtom.ComputeBoundaryAtoms();
+      xAtom.ComputeBoundaryAtoms(xSites[iLocal]->IsBorderSite());
       }
     else
       {
       // What are we supposed to do?
       cout << "Negative F at " << xAtom.u << ", " << xAtom.v << endl;
-      xAtom.F = xAtom.Fu = xAtom.Fv = 0.0;
-      xAtom.R = xAtom.Ru = xAtom.Rv = 0.0;
+      xAtom.R = xAtom.F = xAtom.Fu = xAtom.Fv = 0.0;
       xAtom.flagValid = false;
       }
     }
@@ -496,7 +493,7 @@ double MedialPDESolver::SolveOnce(double delta)
     // Report the largest and smallest values in A and b
     double xMin, xMax;
     ArrayMinMax(xSparseValues, xRowIndex[nSites]-1, xMin, xMax);
-    cout << "max(A) = " << xMax << "; min(A) = " << xMin << endl;
+    // cout << "max(A) = " << xMax << "; min(A) = " << xMin << endl;
     
     // Perform the symbolic factorization only for the first iteration
     if(iIter == 0)
@@ -521,8 +518,8 @@ double MedialPDESolver::SolveOnce(double delta)
     cout << "  Largest Epsilon: " << epsMax << endl;
     cout << "  Largest Eqn Error: " << bMax << endl; 
     */
-    cout << "Step " << iIter << ":\t" << "eMax = " 
-      << epsMax << "\t" << "bMax = " << bMax << endl;
+    // cout << "Step " << iIter << ":\t" << "eMax = " 
+    //   << epsMax << "\t" << "bMax = " << bMax << endl;
     
     // Test the matrix result
     // SparseLinearTest(nSites, xRowIndex, xColIndex, xSparseValues, eps, zTest, b);
@@ -535,6 +532,7 @@ double MedialPDESolver::SolveOnce(double delta)
       break;
     }
 
+  /* 
   // Show the value of phi at the four corners
   cout << "Corner Phi Values: " << 
     y[0][0] << ", " << y[0][n-1] << ", " << y[m-1][1] << ", " << y[m-1][n-1] << endl;
@@ -557,7 +555,8 @@ double MedialPDESolver::SolveOnce(double delta)
 
   xSites[xSiteIndex[1][1]]->PrintReport();
   xMasks[xSiteIndex[1][1]]->PrintReport();
-
+  */
+  
   return bMax;
 }
 
@@ -656,10 +655,16 @@ void ComputeMedialAtomBoundaryDerivative(
     g11 * Hu * Xu + g12 * (Hu * Xv + Hv * Xu) + g22 * Hv * Xv +
     g11 * Fu * Nu + g12 * (Fu * Nv + Fv * Nu) + g22 * Fv * Nv );
 
+  // Record the grad-phi derivative
+  dAtom->xGradPhi = - T2;
+
   // Address the edge case first
   if(isEdge) 
     {
     dAtom->xBnd[1].X = dAtom->xBnd[0].X = N + 0.5 * T2;
+    dAtom->xBnd[0].N = dAtom->xBnd[1].N = 
+      0.5 * ( (T2) / xAtom->R - xAtom->xBnd[0].N * (H / F) );
+    dAtom->xGradRMagSqr = 0.0;
     return;
     }
 
@@ -679,12 +684,18 @@ void ComputeMedialAtomBoundaryDerivative(
   // Compute the Y atoms
   dAtom->xBnd[0].X = N + 0.5 * ( T2 - T4 );
   dAtom->xBnd[1].X = N + 0.5 * ( T2 + T4 );
+  dAtom->xBnd[0].N = 0.5 * ( (T2 - T4) / xAtom->R - xAtom->xBnd[0].N * (H / F) );
+  dAtom->xBnd[1].N = 0.5 * ( (T2 + T4) / xAtom->R - xAtom->xBnd[1].N * (H / F) );
+
+  // Compute the derivative of the gradient magnitude of R
+  dAtom->xGradRMagSqr = 0.25 * 
+    ( 2.0 * dot_product(dAtom->xGradPhi, xAtom->xGradPhi) * F
+      - dot_product(xAtom->xGradPhi, xAtom->xGradPhi) * H ) / ( F * F );
 }
 
 void
 MedialPDESolver
-::ComputeVariationalDerivative(
-  IHyperSurface2D *xVariation, bool flagRhoVariation, MedialAtom *dAtoms)
+::ComputeVariationalDerivative(IHyperSurface2D *xVariation, MedialAtom *dAtoms)
 {
   size_t i, j;
 
@@ -704,38 +715,25 @@ MedialPDESolver
     // Set the atoms' domain coordinates
     dAtom.u = uGrid[i]; dAtom.v = vGrid[j];
 
-    // Split depending on the type of variation
-    if(flagRhoVariation)
-      {
-      // Compute the rho derivative with respect to the variation
-      xVariation->EvaluateAtGridIndex(i, j, 0, 0, 3, 1, &dAtom.xLapR);
+    // Evaluate the variation and its derivatives
+    xVariation->EvaluateAtGridIndex(i, j, 0, 0, 0, 3, dAtom.X.data_block());
+    xVariation->EvaluateAtGridIndex(i, j, 1, 0, 0, 3, dAtom.Xu.data_block());
+    xVariation->EvaluateAtGridIndex(i, j, 0, 1, 0, 3, dAtom.Xv.data_block());
+    xVariation->EvaluateAtGridIndex(i, j, 2, 0, 0, 3, dAtom.Xuu.data_block());
+    xVariation->EvaluateAtGridIndex(i, j, 1, 1, 0, 3, dAtom.Xuv.data_block());
+    xVariation->EvaluateAtGridIndex(i, j, 0, 2, 0, 3, dAtom.Xvv.data_block());
+    xVariation->EvaluateAtGridIndex(i, j, 0, 0, 3, 1, &dAtom.xLapR);
 
-      // Prepare the matrices for the linear solver
-      xSites[iSite]->ComputeVariationalDerivativeRho(
+    // Prepare the matrices for the linear solver
+    xSites[iSite]->ComputeVariationalDerivative(
         y, xSparseValues + xRowIndex[iSite] - 1, &b[i][j],
         &xAtoms[iGrid], &dAtom);
-      }
-    else
-      {
-      // Compute the derivative of the surface with respect to the variation
-      xVariation->EvaluateAtGridIndex(i, j, 0, 0, 0, 3, dAtom.X.data_block());
-      xVariation->EvaluateAtGridIndex(i, j, 1, 0, 0, 3, dAtom.Xu.data_block());
-      xVariation->EvaluateAtGridIndex(i, j, 0, 1, 0, 3, dAtom.Xv.data_block());
-      xVariation->EvaluateAtGridIndex(i, j, 2, 0, 0, 3, dAtom.Xuu.data_block());
-      xVariation->EvaluateAtGridIndex(i, j, 1, 1, 0, 3, dAtom.Xuv.data_block());
-      xVariation->EvaluateAtGridIndex(i, j, 0, 2, 0, 3, dAtom.Xvv.data_block());
-
-      // Prepare the matrices for the linear solver
-      xSites[iSite]->ComputeVariationalDerivativeX(
-        y, xSparseValues + xRowIndex[iSite] - 1, &b[i][j],
-        &xAtoms[iGrid], &dAtom);
-      }
     }
 
   // Solve the partial differential equation
   // TODO: Figure out if we can do factorization once for the whole gradient
   // computation. That could save a significant amount of time overall
-  xPardiso.SymbolicFactorization(nSites, xRowIndex, xColIndex, xSparseValues);
+  // xPardiso.SymbolicFactorization(nSites, xRowIndex, xColIndex, xSparseValues);
   xPardiso.NumericFactorization(xSparseValues);
   xPardiso.Solve(b.data_block(), eps.data_block());
 

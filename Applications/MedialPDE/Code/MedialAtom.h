@@ -33,16 +33,16 @@ struct MedialAtom
   double F, Fu, Fv;
 
   // The radius function and its partial derivatives
-  double R, Ru, Rv, Ruu, Ruv, Rvv;
+  double R; //, Ru, Rv, Ruu, Ruv, Rvv;
 
   // The normal vector and the Riemannian gradient of R on the surface
-  SMLVec3d N, xGradR;
+  SMLVec3d N, xGradR, xGradPhi;
 
   // The Riemannian laplacian of R
   double xLapR;
 
   // The badness of the atom
-  double xBadness;
+  double xGradRMagSqr;
 
   // Whether this is a 'crest' atom, and whether it's valid at all
   bool flagCrest, flagValid;
@@ -59,8 +59,14 @@ struct MedialAtom
 
   /** Given the differential geometry and the normal vector are computed,
    * compute GradR and the boundary sites. */
-  bool ComputeBoundaryAtoms();
+  bool ComputeBoundaryAtoms(bool flagEdgeAtom);
 };
+
+/**
+ * This function performs an operation C = A + p*B on medial atoms
+ */
+void AddScaleMedialAtoms(
+  const MedialAtom &A, const MedialAtom &B, double p, MedialAtom &C);
 
 /** Helper function to access a boundary site in an atom array using a
  * boundary point iterator */
@@ -115,8 +121,8 @@ void ComputeMedialInternalPoints(
 class EuclideanFunction {
 public:
   virtual double Evaluate(const SMLVec3d &x) = 0;
-  virtual SMLVec3d ComputeGradient(const SMLVec3d &x)
-    { return SMLVec3d(0.0); }
+  virtual void ComputeGradient(const SMLVec3d &x, SMLVec3d &G)
+    { G.fill(0.0); }
 };
 
 /**

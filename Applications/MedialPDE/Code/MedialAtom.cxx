@@ -13,92 +13,172 @@ void MedialAtom ::ComputeNormalVector()
   N = vnl_cross_3d(Xu, Xv) * sqrt(G.gInv);
 }
 
-bool MedialAtom::ComputeBoundaryAtoms()
+bool MedialAtom::ComputeBoundaryAtoms(bool flagEdgeAtom)
 {
-  // Compute the partials of R
-  R = sqrt(F);
-  Ru = 0.5 * Fu / R;
-  Rv = 0.5 * Fv / R;
-  
-  // Terms going into gradR
+  // Get a shorthand for the contravariant tensor
   double (*G2)[2] = G.xContravariantTensor;
-  double CXu = 
-    Ru * G.xContravariantTensor[0][0] + Rv * G.xContravariantTensor[0][1]; 
-  double CXv = 
-    Ru * G.xContravariantTensor[0][1] + Rv * G.xContravariantTensor[1][1];
-    
-  // Compute Grad R
-  xGradR[0] = Xv[0] * CXv + Xu[0] * CXu;
-  xGradR[1] = Xv[1] * CXv + Xu[1] * CXu;
-  xGradR[2] = Xv[2] * CXv + Xu[2] * CXu;
 
-  // Compute squared length of GradR
-  // double xMagGradR2 = Ru * CXu + Rv * CXv;
-  // cout << (Fu * Fu * G2[0][0] + 2.0 * Fu * Fv * G2[0][1] + Fv * Fv * G2[1][1]) - 4 * F << endl;
-  double xMagGradR2 = (Fu * Fu * G2[0][0] + 2.0 * Fu * Fv * G2[0][1] + Fv * Fv * G2[1][1]) / ( 4 * F );
-  
-  double sinTheta2 = 1.0f - xMagGradR2;
-  
-  // cout << u << ", " << v << " : " << xMagGradR2 << endl;
-  
-  // Correct the floating point / solver error
-  if(fabs(sinTheta2) < 1e-8) sinTheta2 = 0.0;
-  
-  // Compute the boundary sites
-  xBadness = 0.0;
-  if (sinTheta2 > 0.0)
+  // Compute the radius of the atom
+  R = sqrt(F);
+
+  // Compute the Riemannian gradients of Phi and R
+  double Cu = (Fu * G2[0][0] + Fv * G2[0][1]);
+  double Cv = (Fu * G2[0][1] + Fv * G2[1][1]);
+  xGradPhi = Xu * Cu + Xv * Cv;
+  xGradR = 0.5 * xGradPhi / R;
+
+  // Split depending on whether this is an end atom
+  if(flagEdgeAtom)
     {
-    // We are not at a crest, valid atom
-    flagCrest = false; flagValid = true;
-    
-    // Compute the normal and tangent components of the boundaries
-    SMLVec3d CN = N * sqrt(sinTheta2);
-
-    // Compute the position and normals of boundary points
-    xBnd[0].N = - xGradR - CN;
-    xBnd[1].N = - xGradR + CN;
-    xBnd[0].X = X + xBnd[0].N * R;
-    xBnd[1].X = X + xBnd[1].N * R;
-    }
-  else if (sinTheta2 < 0.0)
-    { 
-    flagValid = false; 
-    xBadness = -sinTheta2;
-    cerr << "Bad atom ("<< R << ", " << xMagGradR2 << ", " << xMagGradR2 * 4 * F << ") at " << u << ", " << v << endl;
-    cout << "x" << flush;
-    }
-  else
-    { 
     // We are at a crest, valid atom
     flagValid = true; flagCrest = true;
+
+    // There is a zero badness value
+    xGradRMagSqr = 1.0;
 
     // Simpler geometry, save a square root!
     xBnd[0].N = xBnd[1].N = -xGradR;
     xBnd[0].X = xBnd[1].X = X - xGradR * R;
+
     }
+  else
+    {
+    // Otherwise, we have a normal atom
+    flagCrest = false;
+
+    // Compute the gradient magnitude of R
+    xGradRMagSqr = 0.25 * (Fu * Cu + Fv * Cv) / F;
+
+    // Check if this is greater than one - should never be very close either
+    if(xGradRMagSqr > 1.0)
+      {
+      // This is an invalid atom
+      flagValid = false;
+
+      // Set the boundary atoms to zero
+      xBnd[0].X = xBnd[1].X = X;
+      xBnd[0].N = -N;
+      xBnd[1].N = N;
+      }
+    else
+      {
+      // Finally, we have a clean internal atom
+      flagValid = true;
+
+      // Compute the normal component of the sail vectors
+      SMLVec3d CN = N * sqrt(1.0 - xGradRMagSqr);
+
+      // Compute the position and normals of boundary points
+      xBnd[0].N = - xGradR - CN;
+      xBnd[0].X = X + xBnd[0].N * R;
+      xBnd[1].N = - xGradR + CN;
+      xBnd[1].X = X + xBnd[1].N * R;
+      }
+    }
+
+  // Compute the partials of R
+  // R = sqrt(F);
+  // Ru = 0.5 * Fu / R;
+  // Rv = 0.5 * Fv / R;
 
   return flagValid;
 }
 
-double CellVolumePartialDerivative(
-  const SMLVec3d &X000, const SMLVec3d &X001, 
-  const SMLVec3d &X010, const SMLVec3d &X011, 
-  const SMLVec3d &X100, const SMLVec3d &X101, 
-  const SMLVec3d &X110, const SMLVec3d &X111,
-  const SMLVec3d &D000, const SMLVec3d &D001, 
-  const SMLVec3d &D010, const SMLVec3d &D011, 
-  const SMLVec3d &D100, const SMLVec3d &D101, 
-  const SMLVec3d &D110, const SMLVec3d &D111)
+void AddScaleMedialAtoms(
+  const MedialAtom &A, const MedialAtom &B, double p, MedialAtom &C)
 {
-  return 0;
+  // The u and v coordinates stay the same
+  C.u = A.u;
+  C.v = A.v;
+  C.flagCrest = A.flagCrest;
+  C.flagValid = A.flagValid;
+
+  // The other objects are simply added and scaled
+  C.X = A.X + p * B.X;
+  C.Xu = A.Xu + p * B.Xu;
+  C.Xv = A.Xv + p * B.Xv;
+  C.Xuu = A.Xuu + p * B.Xuu;
+  C.Xuv = A.Xuv + p * B.Xuv;
+  C.Xvv = A.Xvv + p * B.Xvv;
+
+  C.R = A.R + p * B.R;
+  // C.Ru = A.Ru + p * B.Ru;
+  // C.Rv = A.Rv + p * B.Rv;
+  // C.Ruu = A.Ruu + p * B.Ruu;
+  // C.Ruv = A.Ruv + p * B.Ruv;
+  // C.Rvv = A.Rvv + p * B.Rvv;
+
+  C.F = A.F + p * B.F;
+  C.Fu = A.Fu + p * B.Fu;
+  C.Fv = A.Fv + p * B.Fv;
+
+  C.N = A.N + p * B.N;
+  C.xGradR = A.xGradR + p * B.xGradR;
+  C.xGradPhi = A.xGradPhi + p * B.xGradPhi;
+  C.xGradRMagSqr = A.xGradRMagSqr + p * B.xGradRMagSqr;
+
+  // The differential geometry is also added and scaled 
+  C.G.g = A.G.g + p * B.G.g;
+  C.G.gInv = A.G.gInv + p * B.G.gInv;
+
+  for(size_t i=0; i<2; i++) for(size_t j=0; j<2; j++)
+    {
+    C.G.xContravariantTensor[i][j] = 
+      A.G.xContravariantTensor[i][j] + p * B.G.xContravariantTensor[i][j];
+    C.G.xCovariantTensor[i][j] = 
+      A.G.xCovariantTensor[i][j] + p * B.G.xCovariantTensor[i][j];
+    C.G.xChristoffelSecond[i][j][0] = 
+      A.G.xChristoffelSecond[i][j][0] + p * B.G.xChristoffelSecond[i][j][0];
+    C.G.xChristoffelFirst[i][j][0] = 
+      A.G.xChristoffelFirst[i][j][0] + p * B.G.xChristoffelFirst[i][j][0];
+    C.G.xChristoffelSecond[i][j][1] = 
+      A.G.xChristoffelSecond[i][j][1] + p * B.G.xChristoffelSecond[i][j][1];
+    C.G.xChristoffelFirst[i][j][1] = 
+      A.G.xChristoffelFirst[i][j][1] + p * B.G.xChristoffelFirst[i][j][1];
+    }
+
+  // The boundary atoms are scaled as well
+  for(size_t k=0; k<2; k++)
+    {
+    C.xBnd[k].X = A.xBnd[k].X + p * B.xBnd[k].X;
+    C.xBnd[k].N = A.xBnd[k].N + p * B.xBnd[k].N;
+    }
+}
+/*****************************************************************************
+ * CELL VOLUME AND DERIVATIVE COMPUTATION
+ ****************************************************************************/
+
+inline double ScalarTripleProduct(
+  const SMLVec3d &A, const SMLVec3d &B, const SMLVec3d &C)
+{
+  return
+    A[0] * (B[1] * C[2] - B[2] * C[1]) + 
+    A[1] * (B[2] * C[0] - B[0] * C[2]) + 
+    A[2] * (B[0] * C[1] - B[1] * C[0]);
 }
 
+inline double ScalarTripleProductDerivative(
+  const SMLVec3d &A, const SMLVec3d &B, const SMLVec3d &C,
+  const SMLVec3d &DA, const SMLVec3d &DB, const SMLVec3d &DC)
+{
+  return
+    DA[0] * (B[1] * C[2] - B[2] * C[1]) + 
+    DA[1] * (B[2] * C[0] - B[0] * C[2]) + 
+    DA[2] * (B[0] * C[1] - B[1] * C[0]) +
+    A[0] * (DB[1] * C[2] - DB[2] * C[1] + B[1] * DC[2] - B[2] * DC[1]) + 
+    A[1] * (DB[2] * C[0] - DB[0] * C[2] + B[2] * DC[0] - B[0] * DC[2]) + 
+    A[2] * (DB[0] * C[1] - DB[1] * C[0] + B[0] * DC[1] - B[1] * DC[0]);
+}
+
+
+// This returns 6 x the volume of the tetrahedron
 inline double TetrahedronVolume(
   const SMLVec3d &X1, const SMLVec3d &X2, const SMLVec3d &X3, const SMLVec3d X4)
 {
   return dot_product(vnl_cross_3d(X2 - X1, X3 - X1), X4 - X1);
 }
 
+// This returns 6 x the derivative
 inline double TetrahedronVolumePartialDerivative(
   const SMLVec3d &X1, const SMLVec3d &X2, const SMLVec3d &X3, const SMLVec3d X4,
   const SMLVec3d &D1, const SMLVec3d &D2, const SMLVec3d &D3, const SMLVec3d D4)
@@ -112,6 +192,8 @@ inline double TetrahedronVolumePartialDerivative(
       vnl_cross_3d( X2 - X1, X3 - X1 ) , D4 - D1 );
 }
 
+/**
+ * 
 double CellVolume(
   const SMLVec3d &X000, const SMLVec3d &X001, 
   const SMLVec3d &X010, const SMLVec3d &X011, 
@@ -127,25 +209,129 @@ double CellVolume(
   double v01 = TetrahedronVolume(X101, X100, X001, C);
 
   double v10 = TetrahedronVolume(X100, X101, X110, C);
-  double v11 = TetrahedronVolume(X111, X110, X101, C);
+  double v11 = - TetrahedronVolume(X111, X110, X101, C);
   
-  double v20 = TetrahedronVolume(X110, X111, X010, C);
+  double v20 = - TetrahedronVolume(X110, X111, X010, C);
   double v21 = TetrahedronVolume(X011, X010, X111, C);
   
   double v30 = TetrahedronVolume(X010, X011, X000, C);
   double v31 = TetrahedronVolume(X001, X000, X011, C);
   
   double v40 = TetrahedronVolume(X011, X111, X001, C);
-  double v41 = TetrahedronVolume(X101, X001, X111, C);
+  double v41 = - TetrahedronVolume(X101, X001, X111, C);
   
-  double v50 = TetrahedronVolume(X010, X000, X110, C);
+  double v50 = - TetrahedronVolume(X010, X000, X110, C);
   double v51 = TetrahedronVolume(X100, X110, X000, C);
+
+   cout << "VOLS: " 
+    << (v00 > 0 ? "+1" : "-1") << ", " 
+    << (v01 > 0 ? "+1" : "-1") << ", " 
+    << (v10 > 0 ? "+1" : "-1") << ", " 
+    << (v11 > 0 ? "+1" : "-1") << ", " 
+    << (v20 > 0 ? "+1" : "-1") << ", " 
+    << (v21 > 0 ? "+1" : "-1") << ", " 
+    << (v30 > 0 ? "+1" : "-1") << ", " 
+    << (v31 > 0 ? "+1" : "-1") << ", " 
+    << (v40 > 0 ? "+1" : "-1") << ", " 
+    << (v41 > 0 ? "+1" : "-1") << ", " 
+    << (v50 > 0 ? "+1" : "-1") << ", " 
+    << (v51 > 0 ? "+1" : "-1") << endl;
+  
+  // Return a sixth of these sums
+  static const double SIXTH = 1.0 / 6.0;
+  return - SIXTH *
+    (v00 + v01 + v10 + v11 + v20 + v21 + v30 + v31 + v40 + v41 + v50 + v51);
+}
+*/
+
+/**
+ * This in another, less precise, formula for the volume element. We just
+ * model the solid as a parallellepiped with sides computed as averages
+ */
+double CellVolume(
+  const SMLVec3d &X000, const SMLVec3d &X001, 
+  const SMLVec3d &X010, const SMLVec3d &X011, 
+  const SMLVec3d &X100, const SMLVec3d &X101, 
+  const SMLVec3d &X110, const SMLVec3d &X111)
+{
+  SMLVec3d U = X111 + X110 + X101 + X100 - X011 - X010 - X001 - X000;
+  SMLVec3d V = X111 + X110 - X101 - X100 + X011 + X010 - X001 - X000;
+  SMLVec3d W = X111 - X110 + X101 - X100 + X011 - X010 + X001 - X000;
+  return - 0.015625 * ScalarTripleProduct(U, V, W);
+} 
+
+double CellVolumePartialDerivative(
+  const SMLVec3d &X000, const SMLVec3d &X001, 
+  const SMLVec3d &X010, const SMLVec3d &X011, 
+  const SMLVec3d &X100, const SMLVec3d &X101, 
+  const SMLVec3d &X110, const SMLVec3d &X111,
+  const SMLVec3d &D000, const SMLVec3d &D001, 
+  const SMLVec3d &D010, const SMLVec3d &D011, 
+  const SMLVec3d &D100, const SMLVec3d &D101, 
+  const SMLVec3d &D110, const SMLVec3d &D111)
+{
+  SMLVec3d U  = X111 + X110 + X101 + X100 - X011 - X010 - X001 - X000;
+  SMLVec3d V  = X111 + X110 - X101 - X100 + X011 + X010 - X001 - X000;
+  SMLVec3d W  = X111 - X110 + X101 - X100 + X011 - X010 + X001 - X000;
+  SMLVec3d dU = D111 + D110 + D101 + D100 - D011 - D010 - D001 - D000;
+  SMLVec3d dV = D111 + D110 - D101 - D100 + D011 + D010 - D001 - D000;
+  SMLVec3d dW = D111 - D110 + D101 - D100 + D011 - D010 + D001 - D000;
+  return - 0.015625 * ScalarTripleProductDerivative(U, V, W, dU, dV, dW);
+}
+
+/* 
+double CellVolumePartialDerivative(
+  const SMLVec3d &X000, const SMLVec3d &X001, 
+  const SMLVec3d &X010, const SMLVec3d &X011, 
+  const SMLVec3d &X100, const SMLVec3d &X101, 
+  const SMLVec3d &X110, const SMLVec3d &X111,
+  const SMLVec3d &D000, const SMLVec3d &D001, 
+  const SMLVec3d &D010, const SMLVec3d &D011, 
+  const SMLVec3d &D100, const SMLVec3d &D101, 
+  const SMLVec3d &D110, const SMLVec3d &D111)
+{
+  // Compute the centerpoint inside the cell
+  SMLVec3d C = (X000 + X001 + X010 + X011 + X100 + X101 + X110 + X111) * 0.125;
+  SMLVec3d DC = (D000 + D001 + D010 + D011 + D100 + D101 + D110 + D111) * 0.125;
+
+  // Compute each of the twelve tetrahedra inside the cuboid (group by the
+  // face of the cell)
+  double v00 = TetrahedronVolumePartialDerivative(
+    X000, X001, X100, C, D000, D001, D100, DC);
+  double v01 = TetrahedronVolumePartialDerivative(
+    X101, X100, X001, C, D101, D100, D001, DC);
+
+  double v10 = TetrahedronVolumePartialDerivative(
+    X100, X101, X110, C, D100, D101, D110, DC);
+  double v11 = - TetrahedronVolumePartialDerivative(
+    X111, X110, X101, C, D111, D110, D101, DC);
+  
+  double v20 = - TetrahedronVolumePartialDerivative(
+    X110, X111, X010, C, D110, D111, D010, DC);
+  double v21 = TetrahedronVolumePartialDerivative(
+    X011, X010, X111, C, D011, D010, D111, DC);
+  
+  double v30 = TetrahedronVolumePartialDerivative(
+    X010, X011, X000, C, D010, D011, D000, DC);
+  double v31 = TetrahedronVolumePartialDerivative(
+    X001, X000, X011, C, D001, D000, D011, DC);
+  
+  double v40 = TetrahedronVolumePartialDerivative(
+    X011, X111, X001, C, D011, D111, D001, DC);
+  double v41 = - TetrahedronVolumePartialDerivative(
+    X101, X001, X111, C, D101, D001, D111, DC);
+  
+  double v50 = - TetrahedronVolumePartialDerivative(
+    X010, X000, X110, C, D010, D000, D110, DC);
+  double v51 = TetrahedronVolumePartialDerivative(
+    X100, X110, X000, C, D100, D110, D000, DC);
 
   // Return a sixth of these sums
   static const double SIXTH = 1.0 / 6.0;
-  return SIXTH *
+  return - SIXTH *
     (v00 + v01 + v10 + v11 + v20 + v21 + v30 + v31 + v40 + v41 + v50 + v51);
 }
+*/
 
 /** Helper function to compute the coordinate of an internal medial point
  * that is referenced by an iterator */
@@ -167,6 +353,7 @@ SMLVec3d GetInternalPoint(MedialInternalPointIterator *it, MedialAtom *xAtoms)
   return X + (Y - X) * it->GetRelativeDistanceToMedialAxis();
 }
 
+
 /**
  * This function computes the area associated with each triangle on the
  * boundary of the object and assigns a third of this area to each of the 
@@ -174,6 +361,55 @@ SMLVec3d GetInternalPoint(MedialInternalPointIterator *it, MedialAtom *xAtoms)
  * is generated. The total of these weights, equal to the area of the boundary
  * surface is the return value 
  */
+/* 
+double ComputeMedialBoundaryAreaWeights( MedialAtomGrid *xGrid, 
+  MedialAtom *xAtoms, double *xWeights)
+{
+  // Clear the content of the weights
+  memset(xWeights, 0, sizeof(double) * xGrid->GetNumberOfBoundaryPoints());
+  double xTotalArea = 0.0f;
+  
+  // Create a quad-based iterator
+  MedialBoundaryQuadIterator *itQuad = xGrid->NewBoundaryQuadIterator();
+
+  // For each quad, compute the area associated with it
+  for(; !itQuad->IsAtEnd(); ++(*itQuad))
+    {
+    // Access the four medial points
+    const BoundaryAtom& A00 = GetBoundaryPoint(itQuad, xAtoms, 0, 0);
+    const BoundaryAtom& A01 = GetBoundaryPoint(itQuad, xAtoms, 0, 1);
+    const BoundaryAtom& A11 = GetBoundaryPoint(itQuad, xAtoms, 1, 1);
+    const BoundaryAtom& A10 = GetBoundaryPoint(itQuad, xAtoms, 1, 0);
+
+    // Compute the four vectors along the edges of this rectangle
+    SMLVec3d U0 = A10.X - A00.X; SMLVec3d V0 = A01.X - A00.X;
+    SMLVec3d U1 = A11.X - A01.X; SMLVec3d V1 = A11.X - A10.X;
+
+    // Compute the contribution wo the weight elements of each node
+    double W00 = -0.25 * ScalarTripleProduct(U0, V0, A00.N);
+    double W10 = -0.25 * ScalarTripleProduct(U0, V1, A10.N);
+    double W01 = -0.25 * ScalarTripleProduct(U1, V0, A01.N);
+    double W11 = -0.25 * ScalarTripleProduct(U1, V1, A11.N);
+
+    // Update the total area
+    xTotalArea += W00 + W10 + W01 + W11;
+    
+    // Assign a third of each weight to each corner
+    xWeights[itQuad->GetBoundaryIndex(0, 0)] += W00;
+    xWeights[itQuad->GetBoundaryIndex(1, 1)] += W11;
+    xWeights[itQuad->GetBoundaryIndex(0, 1)] += W01;
+    xWeights[itQuad->GetBoundaryIndex(1, 0)] += W10;
+    }
+
+  // Delete the iterator object
+  delete itQuad;
+
+  // Return the total area
+  return xTotalArea;
+}
+*/
+
+// Old Method: always returns positive areas - dangerous!
 double ComputeMedialBoundaryAreaWeights( MedialAtomGrid *xGrid, 
   MedialAtom *xAtoms, double *xWeights)
 {
@@ -221,7 +457,65 @@ double ComputeMedialBoundaryAreaWeights( MedialAtomGrid *xGrid,
 
 /**
  * Compute the derivative of the boundary area elements given the derivative
- * of the atoms themselves with respect to some parameter */
+ * of the atoms themselves with respect to some parameter 
+ */
+/*
+double ComputeMedialBoundaryAreaPartialDerivative(
+  MedialAtomGrid *xGrid, MedialAtom *xAtoms, MedialAtom *dAtoms, 
+  double *xWeights, double *dWeights)
+{
+  // Clear the content of the weights
+  memset(dWeights, 0, sizeof(double) * xGrid->GetNumberOfBoundaryPoints());
+  double dTotalArea = 0.0f;
+  
+  // Create a quad-based iterator
+  MedialBoundaryQuadIterator *itQuad = xGrid->NewBoundaryQuadIterator();
+
+  // For each quad, compute the area associated with it
+  for(; !itQuad->IsAtEnd(); ++(*itQuad))
+    {
+    // Access the four medial points
+    const BoundaryAtom& A00 = GetBoundaryPoint(itQuad, xAtoms, 0, 0);
+    const BoundaryAtom& A01 = GetBoundaryPoint(itQuad, xAtoms, 0, 1);
+    const BoundaryAtom& A11 = GetBoundaryPoint(itQuad, xAtoms, 1, 1);
+    const BoundaryAtom& A10 = GetBoundaryPoint(itQuad, xAtoms, 1, 0);
+
+    // Also access their derivatives
+    const BoundaryAtom& DA00 = GetBoundaryPoint(itQuad, dAtoms, 0, 0);
+    const BoundaryAtom& DA01 = GetBoundaryPoint(itQuad, dAtoms, 0, 1);
+    const BoundaryAtom& DA11 = GetBoundaryPoint(itQuad, dAtoms, 1, 1);
+    const BoundaryAtom& DA10 = GetBoundaryPoint(itQuad, dAtoms, 1, 0);
+
+    // Compute the four vectors along the edges of this rectangle
+    SMLVec3d U0 = A10.X - A00.X; SMLVec3d V0 = A01.X - A00.X;
+    SMLVec3d U1 = A11.X - A01.X; SMLVec3d V1 = A11.X - A10.X;
+    SMLVec3d DU0 = DA10.X - DA00.X; SMLVec3d DV0 = DA01.X - DA00.X;
+    SMLVec3d DU1 = DA11.X - DA01.X; SMLVec3d DV1 = DA11.X - DA10.X;
+
+    // Compute the contribution wo the weight elements of each node
+    double DW00 = -0.25 * ScalarTripleProductDerivative(U0, V0, A00.N, DU0, DV0, DA00.N);
+    double DW10 = -0.25 * ScalarTripleProductDerivative(U0, V1, A10.N, DU0, DV1, DA10.N);
+    double DW01 = -0.25 * ScalarTripleProductDerivative(U1, V0, A01.N, DU1, DV0, DA01.N);
+    double DW11 = -0.25 * ScalarTripleProductDerivative(U1, V1, A11.N, DU1, DV1, DA11.N);
+
+    // Update the total area
+    dTotalArea += DW00 + DW10 + DW01 + DW11;
+    
+    // Assign a third of each weight to each corner
+    dWeights[itQuad->GetBoundaryIndex(0, 0)] += DW00;
+    dWeights[itQuad->GetBoundaryIndex(1, 1)] += DW11;
+    dWeights[itQuad->GetBoundaryIndex(0, 1)] += DW01;
+    dWeights[itQuad->GetBoundaryIndex(1, 0)] += DW10;
+    }
+
+  // Delete the iterator object
+  delete itQuad;
+
+  // Return the total area
+  return dTotalArea;
+}
+*/
+
 double ComputeMedialBoundaryAreaPartialDerivative(
   MedialAtomGrid *xGrid, MedialAtom *xAtoms, MedialAtom *dAtoms, 
   double *xWeights, double *dWeights)
@@ -258,9 +552,12 @@ double ComputeMedialBoundaryAreaPartialDerivative(
 
     // Compute the areas of the two triangles involved
     double dA1 = THIRD * 
-      TriangleAreaPartialDerivative( X00, X01, X11, D00, D01, D11, A1);
+      TriangleAreaPartialDerivative( X00, X01, X11, D00, D01, D11, 
+        TriangleArea(X00,X01,X11));
+    
     double dA2 = THIRD * 
-      TriangleAreaPartialDerivative( X00, X11, X10, D00, D11, D10, A2);
+      TriangleAreaPartialDerivative( X00, X11, X10, D00, D11, D10, 
+        TriangleArea(X00, X11, X10));
 
     // Update the total area
     dTotalArea += dA1 + dA2;
@@ -306,8 +603,8 @@ public:
     { this->xPoints = xPoints; }
   
   double ComputeWeight (
-    size_t i000, size_t i001, size_t i010, size_t i100, 
-    size_t i011, size_t i101, size_t i110, size_t i111)
+    size_t i000, size_t i001, size_t i010, size_t i011, 
+    size_t i100, size_t i101, size_t i110, size_t i111)
     {
     return CellVolume(
       xPoints[i000], xPoints[i001], xPoints[i010], xPoints[i011], 
@@ -325,8 +622,8 @@ public:
     { this->xPoints = xPoints; this->dPoints = dPoints; }
   
   double ComputeWeight (
-    size_t i000, size_t i001, size_t i010, size_t i100, 
-    size_t i011, size_t i101, size_t i110, size_t i111)
+    size_t i000, size_t i001, size_t i010, size_t i011, 
+    size_t i100, size_t i101, size_t i110, size_t i111)
     {
     return CellVolumePartialDerivative (
       xPoints[i000], xPoints[i001], xPoints[i010], xPoints[i011], 
@@ -375,7 +672,7 @@ double ComputeMedialInteralWeights(
     // cout.width(16);
     // cout << "Cell : " << itCell->GetAtomIndex(0,0) << " ";
     double V =  
-      - xComputer->ComputeWeight( i000, i001, i010, i011, i100, i101, i110, i111); 
+      xComputer->ComputeWeight( i000, i001, i010, i011, i100, i101, i110, i111); 
 
     // Add to total volume of the structure
     xTotalVolume += V;
@@ -411,7 +708,7 @@ double ComputeMedialInteralWeights(
   delete itCell;
 
   // Return the total area
-  return xTotalVolume;
+  return xTotalVolume; 
 }
 
 
@@ -576,7 +873,8 @@ double ComputeFunctionJetOverBoundary(
     // Evaluate the image gradient at this point
     unsigned int iBnd = itBoundary->GetIndex();
     SMLVec3d X = GetBoundaryPoint(itBoundary, xAtoms).X;
-    xOutGradient[iBnd] = xWeights[iBnd] * fMatch->ComputeGradient(X);
+    fMatch->ComputeGradient(X, xOutGradient[iBnd]);
+    xOutGradient[iBnd] *= xWeights[iBnd];
 
     // On to the next point
     ++(*itBoundary);
@@ -623,6 +921,7 @@ void TestTetrahedronVolumePartialDerivative()
   double V1 = TetrahedronVolume( X1[0], X1[1], X1[2], X1[3] );
   double V2 = TetrahedronVolume( X2[0], X2[1], X2[2], X2[3] );
 
+  cout << "Testing tetrahedron partial derivative computation" << endl;
   cout << "Numerical derivative : " << 0.5 * (V1 - V2) / eps << endl;
   cout << "Analytical derivative : " << 
     TetrahedronVolumePartialDerivative(

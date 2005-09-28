@@ -26,6 +26,7 @@ SET(COMMON_SRCS
   Code/Registry.cxx
   Code/ScriptImaging.cxx
   Code/ScriptInterface.cxx
+  Code/TestSolver.cxx
   Code/VTKMedialMesh.cxx)
 
 # Apply SWIG to the .i file
@@ -64,7 +65,6 @@ SET(PDE_LIBS
 
 # Create a common library
 ADD_LIBRARY(medialpde SHARED ${COMMON_SRCS})
-#TARGET_LINK_LIBRARIES(medialpde ${PDE_LIBS})
 TARGET_LINK_LIBRARIES(medialpde ${PDE_LIBS})
 
 # Create the Python module
@@ -80,6 +80,11 @@ TARGET_LINK_LIBRARIES(testpde medialpde)
 # Specify the data root
 FIND_PATH(MPDE_INPUTDATA_ROOT "init/surf01.txt")
 FIND_PATH(MPDE_DATA_ROOT "t1")
+
+# Generate tests
+ENABLE_TESTING()
+ADD_TEST(TestDerivativesNoImage testpde DERIV1)
+ADD_TEST(TestDerivativesWithImage testpde DERIV2)
 
 # Copy the script files
 SET(SCRIPT_FILES 

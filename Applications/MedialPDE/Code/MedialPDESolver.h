@@ -61,8 +61,7 @@ public:
    * that constitute the medial surface. This means solving the PDEs that define
    * the gradient of the phi function with respect to the basis functions, as 
    * well as computing the other partial derivatives */
-  void ComputeVariationalDerivative(
-    IHyperSurface2D *xVariation, bool flagRhoVariation, MedialAtom *dAtoms);
+  void ComputeVariationalDerivative(IHyperSurface2D *xVariation, MedialAtom *dAtoms);
 
   /** Get the array of atoms */
   MedialAtom *GetAtomArray()

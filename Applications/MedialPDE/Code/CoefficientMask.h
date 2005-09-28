@@ -5,6 +5,7 @@
 #include <smlmath.h>
 
 class IBasisRepresentation2D;
+class IHyperSurface2D;
 
 using namespace std;
 
@@ -16,6 +17,10 @@ public:
   virtual size_t GetNumberOfCoefficients() = 0;
   virtual double GetCoefficient(size_t i) = 0;
   virtual void SetCoefficient(size_t i, double x) = 0;
+
+  // Get a surface corresponding to a single component
+  virtual IHyperSurface2D *GetComponentSurface(size_t iCoefficient) = 0;
+  virtual void ReleaseComponentSurface(IHyperSurface2D *xSurface) = 0;
 };
 
 class SelectionMedialCoefficientMask : public IMedialCoefficientMask
@@ -30,6 +35,10 @@ public:
     { return nCoeff; }
   double GetCoefficient(size_t i);
   void SetCoefficient(size_t i, double x);
+
+  // Get a surface corresponding to a single component
+  IHyperSurface2D *GetComponentSurface(size_t iCoefficient);
+  void ReleaseComponentSurface(IHyperSurface2D *xSurface);
 
 private:
   IBasisRepresentation2D *xSource;
@@ -47,6 +56,11 @@ public:
   size_t GetNumberOfCoefficients();
   double GetCoefficient(size_t i);
   void SetCoefficient(size_t i, double x);
+
+  // Get a surface corresponding to a single component
+  IHyperSurface2D *GetComponentSurface(size_t iCoefficient);
+  void ReleaseComponentSurface(IHyperSurface2D *xSurface);
+  
 private:
   IBasisRepresentation2D *xSource;
 };
@@ -70,14 +84,22 @@ public:
   void SetCoefficient(size_t i, double x)
     { xData[i] = x; SetCoefficientArray(xData.data_block()); }
 
+  // Get a surface corresponding to a single component
+  IHyperSurface2D *GetComponentSurface(size_t iCoefficient);
+  void ReleaseComponentSurface(IHyperSurface2D *xSurface);
+
 private:
+  typedef vnl_matrix<double> MatrixType;
+  typedef vnl_vector<double> VectorType;
+
+  
   IBasisRepresentation2D *xSurface;
   size_t nDim, iIndexB, nCoeff;
   
-  vnl_vector<double> xOriginalCoefficients;
-  vnl_matrix<double> A;
-  vnl_vector<double> b, c;
-  vnl_vector<double> xData;
+  VectorType xOriginalCoefficients;
+  MatrixType A;
+  VectorType b, c;
+  VectorType xData;
   double xRhoScale;
 };
 #endif //__CoefficientMask_h_

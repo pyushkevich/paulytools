@@ -60,6 +60,22 @@ public:
   // an follows: internal points near 1.0, external near -1.0, interface 0.0
   double ComputeObjectVolume();
 
+  // Compute the integral of positive voxels in the image. This is the upper
+  // bound for the probabilistic image match function that we use. In other
+  // words, if the cm-rep model and the object in an image are perfectly
+  // matched, the integral of the image inside the model will equal the output
+  // of this function
+  virtual double IntegratePositiveVoxels();
+
+  // Interpolate the image at a given position
+  virtual float Interpolate(const SMLVec3d &x);
+
+  // Interpolate the image gradient
+  virtual void InterpolateImageGradient(const SMLVec3d &x, SMLVec3f &g);
+
+  // Interpolate the image gradient
+  virtual void InterpolateImageGradient(const SMLVec3d &x, SMLVec3d &g);
+
   // Check whether the gradient information is available
   bool IsGradientAvailable();
 
@@ -208,9 +224,6 @@ public:
 
   /** Get an intensity image from the cm-rep */
   void GetIntensityImage(FloatImage *imgIntensity);
-
-  /** A method to test derivative computation */
-  void TestDerivativeComputation(unsigned int iComponent);
 
 private:
   // Optimization modes and optimizers

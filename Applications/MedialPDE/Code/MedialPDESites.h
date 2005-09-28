@@ -29,13 +29,13 @@ public:
 
   // Setup the equation for computing variational derivative of Phi for a
   // variation of the surface
-  virtual void ComputeVariationalDerivativeX(const Mat &Y, double *A, double *b, 
+  virtual void ComputeVariationalDerivative(const Mat &Y, double *A, double *b, 
     MedialAtom *xAtom, MedialAtom *dAtom) = 0;
 
   // Setup the equation for computing variational derivative of Phi for a
   // variation of the rho function
-  virtual void ComputeVariationalDerivativeRho(const Mat &Y, double *A, double *b, 
-    MedialAtom *xAtom, MedialAtom *dAtom) = 0;
+  // virtual void ComputeVariationalDerivativeRho(const Mat &Y, double *A, double *b, 
+  //  MedialAtom *xAtom, MedialAtom *dAtom) = 0;
 
   // Returns the number of boundaries that a site touches 
   // (0 - int, 1 - border, 2 - corner)
@@ -85,12 +85,12 @@ public:
     { return xMask; }
 
   // Compute the variational derivative with respect to X-variation 
-  void ComputeVariationalDerivativeX(const Mat &Y, 
+  void ComputeVariationalDerivative(const Mat &Y, 
     double *A, double *b, MedialAtom *xAtom, MedialAtom *dAtom);
 
   // Compute the variational derivative with respect to Rho-variation 
-  void ComputeVariationalDerivativeRho(const Mat &Y, 
-    double *A, double *b, MedialAtom *xAtom, MedialAtom *dAtom);
+  // void ComputeVariationalDerivativeRho(const Mat &Y, 
+  //  double *A, double *b, MedialAtom *xAtom, MedialAtom *dAtom);
 
 	// Print a report
 	void PrintReport();
@@ -143,12 +143,12 @@ public:
     { return xMask; }
 
   // Compute the variational derivative with respect to X-variation 
-  void ComputeVariationalDerivativeX(const Mat &Y, 
+  void ComputeVariationalDerivative(const Mat &Y, 
     double *A, double *b, MedialAtom *xAtom, MedialAtom *dAtom);
 
   // Compute the variational derivative with respect to Rho-variation 
-  void ComputeVariationalDerivativeRho(const Mat &Y, 
-    double *A, double *b, MedialAtom *xAtom, MedialAtom *dAtom);
+  // void ComputeVariationalDerivativeRho(const Mat &Y, 
+  //  double *A, double *b, MedialAtom *xAtom, MedialAtom *dAtom);
 
 	// Print a report
 	void PrintReport();
