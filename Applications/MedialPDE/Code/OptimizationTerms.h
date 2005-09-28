@@ -361,11 +361,21 @@ public:
   /** Initialize the term with the template info */
   MedialRegularityTerm(MedialAtom *xTempAtoms, MedialAtomGrid *xTempGrid);
   double ComputeEnergy(SolutionDataBase *data);
+
+  // Compute the value and set up common terms
+  double BeginGradientComputation(SolutionData *SCenter);
+  
+  // Compute partial derivative
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
+  
   void PrintReport(ostream &sout);
 private:
-  double ComputeDistortionPenalty(double, double);
+  double DistortionPenalty(double, double);
+  double DistortionPenaltyAndDerivative(double, const SMLVec3d &, const SMLVec3d &, double &);
   vector<double> xEdgeLength;
   double xMaxDistortion, xMinDistortion, xMeanSquareDistortion, xTotalPenalty;
+  vector<double> xGradientCommon;
 };
 
 class MedialOptimizationProblem : public DifferentiableFunction

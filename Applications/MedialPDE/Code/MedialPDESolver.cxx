@@ -200,8 +200,8 @@ MedialPDESolver
     double uMin = i > m/2 ? uGrid[m-(i+1)] - uGrid[m-(i+2)] : uGrid[i+1] - uGrid[i];
     double vMin = j > n/2 ? vGrid[n-(j+1)] - uGrid[n-(j+2)] : vGrid[j+1] - vGrid[j];
     
-    xDefaultInitSoln[i][j] = sqrt( uMin * uMin + vMin * vMin );
-    // xDefaultInitSoln[i][j] = 1.0;
+    // xDefaultInitSoln[i][j] = sqrt( uMin * uMin + vMin * vMin );
+    xDefaultInitSoln[i][j] = 1.0;
 
     // xMasks[iSite]->PrintReport();
 
@@ -467,7 +467,7 @@ double MedialPDESolver::SolveOnce(double delta)
 
   // We are now ready to perform the Newton loop
   bool flagComplete = false;
-  for(unsigned int iIter = 0; iIter < 32 && !flagComplete; iIter++)
+  for(unsigned int iIter = 0; iIter < 50 && !flagComplete; iIter++)
     {
     // Compute the A matrix and the b vector at each node
     for(i = 0; i < m; i++) for(j = 0; j < n; j++)
@@ -518,8 +518,9 @@ double MedialPDESolver::SolveOnce(double delta)
     cout << "  Largest Epsilon: " << epsMax << endl;
     cout << "  Largest Eqn Error: " << bMax << endl; 
     */
-    // cout << "Step " << iIter << ":\t" << "eMax = " 
-    //   << epsMax << "\t" << "bMax = " << bMax << endl;
+    if(iIter > 10)
+      cout << "Step " << iIter << ":\t" << "eMax = " 
+        << epsMax << "\t" << "bMax = " << bMax << endl;
     
     // Test the matrix result
     // SparseLinearTest(nSites, xRowIndex, xColIndex, xSparseValues, eps, zTest, b);

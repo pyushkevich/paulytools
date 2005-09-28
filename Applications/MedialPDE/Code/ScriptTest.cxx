@@ -268,10 +268,10 @@ void TestCellVolume()
  * solver and related classes are correct, bt comparing them to central
  * difference derivatives
  */
-void TestDerivativesNoImage()
+int TestDerivativesNoImage(const char *fnMPDE)
 {
   MedialPDE mp(2, 4, 33, 65, 0.5, 0, 0);
-  mp.LoadFromParameterFile((dirWork + "/init/init2.mpde").c_str());
+  mp.LoadFromParameterFile(fnMPDE);
 
   // Test straight-through gradient computation
   PassThroughCoefficientMask xMask(mp.GetSurface());
@@ -280,25 +280,58 @@ void TestDerivativesNoImage()
   // Test affine transform gradient computation
   AffineTransformCoefficientMask xAffineMask(mp.GetSurface());
   TestGradientComputation(mp.GetSolver(), &xAffineMask);
+
+  return 0;
 }
 
-void TestDerivativesWithImage()
+void MakeFlatTemplate(FourierSurface *xSurface)
 {
-  string fnCMRep = dirWork + "cmrep/st1001L/st1001L.align.mpde";
-  string fnImage = dirWork + "hippo/imgblur/st1001L_med";
+  size_t n = 10;
+  size_t q = (n+1) * (n+1);
+  double *u = new double[q], *v = new double[q];
+  double *x = new double[q], *y = new double[q];
+  double *z = new double[q], *rho = new double[q];
+
+  size_t k = 0;
+  for(size_t i = 0; i <= n; i++) for(size_t j = 0; j <= n; j++)
+    {
+    u[k] = i * 1.0 / n;
+    v[k] = j * 1.0 / n;
+    x[k] = 6 * u[k];
+    y[k] = 12 * v[k];
+    z[k] = 0.0;
+    rho[k] = -0.45;
+    k++;
+    }
+
+  xSurface->FitToData(q, 0, u, v, x);
+  xSurface->FitToData(q, 1, u, v, y);
+  xSurface->FitToData(q, 2, u, v, z);
+  xSurface->FitToData(q, 3, u, v, rho);
+
+  delete u; delete v; delete x; delete y; delete z; delete rho;
+}
+
+int TestDerivativesWithImage(const char *fnMPDE)
+{
   // Load the Medial PDE
   MedialPDE mp(2, 4, 33, 81, 0.5, 0, 0);
-  mp.LoadFromParameterFile(fnCMRep.c_str());
+  mp.LoadFromParameterFile(fnMPDE);
   
-  // Load an image and its derivatives
-  // FloatImage img;
-  // img.LoadFromPath(fnImage.c_str(),"mha");
-  
+  // Define a test image (this in not a real thing)
   SMLVec3d C = mp.GetSurface()->GetCenterOfRotation().extract(3);
   TestFloatImage img( C, 7.0, 4.0 );
 
+  // Define another solver to represent the template - this is used in 
+  // conjunction with the regularity prior 
+  MedialPDE mpTemplate(4, 4, 33, 81);
+  MakeFlatTemplate(mpTemplate.GetSurface());
+  mpTemplate.Solve();
+
   // Create an array of image match terms
   vector<EnergyTerm *> vt;
+  vt.push_back(new MedialRegularityTerm(
+      mpTemplate.GetSolver()->GetAtomArray(), mpTemplate.GetSolver()->GetAtomGrid()));
   vt.push_back(new BoundaryJacobianEnergyTerm());
   vt.push_back(new BoundaryImageMatchTerm(&img));
   vt.push_back(new ProbabilisticEnergyTerm(&img, 4));
@@ -310,6 +343,7 @@ void TestDerivativesWithImage()
 
   // Create labels
   char *nt[] = {
+    "MedialRegularityTerm",
     "BoundaryJacobianEnergyTerm", 
     "BoundaryImageMatchTerm",
     "ProbabilisticEnergyTerm" };
@@ -337,6 +371,8 @@ void TestDerivativesWithImage()
   
   for(j = 0; j < vm.size(); j++)
     delete vm[j];
+
+  return 0;
 }
 
 
@@ -350,27 +386,27 @@ void TestFDMasksInMedialSolver()
 
 }
 
+int usage()
+{
+  cout << "testpde: MedialPDE Test Module" << endl;
+  cout << "  usage: testpde TEST_ID [parameters] " << endl;
+  cout << "  tests: " << endl;
+  cout << "    DERIV1 XX.mpde    Check analytic derivative PDEs." << endl;
+  cout << "    DERIV2 XX.mpde    Check gradient computation in image match terms." << endl;
+  cout << endl;
+  return -1;
+}
+
 int main(int argc, char *argv[])
 {
   // Different tests that can be executed
-  if(argc == 1)
-    {
-    cout << "testpde: MedialPDE Test Module" << endl;
-    cout << "  usage: testpde TEST_ID [parameters] " << endl;
-    cout << "  tests: " << endl;
-    cout << "    DERIV1            Check analytic derivative PDEs." << endl;
-    cout << "    DERIV2            Check gradient computation in image match terms." << endl;
-    cout << endl;
-    return -1;
-    }
+  if(argc == 1) return usage();
 
   // Choose a test depending on the parameters
-  if(0 == strcmp(argv[1], "DERIV1"))
-    TestDerivativesNoImage();
-  else if(0 == strcmp(argv[1], "DERIV2"))
-    TestDerivativesWithImage();
+  if(0 == strcmp(argv[1], "DERIV1") && argc > 2)
+    return TestDerivativesNoImage(argv[2]);
+  else if(0 == strcmp(argv[1], "DERIV2") && argc > 2)
+    return TestDerivativesWithImage(argv[2]);
   else 
-    return -1;
-  
-  return 0;
+    return usage();
 }

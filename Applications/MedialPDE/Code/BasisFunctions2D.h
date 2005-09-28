@@ -207,6 +207,19 @@ public:
   void SetRawCoefficient(size_t iCoeff, double xValue) 
     { C[iCoeff] = xValue; }
 
+  void SetAllCoefficients(double xValue)
+    {  
+    for(size_t i=0; i < C.size(); i++)
+      C[i] = xValue;
+    }
+
+  // Set a coefficient by index
+  void SetCoefficient(size_t iu, size_t iv, size_t iComp, double value)
+    { C(iComp,iu,iv) = value; }
+
+  double GetCoefficient(size_t iu, size_t iv, size_t iComp)
+    { return C(iComp,iu,iv); }
+
   /** Fit the i-th component of the coefficients to some data points */
   void FitToData(size_t n, size_t i, double *uu, double *vv, double *xx); 
 

@@ -83,8 +83,15 @@ FIND_PATH(MPDE_DATA_ROOT "t1")
 
 # Generate tests
 ENABLE_TESTING()
-ADD_TEST(TestDerivativesNoImage testpde DERIV1)
-ADD_TEST(TestDerivativesWithImage testpde DERIV2)
+SET(MPDE_TESTDATA_DIR ${MedialPDE_SOURCE_DIR}/Testing/Input)
+
+# Test the derivative calculation without image terms
+ADD_TEST(TestDerivativesNoImage   
+  testpde DERIV1 ${MPDE_TESTDATA_DIR}/st1001L.align.mpde)
+
+# Test derivative calculation with image terms
+ADD_TEST(TestDerivativesWithImage 
+  testpde DERIV2 ${MPDE_TESTDATA_DIR}/st1001L.align.mpde)
 
 # Copy the script files
 SET(SCRIPT_FILES 
