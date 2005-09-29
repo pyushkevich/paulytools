@@ -15,6 +15,7 @@ OPTION(USE_SWIG "Use the SWIG wrapper" OFF)
 OPTION(USE_INTEL_MKL "Use Intel's MKL Numerics Library (Alternative to Lapack)" OFF)
 OPTION(USE_LAPACK "Use the Lapack Numerics Library" OFF)
 OPTION(USE_PARDISO "Use the PARDISO sparse solver library" OFF)
+OPTION(USE_METIS "Use the METIS Graph Partitioning Library" OFF)
 OPTION(USE_DART "Whether this project should be configured to use Dart" OFF)
 
 # Define the optional inclusion (BUILD) variables 
@@ -121,6 +122,11 @@ ENDIF(USE_INTEL_MKL)
 IF(USE_PARDISO)
   INCLUDE(${PAULY_CMAKE_DIR}/FindPARDISO.cmake)
 ENDIF(USE_PARDISO)
+
+# Set up PARDISO
+IF(USE_METIS)
+  INCLUDE(${PAULY_CMAKE_DIR}/FindMETIS.cmake)
+ENDIF(USE_METIS)
 
 # Dart Support
 IF(USE_DART)

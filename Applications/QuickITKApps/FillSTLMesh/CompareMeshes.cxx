@@ -323,6 +323,8 @@ int main(int argc, char **argv)
   cout << "Unbiased overlap between meshes is " << nIntersect * 1.0 / nUnion << endl;
   cout << "Biased overlap between meshes is " << nIntersect * 1.0 / nReference << endl;
   cout << "Reverse biased overlap between meshes is " << nIntersect * 1.0 / nModel << endl;
+  cout << "Mesh 1 Volume is " << nModel * xVox * xVox * xVox << endl;
+  cout << "Mesh 2 Volume is " << nReference * xVox * xVox * xVox << endl;
   cout << "Distance from mesh 1 to mesh 2 is " << xOneNorm[0] << "; " << xTwoNorm[0] << "; " << xInfNorm[0] << endl;
   cout << "Distance from mesh 2 to mesh 1 is " << xOneNorm[1] << "; " << xTwoNorm[1] << "; " << xInfNorm[1] << endl;
   cout << "RESULT: " 

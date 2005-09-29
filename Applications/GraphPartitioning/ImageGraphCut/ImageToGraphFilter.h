@@ -277,7 +277,9 @@ public:
         // Add all the edges of the pixel 
         for(unsigned int i=0;i<(ImageDimension << 1);i++)
           {
-          int idxNbr = imgIndex->GetPixel(it.GetIndex(iIndex[i]));
+          IndexType indNbr = it.GetIndex(iIndex[i]);
+          if(!imgIndex->GetBufferedRegion().IsInside(indNbr)) continue;
+          int idxNbr = imgIndex->GetPixel(indNbr);
           if(idxNbr >= 0)
             {
             // Add the edge to the adjacency list

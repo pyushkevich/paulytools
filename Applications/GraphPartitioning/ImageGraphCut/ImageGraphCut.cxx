@@ -61,25 +61,18 @@ public:
   /** Check inclusion */
   virtual bool IsPixelAVertex(short i1)
     {
-    // return i1 != 0;
-    return i1 == 2;
+    return i1 != 0;
     }
   
   /** Compute edge weight */
   virtual int GetEdgeWeight(short i1, short i2)
     {
-    // if(i1 == 1 || i2 == 1) return 0;
-    // else return 1;
     return 1;
     }
       
   /** Compute vertex weight */
   virtual int GetVertexWeight(short i1)
     {
-    // if(i1 == 1)
-    //   return 10;
-    //  return 100 + (rand() * 100) / RAND_MAX;
-    //else return 1;
     return 1;
     }
 };
