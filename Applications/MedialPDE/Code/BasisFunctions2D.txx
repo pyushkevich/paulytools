@@ -355,10 +355,10 @@ template<
   typename BasisFunctionU, typename BasisFunctionV >
 IHyperSurface2D*
 GenericBasisRepresentation2D<NComponents,NOrder,BasisFunctionU,BasisFunctionV>
-::GetComponentSurface(size_t iRawComponent)
+::GetComponentSurface(size_t iComponent)
 {
   size_t icu, icv, iComp;
-  GetRawCoefficientIndices(iRawComponent, icu, icv, iComp);
+  GetRawCoefficientIndices(iComponent, icu, icv, iComp);
   return GetComponentSurface(icu, icv, iComp);
 }
 

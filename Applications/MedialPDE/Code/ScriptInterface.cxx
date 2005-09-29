@@ -681,9 +681,9 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
   size_t iBestSurface; double xBestMatch;
 
   // Get the numbers of coefficients
-  size_t nCoeff = xSurface->GetNumberOfRawCoefficients();
+  size_t nCoeff = xSurface->GetNumberOfCoefficients();
   vnl_vector<double> xRotatedCoeff[8], 
-    xInitCoeff(xSurface->GetRawCoefficientArray(), nCoeff);
+    xInitCoeff(xSurface->GetCoefficientArray(), nCoeff);
 
   // Create a volume match object
   ProbabilisticEnergyTerm tVolumeMatch(image, nCuts);
@@ -702,9 +702,9 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
     vnl_matrix<double> R = Vx * F * Vy.transpose();
 
     // Rotate the surface by matrix R and shift to yMean
-    xSurface->SetRawCoefficientArray(xInitCoeff.data_block());
+    xSurface->SetCoefficientArray(xInitCoeff.data_block());
     xSurface->ApplyAffineTransform(R, xMean - yMean, yMean);
-    xRotatedCoeff[f] = vnl_vector<double>(xSurface->GetRawCoefficientArray(), nCoeff);
+    xRotatedCoeff[f] = vnl_vector<double>(xSurface->GetCoefficientArray(), nCoeff);
 
     // Compute the boundary
     xSolver->Solve();
@@ -723,7 +723,7 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
     }
 
   // Use the best surface as the new surface
-  xSurface->SetRawCoefficientArray(xRotatedCoeff[iBestSurface].data_block());
+  xSurface->SetCoefficientArray(xRotatedCoeff[iBestSurface].data_block());
   xSolver->Solve();
 
   // Test the results
@@ -1099,8 +1099,8 @@ void MedialPCA::AddSample(MedialPDE *pde)
 {
   // Make sure that the number of coefficients matches
   if(xSurfaces.size())
-    assert(xSurfaces.front()->GetNumberOfRawCoefficients()
-      == pde->xSurface->GetNumberOfRawCoefficients());
+    assert(xSurfaces.front()->GetNumberOfCoefficients()
+      == pde->xSurface->GetNumberOfCoefficients());
 
   // Get the coefficients from this medial PDE
   FourierSurface *xNew = new FourierSurface(*(pde->xSurface));
@@ -1191,7 +1191,7 @@ void MedialPCA::ComputePCA()
     MedialPDE xJunk(8,12,32,80);
     xJunk.xSurface = new FourierSurface(*xSurfaces[i]);
     xJunk.xSolver->SetMedialSurface(xJunk.xSurface);
-    xJunk.xSurface->SetRawCoefficientArray(xSurfaces[i]->GetRawCoefficientArray());
+    xJunk.xSurface->SetCoefficientArray(xSurfaces[i]->GetCoefficientArray());
     xJunk.Solve();
     }
 
@@ -1200,13 +1200,13 @@ void MedialPCA::ComputePCA()
   // Compute the mean shape and the covariance matrix on the fourier
   // parameters. Since the Fourier basis is orthonormal, doing PCA on the
   // surface and on the Fourier components is identical
-  size_t m = xSurfaces[0]->GetNumberOfRawCoefficients();
+  size_t m = xSurfaces[0]->GetNumberOfCoefficients();
   size_t n = xSurfaces.size();
 
   // Populate the data matrix 
   xDataShape.set_size(n, m);
   for(i = 0; i < n; i++) for(j = 0; j < m; j++)
-    xDataShape[i][j] = xSurfaces[i]->GetRawCoefficient(j);
+    xDataShape[i][j] = xSurfaces[i]->GetCoefficient(j);
 
   // Compute the principal components of xDataShape
   if(xPCA) delete xPCA;
@@ -1309,7 +1309,7 @@ void MedialPCA::GetShapeAtFSLocation(MedialPDE *target)
   // Compute the shape
   target->xSurface = new FourierSurface(*xSurfaces[0]);
   target->xSolver->SetMedialSurface(target->xSurface);
-  target->xSurface->SetRawCoefficientArray(z.data_block());
+  target->xSurface->SetCoefficientArray(z.data_block());
   target->Solve();
 
   // Compute the feature image

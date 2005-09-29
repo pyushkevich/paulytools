@@ -6,7 +6,7 @@
  *****************************************************************************/
 
 SelectionMedialCoefficientMask::SelectionMedialCoefficientMask(
-  IBasisRepresentation2D *source, const vector<size_t> &mask)
+  ICoefficientSettable *source, const vector<size_t> &mask)
 : xMask(mask), 
   xRawCoefficients(mask.size()), xMaskCoefficients(mask.size())
 {
@@ -14,33 +14,44 @@ SelectionMedialCoefficientMask::SelectionMedialCoefficientMask(
   nCoeff = mask.size();
 }
 
+SelectionMedialCoefficientMask::SelectionMedialCoefficientMask(
+  ICoefficientSettable *source, size_t iMaskSize, const size_t *iMask)
+: xRawCoefficients(iMaskSize), xMaskCoefficients(iMaskSize)
+{
+  xSource = source;
+  nCoeff = iMaskSize;
+  xMask.reserve(iMaskSize);
+  for(size_t i=0;i<iMaskSize;i++)
+    xMask.push_back(iMask[i]);
+}
+
 /** Get the coefficient array */
 double *SelectionMedialCoefficientMask::GetCoefficientArray()
 {
-  double *xRaw = xSource->GetRawCoefficientArray();
+  double *xRaw = xSource->GetCoefficientArray();
   for(size_t i=0; i < nCoeff; i++)
     { xMaskCoefficients[i] = xRaw[ xMask[i] ]; }
   return &(xMaskCoefficients[0]);
 }
 
 /** Set the coefficient array */
-void SelectionMedialCoefficientMask::SetCoefficientArray(double *xData)
+void SelectionMedialCoefficientMask::SetCoefficientArray(const double *xData)
 {
-  double *xRaw = xSource->GetRawCoefficientArray();
+  double *xRaw = xSource->GetCoefficientArray();
   for(size_t i=0; i < nCoeff; i++)
     {
     xRaw[ xMask[i] ] = xData[i];
     }
 }
 
-double SelectionMedialCoefficientMask::GetCoefficient(size_t i)
+double SelectionMedialCoefficientMask::GetCoefficient(size_t i) const
 {
-  return xSource->GetRawCoefficientArray()[xMask[i]];
+  return xSource->GetCoefficientArray()[xMask[i]];
 }
 
 void SelectionMedialCoefficientMask::SetCoefficient(size_t i, double x)
 { 
-  xSource->SetRawCoefficient( xMask[i], x ); 
+  xSource->SetCoefficient( xMask[i], x ); 
 }
 
 IHyperSurface2D *
@@ -62,34 +73,34 @@ SelectionMedialCoefficientMask
  *****************************************************************************/
 
 PassThroughCoefficientMask::PassThroughCoefficientMask(
-  IBasisRepresentation2D *source) 
+  ICoefficientSettable *source) 
 : xSource(source) 
 {
 }
 
 double *PassThroughCoefficientMask::GetCoefficientArray()
 { 
-  return xSource->GetRawCoefficientArray(); 
+  return xSource->GetCoefficientArray(); 
 }
 
-void PassThroughCoefficientMask::SetCoefficientArray(double *xData)
+void PassThroughCoefficientMask::SetCoefficientArray(const double *xData)
 { 
-  xSource->SetRawCoefficientArray(xData); 
+  xSource->SetCoefficientArray(xData); 
 }
 
-size_t PassThroughCoefficientMask::GetNumberOfCoefficients()
+size_t PassThroughCoefficientMask::GetNumberOfCoefficients() const
 { 
-  return xSource->GetNumberOfRawCoefficients(); 
+  return xSource->GetNumberOfCoefficients(); 
 }
 
-double PassThroughCoefficientMask::GetCoefficient(size_t i)
+double PassThroughCoefficientMask::GetCoefficient(size_t i) const
 { 
-  return xSource->GetRawCoefficient(i); 
+  return xSource->GetCoefficient(i); 
 }
 
 void PassThroughCoefficientMask::SetCoefficient(size_t i, double x)
 { 
-  xSource->SetRawCoefficient(i, x); 
+  xSource->SetCoefficient(i, x); 
 }
 
 IHyperSurface2D *
@@ -211,7 +222,7 @@ private:
 AffineTransformCoefficientMask
 ::AffineTransformCoefficientMask(IBasisRepresentation2D *surface)
 : xOriginalCoefficients(
-    surface->GetRawCoefficientArray(), surface->GetNumberOfRawCoefficients()), 
+    surface->GetCoefficientArray(), surface->GetNumberOfCoefficients()), 
   xSurface(surface), 
   nDim(surface->GetNumberOfDimensions()),
   A(nDim, nDim), b(nDim), xData(nDim * nDim + nDim)
@@ -228,13 +239,13 @@ AffineTransformCoefficientMask
   b.copy_out(xData.data_block() + iIndexB);
 }
 
-void AffineTransformCoefficientMask::SetCoefficientArray(double *inData)
+void AffineTransformCoefficientMask::SetCoefficientArray(const double *inData)
 { 
   xData.copy_in(inData);
   A.copy_in(inData);
   b.copy_in(inData + iIndexB);
 
-  xSurface->SetRawCoefficientArray(xOriginalCoefficients.data_block());
+  xSurface->SetCoefficientArray(xOriginalCoefficients.data_block());
   xSurface->ApplyAffineTransform(A, b, c);
 }
 
@@ -263,4 +274,10 @@ AffineTransformCoefficientMask
 {
   delete xSurface;
 }
+
+/******************************************************************************
+ * AffineTransform3DCoefficientMask 
+ *****************************************************************************/
+const size_t AffineTransform3DCoefficientMask::xIndexArray[] = 
+  { 0, 1, 2, 4, 5, 6, 8, 9, 10, 16, 17, 18 };
 

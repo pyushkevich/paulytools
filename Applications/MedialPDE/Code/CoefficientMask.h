@@ -3,37 +3,29 @@
 
 #include <vector>
 #include <smlmath.h>
-
-class IBasisRepresentation2D;
-class IHyperSurface2D;
+#include "BasisFunctions2D.h"
 
 using namespace std;
 
-class IMedialCoefficientMask
+class IMedialCoefficientMask : public ICoefficientSettable
 {
 public:
-  virtual double *GetCoefficientArray() = 0;
-  virtual void SetCoefficientArray(double *xData) = 0;
-  virtual size_t GetNumberOfCoefficients() = 0;
-  virtual double GetCoefficient(size_t i) = 0;
-  virtual void SetCoefficient(size_t i, double x) = 0;
-
-  // Get a surface corresponding to a single component
-  virtual IHyperSurface2D *GetComponentSurface(size_t iCoefficient) = 0;
-  virtual void ReleaseComponentSurface(IHyperSurface2D *xSurface) = 0;
 };
 
 class SelectionMedialCoefficientMask : public IMedialCoefficientMask
 {
 public:
   SelectionMedialCoefficientMask(
-    IBasisRepresentation2D *source, const vector<size_t> &mask);
+    ICoefficientSettable *source, const vector<size_t> &mask);
+
+  SelectionMedialCoefficientMask(
+    ICoefficientSettable *source, size_t iMaskSize, const size_t *iMaskIndex);
 
   double *GetCoefficientArray();
-  void SetCoefficientArray(double *xData);
-  size_t GetNumberOfCoefficients()
+  void SetCoefficientArray(const double *xData);
+  size_t GetNumberOfCoefficients() const
     { return nCoeff; }
-  double GetCoefficient(size_t i);
+  double GetCoefficient(size_t i) const; 
   void SetCoefficient(size_t i, double x);
 
   // Get a surface corresponding to a single component
@@ -41,7 +33,7 @@ public:
   void ReleaseComponentSurface(IHyperSurface2D *xSurface);
 
 private:
-  IBasisRepresentation2D *xSource;
+  ICoefficientSettable *xSource;
   vnl_vector<double> xRawCoefficients, xMaskCoefficients;
   vector<size_t> xMask;
   size_t nCoeff;
@@ -50,11 +42,11 @@ private:
 class PassThroughCoefficientMask : public virtual IMedialCoefficientMask
 {
 public:
-  PassThroughCoefficientMask(IBasisRepresentation2D *source);
+  PassThroughCoefficientMask(ICoefficientSettable *source);
   double *GetCoefficientArray();
-  void SetCoefficientArray(double *xData);
-  size_t GetNumberOfCoefficients();
-  double GetCoefficient(size_t i);
+  void SetCoefficientArray(const double *xData);
+  size_t GetNumberOfCoefficients() const;
+  double GetCoefficient(size_t i) const;
   void SetCoefficient(size_t i, double x);
 
   // Get a surface corresponding to a single component
@@ -62,7 +54,7 @@ public:
   void ReleaseComponentSurface(IHyperSurface2D *xSurface);
   
 private:
-  IBasisRepresentation2D *xSource;
+  ICoefficientSettable *xSource;
 };
 
 class AffineTransformCoefficientMask : virtual public IMedialCoefficientMask
@@ -73,12 +65,12 @@ public:
   double *GetCoefficientArray()
     { return xData.data_block(); }
   
-  void SetCoefficientArray(double *inData);
+  void SetCoefficientArray(const double *inData);
   
-  size_t GetNumberOfCoefficients()
+  size_t GetNumberOfCoefficients() const
     { return nCoeff; }
 
-  double GetCoefficient(size_t i)
+  double GetCoefficient(size_t i) const
     { return xData[i]; }
 
   void SetCoefficient(size_t i, double x)
@@ -102,4 +94,31 @@ private:
   VectorType xData;
   double xRhoScale;
 };
+
+
+/** 
+ * This is an affine transform in 3x1D, it uses the standard 12 rather than
+ * 20 coefficients. It's basically a selection mask wrapped around an affine
+ * mask
+ */
+class AffineTransform3DCoefficientMask :
+  public SelectionMedialCoefficientMask
+{
+public:
+  AffineTransform3DCoefficientMask(IBasisRepresentation2D *surface) : 
+    SelectionMedialCoefficientMask(
+      xAffineMask = new AffineTransformCoefficientMask(surface), 12, xIndexArray) 
+  { }
+
+  ~AffineTransform3DCoefficientMask()
+    { delete xAffineMask; }
+    
+private:
+  AffineTransformCoefficientMask *xAffineMask;
+  static const size_t xIndexArray[];
+};
+
+
+
 #endif //__CoefficientMask_h_
+

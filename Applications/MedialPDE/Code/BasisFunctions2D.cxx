@@ -5,6 +5,7 @@
 
 #include "BasisFunctions2D.h"
 #include "BasisFunctions2D.txx"
+#include "CoefficientMask.h"
 
 double CosineBasisFunction::Evaluate(double u, size_t k, size_t d)
 {
@@ -27,7 +28,7 @@ FourierSurface::FourierSurface(const FourierSurface &source)
   : FourierSurfaceBase(source.ncu, source.ncv)
 {
   // Copy the raw coefficients
-  this->SetRawCoefficientArray(source.GetRawCoefficientArray());
+  this->SetCoefficientArray(source.GetCoefficientArray());
 }
 
 vnl_vector<double> FourierSurface::GetCenterOfRotation()

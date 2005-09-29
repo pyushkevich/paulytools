@@ -3,11 +3,11 @@
 
 #include <valarray>
 #include <smlmath.h>
-#include "CoefficientMask.h"
 #include "Registry.h"
 
 using namespace std;
 
+class IMedialCoefficientMask;
 
 class IHyperSurface2D
 {
@@ -54,21 +54,32 @@ public:
   virtual VectorType GetCenterOfRotation() = 0;
 };
 
-/** This is an interface that should be implemented by any 2D basis function
- * implementation */
-class IBasisRepresentation2D : virtual public IMutableHyperSurface2D
+/**
+ * This is an interface that contains functions for setting and getting
+ * coefficients and corresponding component surfaces
+ */
+class ICoefficientSettable
 {
 public:
-  /** Get the coefficients as an array of real values */
-  virtual size_t GetNumberOfRawCoefficients() const = 0;
-  virtual double *GetRawCoefficientArray() = 0;
-  virtual const double *GetRawCoefficientArray() const = 0;
-  virtual double GetRawCoefficient(size_t iCoeff) const = 0;
+  virtual double *GetCoefficientArray() = 0;
+  virtual void SetCoefficientArray(const double *xData) = 0;
+  virtual size_t GetNumberOfCoefficients() const = 0 ;
+  virtual double GetCoefficient(size_t i) const = 0;
+  virtual void SetCoefficient(size_t i, double x) = 0;
 
-  /** Set the coefficient array */
-  virtual void SetRawCoefficientArray(const double *array) = 0;
-  virtual void SetRawCoefficient(size_t iCoeff, double xValue) = 0;
-  
+  // Get a surface corresponding to a single component
+  virtual IHyperSurface2D *GetComponentSurface(size_t iCoefficient) = 0;
+  virtual void ReleaseComponentSurface(IHyperSurface2D *xSurface) = 0;
+};
+
+/** This is an interface that should be implemented by any 2D basis function
+ * implementation */
+class IBasisRepresentation2D : 
+  virtual public IMutableHyperSurface2D, 
+  virtual public ICoefficientSettable
+{
+public:
+
   /** Fit the i-th component of the coefficients to some data points */
   virtual void FitToData(size_t n, size_t i, double *uu, double *vv, double *xx) = 0;
 
@@ -81,11 +92,8 @@ public:
   /** Get a coefficient mask of a given coarseness in each component.
    * Coarseness of zero should mean minimal number of coefficients, and
    * coarseness of one is the maximal numner of coefficients */
-  virtual IMedialCoefficientMask *NewCoarseToFineCoefficientMask(double *xCoarseness) = 0;
-
-  /** Get a component surface corresponding to a coefficient */
-  virtual IHyperSurface2D *GetComponentSurface(size_t iRawCoefficient) = 0;
-  virtual void ReleaseComponentSurface(IHyperSurface2D *xSurface) = 0;
+  virtual IMedialCoefficientMask *
+    NewCoarseToFineCoefficientMask(double *xCoarseness) = 0;
 };
   
 /**
@@ -108,7 +116,10 @@ public:
     }
     
 
-  double &operator() (size_t ix, size_t iy, size_t iz)
+  double &operator() (size_t ix, size_t iy, size_t iz) 
+    { return (*this)[iz * stride_z + iy * stride_y + ix]; }
+
+  const double &operator() (size_t ix, size_t iy, size_t iz) const
     { return (*this)[iz * stride_z + iy * stride_y + ix]; }
 
   double *GetPointer()
@@ -185,26 +196,26 @@ public:
     { return NComponents; }
 
   /** Get number of raw coefficients */
-  size_t GetNumberOfRawCoefficients() const
+  size_t GetNumberOfCoefficients() const 
     { return C.size(); }
 
   /** Get the coefficients as an array of real values */
-  double *GetRawCoefficientArray() 
+  double *GetCoefficientArray() 
     { return C.GetPointer(); }
   
   /** Get the coefficients as an array of real values */
-  const double *GetRawCoefficientArray() const
+  const double *GetCoefficientArray() const
     { return C.GetPointer(); }
 
   /** Set the array of coefficients */
-  void SetRawCoefficientArray(const double *data)
+  void SetCoefficientArray(const double *data)
     { for(size_t i = 0; i < C.size(); i++) C[i] = data[i]; }
 
   // Direct coefficient access
-  double GetRawCoefficient(size_t iCoeff) const
+  double GetCoefficient(size_t iCoeff) const
     { return C[iCoeff]; }
   
-  void SetRawCoefficient(size_t iCoeff, double xValue) 
+  void SetCoefficient(size_t iCoeff, double xValue) 
     { C[iCoeff] = xValue; }
 
   void SetAllCoefficients(double xValue)
@@ -217,7 +228,7 @@ public:
   void SetCoefficient(size_t iu, size_t iv, size_t iComp, double value)
     { C(iComp,iu,iv) = value; }
 
-  double GetCoefficient(size_t iu, size_t iv, size_t iComp)
+  double GetCoefficient(size_t iu, size_t iv, size_t iComp) const
     { return C(iComp,iu,iv); }
 
   /** Fit the i-th component of the coefficients to some data points */
@@ -237,7 +248,7 @@ public:
   void PrintReport();
 
   /** Get one of the components as a surface */
-  IHyperSurface2D *GetComponentSurface(size_t iRawCoefficient);
+  IHyperSurface2D *GetComponentSurface(size_t iCoefficient);
 
   /** Free the memory associated with the component surface */
   void ReleaseComponentSurface(IHyperSurface2D *xSurface);

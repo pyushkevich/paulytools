@@ -270,18 +270,21 @@ void TestCellVolume()
  */
 int TestDerivativesNoImage(const char *fnMPDE)
 {
-  MedialPDE mp(2, 4, 33, 65, 0.5, 0, 0);
+  int iReturn = 0;
+
+  MedialPDE mp(2, 4, 25, 49);
   mp.LoadFromParameterFile(fnMPDE);
 
   // Test straight-through gradient computation
   PassThroughCoefficientMask xMask(mp.GetSurface());
-  TestGradientComputation(mp.GetSolver(), &xMask);
+  iReturn += TestGradientComputation(mp.GetSolver(), &xMask);
 
   // Test affine transform gradient computation
-  AffineTransformCoefficientMask xAffineMask(mp.GetSurface());
-  TestGradientComputation(mp.GetSolver(), &xAffineMask);
+  AffineTransform3DCoefficientMask xAffineMask(mp.GetSurface());
+  iReturn += TestGradientComputation(mp.GetSolver(), &xAffineMask);
 
-  return 0;
+  // Return the total of the test values
+  return iReturn;
 }
 
 void MakeFlatTemplate(FourierSurface *xSurface)
@@ -314,6 +317,9 @@ void MakeFlatTemplate(FourierSurface *xSurface)
 
 int TestDerivativesWithImage(const char *fnMPDE)
 {
+  // Return Code
+  int iReturn = 0;
+
   // Load the Medial PDE
   MedialPDE mp(2, 4, 33, 81, 0.5, 0, 0);
   mp.LoadFromParameterFile(fnMPDE);
@@ -362,7 +368,7 @@ int TestDerivativesWithImage(const char *fnMPDE)
     // Set up the test
     MedialOptimizationProblem mop(mp.GetSolver(), vm[j]);
     mop.AddEnergyTerm(vt[i], 1.0);
-    TestOptimizerGradientComputation(mop, *vm[j], mp.GetSolver());
+    iReturn += TestOptimizerGradientComputation(mop, *vm[j], mp.GetSolver());
     }
 
   // Delete both pointers
@@ -372,7 +378,7 @@ int TestDerivativesWithImage(const char *fnMPDE)
   for(j = 0; j < vm.size(); j++)
     delete vm[j];
 
-  return 0;
+  return iReturn;
 }
 
 

@@ -34,12 +34,45 @@ private:
   double tElapsed;
 };
 
-void TestGradientComputation(
+// An inline function to update max counters
+inline void UpdateMax(double xValue, double &xMaxValue)
+{
+  if(xValue > xMaxValue)
+    xMaxValue = xValue;
+}
+
+void TestGradientComputationPrintReport(
+  double xMaxPhiDiff, double xMaxGRMS, double xMaxBndDiff, 
+  double xMaxBndNrmDiff, double xMaxBndAreaDiff, double xMaxCellVolumeDiff,
+  double xTotalAreaDiff, double xTotalVolumeDiff)
+{
+    // Print out the max difference
+    cout << "Maximal differences between numeric and analytic derivatives:" << endl;
+    cout << "Phi                      : " <<  xMaxPhiDiff << endl;
+    cout << "Sqr. Grad. Mag. of Phi   : " <<  xMaxGRMS << endl;
+    cout << "Boundary Node Positions  : " <<  xMaxBndDiff << endl;
+    cout << "Boundary Node Normals    : " <<  xMaxBndNrmDiff << endl;
+    cout << "Boundary Area Elements   : " <<  xMaxBndAreaDiff << endl;
+    cout << "Total Boundary Area      : " <<  xMaxBndAreaDiff << endl;
+    cout << "Internal Volume Elements : " <<  xTotalAreaDiff << endl;
+    cout << "Total Internal Volume    : " <<  xTotalVolumeDiff << endl;
+}
+
+int TestGradientComputation(
   MedialPDESolver *xSolver, IMedialCoefficientMask *xMask)
 {
   // Timers for different routines
   CodeTimer tCentral, tAnalytic;
   
+  // The epsilon for central difference tests
+  double eps = 0.0001;
+  
+  // Max values for different classes of error
+  double xGlobalMaxPhiDiff = 0.0, xGlobalMaxGRMS = 0.0;
+  double xGlobalMaxBndDiff = 0.0, xGlobalMaxBndNrmDiff = 0.0;
+  double xGlobalMaxBndAreaDiff = 0.0, xGlobalMaxCellVolumeDiff = 0.0;
+  double xGlobalTotalAreaDiff = 0.0, xGlobalTotalVolumeDiff = 0.0;
+
   cout << "*****************************************" << endl;
   cout << "Comparing Numeric Derivatives to Analytic" << endl;
   cout << "*****************************************" << endl;
@@ -77,7 +110,7 @@ void TestGradientComputation(
     xMask->ReleaseComponentSurface(xEta);
 
     // Now, use central differences to compute the same
-    double cc = xMask->GetCoefficient(iComp), eps = 0.0001;
+    double cc = xMask->GetCoefficient(iComp);
 
     // Solve both problems
     tCentral.Start();
@@ -113,36 +146,25 @@ void TestGradientComputation(
       // Take the largest difference in Phi
       double dcPhi = 0.5 * (a1.F - a2.F) / eps;
       double daPhi = a0.F;
-      if(fabs(dcPhi - daPhi) > xMaxPhiDiff)
-        xMaxPhiDiff = fabs(dcPhi - daPhi);
+      UpdateMax(fabs(dcPhi - daPhi), xMaxPhiDiff);
 
       // Also look at the differences in grad R mag sqr.
       double dcGRMS = 0.5 * (a1.xGradRMagSqr - a2.xGradRMagSqr) / eps;
       double daGRMS = a0.xGradRMagSqr;
-      if(fabs(dcGRMS - daGRMS) > xMaxGRMS)
-        xMaxGRMS = fabs(dcGRMS - daGRMS);
+      UpdateMax(fabs(dcGRMS - daGRMS), xMaxGRMS);
 
       // Take the largest difference in boundary derivs
       for(unsigned int k = 0; k < 2; k++)
         {
         SMLVec3d dcBnd = (0.5 / eps) * (a1.xBnd[k].X - a2.xBnd[k].X);
         SMLVec3d daBnd = a0.xBnd[k].X;
-        double xBndDiff = (dcBnd - daBnd).two_norm();
-        if(xBndDiff > xMaxBndDiff) xMaxBndDiff = xBndDiff;
+        UpdateMax((dcBnd - daBnd).two_norm(), xMaxBndDiff);
 
         SMLVec3d dcBndNrm = (0.5 / eps) * (a1.xBnd[k].N - a2.xBnd[k].N);
         SMLVec3d daBndNrm = a0.xBnd[k].N;
-        double xBndNrmDiff = (dcBndNrm - daBndNrm).two_norm();
-        if(xBndNrmDiff > xMaxBndNrmDiff) xMaxBndNrmDiff = xBndNrmDiff;
+        UpdateMax((dcBndNrm - daBndNrm).two_norm(), xMaxBndNrmDiff);
         }
       }
-
-    // Print out the max difference
-    cout << "Maximal differences between numeric and analytic derivatives:" << endl;
-    cout << "Phi                      : " <<  xMaxPhiDiff << endl;
-    cout << "Sqr. Grad. Mag. of Phi   : " <<  xMaxGRMS << endl;
-    cout << "Boundary Node Positions  : " <<  xMaxBndDiff << endl;
-    cout << "Boundary Node Normals    : " <<  xMaxBndNrmDiff << endl;
 
     // Now, test the effect on SolutionData objects
     SolutionData sd0(xSolver), sd1(&S1), sd2(&S2);
@@ -164,20 +186,11 @@ void TestGradientComputation(
         sd1.xBoundaryWeights[itBnd->GetIndex()] - 
         sd2.xBoundaryWeights[itBnd->GetIndex()]) / eps;
       double aAnalytic = pdsd.xBoundaryWeights[itBnd->GetIndex()];
-      double d = fabs(aAnalytic - aNumeric);
-      if(d > eps)
-        cout << itBnd->GetAtomIndex() << " : " << d << " " << aNumeric << " " << aAnalytic << endl;
-      if(d > xMaxBndAreaDiff) xMaxBndAreaDiff = d;
+      UpdateMax(fabs(aAnalytic - aNumeric), xMaxBndAreaDiff);
       ++(*itBnd); 
       }
     delete itBnd;
 
-    cout << "Max difference between numeric and analytic derivs (Bnd Area) : " 
-      <<  xMaxBndAreaDiff << endl;  
-
-    cout << "Difference in total area derivatives : " 
-      << fabs(0.5 * (sd1.xBoundaryArea - sd2.xBoundaryArea) / eps - 
-        pdsd.xBoundaryArea) << endl;
 
     // Compute the difference in internal point volume weights
     size_t nInternal = 4;
@@ -196,32 +209,72 @@ void TestGradientComputation(
         sd1.xInternalWeights[itPoint->GetIndex()] - 
         sd2.xInternalWeights[itPoint->GetIndex()]) / eps;
       double aAnalytic = pdsd.xInternalWeights[itPoint->GetIndex()];
-      SMLVec3d vNumeric = 0.5 * (
-        sd1.xInternalPoints[itPoint->GetIndex()] -
-        sd2.xInternalPoints[itPoint->GetIndex()]) / eps;
-      SMLVec3d vAnalytic = pdsd.xInternalPoints[itPoint->GetIndex()];
-      double d = fabs(aAnalytic - aNumeric);
-      // double d = (vAnalytic - vNumeric).two_norm();
-      if(d > xMaxCellVolumeDiff) xMaxCellVolumeDiff = d;
+      UpdateMax(fabs(aAnalytic - aNumeric), xMaxCellVolumeDiff);
+
       ++(*itPoint); 
       }
     delete itPoint;
 
-    cout << "Max difference between numeric and analytic derivs (Volume Elt) : " 
-      <<  xMaxCellVolumeDiff << endl;  
+    // Compare total area and volume derivatives
+    double xTotalVolumeDiff = 
+      fabs(0.5 * (sd1.xInternalVolume - sd2.xInternalVolume) / eps 
+        - pdsd.xInternalVolume);
 
-    cout << "Difference in total volumes : " 
-      << fabs(0.5 * (sd1.xInternalVolume - sd2.xInternalVolume) / eps - 
-        pdsd.xInternalVolume) << endl;
+    double xTotalAreaDiff = 
+      fabs(0.5 * (sd1.xBoundaryArea - sd2.xBoundaryArea) / eps 
+        - pdsd.xBoundaryArea);
+
+    // Print the report
+    TestGradientComputationPrintReport(
+      xMaxPhiDiff, xMaxGRMS, xMaxBndDiff, 
+      xMaxBndNrmDiff, xMaxBndAreaDiff, xMaxCellVolumeDiff,
+      xTotalAreaDiff, xTotalVolumeDiff);
+
+    // Update the global maximum counters
+    UpdateMax(xMaxPhiDiff, xGlobalMaxPhiDiff);
+    UpdateMax(xMaxGRMS, xGlobalMaxGRMS);
+    UpdateMax(xMaxBndDiff, xGlobalMaxBndDiff);
+    UpdateMax(xMaxBndNrmDiff, xGlobalMaxBndNrmDiff);
+    UpdateMax(xMaxBndAreaDiff, xGlobalMaxBndAreaDiff);
+    UpdateMax(xMaxCellVolumeDiff, xGlobalMaxCellVolumeDiff);
+    UpdateMax(xTotalAreaDiff, xGlobalTotalAreaDiff);
+    UpdateMax(xTotalVolumeDiff, xGlobalTotalVolumeDiff);
     }
 
+  // Print the final report
   cout << "========================================" << endl;
-  cout << "Central difference computed in " << tCentral.Read() 
-    << " sec., Analytic in " << tAnalytic.Read() << " sec." << endl; 
+  cout << "             FINAL REPORT               " << endl;
+  cout << "----------------------------------------" << endl;
+
+  TestGradientComputationPrintReport(
+    xGlobalMaxPhiDiff, xGlobalMaxGRMS, xGlobalMaxBndDiff, 
+    xGlobalMaxBndNrmDiff, xGlobalMaxBndAreaDiff, xGlobalMaxCellVolumeDiff,
+    xGlobalTotalAreaDiff, xGlobalTotalVolumeDiff);
+
+  cout << "----------------------------------------" << endl;
+  cout << "Numeric Gradient CPU Secs. :" << tCentral.Read() << endl;
+  cout << "Analytic Gradient CPU Secs.:" << tAnalytic.Read() << endl; 
+  cout << "----------------------------------------" << endl;
+
+  // The return value is based on any of the error terms exceeding epsilon
+  int iPass = 
+    (xGlobalMaxPhiDiff > eps || xGlobalMaxGRMS > eps ||
+     xGlobalMaxBndDiff > eps || xGlobalMaxBndNrmDiff > eps ||
+     xGlobalMaxBndAreaDiff > eps || xGlobalMaxCellVolumeDiff > eps ||
+     xGlobalTotalAreaDiff > eps || xGlobalTotalVolumeDiff > eps) ? -1 : 0;
+
+  // Describe what happened
+  if(iPass == 0)
+    cout << "TEST PASSED! (No error exceeds " << eps << ")" << endl;
+  else
+    cout << "TEST FAILED! (Errors exceed " << eps << ")" << endl;
   cout << "========================================" << endl;
+
+  // Return value
+  return iPass;
 }
 
-void TestOptimizerGradientComputation(
+int TestOptimizerGradientComputation(
   MedialOptimizationProblem &mop, 
   IMedialCoefficientMask &xMask,
   MedialPDESolver *xSolver)
@@ -237,6 +290,9 @@ void TestOptimizerGradientComputation(
   
   // Speed up this computation
   xSolver->SetSolutionAsInitialGuess();
+
+  // Keep track of the maximum error value
+  double xMaxError = 0.0;
   
   // Compute the numeric gradient of the objective function
   double eps = 0.01;
@@ -262,12 +318,20 @@ void TestOptimizerGradientComputation(
     
     // Print the derivative
     double dNumeric = 0.5 * (f1 - f2) / eps;
+    double xDifference = fabs(xGradient[i] - dNumeric);
     cout << "Derivatives wrt. " << i << ". Numeric = " << dNumeric 
       << ";   Analytic = " << xGradient[i] 
-      << ";   Difference = " << fabs(xGradient[i] - dNumeric) << endl;
+      << ";   Difference = " << xDifference << endl;
+
+    // Update the max error tracker
+    UpdateMax(xDifference, xMaxError);
     }
 
   // Report difference in time
-  cout << "Central difference computed in " << tNumeric.Read() 
-    << " sec., Analytic in " << tAnalytic.Read() << " sec." << endl; 
+  cout << "Maximal Error : " << xMaxError << endl;
+  cout << (xMaxError > eps ? "TEST FAILED" : "TEST PASSED") << endl;
+  cout << "Central difference computed in " << tNumeric.Read() << " sec." << endl;
+  cout << "Analytic gradient computed in  " << tAnalytic.Read() << " sec." << endl; 
+
+  return xMaxError > eps ? -1 : 0;
 }

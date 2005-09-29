@@ -4,10 +4,10 @@
 class MedialPDESolver;
 class IMedialCoefficientMask;
 
-void TestGradientComputation(
+int TestGradientComputation(
   MedialPDESolver *xSolver, IMedialCoefficientMask *xMask);
 
-void TestOptimizerGradientComputation(
+int TestOptimizerGradientComputation(
   MedialOptimizationProblem &mop, 
   IMedialCoefficientMask &xMask,
   MedialPDESolver *xSolver);
