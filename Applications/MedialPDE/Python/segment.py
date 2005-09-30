@@ -8,15 +8,15 @@ import os
 id = sys.argv[1]
 
 # Bail out if the data does not exist
-#if(not os.access(dirWork + "hippo/imgiso/" + id + ".mha", os.R_OK) ):
-#  print "Can not find appropriate image file!"
-#  sys.exit(1)
+if(not os.access(dirWork + "hippo/imgiso/" + id + ".mha", os.R_OK) ):
+  print "Can not find appropriate image file!"
+  sys.exit(1)
 
 # Set the mesh dump directory
 dirMesh = dirWork + "tmp/meshdump/" + id;
 
 # Create the necessary images
-# MakeImages(id)
+MakeImages(id)
 
 # Create a medial PDE object
 mp = MedialPDE(2, 4, 32, 80)
@@ -38,17 +38,26 @@ mp.EnableMeshDump(dirMesh + "/step1",0.01)
 mp.RunOptimization(img, 400)
 SaveMRep(mp, id, "affine")
 
-# Compute low frequency match
+# Compute match to the blurry image
 mp.SetOptimizationToDeformable(1.0, 0.0);
 mp.EnableMeshDump(dirMesh + "/step2",0.01)
-mp.RunOptimization(img, 800)
+mp.RunOptimization(img, 600)
 SaveMRep(mp, id, "ctf01")
 
-# Compute add the rho component to the match
+# Refit to the less blurry image
 mp.SetOptimizationToDeformable()
 mp.EnableMeshDump(dirMesh + "/step3",0.01)
-mp.RunOptimization(img, 800)
+mp.RunOptimization(img, 300)
 SaveMRep(mp, id, "ctf02")
+
+# Load the low-blur image
+img = LoadBlurImage(id, "low")
+
+# Refit to the less blurry image
+mp.SetOptimizationToDeformable()
+mp.EnableMeshDump(dirMesh + "/step3_5",0.01)
+mp.RunOptimization(img, 300)
+SaveMRep(mp, id, "ctf02_5")
 
 # Compute match with rho
 mp.SetNumberOfCoefficients(4, 6)
@@ -56,9 +65,6 @@ mp.SetMatchToBoundaryGradient()
 mp.EnableMeshDump(dirMesh + "/step4",0.01)
 mp.RunOptimization(img, 600)
 SaveMRep(mp, id, "ctf03")
-
-# Load the low-resolution image
-img = LoadBlurImage(id, "low")
 
 # Scale up to 6 by 10 optimization
 mp.SetNumberOfCoefficients(6, 8)

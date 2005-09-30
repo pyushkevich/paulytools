@@ -102,6 +102,7 @@ SET(SCRIPT_FILES
   common.py 
   imageprep.py
   segment.py
+  segment2.py
   pca.py
   sample.py
   testdphi.py
