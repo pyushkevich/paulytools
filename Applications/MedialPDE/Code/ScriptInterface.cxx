@@ -512,13 +512,13 @@ void MedialPDE
   BoundaryJacobianEnergyTerm xTermJacobian;
   // CrestLaplacianEnergyTerm xTermCrest;
   AtomBadnessTerm xTermBadness;
-  MedialRegularityTerm xTermRegularize(xSolver->GetAtomArray(), xSolver->GetAtomGrid());
+  // MedialRegularityTerm xTermRegularize(xSolver->GetAtomArray(), xSolver->GetAtomGrid());
 
   // Add the terms to the problem
   xProblem.AddEnergyTerm(xTermImage, 1.0);
-  xProblem.AddEnergyTerm(&xTermJacobian, 0.005);
+  xProblem.AddEnergyTerm(&xTermJacobian, 0.5);
   xProblem.AddEnergyTerm(&xTermBadness, 1.0);
-  xProblem.AddEnergyTerm(&xTermRegularize, 1.0);
+  // xProblem.AddEnergyTerm(&xTermRegularize, 1.0);
 
   // Create the initial solution
   size_t nCoeff = xMask->GetNumberOfCoefficients();

@@ -78,8 +78,12 @@ TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS})
 TARGET_LINK_LIBRARIES(testpde medialpde)
 
 # Specify the data root
-FIND_PATH(MPDE_INPUTDATA_ROOT "init/surf01.txt")
 FIND_PATH(MPDE_DATA_ROOT "t1")
+IF(MPDE_DATA_ROOT)
+  FIND_PATH(MPDE_INPUTDATA_ROOT "init/surf01.txt" ${MPDE_DATA_ROOT}/Input)
+  FIND_PATH(MPDE_TEMP_ROOT "" ${MPDE_DATA_ROOT}/tmp "/tmp")
+ENDIF(MPDE_DATA_ROOT)
+  
 
 # Generate tests
 ENABLE_TESTING()
@@ -103,6 +107,7 @@ SET(SCRIPT_FILES
   imageprep.py
   segment.py
   segment2.py
+  pipeline.py
   pca.py
   sample.py
   testdphi.py
