@@ -1331,7 +1331,7 @@ void MedialRegularityTerm::PrintReport(ostream &sout)
 /*********************************************************************************
  * MEDIAL OPTIMIZATION PROBLEM
  ********************************************************************************/
-const double MedialOptimizationProblem::xPrecision = 1.0e-12;
+const double MedialOptimizationProblem::xPrecision = 1.0e-10;
 const double MedialOptimizationProblem::xEpsilon = 1.0e-6;
 
 MedialOptimizationProblem
