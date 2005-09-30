@@ -54,7 +54,13 @@ public:
    * Solve the PDE for a given surface and a given rho function up to the required 
    * level of accuracy.
    */
-  void Solve(double delta = 1e-12);
+  void Solve(const Mat& xGuessPhi, double delta = 1e-12);
+
+  /** 
+   * Solve, using the default initial guess
+   */
+  void Solve(double delta = 1e-12)
+    { Solve(xInitSoln); }
 
   /**
    * Compute the 'jet' of the equation with respect to the basis functions
@@ -85,6 +91,9 @@ public:
 
   /** Get the radius field */
   const Mat &GetPhiField() { return y; }
+
+  /** Get the phi field for the last variational derivative computation */
+  const Mat &GetPhiDerivativeField() { return dy; }
 
   /** Get the u and v finite difference grids */
   const Vec &GetGridU() const { return uGrid; }
@@ -126,7 +135,7 @@ private:
   MedialAtom *xAtoms;
 
   /** Three vectors used in the iteration */
-  Mat eps, b, y, zTest, xInitSoln, xDefaultInitSoln;
+  Mat eps, b, y, zTest, xInitSoln, xDefaultInitSoln, dy;
   // vnl_vector<double> eps, b, y, zTest;
 
   // Sparse linear matrix solver
@@ -139,7 +148,7 @@ private:
   void TestJacobi();
   void ReconstructAtoms(const Mat &ySolution);
   void InitializeSiteGeometry();
-  double SolveOnce(double delta);
+  double SolveOnce(const Mat &xGuess, double delta);
   double EstimateLBOperator(const Mat &F, size_t i, size_t j);
 
   bool flagReuseLastSolution;

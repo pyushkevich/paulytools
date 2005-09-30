@@ -32,6 +32,10 @@ public:
   IHyperSurface2D *GetComponentSurface(size_t iCoefficient);
   void ReleaseComponentSurface(IHyperSurface2D *xSurface);
 
+  // Get a surface corresponding to some variation
+  IHyperSurface2D *GetVariationSurface(const double *xData);
+  void ReleaseVariationSurface(IHyperSurface2D *xSurface);
+
 private:
   ICoefficientSettable *xSource;
   vnl_vector<double> xRawCoefficients, xMaskCoefficients;
@@ -52,6 +56,10 @@ public:
   // Get a surface corresponding to a single component
   IHyperSurface2D *GetComponentSurface(size_t iCoefficient);
   void ReleaseComponentSurface(IHyperSurface2D *xSurface);
+
+  // Get a surface corresponding to some variation
+  IHyperSurface2D *GetVariationSurface(const double *xData);
+  void ReleaseVariationSurface(IHyperSurface2D *xSurface);
   
 private:
   ICoefficientSettable *xSource;
@@ -79,6 +87,10 @@ public:
   // Get a surface corresponding to a single component
   IHyperSurface2D *GetComponentSurface(size_t iCoefficient);
   void ReleaseComponentSurface(IHyperSurface2D *xSurface);
+
+  // Get a surface corresponding to some variation
+  IHyperSurface2D *GetVariationSurface(const double *xData);
+  void ReleaseVariationSurface(IHyperSurface2D *xSurface);
 
 private:
   typedef vnl_matrix<double> MatrixType;

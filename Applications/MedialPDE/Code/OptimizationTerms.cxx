@@ -337,6 +337,7 @@ double
 NumericalGradientEnergyTerm
 ::ComputePartialDerivative(SolutionData *S, PartialDerivativeSolutionData *dS)
 {
+  cout << "GENERATING OFFSET DATA!!!" << endl;
   OffsetSolutionData s1(S, dS, xEpsilon), s2(S, dS, -xEpsilon);
   
   // Compute the two energy values
@@ -1333,62 +1334,213 @@ void MedialRegularityTerm::PrintReport(ostream &sout)
 const double MedialOptimizationProblem::xPrecision = 1.0e-12;
 const double MedialOptimizationProblem::xEpsilon = 1.0e-6;
 
+MedialOptimizationProblem
+::MedialOptimizationProblem(
+  MedialPDESolver *xSolver, IMedialCoefficientMask *xCoeff)
+{
+  this->xCoeff = xCoeff;
+  this->xSolver = xSolver;
+  this->nCoeff = xCoeff->GetNumberOfCoefficients();
+
+  flagLastEvalAvailable = false;
+  
+  // xLastPhiDerivField.set_size(
+  //  xSolver->GetPhiField().rows(),xSolver->GetPhiField().columns());
+  
+  dAtoms = new MedialAtom[xSolver->GetAtomGrid()->GetNumberOfAtoms()];
+}
+
+MedialOptimizationProblem
+::~MedialOptimizationProblem()
+{
+  delete dAtoms;
+}
+
 // Add the energy term
 void MedialOptimizationProblem::AddEnergyTerm(EnergyTerm *term, double xWeight)
 {
   xWeights.push_back(xWeight);
   xTerms.push_back(term);
+  xTimers.push_back(CodeTimer());
+  xGradTimers.push_back(CodeTimer());
 }
 
 
-double MedialOptimizationProblem::Evaluate(double *X)
+bool MedialOptimizationProblem::SolvePDE(double *xEvalPoint)
+{
+  // Make a vector from the eval point
+  vnl_vector<double> X(xEvalPoint, nCoeff);
+
+  // Check if a previous solution exists
+  if(flagLastEvalAvailable)
+    {
+    // Compare this to the last evaluation point - never re-evaluate
+    if(X == xLastEvalPoint)
+      return false;
+
+    // Solve the equation
+    xSolveTimer.Start();
+
+    // Update the surface with the new solution
+    xCoeff->SetCoefficientArray(xEvalPoint);
+
+    // Solve the PDE using the last point
+    xSolver->Solve( xSolver->GetPhiField(), xPrecision );
+    }
+  else
+    {
+    // Solve the equation
+    xSolveTimer.Start();
+
+    // Update the surface with the new solution
+    xCoeff->SetCoefficientArray(xEvalPoint);
+
+    // Compute using Taylor series to define the initial guess
+    xSolver->Solve(xPrecision);
+    }
+
+  // Record the current point as the last evaluation point
+  xLastEvalPoint = X;
+  flagLastEvalAvailable = true;
+
+  // Stop timing
+  xSolveTimer.Stop();
+
+  // Return true : solution updated
+  return true;
+}
+
+/*
+void MedialOptimizationProblem::SolvePDE(double *xEvalPoint)
 {
   // Update the surface with the new solution
-  xCoeff->SetCoefficientArray(X);
-  xSolver->Solve(xPrecision);
+  xCoeff->SetCoefficientArray(xEvalPoint);
 
-  // Create a solution data object representing current solution
-  SolutionData S0(xSolver);
+  // Make a vector from the eval point
+  vnl_vector<double> X(xEvalPoint, nCoeff);
+  
+  // Solve the equation
+  xSolveTimer.Start();
 
-  // cout << "REPORT:" << endl;
+  // Check if the evaluation point is along the last gradient
+  if(flagGradAvailable) 
+    {
+    vnl_vector<double> dX = X - xLastGradEvalPoint;
+    double d2 = dot_product(dX, dX);
+    double mg2 = dot_product(xLastGrad, xLastGrad);
+    double xp = dot_product(dX, xLastGrad);
 
-  // Compute the solution for each term
-  xSolution = 0.0;
-  for(size_t iTerm = 0; iTerm < xTerms.size(); iTerm++)
-    { xSolution += xTerms[iTerm]->ComputeEnergy(&S0) * xWeights[iTerm]; }
+    cout << "Gradient closeness : " << fabs(d2 * mg2 - xp * xp) << endl;
+    
+    double alpha;
+    if( fabs(d2 * mg2 - xp * xp) > 1.0e-10 ) 
+      {
+      // The search may be going in the conj. grad. direction
+      xLastGrad = dX;
+      xLastPhiDerivField.fill(0.0);
+      
+      // Repeat for each coefficient
+      for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)
+        {
+        // Get an adapter for evaluating the function
+        IHyperSurface2D *xVariation = xCoeff->GetComponentSurface(iCoeff);
 
-  // cout << "RESULT:" << xSolution << endl;
-  // PrintReport(cout);
+        // Compute the partial derivatives with respect to the coefficients
+        xSolveGradTimer.Start();
+        xSolver->ComputeVariationalDerivative(xVariation, dAtoms); 
+        xSolveGradTimer.Stop();
+
+        // Dump the gradient
+        // cout << iCoeff << "; " << XGradient[iCoeff] << endl;
+        cout << "." << flush;
+
+        // Update the directional derivative of the phi field
+        xLastPhiDerivField += 
+          xLastGrad[iCoeff] * xSolver->GetPhiDerivativeField();
+        }
+
+      alpha = 1.0;
+      }
+    else
+      {
+      alpha = xp / mg2;
+      }
+
+    cout << "Test " << alpha << " along gradient" << endl;
+    
+    // We can use the gradient to estimate the phi field at the current point
+    xSolver->Solve(xLastPhiField + alpha * xLastPhiDerivField, xPrecision);
+    }
+  else
+    xSolver->Solve(xPrecision);
+
+  // Stop timing
+  xSolveTimer.Stop();
+}
+*/
+
+double MedialOptimizationProblem::Evaluate(double *xEvalPoint)
+{
+  // Solve the PDE - if there is no update, return the last solution value
+  if( SolvePDE(xEvalPoint) )
+    {
+    // Create a solution data object representing current solution
+    SolutionData S0(xSolver);
+
+    // TODO: Take this out!!!
+    xWeightsTimer.Start();
+    S0.UpdateBoundaryWeights();
+    S0.UpdateInternalWeights(6);
+    xWeightsTimer.Stop();
+
+    // Compute the solution for each term
+    xLastSolutionValue = 0.0;
+    for(size_t iTerm = 0; iTerm < xTerms.size(); iTerm++)
+      { 
+      xTimers[iTerm].Start();
+      xLastSolutionValue += xTerms[iTerm]->ComputeEnergy(&S0) * xWeights[iTerm]; 
+      xTimers[iTerm].Stop();
+      }
+    }
 
   // Return the result
-  return xSolution;
+  return xLastSolutionValue;
 }
 
+/* 
 double 
 MedialOptimizationProblem
-::ComputeGradient(double *X, double *XGradient)
+::ComputeGradient(double *xEvalPoint, double *xGradient)
 {
   size_t iTerm;
 
-  // Copy the x-vector into the coefficients of the surface
-  size_t nCoeff = xCoeff->GetNumberOfCoefficients();
-  xCoeff->SetCoefficientArray(X);
-
-  // Solve using default initial guess
-  // xSolver->SetDefaultInitialGuess();
-  xSolver->Solve(xPrecision);
+  // Solve the PDE
+  SolvePDE(xEvalPoint);
 
   // Create a solution data object representing current solution
   SolutionData S(xSolver);
 
+  // TODO: Take this out!!!
+  xWeightsTimer.Start();
+  S.UpdateBoundaryWeights();
+  S.UpdateInternalWeights(6);
+  xWeightsTimer.Stop();
+
   // Compute the value at the solution and init gradient computation
   xSolution = 0.0;
   for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
+    {
+    xTimers[iTerm].Start();
     xSolution += 
       xWeights[iTerm] * xTerms[iTerm]->BeginGradientComputation(&S);
-
-  // Allocate an array of derivative atoms
-  MedialAtom *dAtoms = new MedialAtom[xSolver->GetAtomGrid()->GetNumberOfAtoms()];
+    xTimers[iTerm].Stop();
+    }
+    
+  // Store the phi field
+  xLastPhiField = xSolver->GetPhiField();
+  
+  // Clear the directional derivative of the phi field
+  xLastPhiDerivField.fill(0.0);
 
   // Repeat for each coefficient
   for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)
@@ -1397,16 +1549,115 @@ MedialOptimizationProblem
     IHyperSurface2D *xVariation = xCoeff->GetComponentSurface(iCoeff);
 
     // Compute the partial derivatives with respect to the coefficients
+    xSolveGradTimer.Start();
     xSolver->ComputeVariationalDerivative(xVariation, dAtoms); 
+    xSolveGradTimer.Stop();
 
     // Create a solution partial derivative object
     PartialDerivativeSolutionData dS(&S, dAtoms);
     
+    // TODO: Take this out!!!
+    xWeightsGradTimer.Start();
+    dS.UpdateBoundaryWeights();
+    dS.UpdateInternalWeights(6);
+    xWeightsGradTimer.Stop();
+    
     // Compute the partial derivatives for each term
-    XGradient[iCoeff] = 0.0;
+    xGradient[iCoeff] = 0.0;
     for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
-      XGradient[iCoeff] += xWeights[iTerm] *
+      {
+      xGradTimers[iTerm].Start();
+      xGradient[iCoeff] += xWeights[iTerm] *
         xTerms[iTerm]->ComputePartialDerivative(&S, &dS);
+      xGradTimers[iTerm].Stop();
+      }
+
+    // Dump the gradient
+    // cout << iCoeff << "; " << XGradient[iCoeff] << endl;
+    cout << "." << flush;
+
+    // Update the directional derivative of the phi field
+    xLastPhiDerivField += 
+      xGradient[iCoeff] * xSolver->GetPhiDerivativeField();
+
+    // Release the component surface
+    xCoeff->ReleaseComponentSurface(xVariation);
+    }
+
+  // Clear up gradient computation
+  for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
+    xTerms[iTerm]->EndGradientComputation();
+
+  // Store the gradient evaluation point and value
+  xLastGradEvalPoint = vnl_vector<double>(xEvalPoint, nCoeff);
+  xLastGrad = vnl_vector<double>(xGradient, nCoeff);
+  flagGradAvailable = true;
+
+  // Increment the evaluation counter
+  evaluationCost += nCoeff;
+
+  // Return the solution value
+  return xSolution;
+}
+*/
+
+double 
+MedialOptimizationProblem
+::ComputeGradient(double *xEvalPoint, double *xGradient)
+{
+  size_t iTerm;
+
+  // Solve the PDE
+  SolvePDE(xEvalPoint);
+
+  // Create a solution data object representing current solution
+  SolutionData S(xSolver);
+
+  // TODO: Take this out!!!
+  xWeightsTimer.Start();
+  S.UpdateBoundaryWeights();
+  S.UpdateInternalWeights(6);
+  xWeightsTimer.Stop();
+
+  // Compute the value at the solution and init gradient computation
+  xLastSolutionValue = 0.0;
+  for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
+    {
+    xTimers[iTerm].Start();
+    xLastSolutionValue += 
+      xWeights[iTerm] * xTerms[iTerm]->BeginGradientComputation(&S);
+    xTimers[iTerm].Stop();
+    }
+    
+  // Repeat for each coefficient
+  for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)
+    {
+    // Get an adapter for evaluating the function
+    IHyperSurface2D *xVariation = xCoeff->GetComponentSurface(iCoeff);
+
+    // Compute the partial derivatives with respect to the coefficients
+    xSolveGradTimer.Start();
+    xSolver->ComputeVariationalDerivative(xVariation, dAtoms); 
+    xSolveGradTimer.Stop();
+
+    // Create a solution partial derivative object
+    PartialDerivativeSolutionData dS(&S, dAtoms);
+    
+    // TODO: Take this out!!!
+    xWeightsGradTimer.Start();
+    dS.UpdateBoundaryWeights();
+    dS.UpdateInternalWeights(6);
+    xWeightsGradTimer.Stop();
+    
+    // Compute the partial derivatives for each term
+    xGradient[iCoeff] = 0.0;
+    for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
+      {
+      xGradTimers[iTerm].Start();
+      xGradient[iCoeff] += xWeights[iTerm] *
+        xTerms[iTerm]->ComputePartialDerivative(&S, &dS);
+      xGradTimers[iTerm].Stop();
+      }
 
     // Dump the gradient
     // cout << iCoeff << "; " << XGradient[iCoeff] << endl;
@@ -1420,25 +1671,30 @@ MedialOptimizationProblem
   for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
     xTerms[iTerm]->EndGradientComputation();
 
-  // Delete the derivative atoms array
-  delete dAtoms;
-
   // Increment the evaluation counter
-  cout << endl;
   evaluationCost += nCoeff;
 
   // Return the solution value
-  return xSolution;
+  return xLastSolutionValue;
 }
 
 void MedialOptimizationProblem::PrintReport(ostream &sout)
 {
   sout << "Optimization Summary: " << endl;
-  sout << "  energy value   :  " << xSolution << endl; 
+  sout << "  energy value   :  " << xLastSolutionValue << endl; 
   sout << "  evaluation cost: " << this->getEvaluationCost() << endl;
+  sout << "  solver time : " << xSolveTimer.Read() << endl;
+  sout << "  solver gradient time : " << xSolveGradTimer.Read() << endl;
+  sout << "  weights time : " << xWeightsTimer.Read() << endl;
+  sout << "  weights gradient time : " << xWeightsGradTimer.Read() << endl;
   sout << "Per-Term Report:" << endl;
 
   for(size_t iTerm = 0; iTerm < xTerms.size(); iTerm++)
+    {
+    cout << "Term " << iTerm << endl;
     xTerms[iTerm]->PrintReport(sout);
+    cout << "    elapsed time: " << xTimers[iTerm].Read() << endl;
+    cout << "    gradient time: " << xGradTimers[iTerm].Read() << endl;
+    }
 }
 

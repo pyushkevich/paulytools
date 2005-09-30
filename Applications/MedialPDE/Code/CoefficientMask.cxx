@@ -39,9 +39,8 @@ void SelectionMedialCoefficientMask::SetCoefficientArray(const double *xData)
 {
   double *xRaw = xSource->GetCoefficientArray();
   for(size_t i=0; i < nCoeff; i++)
-    {
     xRaw[ xMask[i] ] = xData[i];
-    }
+  xSource->SetCoefficientArray(xRaw);
 }
 
 double SelectionMedialCoefficientMask::GetCoefficient(size_t i) const
@@ -66,6 +65,26 @@ SelectionMedialCoefficientMask
 ::ReleaseComponentSurface(IHyperSurface2D *xSurface)
 {
   xSource->ReleaseComponentSurface(xSurface);
+}
+
+IHyperSurface2D *
+SelectionMedialCoefficientMask
+::GetVariationSurface(const double *xData)
+{
+  // Create an array of coefficients, set unknowns to zeros
+  vnl_vector<double> xFullData(xSource->GetNumberOfCoefficients(), 0.0);
+  for(size_t i=0; i < nCoeff; i++)
+    xFullData[ xMask[i] ] = xData[i];
+  
+  // Call the source's method
+  return xSource->GetVariationSurface(xFullData.data_block());
+}
+
+void
+SelectionMedialCoefficientMask
+::ReleaseVariationSurface(IHyperSurface2D *xSurface)
+{
+  xSource->ReleaseVariationSurface(xSurface);
 }
 
 /******************************************************************************
@@ -115,6 +134,20 @@ PassThroughCoefficientMask
 ::ReleaseComponentSurface(IHyperSurface2D *xSurface)
 {
   xSource->ReleaseComponentSurface(xSurface);
+}
+
+IHyperSurface2D *
+PassThroughCoefficientMask
+::GetVariationSurface(const double *xData)
+{
+  return xSource->GetVariationSurface(xData);
+}
+
+void
+PassThroughCoefficientMask
+::ReleaseVariationSurface(IHyperSurface2D *xSurface)
+{
+  xSource->ReleaseVariationSurface(xSurface);
 }
 
 /******************************************************************************
@@ -268,9 +301,31 @@ AffineTransformCoefficientMask
   return new AffineComponentSurface(xSurface, nDim, dA, db, c);
 }
 
+IHyperSurface2D *
+AffineTransformCoefficientMask
+::GetVariationSurface(const double *xData)
+{
+  // Compute the matrices that are to be applied
+  MatrixType dA(nDim, nDim);
+  VectorType db(nDim);
+
+  dA.copy_in(xData);
+  db.copy_in(xData + iIndexB);
+
+  // Create the special surface
+  return new AffineComponentSurface(xSurface, nDim, dA, db, c);
+}
+
 void
 AffineTransformCoefficientMask
 ::ReleaseComponentSurface(IHyperSurface2D *xSurface)
+{
+  delete xSurface;
+}
+
+void
+AffineTransformCoefficientMask
+::ReleaseVariationSurface(IHyperSurface2D *xSurface)
 {
   delete xSurface;
 }

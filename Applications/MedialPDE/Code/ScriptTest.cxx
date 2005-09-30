@@ -263,6 +263,80 @@ void TestCellVolume()
     SMLVec3d(1,0,0),SMLVec3d(1,0,3),SMLVec3d(1,2,0),SMLVec3d(1,2,3)) << endl;
 }
 
+
+/**
+ * This test routine checks the accuracy of basis function variation
+ * computations, under various masks
+ */
+int TestBasisFunctionVariation(const char *fnMPDE)
+{
+  int iReturn = 0;
+
+  // Load a medial PDE for the test
+  MedialPDE mp(2, 4, 25, 49);
+  mp.LoadFromParameterFile(fnMPDE);
+
+  // Set up a selection mask
+  size_t xSel[] = {0,1,4,6};
+  
+  // Set up an array of coefficient masks
+  vector<IMedialCoefficientMask *> vm;
+  vm.push_back(new PassThroughCoefficientMask(mp.GetSurface()));
+  vm.push_back(new AffineTransformCoefficientMask(mp.GetSurface()));
+  vm.push_back(new SelectionMedialCoefficientMask( mp.GetSurface(), 4, xSel));
+  
+  char *nm[] = {
+    "PassThroughCoefficientMask",
+    "AffineTransformCoefficientMask",
+    "SelectionMedialCoefficientMask" };
+  
+  // Repeat for each mask
+  for(size_t i=0; i<vm.size(); i++)
+    {
+    // Create a random variation vector
+    vnl_vector<double> dx(vm[i]->GetNumberOfCoefficients());
+    for(size_t j=0; j<dx.size(); j++)
+      dx[j] = rand() * 2.0 / RAND_MAX - 1.0;
+
+    // Get the current coefficient vector
+    vnl_vector<double> 
+      x(vm[i]->GetCoefficientArray(), vm[i]->GetNumberOfCoefficients());
+
+    // Compute the surface derivative using each variation
+    SMLVec4d f1, f2, dfNum, dfAn;
+
+    // Evaluate the surface at finite differences
+    double eps = 0.0001;
+    vm[i]->SetCoefficientArray( (x + eps * dx).data_block() );
+    mp.GetSurface()->Evaluate(0.5, 0.5, f1.data_block());
+
+    vm[i]->SetCoefficientArray( (x - eps * dx).data_block() );
+    mp.GetSurface()->Evaluate(0.5, 0.5, f2.data_block());
+
+    dfNum = (f1 - f2) * 0.5 / eps;
+
+    vm[i]->SetCoefficientArray(x.data_block());
+    IHyperSurface2D *xVariation = vm[i]->GetVariationSurface(dx.data_block());
+    xVariation->Evaluate(0.5, 0.5, dfAn.data_block());
+
+    // Report
+    double dMax = (dfAn - dfNum).inf_norm();
+    if(dMax > eps)
+      iReturn += -1;
+    
+    cout << "Testing mask " << nm[i] << endl;
+    cout << "  right f.d.    : " << f1 << endl;
+    cout << "  left f.d.     : " << f2 << endl;
+    cout << "  central diff. : " << dfNum << endl;
+    cout << "  numeric der.  : " << dfAn << endl;
+    cout << "  maximum error : " << dMax << endl;
+    }
+ 
+  return iReturn;
+}
+
+
+
 /**
  * This test routine makes sure that the derivatives computed in the MedialPDE
  * solver and related classes are correct, bt comparing them to central
@@ -399,6 +473,7 @@ int usage()
   cout << "  tests: " << endl;
   cout << "    DERIV1 XX.mpde    Check analytic derivative PDEs." << endl;
   cout << "    DERIV2 XX.mpde    Check gradient computation in image match terms." << endl;
+  cout << "    DERIV3 XX.mpde    Check variations on basis functions." << endl;
   cout << endl;
   return -1;
 }
@@ -413,6 +488,8 @@ int main(int argc, char *argv[])
     return TestDerivativesNoImage(argv[2]);
   else if(0 == strcmp(argv[1], "DERIV2") && argc > 2)
     return TestDerivativesWithImage(argv[2]);
+  else if(0 == strcmp(argv[1], "DERIV3") && argc > 2)
+    return TestBasisFunctionVariation(argv[2]);
   else 
     return usage();
 }

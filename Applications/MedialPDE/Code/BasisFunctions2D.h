@@ -70,6 +70,10 @@ public:
   // Get a surface corresponding to a single component
   virtual IHyperSurface2D *GetComponentSurface(size_t iCoefficient) = 0;
   virtual void ReleaseComponentSurface(IHyperSurface2D *xSurface) = 0;
+
+  // Get a variation surface corresponding to a given change in coeffs
+  virtual IHyperSurface2D *GetVariationSurface(const double *xCoeff) = 0;
+  virtual void ReleaseVariationSurface(IHyperSurface2D *xSurface) = 0;
 };
 
 /** This is an interface that should be implemented by any 2D basis function
@@ -143,6 +147,9 @@ template< size_t NComponents, size_t NOrder,
 class GenericBasisRepresentation2D : virtual public IBasisRepresentation2D
 {
 public:
+  // Some useful typedefs
+  typedef GenericBasisRepresentation2D<
+    NComponents,NOrder,BasisFunctionU,BasisFunctionV> Self;
 
   /** Class that allows you to return a single basis function as a surface;
    * used in variational calculus computations */
@@ -316,6 +323,10 @@ public:
   void ApplyAffineTransform( const vnl_matrix<double> &A, 
     const vnl_vector<double> &b, const vnl_vector<double> &c);
   
+  /** Get a surface corresponding to a variation from this surface */
+  IHyperSurface2D *GetVariationSurface(const double *xCoeff);
+  void ReleaseVariationSurface(IHyperSurface2D *xSurface);
+
   /** Get a coefficient mask of a given coarseness in each component.
    * Coarseness of zero should mean minimal number of coefficients, and
    * coarseness of one is the maximal numner of coefficients */

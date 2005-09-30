@@ -11,29 +11,6 @@
 
 using namespace std;
 
-class CodeTimer 
-{
-public:
-  CodeTimer() 
-    { tElapsed = 0.0; }
-
-  void Start()
-    { tStart = clock(); }
-  
-  void Stop()
-    { tElapsed += (clock() - tStart) * 1.0 / CLOCKS_PER_SEC; }
-
-  void Reset()
-    { tElapsed = 0.0; }
-
-  double Read()
-    { return tElapsed; }
-
-private:
-  clock_t tStart;
-  double tElapsed;
-};
-
 // An inline function to update max counters
 inline void UpdateMax(double xValue, double &xMaxValue)
 {
@@ -85,14 +62,52 @@ int TestGradientComputation(
   MedialPDESolver S2(xSolver->GetGridU(), xSolver->GetGridV());
   S2.SetMedialSurface(xSolver->GetMedialSurface());
 
-  for(size_t iComp = 0; iComp < xMask->GetNumberOfCoefficients(); iComp++)
+  // Create a list of variational surfaces: some components, some random
+  // variations
+  vector<IHyperSurface2D *> xVariations;
+  vector<string> xVariationNames;
+  vector< vnl_vector<double> > xVariationCoeffs;
+
+  // Get the current coefficient vector
+  vnl_vector<double> x0(
+    xMask->GetCoefficientArray(), xMask->GetNumberOfCoefficients());
+
+  // Create the per-component variations
+  size_t iComp;
+  for( iComp = 0; iComp < xMask->GetNumberOfCoefficients(); iComp++)
+    {
+    ostringstream oss;
+    oss << " Coefficient " << iComp;
+    
+    vnl_vector<double> xCoeff(xMask->GetNumberOfCoefficients(), 0.0);
+    xCoeff[iComp] = 1.0;
+    
+    xVariations.push_back(xMask->GetComponentSurface(iComp));
+    xVariationNames.push_back(oss.str());
+    xVariationCoeffs.push_back(xCoeff);
+    }
+
+  // Create mixed variations
+  for(size_t i = 0; i < 3; i++)
+    {    
+    vnl_vector<double> dx(xMask->GetNumberOfCoefficients());
+    for(size_t j=0; j<dx.size(); j++)
+      dx[j] = rand() * 2.0 / RAND_MAX - 1.0;
+
+    xVariations.push_back(xMask->GetVariationSurface(dx.data_block()));
+    xVariationNames.push_back(" Random Variation ");
+    xVariationCoeffs.push_back(dx);
+    }
+  
+  // Repeat for all variations
+  for(size_t iVar = 0; iVar < xVariations.size(); iVar++)
     {
     cout << "----------------------------------------" << endl;
-    cout << " Coefficient " << iComp << endl;
+    cout << xVariationNames[iVar] << endl;
     cout << "----------------------------------------" << endl;
     
     // Get an adapter corresponding to the i-th component of the surface
-    IHyperSurface2D *xEta = xMask->GetComponentSurface(iComp);
+    IHyperSurface2D *xEta = xVariations[iVar];
 
     // Create an array of atoms to hold the derivative
     MedialAtom *dAtoms = 
@@ -106,23 +121,17 @@ int TestGradientComputation(
     xSolver->ComputeVariationalDerivative(xEta, dAtoms);
     tAnalytic.Stop();
 
-    // Release the variation
-    xMask->ReleaseComponentSurface(xEta);
-
-    // Now, use central differences to compute the same
-    double cc = xMask->GetCoefficient(iComp);
-
     // Solve both problems
     tCentral.Start();
-    xMask->SetCoefficient(iComp, cc + eps);
+    xMask->SetCoefficientArray( (x0 + eps * xVariationCoeffs[iVar]).data_block() );
     S1.Solve();
 
-    xMask->SetCoefficient(iComp, cc - eps);
+    xMask->SetCoefficientArray( (x0 - eps * xVariationCoeffs[iVar]).data_block() );
     S2.Solve();
     tCentral.Stop();
 
     // Restore the coefficient to its correct value
-    xMask->SetCoefficient(iComp, cc);
+    xMask->SetCoefficientArray( x0.data_block() );
 
     // Get the atom arrays
     MedialAtom *A1 = S1.GetAtomArray();
@@ -241,6 +250,14 @@ int TestGradientComputation(
     UpdateMax(xTotalVolumeDiff, xGlobalTotalVolumeDiff);
     }
 
+  // Release unused variations
+  for(iComp = 0; iComp < xMask->GetNumberOfCoefficients(); iComp++)
+    xMask->ReleaseComponentSurface(xVariations[iComp]);
+  for(iComp = 0; iComp < 3; iComp++)
+    xMask->ReleaseVariationSurface(
+      xVariations[iComp + xMask->GetNumberOfCoefficients()]);
+
+    
   // Print the final report
   cout << "========================================" << endl;
   cout << "             FINAL REPORT               " << endl;

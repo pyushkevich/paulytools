@@ -485,7 +485,7 @@ void MedialPDE
   IMedialCoefficientMask *xMask;
   if(eMask == AFFINE) 
     {
-    xMask = new AffineTransformCoefficientMask(xSurface);
+    xMask = new AffineTransform3DCoefficientMask(xSurface);
     }
   else if(eMask == FULL) 
     {
@@ -504,20 +504,19 @@ void MedialPDE
   // Create an image match term and a jacobian term
   EnergyTerm *xTermImage;
   if(eMatch == VOLUME)
-    xTermImage = new ProbabilisticEnergyTerm(image, 8);
+    xTermImage = new ProbabilisticEnergyTerm(image, 6);
   else
     xTermImage = new BoundaryImageMatchTerm(image);
   
   // Create the other terms
   BoundaryJacobianEnergyTerm xTermJacobian;
-  CrestLaplacianEnergyTerm xTermCrest;
+  // CrestLaplacianEnergyTerm xTermCrest;
   AtomBadnessTerm xTermBadness;
   MedialRegularityTerm xTermRegularize(xSolver->GetAtomArray(), xSolver->GetAtomGrid());
 
   // Add the terms to the problem
   xProblem.AddEnergyTerm(xTermImage, 1.0);
   xProblem.AddEnergyTerm(&xTermJacobian, 0.005);
-  xProblem.AddEnergyTerm(&xTermCrest, 0.005);
   xProblem.AddEnergyTerm(&xTermBadness, 1.0);
   xProblem.AddEnergyTerm(&xTermRegularize, 1.0);
 

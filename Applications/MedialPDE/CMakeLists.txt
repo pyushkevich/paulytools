@@ -84,14 +84,12 @@ FIND_PATH(MPDE_DATA_ROOT "t1")
 # Generate tests
 ENABLE_TESTING()
 SET(MPDE_TESTDATA_DIR ${MedialPDE_SOURCE_DIR}/Testing/Input)
+SET(MPDE_TEST_CMREP ${MPDE_TESTDATA_DIR}/st1001L.align.mpde)
 
-# Test the derivative calculation without image terms
-ADD_TEST(TestDerivativesNoImage   
-  testpde DERIV1 ${MPDE_TESTDATA_DIR}/st1001L.align.mpde)
-
-# Test derivative calculation with image terms
-ADD_TEST(TestDerivativesWithImage 
-  testpde DERIV2 ${MPDE_TESTDATA_DIR}/st1001L.align.mpde)
+# Test various derivative computations
+ADD_TEST(TestDerivativesNoImage   testpde DERIV1 ${MPDE_TEST_CMREP})
+ADD_TEST(TestDerivativesWithImage testpde DERIV2 ${MPDE_TEST_CMREP})
+ADD_TEST(TestBasisFunctionVariation testpde DERIV3 ${MPDE_TEST_CMREP})
 
 # Copy the script files
 SET(SCRIPT_FILES 
@@ -107,6 +105,7 @@ SET(SCRIPT_FILES
   pca.py
   sample.py
   testdphi.py
+  vis.py
   )
 
 FOREACH(FILE ${SCRIPT_FILES})  

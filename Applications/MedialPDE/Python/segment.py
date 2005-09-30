@@ -8,15 +8,15 @@ import os
 id = sys.argv[1]
 
 # Bail out if the data does not exist
-if(not os.access(dirWork + "hippo/imgiso/" + id + ".mha", os.R_OK) ):
-  print "Can not find appropriate image file!"
-  sys.exit(1)
+#if(not os.access(dirWork + "hippo/imgiso/" + id + ".mha", os.R_OK) ):
+#  print "Can not find appropriate image file!"
+#  sys.exit(1)
 
 # Set the mesh dump directory
 dirMesh = dirWork + "tmp/meshdump/" + id;
 
 # Create the necessary images
-MakeImages(id)
+# MakeImages(id)
 
 # Create a medial PDE object
 mp = MedialPDE(2, 4, 32, 80)

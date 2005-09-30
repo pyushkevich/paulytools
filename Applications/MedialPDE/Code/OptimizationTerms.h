@@ -378,15 +378,37 @@ private:
   vector<double> xGradientCommon;
 };
 
+class CodeTimer 
+{
+public:
+  CodeTimer() 
+    { tElapsed = 0.0; }
+
+  void Start()
+    { tStart = clock(); }
+  
+  void Stop()
+    { tElapsed += (clock() - tStart) * 1.0 / CLOCKS_PER_SEC; }
+
+  void Reset()
+    { tElapsed = 0.0; }
+
+  double Read()
+    { return tElapsed; }
+
+private:
+  clock_t tStart;
+  double tElapsed;
+};
+
 class MedialOptimizationProblem : public DifferentiableFunction
 {
 public:
   /** Initialize the problem */
-  MedialOptimizationProblem(MedialPDESolver *xSolver, IMedialCoefficientMask *xCoeff)
-    {
-    this->xCoeff = xCoeff;
-    this->xSolver = xSolver;
-    }
+  MedialOptimizationProblem(
+    MedialPDESolver *xSolver, IMedialCoefficientMask *xCoeff);
+
+  ~MedialOptimizationProblem();
 
   /** Add an image match term with a perscribed weight */
   void AddEnergyTerm(EnergyTerm *term, double xWeight);
@@ -415,13 +437,36 @@ private:
   // The epsilon used to compute finite difference derivatives
   static const double xEpsilon;
 
+  // The number of coefficients
+  size_t nCoeff;
+
   // Value of the last match
-  double xSolution;
+  double xLastSolutionValue;
 
   MedialPDESolver *xSolver;
   IMedialCoefficientMask *xCoeff;
   vector<double> xWeights;
   vector<EnergyTerm *> xTerms;
+  vector<CodeTimer> xTimers, xGradTimers;
+  CodeTimer xSolveTimer, xSolveGradTimer, xWeightsTimer, xWeightsGradTimer;
+
+  // Whether the gradient is available
+  bool flagLastEvalAvailable;
+  
+  // Last place where the function was evaluated
+  vnl_vector<double> xLastEvalPoint;
+
+  // vnl_vector<double> xLastGradEvalPoint, xLastGrad;
+
+  // The phi / dPhi fields at the last evaluation point
+  // vnl_matrix<double> xLastPhiField, xLastPhiDerivField; 
+
+  // This method solves the MedialPDE, potentially using the last gradient
+  // evaluation as the guess
+  bool SolvePDE(double *xEvalPoint);
+
+  // The array of derivative atoms
+  MedialAtom *dAtoms;
 };
 
 #endif

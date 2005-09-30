@@ -98,6 +98,34 @@ IMedialCoefficientMask * FourierSurface::NewCoarseToFineCoefficientMask(double *
 }
 
 
+IHyperSurface2D *
+FourierSurface
+::GetVariationSurface(const double *xCoeff)
+{
+  // Create a new surface with the same parameters as this one
+  FourierSurface *xVariation = new FourierSurface(ncu, ncv);
+
+  // Set the components of the variation to the components passed in; 
+  // we can do this because the function computed here is linear in the 
+  // coefficients
+  xVariation->SetCoefficientArray(xCoeff);
+
+  // Copy the evaluation grid
+  VectorType uu, vv;
+  GetEvaluationGrid(uu, vv);
+  xVariation->SetEvaluationGrid(uu, vv);
+
+  // Return this variation  
+  return xVariation;
+}
+
+void
+FourierSurface
+::ReleaseVariationSurface(IHyperSurface2D *xSurface)
+{
+  delete xSurface;
+}
+
 
 
 

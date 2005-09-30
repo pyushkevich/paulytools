@@ -260,6 +260,7 @@ MedialPDESolver
   b.set_size(m, n);
   y.set_size(m, n);
   eps.set_size(m, n);
+  dy.set_size(m, n);
   zTest.set_size(m, n);
 
   // Initialize the medial atom array and atom grid
@@ -364,8 +365,9 @@ void MedialPDESolver::InitializeSiteGeometry()
 
     // Compute the laplacian of R 
     xSurface->EvaluateAtGridIndex(i, j, 0, 0, 3, 1, &xAtom.xLapR);
-    if(xAtom.xLapR > 0 && xSites[iSite]->IsBorderSite()) 
-      cout << xAtom.xLapR << " ! " << flush;
+    
+    // if(xAtom.xLapR > 0 && xSites[iSite]->IsBorderSite()) 
+    //  cout << xAtom.xLapR << " ! " << flush;
 
     // Compute the solution at this point
     xSites[iSite]->SetGeometry( &xAtom.G, xAtom.xLapR);
@@ -454,7 +456,7 @@ double ArrayMinMax(double *array, size_t n, double &xMin, double &xMax)
     }
 }
 
-double MedialPDESolver::SolveOnce(double delta)
+double MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
 {
   size_t i, j, k;
   double epsMax, bMax;
@@ -463,7 +465,7 @@ double MedialPDESolver::SolveOnce(double delta)
   eps.fill(0.0);
   
   // Copy the initial solution to the current solution
-  y = xInitSoln;
+  y = xGuess;
 
   // We are now ready to perform the Newton loop
   bool flagComplete = false;
@@ -527,11 +529,14 @@ double MedialPDESolver::SolveOnce(double delta)
     // double zMax = fabs(zTest[myidamax(nSites, zTest, 1)]);
     // cout << "  Largest Solver Error: " << zMax << endl;
    
+    cout << "+";
 
     // Convergence is defined when epsilon is smaller than some threshold
     if(bMax < delta) 
       break;
     }
+
+  cout << endl;
 
   /* 
   // Show the value of phi at the four corners
@@ -563,7 +568,7 @@ double MedialPDESolver::SolveOnce(double delta)
 
 void
 MedialPDESolver
-::Solve(double delta)
+::Solve(const Mat &xGuess, double delta)
 {
   /* 
   unsigned int i, j, k;
@@ -574,7 +579,7 @@ MedialPDESolver
   InitializeSiteGeometry();
 
   // Just solve once - to initialization tricks!
-  SolveOnce(delta);
+  SolveOnce(xGuess, delta);
   
   /* 
 
@@ -736,7 +741,7 @@ MedialPDESolver
   // computation. That could save a significant amount of time overall
   // xPardiso.SymbolicFactorization(nSites, xRowIndex, xColIndex, xSparseValues);
   xPardiso.NumericFactorization(xSparseValues);
-  xPardiso.Solve(b.data_block(), eps.data_block());
+  xPardiso.Solve(b.data_block(), dy.data_block());
 
   // For each atom, compute the boundary derivatives
   for(i = 0; i < m; i++) for(j = 0; j < n; j++)
@@ -749,7 +754,7 @@ MedialPDESolver
     MedialAtom &dAtom = dAtoms[iGrid];
 
     // Compute the gradient of phi for the new atom
-    dAtom.F = xMasks[iSite]->ComputeOneJet(eps, dAtom.Fu, dAtom.Fv);
+    dAtom.F = xMasks[iSite]->ComputeOneJet(dy, dAtom.Fu, dAtom.Fv);
 
     // Compute the rest of the atom derivative
     ComputeMedialAtomBoundaryDerivative(
