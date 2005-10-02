@@ -39,8 +39,8 @@ def LoadBlurImage(id, type):
   return img
 
 # Function to save an m-rep and the meshes too
-def SaveMRep(mp, id, spec):
-  subpath = id + "/" + id + "." + spec;
+def SaveMRep(mp, id, expid, spec):
+  subpath = expid + "/" + id + "/" + id + "." + spec;
   mp.SaveToParameterFile(dirWork + "cmrep/" + subpath + ".mpde")
   mp.SaveVTKMesh(
     dirWork + "vtk/" + subpath + ".med.vtk", 

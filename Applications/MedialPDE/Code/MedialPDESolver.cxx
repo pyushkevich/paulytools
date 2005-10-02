@@ -520,17 +520,20 @@ double MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
     cout << "  Largest Epsilon: " << epsMax << endl;
     cout << "  Largest Eqn Error: " << bMax << endl; 
     */
-    if(iIter > 10)
-      cout << "Step " << iIter << ":\t" << "eMax = " 
-        << epsMax << "\t" << "bMax = " << bMax << endl;
+
+    if(iIter > 12)
+      cout << "!";
+    else
+      cout << "+";
+
+      // cout << endl << "Step " << iIter << ":\t" << "eMax = " 
+      //   << epsMax << "\t" << "bMax = " << bMax << endl;
     
     // Test the matrix result
     // SparseLinearTest(nSites, xRowIndex, xColIndex, xSparseValues, eps, zTest, b);
     // double zMax = fabs(zTest[myidamax(nSites, zTest, 1)]);
     // cout << "  Largest Solver Error: " << zMax << endl;
    
-    cout << "+";
-
     // Convergence is defined when epsilon is smaller than some threshold
     if(bMax < delta) 
       break;

@@ -1667,6 +1667,8 @@ MedialOptimizationProblem
     xCoeff->ReleaseComponentSurface(xVariation);
     }
 
+  cout << endl;
+
   // Clear up gradient computation
   for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
     xTerms[iTerm]->EndGradientComputation();

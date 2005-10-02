@@ -97,6 +97,7 @@ ADD_TEST(TestBasisFunctionVariation testpde DERIV3 ${MPDE_TEST_CMREP})
 
 # Copy the script files
 SET(SCRIPT_FILES 
+  blurimage.py
   example.py 
   example2.py 
   example3.py 
