@@ -23,6 +23,8 @@ UnsymmetricRealPARDISO::UnsymmetricRealPARDISO()
 
   // Specify the number of processors on the system (1)
   IPARM[2] = 1;
+
+  flagPardisoCalled = false;
 }
 
 void 
@@ -41,6 +43,9 @@ UnsymmetricRealPARDISO
   this->idxCols = idxCols;
   this->idxRows = idxRows;
   this->n = n;
+
+  // Set the flag so we know that pardiso was launched before
+  flagPardisoCalled = true;
 }
 
 void 
@@ -79,9 +84,10 @@ UnsymmetricRealPARDISO::
   int MAXFCT = 1, MNUM = 1, PHASE = -1, N = n, NRHS = 1, MSGLVL = 0, ERROR = 0; 
   
   // Perform the symbolic factorization phase
-  pardiso_(PT, &MAXFCT, &MNUM, &MTYPE, &PHASE, &N, 
-    xMatrix, idxRows, idxCols,
-    NULL, &NRHS, IPARM, &MSGLVL, NULL, NULL, &ERROR);
+  if(flagPardisoCalled)
+    pardiso_(PT, &MAXFCT, &MNUM, &MTYPE, &PHASE, &N, 
+      xMatrix, idxRows, idxCols,
+      NULL, &NRHS, IPARM, &MSGLVL, NULL, NULL, &ERROR);
 }
 
 

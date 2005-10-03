@@ -5,11 +5,12 @@ import os
 
 # Choose one of the hippocampi
 id = sys.argv[1]
+expid = sys.argv[2]
 
 # Set up the filenames
-fnT1 = dirWork + "/t1rot/" + id[:-1] + ".hdr"
-fnMREP = dirWork + "/mreps/" + id + ".ctf06.mpde"
-fnOut = dirWork + "/t1sample/" + id;
+fnT1 = dirWork + "/t1/proc/" + id[:-1] + ".hdr"
+fnMREP = dirWork + "/cmreps/" + expid + "/" + id + ".ctf80.mpde"
+fnOut = dirWork + "/t1/sample/" + expid + "/" + id;
 
 # Check that the filenames exist
 for fn in fnT1, fnMREP:
@@ -18,7 +19,7 @@ for fn in fnT1, fnMREP:
     sys.exit(1)
 
 # The work
-m=MedialPDE(8,12,64,160)
+m=MedialPDE(8, 12, 64, 160)
 m.LoadFromParameterFile(fnMREP);
 
 i1=FloatImage()

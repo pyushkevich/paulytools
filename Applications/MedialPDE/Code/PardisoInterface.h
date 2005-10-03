@@ -31,6 +31,7 @@ private:
   // Storage for data in intermediate steps
   int n, *idxRows, *idxCols;
   double *xMatrix;
+  bool flagPardisoCalled;
 };
 
 #endif 

@@ -4,10 +4,10 @@ import sys
 import os
 
 # Get the experiment id
-expid = sys.args[1]
+expid = sys.argv[1]
 
 # Create a medial model
-m=MedialPDE(8, 12, 32, 80)
+m=MedialPDE(8, 10, 32, 80)
 
 # Load each sample
 samples=(
@@ -29,47 +29,29 @@ pca = MedialPCA()
 # Add all the samples to the PCA
 for file in samples:
   # The filename to read the PDE from
-  fnMPDE = dirWork + "cmrep/" + expid + "/st" + file + ".ctf80.mpde";
-  fnImage = dirWork + "t1/sample/" + expid + "/st" + file + ".hdr";
+  id = "st" + file;
+  fnMPDE = dirWork + "cmrep/" + expid + "/" + id + "/" + id + ".ctf80.mpde";
 
   # Check if the file exists
-  if(os.access(fnInput)):
+  if(os.access(fnMPDE, os.R_OK)):
     # Load the m-rep
-    m.LoadFromParameterFile(fnInput)
+    m.LoadFromParameterFile(fnMPDE)
     
-    # Set the intensity image as part of the PCA (need that?)
-    img = FloatImage()
-    img.LoadFromFile(fnImage)
-    m.SetIntensityImage(img)
-  
     # Add the sample to the PCA  
+    print "Added " + id + " to the PCA"
     pca.AddSample(m);
 
-    # Compute the PCA proper
-    print "Added " + fnInput + " to the PCA"
-    pca.ComputePCA();
+# Compute the PCA proper
+pca.ComputePCA();
 
 # Export the PCA matrix in matlab format
-pca.ExportShapeMatrix(dirWork + "pca/" + expid + "/matrix/shapemat.mat");
+fnMatFile = CheckDir(dirWork + "pca/" + expid + "/matrix") + "/shapemat.mat"
+pca.ExportShapeMatrix(fnMatFile);
 
-# Sample along the first four modes
-for i in range(4):
-  for j in range(-30,30,1):
-    print "Mode %(i)d, Frame %(j)d" % {"i":i,"j":j}      
-    pca.SetFSLocationToMean()
-    pca.SetFSLocation(i, 0.1 * j)
-    pca.GetShapeAtFSLocation(m)
-
-    sub = {'path':dirWork, 'i':i, 'id':j+30, 'expid':expid}
-    fn1 = "%(path)s/pca/%(expid)/vtk/pcamed_m%(i)d_%(id)02d.vtk" % sub
-    fn2 = "%(path)s/pca/%(expid)/vtk/pcabnd_m%(i)d_%(id)02d.vtk" % sub
-    m.SaveVTKMesh(fn1, fn2)
-
-    img = FloatImage()
-    m.GetIntensityImage(img)
-    fn3 = "%(path)s/pca/%(expid)/img/pcaimg_m%(i)d_%(id)02d.img.gz" % sub
-    img.SaveToFile(fn3)
-    
-    
-
-
+# Export the mean model
+pca.SetFSLocationToMean()
+pca.GetShapeAtFSLocation(m)
+dirVTK = CheckDir(dirWork + "/pca/" + expid +"/vtk")
+dirMean = CheckDir(dirWork + "/pca/" + expid +"/mean")
+m.SaveVTKMesh(dirVTK + "/pcamed_mean.vtk", dirVTK + "/pcabnd_mean.vtk")
+m.SaveToParameterFile(dirMean + "/mean.mpde");

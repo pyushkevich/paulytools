@@ -1,5 +1,6 @@
 #include "CoefficientMask.h"
 #include "BasisFunctions2D.h"
+#include "PrincipalComponents.h"
 
 /******************************************************************************
  * SelectionMedialCoefficientMask 
@@ -336,3 +337,85 @@ AffineTransformCoefficientMask
 const size_t AffineTransform3DCoefficientMask::xIndexArray[] = 
   { 0, 1, 2, 4, 5, 6, 8, 9, 10, 16, 17, 18 };
 
+/******************************************************************************
+ * PCACoefficientMask 
+ *****************************************************************************/
+PCACoefficientMask
+::PCACoefficientMask(
+  const vnl_matrix<double> &mPCA, 
+  ICoefficientSettable *xSurface, size_t nModes)
+: xCoeffArray(nModes, 0.0), pca(mPCA)
+{
+  this->xSurface = xSurface;
+  this->nModes = nModes;
+
+  // Substract the PCA mean from the original coefficients vector
+  xOriginalOffsetFromMean = vnl_vector<double>(
+    xSurface->GetCoefficientArray(), xSurface->GetNumberOfCoefficients()) 
+    - pca.GetMean();
+}
+
+double *PCACoefficientMask::GetCoefficientArray()
+{
+  return xCoeffArray.data_block();
+}
+
+void PCACoefficientMask::SetCoefficientArray(const double *xData)
+{
+  // Save the parameter vector
+  xCoeffArray.copy_in(xData);
+  
+  // Apply the parameter transformation
+  vnl_vector<double> X = 
+    xOriginalOffsetFromMean + pca.MapToFeatureSpace(xCoeffArray);
+
+  // Set the parameters of the parent surface
+  xSurface->SetCoefficientArray(X.data_block());
+}
+
+double PCACoefficientMask::GetCoefficient(size_t i) const
+{
+  return xCoeffArray[i];
+}
+
+void PCACoefficientMask::SetCoefficient(size_t i, double x)
+{
+  // Update the coefficient array
+  xCoeffArray[i] = x;
+
+  // Apply the parameter transformation
+  vnl_vector<double> X = 
+    xOriginalOffsetFromMean + pca.MapToFeatureSpace(xCoeffArray);
+
+  // Set the parameters of the parent surface
+  xSurface->SetCoefficientArray(X.data_block());
+}
+
+IHyperSurface2D *PCACoefficientMask::GetComponentSurface(size_t iCoefficient)
+{
+  // Create a coefficient vector
+  vnl_vector<double> xVariationCoeff(nModes, 0.0);
+  xVariationCoeff[iCoefficient] = 1.0;
+  return GetVariationSurface(xVariationCoeff.data_block());
+}
+
+void PCACoefficientMask::ReleaseComponentSurface(IHyperSurface2D *xSurface)
+{
+  ReleaseVariationSurface(xSurface);
+}
+
+IHyperSurface2D *PCACoefficientMask::GetVariationSurface(const double *xVariation)
+{
+  // Map the variation into the feature space
+  vnl_vector<double> xCSVariation(xVariation, nModes);
+  vnl_vector<double> xFSVariation 
+    = pca.MapToFeatureSpaceZeroMean(xCSVariation);
+  
+  // Generate a variation surface using parent's method
+  return xSurface->GetVariationSurface(xFSVariation.data_block());
+}
+
+void PCACoefficientMask::ReleaseVariationSurface(IHyperSurface2D *xVarSurface)
+{
+  xSurface->ReleaseVariationSurface(xVarSurface);
+}

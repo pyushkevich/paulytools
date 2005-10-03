@@ -22,6 +22,7 @@ SET(COMMON_SRCS
   Code/MedialPDESolver.cxx 
   Code/OptimizationTerms.cxx
   Code/PardisoInterface.cxx
+  Code/PrincipalComponents.cxx
   Code/Procrustes.cxx
   Code/Registry.cxx
   Code/ScriptImaging.cxx
@@ -89,9 +90,12 @@ ENDIF(MPDE_DATA_ROOT)
 ENABLE_TESTING()
 SET(MPDE_TESTDATA_DIR ${MedialPDE_SOURCE_DIR}/Testing/Input)
 SET(MPDE_TEST_CMREP ${MPDE_TESTDATA_DIR}/st1001L.align.mpde)
+SET(MPDE_TEST_PCA ${MPDE_TESTDATA_DIR}/shapemat.mat)
 
 # Test various derivative computations
-ADD_TEST(TestDerivativesNoImage   testpde DERIV1 ${MPDE_TEST_CMREP})
+ADD_TEST(TestDerivativesNoImage testpde 
+  DERIV1 ${MPDE_TEST_CMREP} ${MPDE_TEST_PCA})
+
 ADD_TEST(TestDerivativesWithImage testpde DERIV2 ${MPDE_TEST_CMREP})
 ADD_TEST(TestBasisFunctionVariation testpde DERIV3 ${MPDE_TEST_CMREP})
 
@@ -110,6 +114,7 @@ SET(SCRIPT_FILES
   segment2.py
   pipeline.py
   pca.py
+  pcalite.py
   sample.py
   testdphi.py
   vis.py

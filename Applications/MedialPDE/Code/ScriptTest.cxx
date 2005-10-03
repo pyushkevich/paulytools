@@ -15,7 +15,7 @@ using namespace std;
 using namespace medialpde;
 
 string dirWork = "/home/pauly/data2005/Stanley/data/";
-//string dirWork = "/mnt/data2/PUBLIC/Data/Input/StanleySchizophrenia/";
+// string dirWork = "/mnt/data2/PUBLIC/Data/Input/StanleySchizophrenia/";
 
 /**
  * This is a test class that is a sphere that pretends to be a floating
@@ -342,7 +342,7 @@ int TestBasisFunctionVariation(const char *fnMPDE)
  * solver and related classes are correct, bt comparing them to central
  * difference derivatives
  */
-int TestDerivativesNoImage(const char *fnMPDE)
+int TestDerivativesNoImage(const char *fnMPDE, const char *fnPCA)
 {
   int iReturn = 0;
 
@@ -356,6 +356,12 @@ int TestDerivativesNoImage(const char *fnMPDE)
   // Test affine transform gradient computation
   AffineTransform3DCoefficientMask xAffineMask(mp.GetSurface());
   iReturn += TestGradientComputation(mp.GetSolver(), &xAffineMask);
+
+  // Create a PCA based mask based on the test matrix
+  mp.SetPCAMatrix(8, 10, fnPCA);
+  PCACoefficientMask *xPCAMask = mp.CreatePCACoefficientMask(5);
+  iReturn += TestGradientComputation(mp.GetSolver(), xPCAMask);
+  mp.ReleasePCACoefficientMask(xPCAMask);
 
   // Return the total of the test values
   return iReturn;
@@ -471,9 +477,9 @@ int usage()
   cout << "testpde: MedialPDE Test Module" << endl;
   cout << "  usage: testpde TEST_ID [parameters] " << endl;
   cout << "  tests: " << endl;
-  cout << "    DERIV1 XX.mpde    Check analytic derivative PDEs." << endl;
-  cout << "    DERIV2 XX.mpde    Check gradient computation in image match terms." << endl;
-  cout << "    DERIV3 XX.mpde    Check variations on basis functions." << endl;
+  cout << "    DERIV1 XX.mpde XX.mat      Check analytic derivative PDEs." << endl;
+  cout << "    DERIV2 XX.mpde             Check gradient computation in image match terms." << endl;
+  cout << "    DERIV3 XX.mpde             Check variations on basis functions." << endl;
   cout << endl;
   return -1;
 }
@@ -484,8 +490,8 @@ int main(int argc, char *argv[])
   if(argc == 1) return usage();
 
   // Choose a test depending on the parameters
-  if(0 == strcmp(argv[1], "DERIV1") && argc > 2)
-    return TestDerivativesNoImage(argv[2]);
+  if(0 == strcmp(argv[1], "DERIV1") && argc > 3)
+    return TestDerivativesNoImage(argv[2], argv[3]);
   else if(0 == strcmp(argv[1], "DERIV2") && argc > 2)
     return TestDerivativesWithImage(argv[2]);
   else if(0 == strcmp(argv[1], "DERIV3") && argc > 2)

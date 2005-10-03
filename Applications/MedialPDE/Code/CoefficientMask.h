@@ -4,6 +4,9 @@
 #include <vector>
 #include <smlmath.h>
 #include "BasisFunctions2D.h"
+#include "PrincipalComponents.h"
+
+class PrincipalComponents;
 
 using namespace std;
 
@@ -128,6 +131,40 @@ public:
 private:
   AffineTransformCoefficientMask *xAffineMask;
   static const size_t xIndexArray[];
+};
+
+/**
+ * This is a PCA-based coefficient mask. In it, PCA-space coefficients are
+ * mapped to changes in the actual coefficients
+ */
+class PCACoefficientMask : public IMedialCoefficientMask
+{
+public:
+  // Constructor: takes a surface and a data matrix
+  PCACoefficientMask(
+    const vnl_matrix<double> &mPCA, 
+    ICoefficientSettable *xSurface, size_t nModes);
+  
+  double *GetCoefficientArray();
+  void SetCoefficientArray(const double *xData);
+  size_t GetNumberOfCoefficients() const
+    { return nModes; }
+  double GetCoefficient(size_t i) const; 
+  void SetCoefficient(size_t i, double x);
+
+  // Get a surface corresponding to a single component
+  IHyperSurface2D *GetComponentSurface(size_t iCoefficient);
+  void ReleaseComponentSurface(IHyperSurface2D *xSurface);
+
+  // Get a surface corresponding to some variation
+  IHyperSurface2D *GetVariationSurface(const double *xData);
+  void ReleaseVariationSurface(IHyperSurface2D *xSurface);
+
+private:
+  ICoefficientSettable *xSurface;
+  PrincipalComponents pca;
+  size_t nModes;
+  vnl_vector<double> xCoeffArray, xOriginalOffsetFromMean;
 };
 
 

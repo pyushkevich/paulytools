@@ -1,5 +1,7 @@
 # Load all the symbols in the library
 from medialpde import *
+import sys
+import os
 
 # Set the working directory
 dirInput = "${MPDE_INPUTDATA_ROOT}/"
@@ -45,3 +47,10 @@ def SaveMRep(mp, id, expid, spec):
   mp.SaveVTKMesh(
     dirWork + "vtk/" + subpath + ".med.vtk", 
     dirWork + "vtk/" + subpath + ".bnd.vtk")
+
+# Ensure that a filename can be created
+def CheckDir(dir):
+  if(not os.access(dir,os.X_OK)):
+    os.makedirs(dir)
+  return dir
+  

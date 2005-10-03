@@ -5,13 +5,13 @@
 #include "MedialPDERenderer.h"
 #include "OptimizationTerms.h"
 #include "Procrustes.h"
+#include "PrincipalComponents.h"
 #include "Registry.h"
 
 #include "itkImageRegionConstIteratorWithIndex.h"
 #include "itkNearestNeighborInterpolateImageFunction.h"
 #include "itkBSplineInterpolateImageFunction.h"
 #include "vnl/algo/vnl_symmetric_eigensystem.h"
-#include "vnl/vnl_matlab_filewrite.h"
 #include "ConjugateGradientMethod.h"
 #include "EvolutionaryStrategy.h"
 
@@ -24,6 +24,37 @@ void ExportBoundaryMeshToVTK(MedialAtomGrid *xGrid, MedialAtom *xAtoms, const ch
 //  ITKImageWrapper<float> *imgField, const char *file);
 using namespace std;
 
+
+void WriteMatrixFile(const vnl_matrix<double> &mat, const char *file)
+{
+  ofstream ofs(file, ios_base::out);
+  ofs << "# MATRIX " << mat.rows() << " " << mat.columns() << endl;
+  for(size_t r = 0; r < mat.rows(); r++)
+    for(size_t c = 0; c < mat.columns(); c++)
+      {
+      ofs << mat[r][c];
+      if(c == mat.columns() - 1) ofs << endl; else ofs << " ";
+      }
+  ofs.close();
+}
+
+bool ReadMatrixFile(vnl_matrix<double> &mat, const char *file)
+{
+  FILE *fin = fopen(file,"rt");
+  if(fin == NULL) return false;
+
+  size_t r = 0, c = 0;
+  fscanf(fin, "# MATRIX %d %d\n", &r, &c);
+  if(r == 0 || c == 0)
+    { fclose(fin); return false; }
+
+  mat.set_size(r, c);
+  for(size_t i = 0; i < r; i++)
+    for(size_t j = 0; j < c; j++)
+      fscanf(fin, "%lg", &mat[i][j]);
+
+  fclose(fin);
+}
 
 namespace medialpde {
 
@@ -491,6 +522,10 @@ void MedialPDE
     {
     xMask = new PassThroughCoefficientMask(xSurface);
     }
+  else if(eMask == PCA)
+    {
+    xMask = CreatePCACoefficientMask(nPCAModes);
+    }
   else
     {
     double crs[4] = { 
@@ -928,168 +963,72 @@ void MedialPDE::GetIntensityImage(FloatImage *imgTarget)
   imgTarget->xImage->SetInternalImage(imgIntensity.xImage->GetInternalImage());
 }
 
-
-
-
-
-
-
-
-
-class PrincipalComponents
+void MedialPDE::SetPCAMatrix(size_t ncu, size_t ncv, const char *fname)
 {
-public:
-  typedef vnl_matrix<double> Mat;
-  typedef vnl_vector<double> Vec;
-
-  PrincipalComponents(const Mat &A);
-
-  /** Get the number of principal modes */
-  size_t GetNumberOfModes() 
-    { return nModes; }
-
-  /** Get the eigenvalues in decreasing order */
-  double GetEigenvalue(size_t i) const
-    { return lambda[i]; }
-
-  /** Get the eigenvectors in decreasing order of eigenvalue */
-  Vec GetEigenvector(size_t i) const
-    { return Q.get_row(i); }
-
-  /** Get the shape at a certain position in PCA space. The coordinates in this
-   * space are the eigenvectors of PCA and the units are standard deviations
-   * (sqrt of the eigenvalues). The input vector can be shorter than the number
-   * of modes; the remaining modes will be treated as zero */
-  Vec MapToFeatureSpace(const Vec &xComponent) const
-    {
-    Vec x = mu;
-    for(size_t i = 0; i < xComponent.size(); i++)
-      x += xComponent[i] * sdev[i] * GetEigenvector(i);
-    return x;
-    }
-
-  /** Project a point in feature (shape) space into the coefficient space */
-  Vec MatToCoefficientSpace(const Vec &xFeature, size_t nCoeff) const
-    {
-    Vec z(m, 0.0);
-    if(nCoeff > nModes) nCoeff = nModes;
-    for(size_t i = 0; i < nCoeff; i++)
-      z[i] = dot_product(xFeature - mu, GetEigenvector(i)) / sdev[i];
-    return z;
-    }
-
-  /** Get a feature space vector along one of the principal modes. Useful for 
-   * animating the PCA modes */
-  Vec MapToFeatureSpace(size_t iComponent, double xComponentValue)
-    {
-    return mu + xComponentValue * sdev[iComponent] * GetEigenvector(iComponent);
-    }
-
-  /**
-   * Perform leave-one-out analysis, i.e., how well the PCA can predict the 
-   * individual members.
-   */
-  // static void LeaveOneOutAnalysis(const Mat &A);
-
-private:
-  // The mean vector
-  Vec mu;
-
-  // The principal component vectors (rows)
-  Mat Q;
-
-  // The eigenvalues
-  Vec lambda, sdev;
-
-  // The dimensions of the data
-  size_t m, n, nModes;
-};
-
-/*
-PrincipalComponents::LeaveOneOutAnalysis(const Mat &A)
-{
-  // Repeat for each element of A
-  unsigned int i, n = A.rows();
-  for(i = 0; i < n; i++)
-    {
-    // Create a matrix with row i taken out
-    Mat B(A.rows()-1, A.columns());
-    if(i > 0) B.update(0,0,A.get_n_rows(0, i));
-    if(i < n-1) B.update(i,0,A.get_n_rows(i+1,n-i-1));
-
-    // Compute the PCA of B
-    PrincipalComponents p(B);
-
-    // Project the left out guy on the principal components
-    p.
-
-    }
+  // Store the dimensions
+  ncuPCA = ncu;
+  ncvPCA = ncv;
+  
+  // Read the matrix
+  ReadMatrixFile(mPCAMatrix, fname);
+  cout << "READ PCA MATRIX " << mPCAMatrix.rows() 
+    << " x " << mPCAMatrix.columns() << endl;
 }
-*/
 
-
-PrincipalComponents::PrincipalComponents(const Mat &A)
+PCACoefficientMask *MedialPDE::CreatePCACoefficientMask(size_t nModes)
 {
-  size_t i, j;
-  m = A.columns();
-  n = A.rows();
+  size_t ncu, ncv; 
 
-  // Compute the mean
-  mu.set_size(m); mu.fill(0.0);
-  for(i = 0; i < n; i++) for(j = 0; j < m; j++)
-    mu[j] += A(i,j);
-  mu /= n;
-
-  // Compute the zero mean matrix
-  Mat Z(n, m);
-  for(i = 0; i < n; i++) for(j = 0; j < m; j++)
-    Z(i,j) = A(i,j) - mu[j];
-
-  // Split, depending on if m > n or not
-  if(m > n)
+  // Create a PCA mask
+  PCACoefficientMask *xMask = NULL;
+  
+  // See if the numbers of coefficients match between current surface and matrix
+  xSurface->GetNumberOfCoefficientsUV(ncu, ncv);
+  if(ncu == ncuPCA && ncv == ncvPCA)
     {
-    // Compute the covariance matrix Z Zt
-    Mat Zt = Z.transpose();
-    Mat K = ( Z * Zt ) / n;
-
-    // Get the eigensystem of K
-    vnl_symmetric_eigensystem<double> eig(K);
-
-    // Take the eigenvalues
-    lambda.set_size(n); Q.set_size(n, m); 
-    lambda.fill(0.0); Q.fill(0.0);
-    
-    for(i = 0; i < n; i++) 
-      {
-      lambda[i] = eig.get_eigenvalue(n - 1 - i);
-      if(lambda[i] > 0.0)
-        Q.set_row(i, (Zt * eig.get_eigenvector(n - 1 - i)).normalize());
-      else break;
-      }
+    // Simple, use the matrix that was passed in
+    xMask = new PCACoefficientMask(mPCAMatrix, xSurface, nModes);
     }
   else
     {
-    // Compute the real covariance matrix At Z
-    Mat K = (Z.transpose() * Z) / n;
-    vnl_symmetric_eigensystem<double> eig(K);
+    // We need to extract the coefficients from the source matrix to match the
+    // current coefficients
+    FourierSurface xSource(ncuPCA, ncvPCA), xTarget(ncu, ncv);
+    vnl_matrix<double> mPCAChunk(
+      mPCAMatrix.rows(), xSurface->GetNumberOfCoefficients());
 
-    // Copy the eigenvalues and vectors
-    lambda.set_size(m); Q.set_size(m,m); 
-    lambda.fill(0.0); Q.fill(0.0);
-    
-    for(i = 0; i < m; i++) 
+    // For each subject in the matrix, remap using current coefficients
+    for(size_t i = 0; i < mPCAMatrix.rows(); i++)
       {
-      lambda[i] = eig.get_eigenvalue(m - 1 - i);
-      if(lambda[i] > 0.0)
-        Q.set_row(i, eig.get_eigenvector(n - 1 - i));
-      else break;
+      xSource.SetCoefficientArray(mPCAMatrix.get_row(i).data_block());
+      for(size_t icu = 0; icu < ncu; icu++) for(size_t icv = 0; icv < ncv; icv++) 
+        for(size_t iComp = 0; iComp < xSurface->GetNumberOfDimensions(); iComp++) 
+          {
+          double xVal = (icu >= ncuPCA || icv >= ncvPCA) ? 0.0 : 
+            xSource.GetCoefficient(icu, icv, iComp);
+          xTarget.SetCoefficient(icu, icv, iComp, xVal);
+          }
+      mPCAChunk.set_row(i, xTarget.GetCoefficientArray());
       }
+
+    // Pass this matrix to the PCA
+    xMask = new PCACoefficientMask(mPCAChunk, xSurface, nModes);
     }
 
-  // Finish up
-  nModes = i;
-  sdev = lambda.apply(sqrt);
+  return xMask;
 }
+
+void MedialPDE::ReleasePCACoefficientMask(PCACoefficientMask *xMask)
+{
+  delete xMask;
+}
+
+
+
+
+
+
+
 
 /**
  * MEDIAL PCA CODE
@@ -1283,8 +1222,7 @@ void MedialPCA::SetFSLocationToMean()
 // Export shape matrix
 void MedialPCA::ExportShapeMatrix(const char *filename)
 {
-  vnl_matlab_filewrite writer(filename);
-  writer.write(xDataShape, "xShape");
+  WriteMatrixFile(xDataShape, filename);
 }
 
 

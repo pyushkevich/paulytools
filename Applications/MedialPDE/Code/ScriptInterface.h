@@ -9,6 +9,8 @@ class MedialPDESolver;
 class FourierSurface;
 class MedialOptimizationProblem;
 class IMedialCoefficientMask;
+class PrincipalComponents;
+class PCACoefficientMask;
 template <typename TPixel> class ITKImageWrapper;
 
 void TestTriangleAreaPartialDerivative();
@@ -176,6 +178,13 @@ public:
   void SetOptimizationToDeformable()
     { eMask = FULL; }
 
+  /** 
+   * Set optimization mode to use the PCA matrix. The matrix file must be
+   * specified separately
+   */
+  void SetOptimizationToPCA(size_t nModes)
+    { eMask = PCA; nPCAModes = nModes; }
+
   /** Set the optimization mode */
   void SetOptimizerToGradientDescent(double xStep)
     { eOptimizer = GRADIENT; xStepSize = xStep; }
@@ -225,10 +234,20 @@ public:
   /** Get an intensity image from the cm-rep */
   void GetIntensityImage(FloatImage *imgIntensity);
 
+  /** Set the PCA data for PCA-based optimization */
+  void SetPCAMatrix(size_t ncu, size_t ncv, const char *fnMatrix);
+
+  /** Create a PCACoefficientMask based on this medial PDE and the previously
+   * specified coefficient matrix */
+  PCACoefficientMask *CreatePCACoefficientMask(size_t nModes);
+
+  /** Release resources from a coefficient mask */
+  void ReleasePCACoefficientMask(PCACoefficientMask *xMask);
+
 private:
   // Optimization modes and optimizers
   enum OptimizerType { CONJGRAD, GRADIENT, EVOLUTION };
-  enum MaskType { AFFINE, COARSE_TO_FINE, FULL }; 
+  enum MaskType { AFFINE, COARSE_TO_FINE, FULL, PCA }; 
   enum MatchType { VOLUME, BOUNDARY };
   
   // The solver
@@ -261,9 +280,14 @@ private:
     vnl_vector<double> &xSolution, unsigned int nSteps, double xStep);
   friend void RenderMedialPDE(MedialPDE *);
   friend class MedialPCA;
+
+  // PCA matrix (used to create PCA coefficient masks)
+  vnl_matrix<double> mPCAMatrix;
+
+  // Number of coefficients used in the PCA matrix
+  size_t ncuPCA, ncvPCA, nPCAModes;
 };
 
-class PrincipalComponents;
 class MedialPCA
 {
 public:

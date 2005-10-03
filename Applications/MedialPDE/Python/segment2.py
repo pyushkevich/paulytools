@@ -8,6 +8,12 @@ expid = sys.argv[2]
 # Set the mesh dump directory
 dirMesh = dirWork + "tmp/meshdump/" + expid + "/" + id;
 
+# Set the template to be the initial shape
+fnTemplate = dirInput + "init/init.mpde"
+
+# Align template by moments of inertia
+Stage_MOInertia(id, expid, fnTemplate, "align","med", 2, 4)
+
 # Align template by moments of inertia
 Stage_MOInertia(id, expid, "align",            "med", 2, 4)
 
