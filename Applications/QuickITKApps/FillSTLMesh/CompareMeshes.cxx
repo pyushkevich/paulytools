@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include <vtkCellArray.h>
+#include <vtkCellLocator.h>
 #include <vtkPolyData.h>
 #include <vtkLODActor.h>
 #include <vtkRenderer.h>
@@ -229,6 +230,28 @@ void ScanConvertPolyData(vtkPolyData *pd, double *b0, double *b1, int *res, doub
   */
 }
 
+void ComputeExactMeshToMeshDistance(vtkPolyData *source, vtkPolyData *target, vnl_vector<double> &dist)
+{
+  // Create a cell locator from the target mesh
+  vtkCellLocator *xLocator = vtkCellLocator::New();
+  xLocator->SetDataSet(target);
+  xLocator->BuildLocator();
+
+  // Expand the distance array to match the number of points in the source
+  dist.set_size(source->GetNumberOfPoints());
+
+  // Compute each distance
+  for(size_t i = 0; i < dist.size(); i++)
+    {
+    double xClosest[3];
+    vtkIdType cellId;
+    int subId;
+    xLocator->FindClosestPoint(source->GetPoint(i), xClosest, cellId, subId, dist[i]);
+    }
+
+  // Take square root
+  dist.apply(sqrt);
+}
 
 int main(int argc, char **argv)
 {
@@ -307,6 +330,7 @@ int main(int argc, char **argv)
       nModel++;
     }
 
+  /*
   // Compute the distance transform for each image
   FloatImageType::Pointer d1 = FloatImageType::New();
   FloatImageType::Pointer d2 = FloatImageType::New();
@@ -317,7 +341,23 @@ int main(int argc, char **argv)
   double xOneNorm[2], xTwoNorm[2], xInfNorm[2];
   IntegrateDistance(p1, d2, xOneNorm[0], xTwoNorm[0], xInfNorm[0]);
   IntegrateDistance(p2, d1, xOneNorm[1], xTwoNorm[1], xInfNorm[1]);
+  */
 
+  // Compute exact pointwise distances from mesh to mesh
+  vnl_vector<double> d1, d2;
+  ComputeExactMeshToMeshDistance(p1, p2, d1);
+  ComputeExactMeshToMeshDistance(p2, p1, d2);
+
+  // Compute the maximum and average distances (this should be a surface integral...)
+  double xOneNorm[2], xTwoNorm[2], xInfNorm[2];
+  xOneNorm[0] = d1.one_norm() / d1.size(); 
+  xTwoNorm[0] = d1.two_norm() / sqrt(d1.size()); 
+  xInfNorm[0] = d1.inf_norm();
+  
+  xOneNorm[1] = d2.one_norm() / d2.size(); 
+  xTwoNorm[1] = d2.two_norm() / sqrt(d2.size()); 
+  xInfNorm[1] = d2.inf_norm();
+  
   // Report our findings
   cout << endl;
   cout << "Unbiased overlap between meshes is " << nIntersect * 1.0 / nUnion << endl;

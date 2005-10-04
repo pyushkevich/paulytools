@@ -17,10 +17,15 @@ INCLUDE_DIRECTORIES(
   ${PAULY_SOURCE_DIR}/Applications/QuickITKApps/Ovoids
 )
 
-ADD_EXECUTABLE(ovoids ${OVOIDS_SRC} main.cpp)
-ADD_EXECUTABLE(bettermesh ${OVOIDS_SRC} bettermesh.cpp)
-
 FLTK_WRAP_UI(ovoids ui.fl)
+ADD_EXECUTABLE(ovoids 
+  ${OVOIDS_SRC}
+  ${ovoids_FLTK_UI_SRCS}
+  main.cpp)
+
+ADD_EXECUTABLE(bettermesh 
+  ${OVOIDS_SRC} 
+  bettermesh.cpp)
 
 LINK_LIBRARIES(
   ITKCommon 
