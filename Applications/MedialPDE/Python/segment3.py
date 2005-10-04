@@ -7,7 +7,9 @@ expid = sys.argv[2]
 expidPCA = sys.argv[3]
 
 # Set the mesh dump directory
-dirMesh = dirWork + "tmp/meshdump/" + expid + "/" + id;
+dirMesh = CheckDir(dirWork + "tmp/meshdump/" + expid + "/" + id);
+dirVTK = CheckDir(dirWork + "vtk/" + expid + "/" + id);
+dirMPDE = CheckDir(dirWork + "cmrep/" + expid + "/" + id);
 
 # Set the PCA information (mean, matrix, nu, nv)
 dirPCA = dirWork + "/pca/" + expidPCA + "/";
@@ -22,13 +24,13 @@ pcaData = {
 fnTemplate = pcaData["mean"]
 
 # Align template by moments of inertia
-Stage_MOInertia(id, expid, fnTemplate, "align","med", 2, 4)
+Stage_MOInertia(id, expid, fnTemplate, "align","med", 8, 10)
 
 # Affine stage
-Stage_AFF_CG_VO(id, expid, "align",  "affine", "med", 2, 4, 400);
+Stage_AFF_CG_VO(id, expid, "align",  "affine", "med", 8, 10, 400);
 
 # PCA Stage
-Stage_PCA_CG_VO(id, expid, "affine", "pca24",  "med", 2, 4, 400);
+Stage_PCA_CG_VO(id, expid, "affine", "pca24",  "med", 8, 10, 400, pcaData, 4);
 
 # Subsequent stages: 2x4 grid
 #Stage_XYZ_CG_VO(id, expid, "affine", "xyz24",  "med", 2, 4, 800);

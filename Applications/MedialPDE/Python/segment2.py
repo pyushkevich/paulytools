@@ -5,8 +5,10 @@ from pipeline import *
 id = sys.argv[1]
 expid = sys.argv[2]
 
-# Set the mesh dump directory
-dirMesh = dirWork + "tmp/meshdump/" + expid + "/" + id;
+# Set the mesh dump directory and the output directories
+dirMesh = CheckDir(dirWork + "tmp/meshdump/" + expid + "/" + id);
+dirVTK = CheckDir(dirWork + "vtk/" + expid + "/" + id);
+dirMPDE = CheckDir(dirWork + "cmrep/" + expid + "/" + id);
 
 # Set the template to be the initial shape
 fnTemplate = dirInput + "init/init.mpde"

@@ -106,7 +106,7 @@ def Stage_PCA_CG_VO(id, expid, nmStart, nmEnd, imgType, nu, nv, nIter, pcaData, 
   mp.SetNumberOfCoefficients(nu, nv);
 
   # Load the PCA data
-  mp.SetPCAMatrix(pcaData["matrix"], pcaData["ncu"], pcaData["ncv"]);
+  mp.SetPCAMatrix(pcaData["ncu"], pcaData["ncv"], pcaData["matrix"]);
 
   # Set up the optimizer
   mp.SetOptimizerToConjugateGradientDescent(0.1);

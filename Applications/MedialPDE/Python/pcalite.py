@@ -42,13 +42,16 @@ for file in samples:
     pca.AddSample(m);
 
 # Compute the PCA proper
+print "Computing PCA!"
 pca.ComputePCA();
 
 # Export the PCA matrix in matlab format
 fnMatFile = CheckDir(dirWork + "pca/" + expid + "/matrix") + "/shapemat.mat"
+print "Writing Matrix to " + fnMatFile
 pca.ExportShapeMatrix(fnMatFile);
 
 # Export the mean model
+print "Computing Mean Model"
 pca.SetFSLocationToMean()
 pca.GetShapeAtFSLocation(m)
 dirVTK = CheckDir(dirWork + "/pca/" + expid +"/vtk")

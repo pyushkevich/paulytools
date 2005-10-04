@@ -239,10 +239,10 @@ public:
 
   /** Create a PCACoefficientMask based on this medial PDE and the previously
    * specified coefficient matrix */
-  PCACoefficientMask *CreatePCACoefficientMask(size_t nModes);
+  IMedialCoefficientMask *CreatePCACoefficientMask(size_t nModes);
 
   /** Release resources from a coefficient mask */
-  void ReleasePCACoefficientMask(PCACoefficientMask *xMask);
+  void ReleasePCACoefficientMask(IMedialCoefficientMask *xMask);
 
 private:
   // Optimization modes and optimizers

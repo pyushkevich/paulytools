@@ -350,16 +350,46 @@ int TestDerivativesNoImage(const char *fnMPDE, const char *fnPCA)
   mp.LoadFromParameterFile(fnMPDE);
 
   // Test straight-through gradient computation
+  cout << "**************************************************" << endl;
+  cout << "** TESTIING PassThroughCoefficientMask          **" << endl;
+  cout << "**************************************************" << endl;
+ 
   PassThroughCoefficientMask xMask(mp.GetSurface());
   iReturn += TestGradientComputation(mp.GetSolver(), &xMask);
 
   // Test affine transform gradient computation
+  cout << "**************************************************" << endl;
+  cout << "** TESTIING AffineTransform3DCoefficientMask    **" << endl;
+  cout << "**************************************************" << endl;
+
+  // Don't start at the default position, or we may get a false positive
+  double xAffinePosn[] = 
+    { 1.2, 0.2, 0.1, 
+      0.1, 0.9,-0.2,
+      0.3,-0.2, 1.4,
+      7.0,-4.5, 2.3 };
+  
   AffineTransform3DCoefficientMask xAffineMask(mp.GetSurface());
+  xAffineMask.SetCoefficientArray(xAffinePosn);
   iReturn += TestGradientComputation(mp.GetSolver(), &xAffineMask);
 
+  // Test the most convoluted mask that we have
+  cout << "**************************************************" << endl;
+  cout << "** TESTIING Affine3DAndPCACoefficientMask       **" << endl;
+  cout << "**************************************************" << endl;
+ 
   // Create a PCA based mask based on the test matrix
+  double xAPCAPosn[] = 
+    { 1.2, 0.1, 0.2,           // Affine Matrix
+     -0.2, 0.9, 0.1, 
+     -0.1, 0.1, 1.0, 
+      5.0, 3.0,-2.0,           // Translation Vector
+      0.5, 0.4, 0.3,-0.2, 0.3  // PCA offsets
+    };
+  
   mp.SetPCAMatrix(8, 10, fnPCA);
-  PCACoefficientMask *xPCAMask = mp.CreatePCACoefficientMask(5);
+  IMedialCoefficientMask *xPCAMask = mp.CreatePCACoefficientMask(5);
+  xPCAMask->SetCoefficientArray(xAPCAPosn);
   iReturn += TestGradientComputation(mp.GetSolver(), xPCAMask);
   mp.ReleasePCACoefficientMask(xPCAMask);
 

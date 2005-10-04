@@ -243,11 +243,82 @@ public:
     { return xSource->GetNumberOfDimensions(); }
 
 private:
+  friend class AffineTransformCoefficientMask;
+  friend class AffineAndPCACoefficientMask;
   size_t nDim;
   IHyperSurface2D *xSource;
   MatrixType A;
   VectorType b, c;
 };
+
+/******************************************************************************
+ * AdditiveComponentSurface
+ *****************************************************************************/
+
+/**
+ * This class represents a sum of two surfaces.
+ */
+class AdditiveComponentSurface : public IHyperSurface2D
+{
+public:
+  
+  // Constructor: pass in the surfaces
+  AdditiveComponentSurface(IHyperSurface2D *xSurf1, IHyperSurface2D *xSurf2)
+    {
+    this->surf1 = xSurf1;
+    this->surf2 = xSurf2;
+    this->nDim = xSurf1->GetNumberOfDimensions();
+    }
+
+  /** Evaluate the function at a particular u, v coordinate. The return value
+   * is a vector of doubles */
+  void Evaluate(double u, double v, double *x)
+    {
+    vnl_vector<double> X1(nDim), X2(nDim), X;
+    surf1->Evaluate(u, v, X1.data_block());
+    surf2->Evaluate(u, v, X2.data_block());
+    X = X1 + X2;
+    X.copy_out(x);
+    }
+ 
+  /** Evaluate a partial derivative of the function at the u, v coordinate.
+   * The first component is c0, number of components nc */
+  void EvaluateDerivative(
+    double u, double v, size_t ou, size_t ov, size_t c0, size_t nc, double *x)
+    {
+    vnl_vector<double> X1(nc), X2(nc), X;
+    surf1->EvaluateDerivative(u, v, ou, ov, c0, nc, X1.data_block());
+    surf2->EvaluateDerivative(u, v, ou, ov, c0, nc, X2.data_block());
+    X = X1 + X2;
+    X.copy_out(x);
+    }
+
+  /** Evaluate the function at a grid point */
+  void EvaluateAtGridIndex(
+    size_t iu, size_t iv, size_t ou, size_t ov, size_t c0, size_t nc, double *x)
+    {
+    vnl_vector<double> X1(nc), X2(nc), X;
+    surf1->EvaluateAtGridIndex(iu, iv, ou, ov, c0, nc, X1.data_block());
+    surf2->EvaluateAtGridIndex(iu, iv, ou, ov, c0, nc, X2.data_block());
+    X = X1 + X2;
+    X.copy_out(x);
+    }
+
+  /** Get the evaluation grid parameters */
+  void GetEvaluationGrid(VectorType &uu, VectorType &vv) const
+    { return surf1->GetEvaluationGrid(uu, vv); }
+
+  /** Get the number of dimensions of the surface */
+  size_t GetNumberOfDimensions()
+    { return surf1->GetNumberOfDimensions(); }
+
+private:
+  IHyperSurface2D *surf1, *surf2;
+  size_t nDim;
+
+  friend class AffineAndPCACoefficientMask;
+};
+
 
 /******************************************************************************
  * AffineTransformCoefficientMask 
@@ -279,7 +350,7 @@ void AffineTransformCoefficientMask::SetCoefficientArray(const double *inData)
   A.copy_in(inData);
   b.copy_in(inData + iIndexB);
 
-  xSurface->SetCoefficientArray(xOriginalCoefficients.data_block());
+  xSurface->SetCoefficientArray(GetCoefficientsBeforeTransform());
   xSurface->ApplyAffineTransform(A, b, c);
 }
 
@@ -291,44 +362,53 @@ AffineTransformCoefficientMask
   VectorType xIndex(nCoeff, 0.0);
   xIndex[iCoefficient] = 1.0;
   
-  // Compute the matrices that are to be applied
-  MatrixType dA(nDim, nDim);
-  VectorType db(nDim);
-
-  dA.copy_in(xIndex.data_block());
-  db.copy_in(xIndex.data_block() + iIndexB);
-
   // Create the special surface
-  return new AffineComponentSurface(xSurface, nDim, dA, db, c);
+  IHyperSurface2D *xSurfaceRaw 
+    = xSurface->GetVariationSurface(GetCoefficientsBeforeTransform());
+  return CreateAffineVariation(xSurfaceRaw, xIndex.data_block());
 }
 
 IHyperSurface2D *
 AffineTransformCoefficientMask
 ::GetVariationSurface(const double *xData)
 {
+  // Create the special surface
+  IHyperSurface2D *xSurfaceRaw 
+    = xSurface->GetVariationSurface(GetCoefficientsBeforeTransform());
+  return CreateAffineVariation(xSurfaceRaw, xData);
+}
+
+IHyperSurface2D *
+AffineTransformCoefficientMask
+::CreateAffineVariation(
+  IHyperSurface2D *xSurfaceVariation, const double *xAffineVariation)
+{
   // Compute the matrices that are to be applied
   MatrixType dA(nDim, nDim);
   VectorType db(nDim);
 
-  dA.copy_in(xData);
-  db.copy_in(xData + iIndexB);
+  dA.copy_in(xAffineVariation);
+  db.copy_in(xAffineVariation + iIndexB);
 
-  // Create the special surface
-  return new AffineComponentSurface(xSurface, nDim, dA, db, c);
+  return new AffineComponentSurface(xSurfaceVariation, nDim, dA, db, c);
+}
+  
+void
+AffineTransformCoefficientMask
+::ReleaseComponentSurface(IHyperSurface2D *xCompSurface)
+{
+  ReleaseVariationSurface(xCompSurface);
 }
 
 void
 AffineTransformCoefficientMask
-::ReleaseComponentSurface(IHyperSurface2D *xSurface)
+::ReleaseVariationSurface(IHyperSurface2D *xCompSurface)
 {
-  delete xSurface;
-}
+  AffineComponentSurface *xAffCompSurf 
+    = dynamic_cast<AffineComponentSurface *>(xCompSurface);
 
-void
-AffineTransformCoefficientMask
-::ReleaseVariationSurface(IHyperSurface2D *xSurface)
-{
-  delete xSurface;
+  delete xAffCompSurf->xSource;
+  delete xAffCompSurf;
 }
 
 /******************************************************************************
@@ -418,4 +498,158 @@ IHyperSurface2D *PCACoefficientMask::GetVariationSurface(const double *xVariatio
 void PCACoefficientMask::ReleaseVariationSurface(IHyperSurface2D *xVarSurface)
 {
   xSurface->ReleaseVariationSurface(xVarSurface);
+}
+
+/******************************************************************************
+ * AffineAndPCACoefficientMask
+ *****************************************************************************/
+AffineAndPCACoefficientMask::AffineAndPCACoefficientMask(
+  const vnl_matrix<double> &mPCA, IBasisRepresentation2D *xSurface, size_t nModes)
+: AffineTransformCoefficientMask(xSurface), 
+  maskPCA(mPCA, xSurface, nModes),
+  xPreAffineCoeffArray(xSurface->GetCoefficientArray(),
+    xSurface->GetNumberOfCoefficients())
+{
+  nAffine = AffineTransformCoefficientMask::GetNumberOfCoefficients();
+  nPCA = nModes;
+  n = nAffine + nPCA;
+  
+  xCoeffArray.set_size(n);
+  for(size_t i=0; i < nAffine; i++)
+    xCoeffArray[i] = AffineTransformCoefficientMask::GetCoefficient(i);
+  for(size_t j=0; j < nPCA; j++)
+    xCoeffArray[j + nAffine] = maskPCA.GetCoefficient(j);
+}
+
+void
+AffineAndPCACoefficientMask
+::SetCoefficientArray(const double *xData)
+{
+  // Fill the coefficient array
+  xCoeffArray.copy_in(xData);
+
+  // Apply the PCA mask first
+  maskPCA.SetCoefficientArray(xData  + nAffine);
+  xPreAffineCoeffArray.copy_in(xSurface->GetCoefficientArray());
+
+  // Apply the Affine mask next
+  AffineTransformCoefficientMask::SetCoefficientArray(xData);
+}
+
+IHyperSurface2D *
+AffineAndPCACoefficientMask
+::GetComponentSurface(size_t iComp)
+{
+  // Same as the affine transform's variation surface
+  if(iComp < nAffine)
+    {
+    // Use the current parameters as the PCA component of variation
+    IHyperSurface2D *xVariationPCA 
+      = xSurface->GetVariationSurface(xPreAffineCoeffArray.data_block());
+
+    // Create a simple variation in the affine direction
+    VectorType xAffineVarArray(nAffine, 0.0);
+    xAffineVarArray[iComp] = 1.0;
+
+    // Generate a combined variation
+    return CreateAffineVariation(xVariationPCA, xAffineVarArray.data_block());
+    }
+  else
+    {
+    // Get a PCA-based component surface
+    IHyperSurface2D *xVariationPCA = maskPCA.GetComponentSurface(iComp - nAffine);
+
+    // This surface will have to be affine-transformed, but with no offsets
+    MatrixType A(xCoeffArray.data_block(), nDim, nDim);
+
+    // Now, create an affine wrapper on top of this surface
+    return new AffineComponentSurface(xVariationPCA, nDim, A, 
+      VectorType(nDim, 0.0), VectorType(nDim, 0.0));
+    }
+}
+
+void
+AffineAndPCACoefficientMask
+::ReleaseComponentSurface(IHyperSurface2D *xVariation)
+{
+  // Delete the internal component
+  AffineComponentSurface * xAffineSurf 
+    = dynamic_cast<AffineComponentSurface *>(xVariation);
+
+  // TODO: technically, this is wrong, I should be calling ReleaseVariationSurface
+  // depending on which parameter was used to generate this
+  delete xAffineSurf->xSource;
+
+  // Delete the surface itself
+  delete xAffineSurf;
+}
+
+IHyperSurface2D *AffineAndPCACoefficientMask
+::GetVariationSurface(const double *xData)
+{
+  // Create the component dA * S
+  IHyperSurface2D *xComponentPCA 
+    = xSurface->GetVariationSurface(xPreAffineCoeffArray.data_block());
+
+  IHyperSurface2D *surf1 =  CreateAffineVariation(xComponentPCA, xData);
+
+  // Create the component A * dS
+  IHyperSurface2D *xVariationPCA = maskPCA.GetVariationSurface(xData + nAffine);
+
+  MatrixType A(xCoeffArray.data_block(), nDim, nDim);
+
+  IHyperSurface2D *surf2 = new AffineComponentSurface(xVariationPCA, nDim, 
+    A, VectorType(nDim, 0.0), VectorType(nDim, 0.0));
+
+  // Combine the two components
+  return new AdditiveComponentSurface(surf1, surf2);
+}
+
+void AffineAndPCACoefficientMask
+::ReleaseVariationSurface(IHyperSurface2D *xVarSurface)
+{
+  // Cast pointers to the right classes
+  AdditiveComponentSurface *xSumSurface = 
+    dynamic_cast<AdditiveComponentSurface *> (xVarSurface);
+
+  AffineComponentSurface *surf1 = 
+    dynamic_cast<AffineComponentSurface *> (xSumSurface->surf1);
+
+  AffineComponentSurface *surf2 = 
+    dynamic_cast<AffineComponentSurface *> (xSumSurface->surf2);
+
+  // Deallocate the source surfaces
+  xSurface->ReleaseVariationSurface(surf1->xSource);
+  maskPCA.ReleaseVariationSurface(surf2->xSource);
+
+  // Delete the wrapper surfaces
+  delete surf1;
+  delete surf2;
+  delete xSumSurface;
+}
+
+/******************************************************************************
+ * Affine3DAndPCACoefficientMask
+ *****************************************************************************/
+
+Affine3DAndPCACoefficientMask
+::Affine3DAndPCACoefficientMask(const vnl_matrix<double> &mPCA, 
+  IBasisRepresentation2D *xSurface, size_t nModes)
+: SelectionMedialCoefficientMask(
+   xWrappedMask = new AffineAndPCACoefficientMask(mPCA, xSurface, nModes), 
+   nModes+12, FillIndexArray(nModes) )
+{
+}
+
+size_t *Affine3DAndPCACoefficientMask
+::FillIndexArray(size_t nModes)
+{
+  xIndexArray = new size_t[12 + nModes];
+
+  for(size_t i = 0; i < 12; i++)
+    xIndexArray[i] = AffineTransform3DCoefficientMask::xIndexArray[i];
+  for(size_t j = 0; j < nModes; j++)
+    xIndexArray[12 + j] = 20 + j;
+
+  return xIndexArray;
 }

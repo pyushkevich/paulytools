@@ -975,19 +975,19 @@ void MedialPDE::SetPCAMatrix(size_t ncu, size_t ncv, const char *fname)
     << " x " << mPCAMatrix.columns() << endl;
 }
 
-PCACoefficientMask *MedialPDE::CreatePCACoefficientMask(size_t nModes)
+IMedialCoefficientMask *MedialPDE::CreatePCACoefficientMask(size_t nModes)
 {
   size_t ncu, ncv; 
 
   // Create a PCA mask
-  PCACoefficientMask *xMask = NULL;
+  IMedialCoefficientMask *xMask = NULL;
   
   // See if the numbers of coefficients match between current surface and matrix
   xSurface->GetNumberOfCoefficientsUV(ncu, ncv);
   if(ncu == ncuPCA && ncv == ncvPCA)
     {
     // Simple, use the matrix that was passed in
-    xMask = new PCACoefficientMask(mPCAMatrix, xSurface, nModes);
+    xMask = new AffineAndPCACoefficientMask(mPCAMatrix, xSurface, nModes);
     }
   else
     {
@@ -1012,13 +1012,13 @@ PCACoefficientMask *MedialPDE::CreatePCACoefficientMask(size_t nModes)
       }
 
     // Pass this matrix to the PCA
-    xMask = new PCACoefficientMask(mPCAChunk, xSurface, nModes);
+    xMask = new Affine3DAndPCACoefficientMask(mPCAChunk, xSurface, nModes);
     }
 
   return xMask;
 }
 
-void MedialPDE::ReleasePCACoefficientMask(PCACoefficientMask *xMask)
+void MedialPDE::ReleasePCACoefficientMask(IMedialCoefficientMask *xMask)
 {
   delete xMask;
 }

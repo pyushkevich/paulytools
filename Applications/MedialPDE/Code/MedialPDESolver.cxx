@@ -197,8 +197,8 @@ MedialPDESolver
 
     // Compute the initial solution value as the distance from the nearest
     // edge
-    double uMin = i > m/2 ? uGrid[m-(i+1)] - uGrid[m-(i+2)] : uGrid[i+1] - uGrid[i];
-    double vMin = j > n/2 ? vGrid[n-(j+1)] - uGrid[n-(j+2)] : vGrid[j+1] - vGrid[j];
+    // double uMin = i > m/2 ? uGrid[m-(i+1)] - uGrid[m-(i+2)] : uGrid[i+1] - uGrid[i];
+    // double vMin = j > n/2 ? vGrid[n-(j+1)] - vGrid[n-(j+2)] : vGrid[j+1] - vGrid[j];
     
     // xDefaultInitSoln[i][j] = sqrt( uMin * uMin + vMin * vMin );
     xDefaultInitSoln[i][j] = 1.0;

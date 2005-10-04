@@ -265,7 +265,7 @@ GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV
   if(mu < ncu) mu = ncu; if(mv < ncv) mv = ncv;
 
   // Reinitialize the coefficient array
-  C = Index3D(NComponents, mu, mv);
+  C.resize(NComponents, mu, mv);
   Initialize(mu, mv);
   
   // Load the coefficients

@@ -95,12 +95,27 @@ public:
   IHyperSurface2D *GetVariationSurface(const double *xData);
   void ReleaseVariationSurface(IHyperSurface2D *xSurface);
 
-private:
+protected:
+
+  // This virtual method is called before applying an affine transform to set 
+  // the state of the coefficients to the pre-transform values.
+  virtual double *GetCoefficientsBeforeTransform()
+    { return xOriginalCoefficients.data_block(); }
+
+  // Create an affine variation based on some particular variation of the
+  // underlying surface
+  virtual IHyperSurface2D *CreateAffineVariation(
+    IHyperSurface2D *xSurfaceVariation, const double *xAffineVariation);
+
+  
+  // The underlying surface
+  IBasisRepresentation2D *xSurface;
+  
+protected:
   typedef vnl_matrix<double> MatrixType;
   typedef vnl_vector<double> VectorType;
 
   
-  IBasisRepresentation2D *xSurface;
   size_t nDim, iIndexB, nCoeff;
   
   VectorType xOriginalCoefficients;
@@ -131,6 +146,7 @@ public:
 private:
   AffineTransformCoefficientMask *xAffineMask;
   static const size_t xIndexArray[];
+  friend class Affine3DAndPCACoefficientMask;
 };
 
 /**
@@ -167,6 +183,80 @@ private:
   vnl_vector<double> xCoeffArray, xOriginalOffsetFromMean;
 };
 
+class AffineAndPCACoefficientMask : public AffineTransformCoefficientMask
+{
+public:
+  typedef vnl_matrix<double> MatrixType;
+  typedef vnl_vector<double> VectorType;
+
+  // Constructor: takes a surface and a data matrix
+  AffineAndPCACoefficientMask( const MatrixType &mPCA, 
+    IBasisRepresentation2D *xSurface, size_t nModes);
+  
+  // Get the array of coefficients
+  double *GetCoefficientArray()
+    { return xCoeffArray.data_block(); }
+
+  // Set the array of coefficients
+  void SetCoefficientArray(const double *xData);
+
+  // This method does nothing
+  virtual double *GetCoefficientsBeforeTransform()
+    { return xPreAffineCoeffArray.data_block(); }
+
+  // Get the number of coefficients
+  size_t GetNumberOfCoefficients() const
+    { return n; }
+
+  // Get a single coefficient
+  double GetCoefficient(size_t i) const
+    { return xCoeffArray[i]; }
+  
+  // Set a single coefficient
+  void SetCoefficient(size_t i, double x)
+    { xCoeffArray[i] = x; SetCoefficientArray(xCoeffArray.data_block()); }
+
+  // Get a surface corresponding to a single component
+  IHyperSurface2D *GetComponentSurface(size_t iCoefficient);
+  void ReleaseComponentSurface(IHyperSurface2D *xSurface);
+
+  // Get a surface corresponding to some variation
+  IHyperSurface2D *GetVariationSurface(const double *xData);
+  void ReleaseVariationSurface(IHyperSurface2D *xSurface);
+
+private:
+
+  // Numbers of coefficients of each kind
+  size_t n, nAffine, nPCA;
+  VectorType xCoeffArray, xPreAffineCoeffArray;
+  PCACoefficientMask maskPCA;
+};
+
+/** 
+ * This is a wrapper around AffineAndPCACoefficientMask that takes out the 
+ * unused affine coefficients by defining a selection mask.
+ */
+class Affine3DAndPCACoefficientMask :
+  public SelectionMedialCoefficientMask
+{
+public:
+ 
+  Affine3DAndPCACoefficientMask(const vnl_matrix<double> &mPCA, 
+    IBasisRepresentation2D *xSurface, size_t nModes);
+
+  ~Affine3DAndPCACoefficientMask()
+    { delete xIndexArray; delete xWrappedMask; }
+
+private:
+  // The actual mask that does all the work
+  AffineAndPCACoefficientMask *xWrappedMask;
+
+  // The selection index array
+  size_t *xIndexArray;
+  
+  // Method that generates the index array
+  size_t *FillIndexArray(size_t nModes);
+};
 
 
 #endif //__CoefficientMask_h_

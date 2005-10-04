@@ -112,6 +112,8 @@ SET(SCRIPT_FILES
   imageprep.py
   segment.py
   segment2.py
+  segment2.py
+  segment3.py
   pipeline.py
   pca.py
   pcalite.py
