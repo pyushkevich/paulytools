@@ -551,7 +551,7 @@ double MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
     // cout << "  Largest Solver Error: " << zMax << endl;
    
     // Convergence is defined when epsilon is smaller than some threshold
-    if(bMax < delta) 
+    if(bMax < delta || epsMax < delta) 
       break;
     }
 

@@ -138,7 +138,7 @@ void GeneralizedProcrustesAnalysis(size_t m, Mat *A, Mat *R, Vec *t, double *s)
     }
 
   // Clean up
-  delete B;
+  delete[] B;
 }
 
 /** Test the procrustes method */
