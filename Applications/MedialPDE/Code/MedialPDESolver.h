@@ -150,6 +150,7 @@ private:
   void InitializeSiteGeometry();
   double SolveOnce(const Mat &xGuess, double delta);
   double EstimateLBOperator(const Mat &F, size_t i, size_t j);
+  double ComputeNewtonRHS(const Mat& x, Mat &b);
 
   bool flagReuseLastSolution;
 };

@@ -371,7 +371,7 @@ BoundaryImageMatchTerm
   //   S->xAtomGrid, S->xAtoms, xMinArea, &fImage);
 
   xBoundaryArea = S->xBoundaryArea;
-  xFinalMatch = sqrt( xImageMatch / xBoundaryArea );
+  xFinalMatch = xImageMatch / xBoundaryArea;
 
   // Scale by area
   return xFinalMatch;
@@ -423,7 +423,7 @@ BoundaryImageMatchTerm::BeginGradientComputation(SolutionData *S)
   xBoundaryArea = S->xBoundaryArea;
 
   // Compute the final match
-  xFinalMatch = sqrt( xImageMatch / xBoundaryArea );
+  xFinalMatch = xImageMatch / xBoundaryArea;
   
   // Clean up
   delete itBnd;
@@ -474,9 +474,6 @@ BoundaryImageMatchTerm
   double dFinaldC = 
     ( dMatchdC * S->xBoundaryArea - xImageMatch * DS->xBoundaryArea ) / 
     ( S->xBoundaryArea * S->xBoundaryArea );
-
-  // Account for the square root
-  dFinaldC *= 0.5 / xFinalMatch;
 
   // Return the final match derivative
   return dFinaldC;

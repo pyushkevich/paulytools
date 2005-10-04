@@ -15,7 +15,7 @@ dirMPDE = CheckDir(dirWork + "cmrep/" + expid + "/" + id);
 dirPCA = dirWork + "/pca/" + expidPCA + "/";
 pcaData = { 
   "mean":dirPCA + "mean/mean.mpde", 
-  "matrix":dirPCA + "matrix/shapemat.pca", 
+  "matrix":dirPCA + "matrix/shapemat.mat", 
   "ncu":8, 
   "ncv":10
 };
@@ -27,10 +27,13 @@ fnTemplate = pcaData["mean"]
 Stage_MOInertia(id, expid, fnTemplate, "align","med", 8, 10)
 
 # Affine stage
-Stage_AFF_CG_VO(id, expid, "align",  "affine", "med", 8, 10, 400);
+Stage_AFF_CG_VO(id, expid, "align",  "affine", "med", 8, 10, 600);
 
 # PCA Stage
-Stage_PCA_CG_VO(id, expid, "affine", "pca24",  "med", 8, 10, 400, pcaData, 4);
+Stage_PCA_CG_VO(id, expid, "affine", "pca04",  "med", 8, 10, 600, pcaData, 4);
+
+# Second PCA Stage
+Stage_PCA_CG_VO(id, expid, "pca04",  "pca12",  "med", 8, 10, 600, pcaData, 12);
 
 # Subsequent stages: 2x4 grid
 #Stage_XYZ_CG_VO(id, expid, "affine", "xyz24",  "med", 2, 4, 800);

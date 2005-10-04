@@ -456,10 +456,19 @@ double ArrayMinMax(double *array, size_t n, double &xMin, double &xMax)
     }
 }
 
+/** This computes the right hand side of the site equations, given phi=x */
+double MedialPDESolver::ComputeNewtonRHS(const Mat& x, Mat &b)
+{
+  size_t i, j;
+  for(i = 0; i < m; i++) for(j = 0; j < n; j++)
+    b[i][j] = - xSites[xSiteIndex[i][j]]->ComputeEquation(x);
+  return dot_product(b, b);
+}
+
 double MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
 {
   size_t i, j, k, iIter;
-  double epsMax, bMax;
+  double epsMax, bMax, bMagSqr;
   
   // Initialize epsilon to zero
   eps.fill(0.0);
@@ -467,73 +476,63 @@ double MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
   // Copy the initial solution to the current solution
   y = xGuess;
 
+  // Compute the right hand side, put it into b
+  bMagSqr = ComputeNewtonRHS(y, b);
+  // cout << " " << bMagSqr << " ";
+
   // We are now ready to perform the Newton loop
-  bool flagComplete = false;
-  for(iIter = 0; iIter < 50 && !flagComplete; iIter++)
+  for(iIter = 0; iIter < 50; iIter++)
     {
-    // Compute the A matrix and the b vector at each node
-    for(i = 0; i < m; i++) for(j = 0; j < n; j++)
-      {
-      // Get the site index
-      size_t iSite = xSiteIndex[i][j];
-      
-      // Compute the non-zero values of A for this row
+    // Compute the Jacobian matrix
+    for(size_t iSite = 0; iSite < nSites; iSite++)
       xSites[iSite]->
         ComputeDerivative(y, xSparseValues + xRowIndex[iSite] - 1, iSite+1);
-
-			//if(iIter == 0)        
-	    //  {
-	    //  double xMin, xMax;
-  	  //  ArrayMinMax(xSparseValues + xRowIndex[iSite] - 1, xMasks[iSite]->Size(), xMin, xMax);
-    	//  cout << "Site " << i << " , " << j << "  Range: " << xMin << " -- " << xMax << endl;				
-	    //  }
-
-      // Compute the value of b
-      b[i][j] = -xSites[iSite]->ComputeEquation(y);
-      }
       
-    // Report the largest and smallest values in A and b
-    double xMin, xMax;
-    ArrayMinMax(xSparseValues, xRowIndex[nSites]-1, xMin, xMax);
-    // cout << "max(A) = " << xMax << "; min(A) = " << xMin << endl;
-    
     // Perform the symbolic factorization only for the first iteration
     if(iIter == 0)
       xPardiso.SymbolicFactorization(nSites, xRowIndex, xColIndex, xSparseValues);
 
-    // Peform numeric factorization and solution at each step
+    // Compute the Jacobian inverse
     xPardiso.NumericFactorization(xSparseValues);
     xPardiso.Solve(b.data_block(), eps.data_block());
+
+    // A plus means solver step
+    cout << "+";
+
+    // Advance y to the new Newton position
+    y += eps; 
+       
+    // Compute the solution at the full Newton step
+    double bMagSqrTest = ComputeNewtonRHS(y, b);
+
+    // Perform backtracking if necessary (this is boneheaded backtracking but
+    // it appears to work). TODO: Implement lnsrch from NRC
+    double lambda = 0.5;
+    while(bMagSqrTest > bMagSqr && lambda > 1e-4)
+      {
+      // Go back along eps
+      y -= lambda * eps; lambda *= 0.5;
+
+      // Compute the right hand side again
+      bMagSqrTest = ComputeNewtonRHS(y, b);
+
+      // A "-" means backtrack step
+      cout << "-";
+      }
+
+    // Store the new b magnitude value
+    bMagSqr = bMagSqrTest;
+    // cout << " " << bMagSqr << " ";
 
     // Get the largest error (eps)
     epsMax = eps.array_inf_norm();
     bMax = b.array_inf_norm();
 
-    // Check if the sum of squares has decreased from the last evaluation
-    double fOld = dot_product(b, b), fNew = fOld, lambda = 1.0;
-    cout << "Gotta beat "<< fOld << endl;
-    while(fNew >= fOld && lambda > 1e-4) {
-      // Try stepping forward
-      Mat yTest = y + lambda * eps;
-
-      // Recompute the b vector
-      for(i = 0; i < m; i++) for(j = 0; j < n; j++)
-        b[i][j] = -xSites[xSiteIndex[i][j]]->ComputeEquation(yTest);
-      fNew = dot_product(b, b);
-      cout << "f[" << lambda << "] = " << fNew << endl;
-
-      // Scale the lambda by two
-      lambda = 0.5 * lambda;
-    };
-      
-    // Append the epsilon vector to the result
-    y += 2.0 * lambda * eps;
-
     // Print the statistics
-    cout << "-----------" << endl;
-    cout << "Step " << iIter << ": " << endl;
-    cout << "  Largest Epsilon: " << epsMax << endl;
-    cout << "  Largest Eqn Error: " << bMax << endl; 
+    // cout << "-----------" << endl;
+    // cout << "Step " << iIter << ": " << endl;
+    // cout << "  Largest Epsilon: " << epsMax << endl;
+    // cout << "  Largest Eqn Error: " << bMax << endl; 
 
     /*
     if(iIter > 12)
@@ -555,8 +554,13 @@ double MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
       break;
     }
 
-  if(iIter > 12)
+  // Let the user know if we can't converge on the root
+  if(bMax > delta && epsMax > delta)
+    {
+    cout << "  *** CONVERGENCE FAILURE *** ";
     cout << " epsMax = " << epsMax << "; bMax = " << bMax << endl;
+    }
+
   cout << endl;
 
   /* 
@@ -836,58 +840,3 @@ void MedialPDESolver
 
   cout << "MedialPDESolver FD Test: " << xMaxDiff << endl;
 }
-
-double MedialPDESolver::EstimateLBOperator(const Mat &F, size_t i, size_t j)
-{
-  size_t iGrid = xGrid->GetAtomIndex(i, j);
-  size_t iSite = xSiteIndex[i][j];
-  
-  SMLVec3d X0 = xAtoms[iGrid].X;
-  
-  int n = 8;
-  int nu[] = { 1, 1,  1,  0, -1, -1, -1, 0 };
-  int nv[] = { 1, 0, -1, -1, -1,  0,  1, 1 };
-  // int nu[] = { 1, 1,  1,  -1, -1, -1 };
-  // int nv[] = { 1, 0, -1,  -1,  0,  1 };
-
-  double LBO = 0.0, xArea = 0.0;
-
-  // Compute the contribution of each term
-  for(int k = 0; k < n; k++)
-    {
-    int km = (k + n - 1) % n, kp = (k + 1) % n;
-    size_t iGridOpp   = xGrid->GetAtomIndex(i + nu[k],  j + nv[k]);
-    size_t iGridMinus = xGrid->GetAtomIndex(i + nu[km], j + nv[km]);
-    size_t iGridPlus  = xGrid->GetAtomIndex(i + nu[kp], j + nv[kp]);
-    
-    SMLVec3d X1 = xAtoms[iGridMinus].X;
-    SMLVec3d X2 = xAtoms[iGridOpp].X;
-    SMLVec3d X3 = xAtoms[iGridPlus].X;
-
-    SMLVec3d ac = X0 - X1, bc = X2 - X1, ad = X0 - X3, bd = X2 - X3;
-    double A1 = 0.5 * sqrt(
-      dot_product(ac,ac) * dot_product(bc,bc) - 
-      dot_product(ac,bc) * dot_product(ac,bc));
-    double A2 = 0.5 * sqrt(
-      dot_product(ad,ad) * dot_product(bd,bd) - 
-      dot_product(ad,bd) * dot_product(ad,bd));
-
-    double ca = dot_product(ac,bc) / sqrt(dot_product(ac,ac) * dot_product(bc,bc));
-    double sa = sqrt(1 - ca * ca);
-    double cota = ca / sa;
-    
-    double cb = dot_product(ad,bd) / sqrt(dot_product(ad,ad) * dot_product(bd,bd));
-    double sb = sqrt(1 - cb * cb);
-    double cotb = cb / sb;
-
-    double w = cota + cotb;
-
-    LBO += (F[i+nu[k]][j+nv[k]] - F[i][j]) * w;
-    xArea += 0.5 * (A1 + A2);
-    }
-
-  // Compute the operator
-  return 2.0 * LBO / xArea;
-}
-
-

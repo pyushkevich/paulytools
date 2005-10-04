@@ -7,7 +7,7 @@ import os
 expid = sys.argv[1]
 
 # Create a medial model
-m=MedialPDE(8, 10, 32, 80)
+m=MedialPDE(8, 10, sampling["nu"], sampling["nv"], sampling["cut"], sampling["ncu"], sampling["ncv"]);
 
 # Load each sample
 samples=(
@@ -23,6 +23,52 @@ samples=(
   "1076L", "1077L", "1078L", "1079L", "1080L", "1081L", "1082L", "1083L",
   "1084L", "1085L", "1086L", "1087L", "1088L", "1089L");
 
+# A method to save PCA to a set of files
+def SaveMedialPCA(pca, mpde, expid, nModes, nSamples):
+  """Save the medial PCA to a matrix, mean and mode files"""
+
+  # Create a substitution rule
+  sub = {"path":dirWork, "expid":expid}
+
+  # Check all directories
+  CheckDir("%(path)s/pca/%(expid)s/matrix" % sub)
+  CheckDir("%(path)s/pca/%(expid)s/mean" % sub)
+  CheckDir("%(path)s/pca/%(expid)s/vtk" % sub)
+  CheckDir("%(path)s/pca/%(expid)s/vtk/mean" % sub)
+  CheckDir("%(path)s/pca/%(expid)s/vtk/modes" % sub)
+
+  # First, save the shape matrix
+  pca.ExportShapeMatrix("%(path)s/pca/%(expid)s/matrix/shapemat.mat" % sub)
+
+  # Next, save the mean shape
+  pca.SetFSLocationToMean();
+  pca.GetShapeAtFSLocation(mpde);
+  mpde.SaveVTKMesh(
+      "%(path)s/pca/%(expid)s/vtk/mean/pcamed.mean.vtk" % sub,
+      "%(path)s/pca/%(expid)s/vtk/mean/pcabnd.mean.vtk" % sub);
+  mpde.SaveToParameterFile("%(path)s/pca/%(expid)s/mean/mean.mpde" % sub);
+
+  # Now save the models along the PCA modes
+  for i in range(nModes):
+    sub["i"] = i;
+    CheckDir("%(path)s/pca/%(expid)s/vtk/modes/mode%(i)d" % sub)
+
+    # Iterate over the samples in this mode
+    for j in range(-nSamples/2, nSamples/2, 1):
+      sub["j"] = j; sub["id"] = j + nSamples/2;
+      print ("Mode %(i)d, Frame %(j)d" % sub);
+
+      # Go to the PCA location
+      pca.SetFSLocationToMean()
+      pca.SetFSLocation(i, j * 6.0 / nSamples);
+      pca.GetShapeAtFSLocation(mpde)
+
+      # Save the VTK mesh
+      mpde.SaveVTKMesh(
+          "%(path)s/pca/%(expid)s/vtk/modes/mode%(i)d/pcamed_m%(i)d_%(id)02d.vtk" % sub,
+          "%(path)s/pca/%(expid)s/vtk/modes/mode%(i)d/pcabnd_m%(i)d_%(id)02d.vtk" % sub);
+
+      
 # Create the PCA object
 pca = MedialPCA()
 
@@ -46,15 +92,4 @@ print "Computing PCA!"
 pca.ComputePCA();
 
 # Export the PCA matrix in matlab format
-fnMatFile = CheckDir(dirWork + "pca/" + expid + "/matrix") + "/shapemat.mat"
-print "Writing Matrix to " + fnMatFile
-pca.ExportShapeMatrix(fnMatFile);
-
-# Export the mean model
-print "Computing Mean Model"
-pca.SetFSLocationToMean()
-pca.GetShapeAtFSLocation(m)
-dirVTK = CheckDir(dirWork + "/pca/" + expid +"/vtk")
-dirMean = CheckDir(dirWork + "/pca/" + expid +"/mean")
-m.SaveVTKMesh(dirVTK + "/pcamed_mean.vtk", dirVTK + "/pcabnd_mean.vtk")
-m.SaveToParameterFile(dirMean + "/mean.mpde");
+SaveMedialPCA(pca, m, expid, 4, 24)

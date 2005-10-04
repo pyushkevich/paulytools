@@ -15,7 +15,7 @@ def Stage_MOInertia(id, expid, nmTemplate, nmEnd, imgType, nu, nv):
   img = LoadBlurImage(id, imgType);
   
   # Load the m-rep
-  mp = MedialPDE(nu, nv, 32, 80);
+  mp = MedialPDE(nu, nv, sampling["nu"], sampling["nv"], sampling["cut"], sampling["ncu"], sampling["ncv"]);
   mp.LoadFromParameterFile(nmTemplate);
   mp.MatchImageByMoments(img, 5);
     
@@ -30,7 +30,7 @@ def Stage_AFF_CG_VO(id, expid, nmStart, nmEnd, imgType, nu, nv, nIter):
   img = LoadBlurImage(id, imgType);
   
   # Load the m-rep
-  mp = MedialPDE(nu, nv, 32, 80);
+  mp = MedialPDE(nu, nv, sampling["nu"], sampling["nv"], sampling["cut"], sampling["ncu"], sampling["ncv"]);
   mp.LoadFromParameterFile(
       dirWork + "cmrep/" + expid + "/" + id + "/" + id + "." + nmStart + ".mpde");
   mp.SetNumberOfCoefficients(nu, nv);
@@ -53,7 +53,7 @@ def Stage_XYZ_CG_VO(id, expid, nmStart, nmEnd, imgType, nu, nv, nIter):
   img = LoadBlurImage(id, imgType);
   
   # Load the m-rep
-  mp = MedialPDE(nu, nv, 32, 80);
+  mp = MedialPDE(nu, nv, sampling["nu"], sampling["nv"], sampling["cut"], sampling["ncu"], sampling["ncv"]);
   mp.LoadFromParameterFile(
       dirWork + "cmrep/" + expid + "/" + id + "/" + id + "." + nmStart + ".mpde");
   mp.SetNumberOfCoefficients(nu, nv);
@@ -76,7 +76,7 @@ def Stage_CTF_CG_VO(id, expid, nmStart, nmEnd, imgType, nu, nv, nIter):
   img = LoadBlurImage(id, imgType);
   
   # Load the m-rep
-  mp = MedialPDE(nu, nv, 32, 80);
+  mp = MedialPDE(nu, nv, sampling["nu"], sampling["nv"], sampling["cut"], sampling["ncu"], sampling["ncv"]);
   mp.LoadFromParameterFile(
       dirWork + "cmrep/" + expid + "/" + id + "/" + id + "." + nmStart + ".mpde");
   mp.SetNumberOfCoefficients(nu, nv);
@@ -84,6 +84,29 @@ def Stage_CTF_CG_VO(id, expid, nmStart, nmEnd, imgType, nu, nv, nIter):
   # Set up the optimizer
   mp.SetOptimizerToConjugateGradientDescent(0.1);
   mp.SetMatchToVolumeOverlap();
+  mp.SetOptimizationToDeformable();
+  mp.EnableMeshDump(dirMesh + expid + "/" + id + "/" + nmEnd, 0.01);
+  
+  # Run the optimization
+  mp.RunOptimization(img, nIter);
+  SaveMRep(mp, id, expid, nmEnd);
+
+
+def Stage_CTF_CG_BM(id, expid, nmStart, nmEnd, imgType, nu, nv, nIter):
+  """Run an optimization stage"""
+    
+  # Load the image from file
+  img = LoadBlurImageWithGradient(id, imgType);
+  
+  # Load the m-rep
+  mp = MedialPDE(nu, nv, sampling["nu"], sampling["nv"], sampling["cut"], sampling["ncu"], sampling["ncv"]);
+  mp.LoadFromParameterFile(
+      dirWork + "cmrep/" + expid + "/" + id + "/" + id + "." + nmStart + ".mpde");
+  mp.SetNumberOfCoefficients(nu, nv);
+    
+  # Set up the optimizer
+  mp.SetOptimizerToConjugateGradientDescent(0.1);
+  mp.SetMatchToBoundaryGradient();
   mp.SetOptimizationToDeformable();
   mp.EnableMeshDump(dirMesh + expid + "/" + id + "/" + nmEnd, 0.01);
   
@@ -100,7 +123,7 @@ def Stage_PCA_CG_VO(id, expid, nmStart, nmEnd, imgType, nu, nv, nIter, pcaData, 
   img = LoadBlurImage(id, imgType);
   
   # Load the m-rep
-  mp = MedialPDE(nu, nv, 32, 80);
+  mp = MedialPDE(nu, nv, sampling["nu"], sampling["nv"], sampling["cut"], sampling["ncu"], sampling["ncv"]);
   mp.LoadFromParameterFile(
       dirWork + "cmrep/" + expid + "/" + id + "/" + id + "." + nmStart + ".mpde");
   mp.SetNumberOfCoefficients(nu, nv);

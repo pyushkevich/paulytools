@@ -16,9 +16,6 @@ fnTemplate = dirInput + "init/init.mpde"
 # Align template by moments of inertia
 Stage_MOInertia(id, expid, fnTemplate, "align","med", 2, 4)
 
-# Align template by moments of inertia
-Stage_MOInertia(id, expid, "align",            "med", 2, 4)
-
 # Affine stage
 Stage_AFF_CG_VO(id, expid, "align",  "affine", "med", 2, 4, 400);
 
@@ -34,3 +31,7 @@ Stage_CTF_CG_VO(id, expid, "ctf46",  "ctf57",  "low", 5, 7, 600);
 Stage_CTF_CG_VO(id, expid, "ctf57",  "ctf68",  "low", 6, 8, 600);
 Stage_CTF_CG_VO(id, expid, "ctf68",  "ctf79",  "low", 7, 9, 600);
 Stage_CTF_CG_VO(id, expid, "ctf79",  "ctf80",  "low", 8, 10, 600);
+
+# Boundary image match stage
+Stage_CTF_CG_BM(id, expid, "ctf80",  "bdm80",  "low", 8, 10, 600);
+Stage_CTF_CG_BM(id, expid, "bdm80",  "bdm92",  "low", 9, 12, 600);

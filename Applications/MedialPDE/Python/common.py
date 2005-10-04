@@ -7,6 +7,9 @@ import os
 dirInput = "${MPDE_INPUTDATA_ROOT}/"
 dirWork = "${MPDE_DATA_ROOT}/"
 
+# Define the sampling for the cm-rep experiments
+sampling = {"nu":32, "nv":80, "cut":0.5, "ncu":2, "ncv":2}
+
 # Function to generate working images
 def MakeImages(id):
   """ Blur binary image to floating point """
@@ -37,6 +40,14 @@ def LoadBlurImage(id, type):
   """ Load blurred image from file """
   img = FloatImage()
   img.LoadFromFile(dirWork + "hippo/imgblur/" + id + "_" + type + ".mha")
+  img.SetOutsideValue(-1.0)
+  return img
+
+# Function to load a blurred image and gradient, type is hi, med or low
+def LoadBlurImageWithGradient(id, type):
+  """ Load blurred image from file """
+  img = FloatImage()
+  img.LoadFromPath(dirWork + "hippo/imgblur/" + id + "_" + type,"mha")
   img.SetOutsideValue(-1.0)
   return img
 
