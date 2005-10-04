@@ -458,7 +458,7 @@ double ArrayMinMax(double *array, size_t n, double &xMin, double &xMax)
 
 double MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
 {
-  size_t i, j, k;
+  size_t i, j, k, iIter;
   double epsMax, bMax;
   
   // Initialize epsilon to zero
@@ -469,7 +469,7 @@ double MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
 
   // We are now ready to perform the Newton loop
   bool flagComplete = false;
-  for(unsigned int iIter = 0; iIter < 50 && !flagComplete; iIter++)
+  for(iIter = 0; iIter < 50 && !flagComplete; iIter++)
     {
     // Compute the A matrix and the b vector at each node
     for(i = 0; i < m; i++) for(j = 0; j < n; j++)
@@ -509,22 +509,38 @@ double MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
     epsMax = eps.array_inf_norm();
     bMax = b.array_inf_norm();
 
+    // Check if the sum of squares has decreased from the last evaluation
+    double fOld = dot_product(b, b), fNew = fOld, lambda = 1.0;
+    cout << "Gotta beat "<< fOld << endl;
+    while(fNew >= fOld && lambda > 1e-4) {
+      // Try stepping forward
+      Mat yTest = y + lambda * eps;
+
+      // Recompute the b vector
+      for(i = 0; i < m; i++) for(j = 0; j < n; j++)
+        b[i][j] = -xSites[xSiteIndex[i][j]]->ComputeEquation(yTest);
+      fNew = dot_product(b, b);
+      cout << "f[" << lambda << "] = " << fNew << endl;
+
+      // Scale the lambda by two
+      lambda = 0.5 * lambda;
+    };
+      
     // Append the epsilon vector to the result
-    y += eps;
+    y += 2.0 * lambda * eps;
 
     // Print the statistics
-    
-    /* 
     cout << "-----------" << endl;
     cout << "Step " << iIter << ": " << endl;
     cout << "  Largest Epsilon: " << epsMax << endl;
     cout << "  Largest Eqn Error: " << bMax << endl; 
-    */
 
+    /*
     if(iIter > 12)
       cout << "!";
     else
       cout << "+";
+      */
 
       // cout << endl << "Step " << iIter << ":\t" << "eMax = " 
       //   << epsMax << "\t" << "bMax = " << bMax << endl;
@@ -539,6 +555,8 @@ double MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
       break;
     }
 
+  if(iIter > 12)
+    cout << " epsMax = " << epsMax << "; bMax = " << bMax << endl;
   cout << endl;
 
   /* 
@@ -872,4 +890,4 @@ double MedialPDESolver::EstimateLBOperator(const Mat &F, size_t i, size_t j)
   return 2.0 * LBO / xArea;
 }
 
-  
+
