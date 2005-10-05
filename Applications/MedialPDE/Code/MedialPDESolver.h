@@ -54,13 +54,13 @@ public:
    * Solve the PDE for a given surface and a given rho function up to the required 
    * level of accuracy.
    */
-  void Solve(const Mat& xGuessPhi, double delta = 1e-12);
+  bool Solve(const Mat& xGuessPhi, double delta = 1e-12);
 
   /** 
    * Solve, using the default initial guess
    */
-  void Solve(double delta = 1e-12)
-    { Solve(xInitSoln); }
+  bool Solve(double delta = 1e-12)
+    { return Solve(xInitSoln); }
 
   /**
    * Compute the 'jet' of the equation with respect to the basis functions
@@ -146,9 +146,9 @@ private:
 
   /** Routine to compute medial atoms */
   void TestJacobi();
-  void ReconstructAtoms(const Mat &ySolution);
+  bool ReconstructAtoms(const Mat &ySolution);
   void InitializeSiteGeometry();
-  double SolveOnce(const Mat &xGuess, double delta);
+  bool SolveOnce(const Mat &xGuess, double delta);
   double EstimateLBOperator(const Mat &F, size_t i, size_t j);
   double ComputeNewtonRHS(const Mat& x, Mat &b);
 

@@ -412,10 +412,13 @@ void MedialPDESolver::InitializeSiteGeometry()
   */
 }
 
-void
+bool
 MedialPDESolver
 ::ReconstructAtoms(const Mat &ySolution)
 {
+  // Keep track of invalid atoms
+  bool flagAllAtomsValid = true;
+  
   // Once the iterations are complete, reconstruct the atoms
   for(unsigned int i = 0; i < m; i++) for(unsigned int j = 0; j < n; j++)
     {
@@ -443,7 +446,13 @@ MedialPDESolver
       xAtom.R = xAtom.F = xAtom.Fu = xAtom.Fv = 0.0;
       xAtom.flagValid = false;
       }
+
+    // Update the valid atoms flag
+    flagAllAtomsValid &= xAtom.flagValid;
     }
+
+  // Return value: whether all atoms are valid
+  return flagAllAtomsValid;
 }
 
 double ArrayMinMax(double *array, size_t n, double &xMin, double &xMax)
@@ -465,7 +474,7 @@ double MedialPDESolver::ComputeNewtonRHS(const Mat& x, Mat &b)
   return dot_product(b, b);
 }
 
-double MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
+bool MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
 {
   size_t i, j, k, iIter;
   double epsMax, bMax, bMagSqr;
@@ -559,9 +568,13 @@ double MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
     {
     cout << "  *** CONVERGENCE FAILURE *** ";
     cout << " epsMax = " << epsMax << "; bMax = " << bMax << endl;
+    return false;
     }
-
-  cout << endl;
+  else
+    {
+    cout << endl;
+    return true;
+    }
 
   /* 
   // Show the value of phi at the four corners
@@ -587,70 +600,22 @@ double MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
   xSites[xSiteIndex[1][1]]->PrintReport();
   xMasks[xSiteIndex[1][1]]->PrintReport();
   */
-  
-  return bMax;
 }
 
-void
+bool
 MedialPDESolver
 ::Solve(const Mat &xGuess, double delta)
 {
-  /* 
-  unsigned int i, j, k;
-  Mat xBestInit(m, n);
-  */
-  
   // Intialize the sites
   InitializeSiteGeometry();
 
-  // Just solve once - to initialization tricks!
-  SolveOnce(xGuess, delta);
+  // Just solve once - no initialization tricks!
+  bool flagSolved = SolveOnce(xGuess, delta);
   
-  /* 
-
-  // Try solving with the current initial guess
-  double xBestGuess = SolveOnce(delta);
-  if(false && xBestGuess > delta)
-    {
-    // Save the initial solution for all that it's worth
-    xBestInit = xInitSoln;
-
-    // Try using the following scale factors to get a decent solution
-    double xTest = 1.0e-6, xScale = 2.0, nGuesses = 20;
-    for(size_t iGuess = 0; iGuess < nGuesses; iGuess++)
-      {
-      
-      // Try solving using the current guess
-      SetDefaultInitialGuess(xTest);
-      double xGuess = SolveOnce(delta);
-      
-      cout << "PDE Solver Initialization Failure; Initializing with " << xTest 
-        << "; Result: " << xGuess << endl;
-      
-      if(xGuess < xBestGuess)
-        {
-        xBestGuess = xGuess;
-        xBestInit = xInitSoln;
-        }
-      
-      if(xGuess < delta)
-        break;
-
-      // Scale up to the next guess
-      xTest *= xScale;
-      }
-    }
-  
-  // If we never succeeded, use the best initialization that we could find
-  if(xBestGuess > delta)
-    { 
-    cerr << "Complete PDE Solver Failure!" << endl; 
-    xInitSoln = xBestInit;
-    }
-  */
-
   // Reconstruct the medial atoms
-  ReconstructAtoms(y);
+  bool flagValid = ReconstructAtoms(y);
+
+  return flagValid && flagSolved;
 }
 
 void ComputeMedialAtomBoundaryDerivative(

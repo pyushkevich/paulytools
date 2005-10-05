@@ -141,7 +141,7 @@ public:
   void SaveToParameterFile(const char *file);
 
   /** Load from a parameter file */
-  void LoadFromParameterFile(const char *file);
+  bool LoadFromParameterFile(const char *file);
 
   /** Set the number of fourier coefficients */
   void SetNumberOfCoefficients(unsigned int m, unsigned int n);
@@ -165,7 +165,7 @@ public:
   void SaveVTKMesh(const char *fileMedial, const char *fileBoundary);
 
   /** Compute the radius function after surface/pho update */
-  void Solve();
+  bool Solve();
 
   /** Set the optimization mode to affine */
   void SetOptimizationToAffine()

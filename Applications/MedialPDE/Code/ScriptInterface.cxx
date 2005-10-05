@@ -183,7 +183,7 @@ void MedialPDE::SaveToParameterFile(const char *file)
   R.WriteToFile(file);
 }
 
-void MedialPDE::LoadFromParameterFile(const char *file)
+bool MedialPDE::LoadFromParameterFile(const char *file)
 {
   // Use the registry to save the data
   Registry R(file);
@@ -201,18 +201,24 @@ void MedialPDE::LoadFromParameterFile(const char *file)
       xSurface->ReadFromRegistry(R.Folder("Fourier"));
 
       // Solve the PDE
-      xSolver->Solve();
+      return xSolver->Solve();
       }
     else
-      { cerr << "Invalid surface model in file" << endl; }
+      { 
+      cerr << "Invalid surface model in file" << endl; 
+      return false;
+      }
     } 
   else
-    { cerr << "Invalid grid type in file" << endl; }
+    { 
+    cerr << "Invalid grid type in file" << endl; 
+    return false;
+    }
 }
 
-void MedialPDE::Solve()
+bool MedialPDE::Solve()
 {
-  xSolver->Solve();
+  return xSolver->Solve();
 }
 
 void MedialPDE::SetNumberOfCoefficients(unsigned int m, unsigned int n)

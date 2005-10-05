@@ -54,13 +54,13 @@ def SaveMedialPCA(pca, mpde, expid, nModes, nSamples):
     CheckDir("%(path)s/pca/%(expid)s/vtk/modes/mode%(i)d" % sub)
 
     # Iterate over the samples in this mode
-    for j in range(-nSamples/2, nSamples/2, 1):
-      sub["j"] = j; sub["id"] = j + nSamples/2;
-      print ("Mode %(i)d, Frame %(j)d" % sub);
+    for j in range(-nSamples/2, nSamples/2 + 1, 1):
+      sub["j"] = j; sub["id"] = j + nSamples/2; sub["z"] = j * 6.0 / nSamples;
+      print ("Mode %(i)d, Frame %(j)d, z = %(z)g" % sub);
 
       # Go to the PCA location
       pca.SetFSLocationToMean()
-      pca.SetFSLocation(i, j * 6.0 / nSamples);
+      pca.SetFSLocation(i, sub["z"]);
       pca.GetShapeAtFSLocation(mpde)
 
       # Save the VTK mesh
@@ -80,12 +80,13 @@ for file in samples:
 
   # Check if the file exists
   if(os.access(fnMPDE, os.R_OK)):
-    # Load the m-rep
-    m.LoadFromParameterFile(fnMPDE)
     
-    # Add the sample to the PCA  
-    print "Added " + id + " to the PCA"
-    pca.AddSample(m);
+    # Load the m-rep if we can
+    if(m.LoadFromParameterFile(fnMPDE)):
+      
+      # Add the sample to the PCA  
+      print "Added " + id + " to the PCA"
+      pca.AddSample(m);
 
 # Compute the PCA proper
 print "Computing PCA!"
