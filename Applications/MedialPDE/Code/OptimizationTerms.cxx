@@ -549,8 +549,8 @@ double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
     xAvgJacobian += J0 + J1;
 
     // Compute the penalty function
-    xTotalPenalty += PenaltyFunction(J0, 10, 40);
-    xTotalPenalty += PenaltyFunction(J1, 10, 40);
+    xTotalPenalty += PenaltyFunction(J0, 10, 400);
+    xTotalPenalty += PenaltyFunction(J1, 10, 400);
     }
   delete itQuad;
 
@@ -631,8 +631,8 @@ double BoundaryJacobianEnergyTerm
     double dJ1 = (dot_product(dNY1, NX) + dot_product(NY1, dNX) - J1 *dGX) / GX;
 
     // Compute the penalty function
-    dTotalPenalty += PenaltyFunctionDerivative(J0, 10, 40) * dJ0;
-    dTotalPenalty += PenaltyFunctionDerivative(J1, 10, 40) * dJ1;
+    dTotalPenalty += PenaltyFunctionDerivative(J0, 10, 400) * dJ0;
+    dTotalPenalty += PenaltyFunctionDerivative(J1, 10, 400) * dJ1;
     }
   delete itQuad;
 
@@ -1131,6 +1131,137 @@ void AtomBadnessTerm::PrintReport(ostream &sout)
 }
 
 /*********************************************************************************
+ * Angles penalty term
+ ********************************************************************************/
+
+// Compute squared cosines of four angles in a quad
+double CosineSquareTuple(MedialAtom *A, MedialQuadIterator *it)
+{
+  // Get the four vectors
+  const SMLVec3d &X00 = A[it->GetAtomIndex(0, 0)].X;
+  const SMLVec3d &X01 = A[it->GetAtomIndex(0, 1)].X;
+  const SMLVec3d &X10 = A[it->GetAtomIndex(1, 0)].X;
+  const SMLVec3d &X11 = A[it->GetAtomIndex(1, 1)].X;
+
+  // Compute the differences
+  SMLVec3d DX0 = X10 - X00;
+  SMLVec3d DX1 = X11 - X01;
+  SMLVec3d DY0 = X01 - X00;
+  SMLVec3d DY1 = X11 - X10;
+
+  // Compute the lengths squared
+  double LX0 = dot_product(DX0, DX0);
+  double LX1 = dot_product(DX1, DX1);
+  double LY0 = dot_product(DY0, DY0);
+  double LY1 = dot_product(DY1, DY1);
+
+  // Compute the cosines squared
+  double A00 = dot_product(DX0, DY0);
+  double A01 = dot_product(DX1, DY0);
+  double A10 = dot_product(DX0, DY1);
+  double A11 = dot_product(DX1, DY1);
+
+  // Compute the actual values
+  double C00 = (A00 * A00) / (LX0 * LY0);
+  double C01 = (A01 * A01) / (LX1 * LY0);
+  double C10 = (A10 * A10) / (LX0 * LY1);
+  double C11 = (A11 * A11) / (LX1 * LY1);
+
+  // Compute the weighted sum
+  return C00+C01+C10+C11;
+}
+
+// Compute squared cosines of four angles in a quad
+double CosineSquareTupleDerivative(MedialAtom *A, MedialAtom *dA, MedialQuadIterator *it)
+{
+  size_t i00 = it->GetAtomIndex(0, 0);
+  size_t i01 = it->GetAtomIndex(0, 1);
+  size_t i10 = it->GetAtomIndex(1, 0);
+  size_t i11 = it->GetAtomIndex(1, 1);
+
+  // Compute the differences and their derivatives
+  SMLVec3d DX0 = A[i10].X - A[i00].X;
+  SMLVec3d DX1 = A[i11].X - A[i01].X;
+  SMLVec3d DY0 = A[i01].X - A[i00].X;
+  SMLVec3d DY1 = A[i11].X - A[i10].X;
+
+  SMLVec3d dDX0 = dA[i10].X - dA[i00].X;
+  SMLVec3d dDX1 = dA[i11].X - dA[i01].X;
+  SMLVec3d dDY0 = dA[i01].X - dA[i00].X;
+  SMLVec3d dDY1 = dA[i11].X - dA[i10].X;
+
+  // Compute the lengths squared
+  double LX0 = dot_product(DX0, DX0);
+  double LX1 = dot_product(DX1, DX1);
+  double LY0 = dot_product(DY0, DY0);
+  double LY1 = dot_product(DY1, DY1);
+
+  double dLX0 = 2.0 * dot_product(DX0, dDX0);
+  double dLX1 = 2.0 * dot_product(DX1, dDX1);
+  double dLY0 = 2.0 * dot_product(DY0, dDY0);
+  double dLY1 = 2.0 * dot_product(DY1, dDY1);
+
+  // Compute the cosines squared and their derivatives
+  double A00 = dot_product(DX0, DY0);
+  double A01 = dot_product(DX1, DY0);
+  double A10 = dot_product(DX0, DY1);
+  double A11 = dot_product(DX1, DY1);
+
+  double dA00 = dot_product(dDX0, DY0) + dot_product(DX0, dDY0);
+  double dA01 = dot_product(dDX1, DY0) + dot_product(DX1, dDY0);
+  double dA10 = dot_product(dDX0, DY1) + dot_product(DX0, dDY1);
+  double dA11 = dot_product(dDX1, DY1) + dot_product(DX1, dDY1);
+
+  // Compute the derivatives of the actual values
+  double dC00 = ( 2.0 * (A00 * dA00) * (LX0 * LY0) - (A00 * A00) * (LX0 * dLY0 + dLX0 * LY0) ) / ( (LX0 * LY0) * (LX0 * LY0) );
+  double dC01 = ( 2.0 * (A01 * dA01) * (LX1 * LY0) - (A01 * A01) * (LX1 * dLY0 + dLX1 * LY0) ) / ( (LX1 * LY0) * (LX1 * LY0) );
+  double dC10 = ( 2.0 * (A10 * dA10) * (LX0 * LY1) - (A10 * A10) * (LX0 * dLY1 + dLX0 * LY1) ) / ( (LX0 * LY1) * (LX0 * LY1) );
+  double dC11 = ( 2.0 * (A11 * dA11) * (LX1 * LY1) - (A11 * A11) * (LX1 * dLY1 + dLX1 * LY1) ) / ( (LX1 * LY1) * (LX1 * LY1) );
+
+  // Compute the weighted sum
+  return dC00 + dC01 + dC10 + dC11;
+}
+
+double MedialAnglesPenaltyTerm::ComputeEnergy(SolutionDataBase *data)
+{
+  xTotalPenalty = 0.0;
+
+  // Iterate over all the quads in the medial mesh
+  MedialQuadIterator *itQuad = data->xAtomGrid->NewQuadIterator();
+  for( ; !itQuad->IsAtEnd(); ++(*itQuad))
+    {
+    // Compute the cosine square of each angle
+    xTotalPenalty += CosineSquareTuple(data->xAtoms, itQuad);
+    }
+  delete itQuad;
+
+  return 0.25 * xTotalPenalty / data->xAtomGrid->GetNumberOfAtoms();
+}
+
+double MedialAnglesPenaltyTerm::ComputePartialDerivative(SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  double dTotalPenalty = 0.0;
+
+  // Iterate over all the quads in the medial mesh
+  MedialQuadIterator *itQuad = S->xAtomGrid->NewQuadIterator();
+  for( ; !itQuad->IsAtEnd(); ++(*itQuad))
+    {
+    // Compute the cosine square of each angle
+    dTotalPenalty += CosineSquareTupleDerivative(S->xAtoms, dS->xAtoms, itQuad);
+    }
+  delete itQuad;
+
+  return 0.25 * dTotalPenalty / S->xAtomGrid->GetNumberOfAtoms();
+}
+
+void MedialAnglesPenaltyTerm::PrintReport(ostream &sout)
+{
+  sout << "  Square Cosine Penalty Term : " << endl;
+  sout << "    total penalty            : " << xTotalPenalty << endl;
+}
+
+
+/*********************************************************************************
  * Regularity term (used to maintain correspondence)
  ********************************************************************************/
 MedialRegularityTerm::MedialRegularityTerm(
@@ -1368,6 +1499,9 @@ bool MedialOptimizationProblem::SolvePDE(double *xEvalPoint)
   // Make a vector from the eval point
   vnl_vector<double> X(xEvalPoint, nCoeff);
 
+  // This flag will tell us if the last evaluation failed
+  bool flagSolveOk;
+
   // Check if a previous solution exists
   if(flagLastEvalAvailable)
     {
@@ -1382,7 +1516,7 @@ bool MedialOptimizationProblem::SolvePDE(double *xEvalPoint)
     xCoeff->SetCoefficientArray(xEvalPoint);
 
     // Solve the PDE using the last point
-    xSolver->Solve( xSolver->GetPhiField(), xPrecision );
+    flagSolveOk = xSolver->Solve( xLastPhiField, xPrecision );
     }
   else
     {
@@ -1393,12 +1527,17 @@ bool MedialOptimizationProblem::SolvePDE(double *xEvalPoint)
     xCoeff->SetCoefficientArray(xEvalPoint);
 
     // Compute using Taylor series to define the initial guess
-    xSolver->Solve(xPrecision);
+    flagSolveOk = xSolver->Solve(xPrecision);
     }
 
-  // Record the current point as the last evaluation point
-  xLastEvalPoint = X;
-  flagLastEvalAvailable = true;
+  // Record the current point as the last evaluation point, but only if 
+  // everything went well
+  if( flagSolveOk )
+    {
+    xLastEvalPoint = X;
+    xLastPhiField = xSolver->GetPhiField();
+    flagLastEvalAvailable = true;
+    }
 
   // Stop timing
   xSolveTimer.Stop();

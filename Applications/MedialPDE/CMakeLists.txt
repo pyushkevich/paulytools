@@ -109,14 +109,17 @@ SET(SCRIPT_FILES
   example5.py
   example6.py
   common.py 
+  common2.py 
   imageprep.py
   segment.py
   segment2.py
   segment2.py
   segment3.py
   pipeline.py
+  pipeline2.py
   pca.py
   pcalite.py
+  pca_segment.py
   sample.py
   testdphi.py
   vis.py

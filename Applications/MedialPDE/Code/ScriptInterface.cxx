@@ -82,8 +82,6 @@ MedialPDE::MedialPDE(unsigned int nBasesU, unsigned int nBasesV,
   eMatch = VOLUME;
   
   xStepSize = 0.1;
-  xCoarsenessRho = 1.0;
-  xCoarsenessX = 1.0;
   xMeshDumpImprovementPercentage = 0.0;
 
   flagIntensityPresent = false;
@@ -532,11 +530,15 @@ void MedialPDE
     {
     xMask = CreatePCACoefficientMask(nPCAModes);
     }
-  else
+  else if(eMask == COARSE_TO_FINE)
     {
-    double crs[4] = { 
-      xCoarsenessX, xCoarsenessX, xCoarsenessX, xCoarsenessRho };
-    xMask = xSurface->NewCoarseToFineCoefficientMask(crs);
+    // Get the list of selected coefficients
+    vector<size_t> iSelect = xSurface->GetCoefficientSubset(
+      xCoarseFineParams[0], xCoarseFineParams[1], 
+      xCoarseFineParams[2], xCoarseFineParams[3]);
+
+    // Construct a mask from the coefficients
+    xMask = new SelectionMedialCoefficientMask(xSurface, iSelect);
     }
 
   // Create the optimization problem

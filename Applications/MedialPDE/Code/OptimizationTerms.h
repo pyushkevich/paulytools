@@ -302,7 +302,7 @@ private:
 };
 */
 
-class BoundaryJacobianEnergyTerm : public NumericalGradientEnergyTerm
+class BoundaryJacobianEnergyTerm : public EnergyTerm
 {
 public:
   // Compute the energy
@@ -327,6 +327,24 @@ private:
   /** The derivative of the penalty function */
   double PenaltyFunctionDerivative(double x, double a, double b)
     { return exp(x - b) - a * exp (-a * x); }
+};
+
+
+class MedialAnglesPenaltyTerm : public EnergyTerm
+{
+public:
+  // Compute the energy
+  double ComputeEnergy(SolutionDataBase *data);
+
+  // Print a verbose report
+  void PrintReport(ostream &sout);
+
+  // Compute the partial derivative term
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
+  
+private:
+  double xTotalPenalty;
 };
 
 class CrestLaplacianEnergyTerm : public NumericalGradientEnergyTerm
@@ -455,6 +473,9 @@ private:
   
   // Last place where the function was evaluated
   vnl_vector<double> xLastEvalPoint;
+
+  // The solution at the last evaluation point
+  vnl_matrix<double> xLastPhiField;
 
   // vnl_vector<double> xLastGradEvalPoint, xLastGrad;
 

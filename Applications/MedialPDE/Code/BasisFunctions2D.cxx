@@ -74,27 +74,32 @@ void FourierSurface::ApplyAffineTransform(const vnl_matrix<double> &A,
     }
 }
 
-/** Get a coefficient mask of a given coarseness in each component.
- * Coarseness of zero should mean minimal number of coefficients, and
- * coarseness of one is the maximal numner of coefficients */
-IMedialCoefficientMask * FourierSurface::NewCoarseToFineCoefficientMask(double *xCoarseness)
+/**
+ * Get a coefficient mask with given numbers of coefficients in X and Rho
+ */
+vector<size_t>  
+FourierSurface
+::GetCoefficientSubset( size_t ncuX, size_t ncvX, size_t ncuRho, size_t ncvRho)
 {
-  // Get the number of coefficients in each direction that has been requested
+  size_t i, j;
+
+  // Construct a vector of coefficients that will be included
   vector<size_t> iSelect;
-  for(size_t iComp = 0; iComp < 4; iComp ++)
+
+  // Add the X components
+  for(i = 0; i < ncuX; i++) for(j = 0; j < ncvX; j++)
     {
-    size_t nu = (size_t) (xCoarseness[iComp] * ncu);
-    size_t nv = (size_t) (xCoarseness[iComp] * ncv);
-    for(size_t i = 0; i < nu; i++) for(size_t j = 0; j < nv; j++)
-      iSelect.push_back(GetCoefficientIndex(i,j,iComp));
-    
-    cout << "Component " << iComp << ", Taking " << nu << " x " << nv << " coeffs. " << endl;
+    iSelect.push_back(GetCoefficientIndex(i, j, 0));
+    iSelect.push_back(GetCoefficientIndex(i, j, 1));
+    iSelect.push_back(GetCoefficientIndex(i, j, 2));
     }
 
+  // Add the Rho components
+  for(i = 0; i < ncuRho; i++) for(j = 0; j < ncvRho; j++)
+    iSelect.push_back(GetCoefficientIndex(i, j, 3));
 
-
-  // Create the mask
-  return new SelectionMedialCoefficientMask(this, iSelect);
+  // Return the coefficient vector
+  return iSelect;
 }
 
 

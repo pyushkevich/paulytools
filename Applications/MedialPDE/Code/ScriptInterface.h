@@ -171,10 +171,22 @@ public:
   void SetOptimizationToAffine()
     { eMask = AFFINE; }
 
-  /** Set the optimization mode to deformable */
-  void SetOptimizationToDeformable(double crsX, double crsRho)
-    { eMask = COARSE_TO_FINE; xCoarsenessX = crsX; xCoarsenessRho = crsRho; }
+  /** 
+   * Set optimization to a subset of the coefficients. The first ncu, ncv 
+   * coefficients in X and Rho will be used. This makes sense for Fourier
+   * style masks
+   */
+  void SetOptimizationToCoarseToFine(
+    int ncuX, int ncvX, int ncuRho, int ncvRho)
+    { 
+    eMask = COARSE_TO_FINE;
+    xCoarseFineParams[0] = ncuX;
+    xCoarseFineParams[1] = ncvX;
+    xCoarseFineParams[2] = ncuRho;
+    xCoarseFineParams[3] = ncvRho;
+    }
 
+  /** Set the optimization mode to deformable */
   void SetOptimizationToDeformable()
     { eMask = FULL; }
 
@@ -256,8 +268,11 @@ private:
   // The surface
   FourierSurface *xSurface;
 
+  // Parameters for coarse-to-fine optimization
+  int xCoarseFineParams[4];
+
   // Properties associated with different modes
-  double xCoarsenessX, xCoarsenessRho, xStepSize;
+  double xStepSize;
 
   // A file where the mesh info is dumped
   std::string strDumpPath, strOptimizerDump;

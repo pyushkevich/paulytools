@@ -92,12 +92,6 @@ public:
 
   /** Read the coefficients from a registry */
   virtual bool ReadFromRegistry(Registry &R) = 0;
-  
-  /** Get a coefficient mask of a given coarseness in each component.
-   * Coarseness of zero should mean minimal number of coefficients, and
-   * coarseness of one is the maximal numner of coefficients */
-  virtual IMedialCoefficientMask *
-    NewCoarseToFineCoefficientMask(double *xCoarseness) = 0;
 };
   
 /**
@@ -327,10 +321,12 @@ public:
   IHyperSurface2D *GetVariationSurface(const double *xCoeff);
   void ReleaseVariationSurface(IHyperSurface2D *xSurface);
 
-  /** Get a coefficient mask of a given coarseness in each component.
-   * Coarseness of zero should mean minimal number of coefficients, and
-   * coarseness of one is the maximal numner of coefficients */
-  IMedialCoefficientMask *NewCoarseToFineCoefficientMask(double *xCoarseness);
+  /**
+   * Get the list of raw coefficient indices that correspond to the first 
+   * (ncu x ncv) components in X and Rho
+   */
+  vector<size_t> GetCoefficientSubset(
+    size_t ncuX, size_t ncvX, size_t ncuRho, size_t ncvRho);
 };
 
 #endif

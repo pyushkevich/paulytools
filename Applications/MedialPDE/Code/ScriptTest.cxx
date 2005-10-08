@@ -446,6 +446,7 @@ int TestDerivativesWithImage(const char *fnMPDE)
 
   // Create an array of image match terms
   vector<EnergyTerm *> vt;
+  vt.push_back(new MedialAnglesPenaltyTerm());
   vt.push_back(new MedialRegularityTerm(
       mpTemplate.GetSolver()->GetAtomArray(), mpTemplate.GetSolver()->GetAtomGrid()));
   vt.push_back(new BoundaryJacobianEnergyTerm());
@@ -459,6 +460,7 @@ int TestDerivativesWithImage(const char *fnMPDE)
 
   // Create labels
   char *nt[] = {
+    "MedialAnglesPenaltyTerm",
     "MedialRegularityTerm",
     "BoundaryJacobianEnergyTerm", 
     "BoundaryImageMatchTerm",
