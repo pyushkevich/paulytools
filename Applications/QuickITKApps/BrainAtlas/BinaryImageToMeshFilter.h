@@ -96,8 +96,8 @@ public:
   itkGetMacro(DecimateFactor, double);
 
   /** Smoothing iterations, or 0 for none */
-  itkSetMacro(SmoothingIterations, double);
-  itkGetMacro(SmoothingIterations, double);
+  itkSetMacro(SmoothingIterations, int);
+  itkGetMacro(SmoothingIterations, int);
 
   /** Set the input */
   void SetInput(TImage *image) 

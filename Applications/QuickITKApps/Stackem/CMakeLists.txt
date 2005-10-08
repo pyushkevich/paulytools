@@ -2,7 +2,7 @@ PROJECT(STACKEM)
 
 ADD_EXECUTABLE(stackem Stackem.cxx)
 
-LINK_LIBRARIES(
+TARGET_LINK_LIBRARIES(stackem
   ITKCommon
   ITKIO
   ITKNumerics

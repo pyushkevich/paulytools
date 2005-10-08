@@ -202,9 +202,9 @@ int main(int argc, char *argv[])
     return usage("Could not open the input directory!");
 
   // Create a PNG IO object to check readability
-  itk::ImageIOBase::Pointer ioPNG  = itk::PNGImageIO::New();
-  itk::ImageIOBase::Pointer ioTIFF = itk::TIFFImageIO::New();
-  itk::ImageIOBase::Pointer ioJPEG = itk::JPEGImageIO::New();
+  itk::PNGImageIO::Pointer ioPNG  = itk::PNGImageIO::New();
+  itk::TIFFImageIO::Pointer ioTIFF = itk::TIFFImageIO::New();
+  itk::JPEGImageIO::Pointer ioJPEG = itk::JPEGImageIO::New();
   
   // Parse the directory contents, checking files
   FileList fnInput;

@@ -4,6 +4,7 @@
 #include "itkImageFileWriter.h"
 #include "itkImageRegionConstIteratorWithIndex.h"
 #include "itkBinaryThresholdImageFilter.h"
+#include "itkExtractImageFilter.h"
 #include "itkResampleImageFilter.h"
 #include "itkCommand.h"
 
@@ -34,8 +35,16 @@ int usage()
 {
   cout << "aalias - Apply ITK Whitaker's Anti-Aliasing method to a label image" << endl;
   cout << "usage:" << endl;
-  cout << "   aalias [options] input.img output_base_name " << endl;
+  cout << "   aalias [options] input_image output_base_name " << endl;
+  cout << "parameters:" << endl;
+  cout << "   input_image        An ITK-readable image file " << endl;
+  cout << "   output_base_name   A path to the output, without extension. For each label " << endl;
+  cout << "                      in the input image, an output image will be generated " << endl;
+  cout << "                      (e.g., output_base_name.1.hdr, output_base_name.2.hdr) " << endl;
   cout << "options:" << endl;
+  cout << "   -crop x.xx   Crop the image, removing the background, leaving a margin of " << endl;
+  cout << "                size x.xx in each dimension (margin is specified relative to " << endl;
+  cout << "                the extent of the label data, e.g.: 0.1 means 10\% on each side. " << endl;
   cout << "   -iso x.xx    Rescale image to be isotropic w/ voxel size x.xx" << endl;
   cout << "   -rms x.xx    Max RMS error parameter (0.07) " << endl;
   cout << "   -itr nn      Max iterations (omit: as many as needed) " << endl;
@@ -50,8 +59,8 @@ int main(int argc, char **argv)
 
   // Read in the parameters
   unsigned int nMaxIterations = 0;
-  bool flagDoResample = false;
-  double xMaxRMS = 0.07, xVoxelSize = 1.0;
+  bool flagDoResample = false, flagDoCrop = false;
+  double xMaxRMS = 0.07, xVoxelSize = 1.0, xCropFraction = 0.0;
   string fnInput = argv[argc-2], fnOutput = argv[argc-1];
 
   try 
@@ -68,10 +77,15 @@ int main(int argc, char **argv)
         {
         xMaxRMS = atof(argv[++iArg]);
         }        
-      else if(arg == "itr")
+      else if(arg == "-itr")
         {
         nMaxIterations = atoi(argv[++iArg]);
         }        
+      else if(arg == "-crop")
+        {
+        flagDoCrop = true;
+        xCropFraction = atof(argv[++iArg]);
+        }
       else
         {
         cerr << "Bad parameter " << arg << endl;
@@ -139,30 +153,54 @@ int main(int argc, char **argv)
       {
       cout << "Processing intensity level " << it->val << endl;
       cout << "     Number of voxels        : " << it->count << endl << endl;
-      
-      // Create a region corresponding to the bounding box
-      itk::ImageRegion<3> roi;
-      for(unsigned int i=0;i<3;i++)
-        {
-        roi.SetIndex(i,it->lb[i]);
-        roi.SetSize(i,1 + it->ub[i] - it->lb[i]);
-        }
 
-      // Pad the region sufficiently and crop
-      roi.PadByRadius(10);
-      roi.Crop(imgInput->GetBufferedRegion());
+      // Binary image pointer that will be later converted to float
+      ImageType::Pointer imgBinary = imgInput;
+
+      // If the user requests cropping the output image region, create an 
+      // extraction filter
+      if(flagDoCrop)
+        {
+        // Create a region corresponding to the bounding box
+        itk::ImageRegion<3> roi;
+        itk::Size<3> padding;
+        for(unsigned int i=0;i<3;i++)
+          {
+          roi.SetIndex(i,it->lb[i]);
+          roi.SetSize(i,1 + it->ub[i] - it->lb[i]);
+          padding[i] = (itk::Size<3>::SizeValueType) ( roi.GetSize(i) * xCropFraction );
+          }
+
+        roi.PadByRadius(padding);
+        roi.Crop(imgInput->GetBufferedRegion());
+
+        cout << "    Extracting image region : " << roi << endl;
+
+        // Perform the extraction
+        typedef itk::ExtractImageFilter<ImageType, ImageType> ExtractFilterType;
+        ExtractFilterType::Pointer fltExtract = ExtractFilterType::New();
+        fltExtract->SetInput(imgInput);
+        fltExtract->SetExtractionRegion(roi);
+        fltExtract->Update();
+
+        cout << "   Extracted image : " << fltExtract->GetOutput() << endl;
+
+        // Create a pointer to the output
+        imgBinary = fltExtract->GetOutput();
+        }
       
       // Extract a binary image for the region of interest of the image
       typedef itk::Image<float, 3> FloatImageType;
-      FloatImageType::Pointer imgBinary = FloatImageType::New();
-      imgBinary->SetRegions(imgInput->GetBufferedRegion());
-      imgBinary->SetSpacing(imgInput->GetSpacing());
-      imgBinary->Allocate();
-      imgBinary->FillBuffer(1.0f);
+      FloatImageType::Pointer imgFloatMask = FloatImageType::New();
+      imgFloatMask->SetRegions(imgBinary->GetBufferedRegion());
+      imgFloatMask->SetSpacing(imgBinary->GetSpacing());
+      imgFloatMask->SetOrigin(imgBinary->GetOrigin());
+      imgFloatMask->Allocate();
+      imgFloatMask->FillBuffer(1.0f);
 
       // Pass the image through, binarizing current label
-      itk::ImageRegionConstIterator<ImageType> itBinSource(imgInput,imgInput->GetBufferedRegion());
-      itk::ImageRegionIterator<FloatImageType> itBinTarget(imgBinary,imgInput->GetBufferedRegion());
+      itk::ImageRegionConstIterator<ImageType> itBinSource(imgBinary,imgBinary->GetBufferedRegion());
+      itk::ImageRegionIterator<FloatImageType> itBinTarget(imgFloatMask,imgBinary->GetBufferedRegion());
       while(!itBinSource.IsAtEnd())
         {
         itBinTarget.Set(it->val == itBinSource.Get() ? -1.0f : 1.0f);
@@ -182,17 +220,17 @@ int main(int argc, char **argv)
           // typedef itk::BSplineInterpolateImageFunction<FloatImageType,double> IFType;
 
         ResampleFilter::Pointer fltResample = ResampleFilter::New();
-        fltResample->SetInput(imgBinary);
+        fltResample->SetInput(imgFloatMask);
         fltResample->SetTransform(itk::IdentityTransform<double,3>::New());
         fltResample->SetInterpolator(IFType::New());
 
         // Compute the size
-        itk::Size<3> szInput = imgBinary->GetBufferedRegion().GetSize();
+        itk::Size<3> szInput = imgFloatMask->GetBufferedRegion().GetSize();
         itk::Size<3> szOutput; 
         for(unsigned int j=0;j<3;j++)
           {
           szOutput[j] = 
-            (unsigned long) (szInput[j] * imgBinary->GetSpacing()[j] / xVoxelSize);
+            (unsigned long) (szInput[j] * imgFloatMask->GetSpacing()[j] / xVoxelSize);
           }
         fltResample->SetSize(szOutput);
 
@@ -206,14 +244,14 @@ int main(int argc, char **argv)
         fltResample->UpdateLargestPossibleRegion();
 
         // Set the 'new' binary image 
-        imgBinary = fltResample->GetOutput();
+        imgFloatMask = fltResample->GetOutput();
         }
 
       // Apply antialiasing to the binary image
       typedef itk::AntiAliasBinaryImageFilter<FloatImageType,FloatImageType>
         AntiFilterType;
       AntiFilterType::Pointer fltAnti = AntiFilterType::New();
-      fltAnti->SetInput(imgBinary);
+      fltAnti->SetInput(imgFloatMask);
       fltAnti->SetMaximumRMSError(xMaxRMS);      
       if(nMaxIterations > 0)
         fltAnti->SetNumberOfIterations(nMaxIterations);
@@ -225,6 +263,8 @@ int main(int argc, char **argv)
       ImageType::Pointer imgOut = ImageType::New();
       imgOut->SetRegions(fltAnti->GetOutput()->GetBufferedRegion());
       imgOut->Allocate();
+      imgOut->SetSpacing(fltAnti->GetOutput()->GetSpacing());
+      imgOut->SetOrigin(fltAnti->GetOutput()->GetOrigin());
       imgOut->FillBuffer(0);
 
       itk::ImageRegionConstIterator<FloatImageType> itOutSource(fltAnti->GetOutput(),imgOut->GetBufferedRegion());
@@ -237,7 +277,8 @@ int main(int argc, char **argv)
 
       // Save the output
       std::ostringstream oss;
-      oss << argv[2] << "." << it->val << ".hdr";
+      oss << fnOutput << "." << it->val << ".img.gz";
+      cout << endl << "     Saving image as " << oss.str() << endl;
       
       typedef itk::ImageFileWriter<ImageType> WriterType;
       WriterType::Pointer fltWriter = WriterType::New();
