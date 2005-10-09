@@ -247,6 +247,21 @@ public:
       }
   }
 
+  /** Get the size of an array */
+  unsigned int GetArraySize() 
+    { return Entry("ArraySize")[(unsigned int) 0]; }
+
+  /** Get an array from the registry and store it in the vector passed in */
+  template <class T> void GetArray(T *array, const T &defaultElement)
+    {
+    // Try reading the element count
+    unsigned int size = Entry("ArraySize")[(unsigned int) 0];
+
+    // Read element
+    for(unsigned int i=0;i < size;i++)
+      array[i] = Entry(Key("Element[%d]",i))[defaultElement];
+    }
+
   /** Get an array from the registry */
   template <class T> std::vector<T> GetArray(const T &defaultElement)
   {

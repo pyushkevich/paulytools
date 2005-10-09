@@ -173,6 +173,11 @@ void MedialPDE::SaveToParameterFile(const char *file)
   R["Grid.Size.U"] << xSolver->GetNumberOfUPoints();
   R["Grid.Size.V"] << xSolver->GetNumberOfVPoints();
 
+  // Store the phi values computed for this mpde
+  R["Grid.PhiAvailable"] << true;
+  R.Folder("Grid.Phi").PutArray(
+    xSolver->GetPhiField().size(), xSolver->GetPhiField().data_block());
+
   // Store the fourier coefficient information
   R["SurfaceModel"] << "Fourier";
   xSurface->SaveToRegistry(R.Folder("Fourier"));
@@ -197,15 +202,36 @@ bool MedialPDE::LoadFromParameterFile(const char *file)
       {
       // Read the surface from the parameters
       xSurface->ReadFromRegistry(R.Folder("Fourier"));
-
-      // Solve the PDE
-      return xSolver->Solve();
       }
     else
       { 
       cerr << "Invalid surface model in file" << endl; 
       return false;
       }
+
+    // Read the phi matrix is it's available
+    if(R["Grid.PhiAvailable"][false])
+      {
+      unsigned int nSites = m * n;
+      if(nSites != R.Folder("Grid.Phi").GetArraySize())
+        {
+        cerr << "Phi matrix dimensions do not match grid size" << endl;
+        return false;
+        }
+
+      // Read the phi array
+      vnl_matrix<double> xPhi(m, n);
+      R.Folder("Grid.Phi").GetArray(xPhi.data_block(), 0.0);
+
+      // Pass the phi array to the solver
+      if( xSolver->Solve(xPhi) )
+        {
+        xSolver->SetSolutionAsInitialGuess();
+        return true;
+        }
+      else return false;
+      }
+    else return xSolver->Solve();
     } 
   else
     { 
@@ -1292,9 +1318,9 @@ void RenderMedialPDE(MedialPDE *model)
   GLDisplayDriver::addRenderer(rndPDESpline);
 
   // Put the display into Talairach coordinates
-  //GLDisplayDriver::center[0] = model->GetSurface()->GetCenterOfRotation()[0];
-  //GLDisplayDriver::center[1] = model->GetSurface()->GetCenterOfRotation()[1];
-  //GLDisplayDriver::center[2] = model->GetSurface()->GetCenterOfRotation()[2];
+  GLDisplayDriver::center[0] = model->GetSurface()->GetCenterOfRotation()[0];
+  GLDisplayDriver::center[1] = model->GetSurface()->GetCenterOfRotation()[1];
+  GLDisplayDriver::center[2] = model->GetSurface()->GetCenterOfRotation()[2];
   GLDisplayDriver::scale = 20;
 
   // Start GLUT
