@@ -469,7 +469,7 @@ private:
   CodeTimer xSolveTimer, xSolveGradTimer, xWeightsTimer, xWeightsGradTimer;
 
   // Whether the gradient is available
-  bool flagLastEvalAvailable;
+  bool flagLastEvalAvailable, flagPhiGuessAvailable;
   
   // Last place where the function was evaluated
   vnl_vector<double> xLastEvalPoint;

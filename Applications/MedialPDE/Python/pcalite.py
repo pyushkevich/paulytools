@@ -1,7 +1,21 @@
+#! /usr/bin/env python
+#
 from medialpde import *;
 from common import *;
 import sys
 import os
+
+# Usage command
+def usage():
+  print """
+  Usage: pcalite expid
+    expid              The experiment ID code (assumes standard filesystem)
+  """
+  os._exit(-1)
+
+# Check the number of parameters
+if(len(sys.argv) <> 2):
+  usage()
 
 # Get the experiment id
 expid = sys.argv[1]
@@ -83,6 +97,9 @@ for file in samples:
     
     # Load the m-rep if we can
     if(m.LoadFromParameterFile(fnMPDE)):
+
+      # Check the Jacobian penalty
+      m.ComputeBoundaryJacobianPenalty(True)
       
       # Add the sample to the PCA  
       print "Added " + id + " to the PCA"

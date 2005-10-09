@@ -151,6 +151,9 @@ public:
 
   /** Compute the match between the model and a floating point image */
   double ComputeImageMatch(FloatImage *image);
+
+  /** Compute the boundary jacobian penalty */
+  double ComputeBoundaryJacobianPenalty(bool verbose = false);
   
   /** Fit the model to the binary image by matching moments of inertia */
   void MatchImageByMoments(FloatImage *image, unsigned int nCuts);

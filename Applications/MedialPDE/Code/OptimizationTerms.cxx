@@ -1471,6 +1471,7 @@ MedialOptimizationProblem
   this->nCoeff = xCoeff->GetNumberOfCoefficients();
 
   flagLastEvalAvailable = false;
+  flagPhiGuessAvailable = false;
   
   // xLastPhiDerivField.set_size(
   //  xSolver->GetPhiField().rows(),xSolver->GetPhiField().columns());
@@ -1502,45 +1503,28 @@ bool MedialOptimizationProblem::SolvePDE(double *xEvalPoint)
   // This flag will tell us if the last evaluation failed
   bool flagSolveOk;
 
-  // Check if a previous solution exists
-  if(flagLastEvalAvailable)
-    {
-    // Compare this to the last evaluation point - never re-evaluate
-    if(X == xLastEvalPoint)
-      return false;
+  // Check if we are re-evaluating at a previously tried location
+  if(flagLastEvalAvailable && X == xLastEvalPoint)
+    return false;
 
-    // Solve the equation
-    xSolveTimer.Start();
+  // Solve the equation
+  xSolveTimer.Start();
 
-    // Update the surface with the new solution
-    xCoeff->SetCoefficientArray(xEvalPoint);
+  // Update the surface with the new solution
+  xCoeff->SetCoefficientArray(xEvalPoint);
 
-    // Solve the PDE using the last point
-    flagSolveOk = xSolver->Solve( xLastPhiField, xPrecision );
-    }
-  else
-    {
-    // Solve the equation
-    xSolveTimer.Start();
-
-    // Update the surface with the new solution
-    xCoeff->SetCoefficientArray(xEvalPoint);
-
-    // Compute using Taylor series to define the initial guess
-    flagSolveOk = xSolver->Solve(xPrecision);
-    }
-
-  // Record the current point as the last evaluation point, but only if 
-  // everything went well
-  if( flagSolveOk )
-    {
-    xLastEvalPoint = X;
-    xLastPhiField = xSolver->GetPhiField();
-    flagLastEvalAvailable = true;
-    }
+  // Solve the PDE using the last phi field if we have it
+  // flagSolveOk = (flagPhiGuessAvailable)
+  //   ? xSolver->Solve(xLastPhiField, xPrecision)
+  //   : xSolver->Solve(xPrecision);
+  flagSolveOk = xSolver->Solve(xPrecision);
 
   // Stop timing
   xSolveTimer.Stop();
+
+  // Set the last evaluation point (this is to ensure we never double-evaluate)
+  xLastEvalPoint = X;
+  flagLastEvalAvailable = true;
 
   // Return true : solution updated
   return true;
@@ -1745,6 +1729,13 @@ MedialOptimizationProblem
 
   // Solve the PDE
   SolvePDE(xEvalPoint);
+
+  // Store the solution at this point as the new guess
+  // xLastPhiField = xSolver->GetPhiField();
+  // flagPhiGuessAvailable = true;
+
+  // Store this solution as the new initialization for the PDE solver
+  xSolver->SetSolutionAsInitialGuess();
 
   // Create a solution data object representing current solution
   SolutionData S(xSolver);

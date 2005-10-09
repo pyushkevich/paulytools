@@ -212,11 +212,11 @@ bool MedialPDE::LoadFromParameterFile(const char *file)
     // Read the phi matrix is it's available
     if(R["Grid.PhiAvailable"][false])
       {
-      unsigned int nSites = m * n;
+      unsigned int nSites = xSolver->GetNumberOfAtoms();
       if(nSites != R.Folder("Grid.Phi").GetArraySize())
         {
         cerr << "Phi matrix dimensions do not match grid size" << endl;
-        return false;
+        return xSolver->Solve();
         }
 
       // Read the phi array
@@ -378,6 +378,25 @@ double MedialPDE::ComputeImageMatch(FloatImage *image)
   termImage.PrintReport(cout);
 
   return xMatch;
+}
+
+double MedialPDE::ComputeBoundaryJacobianPenalty(bool verbose)
+{
+  // Create a solution object
+  SolutionData S(xSolver);
+
+  // Compute the penalty term
+  BoundaryJacobianEnergyTerm bjet;
+  double x = bjet.ComputeEnergy(&S);
+
+  // Optionally, print a report
+  if(verbose)
+    {
+    cout << "REPORT: " << endl;
+    bjet.PrintReport(cout);
+    }
+
+  return x;
 }
 
 void GradientDescentOptimization(MedialOptimizationProblem *xProblem, 
