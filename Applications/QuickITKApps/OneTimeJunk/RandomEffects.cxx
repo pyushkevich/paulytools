@@ -46,6 +46,7 @@ int main(int argc, char *argv[])
   imgOutput->Allocate();
   imgOutput->SetSpacing(imgInput[0]->GetSpacing());
   imgOutput->SetOrigin(imgInput[0]->GetOrigin());
+  imgOutput->FillBuffer(0.0f);
 
   // Just compute the t-test on the pixel arrays
   size_t m = imgOutput->GetBufferedRegion().GetNumberOfPixels();
