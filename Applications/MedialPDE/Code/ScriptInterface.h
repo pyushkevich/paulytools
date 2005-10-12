@@ -84,6 +84,10 @@ public:
   // Set the default 'outside' value (value of pixels outside of the image)
   void SetOutsideValue(float xValue);
 
+  // Set the origin of the image, since some readers (Analyze) don't set it correctly
+  // Do this after loading the image!
+  void SetImageOrigin(double ox, double oy, double oz);
+
 private:
   // Internally stored image
   typedef ITKImageWrapper<float> WrapperType;

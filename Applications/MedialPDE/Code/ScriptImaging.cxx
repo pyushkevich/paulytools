@@ -148,6 +148,16 @@ void FloatImage::SetOutsideValue(float xOutsideValue)
   this->xOutsideValue = xOutsideValue;
 }
 
+void FloatImage::SetImageOrigin(double ox, double oy, double oz)
+{
+  double origin[] = {ox, oy, oz};
+  if(xImage->GetInternalImage())
+    xImage->GetInternalImage()->SetOrigin(origin);
+  for(size_t i = 0; i < 3; i++)
+    if(xGradient[i]->GetInternalImage())
+      xGradient[i]->GetInternalImage()->SetOrigin(origin);
+}
+
 class BinaryFloatFunctor 
 {
 public:
