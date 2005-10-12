@@ -202,6 +202,7 @@ bool MedialPDE::LoadFromParameterFile(const char *file)
       {
       // Read the surface from the parameters
       xSurface->ReadFromRegistry(R.Folder("Fourier"));
+      xSolver->SetMedialSurface(xSurface);
       }
     else
       { 

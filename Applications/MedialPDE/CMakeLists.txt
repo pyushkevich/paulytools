@@ -121,6 +121,7 @@ SET(SCRIPT_FILES
   pcalite.py
   pca_segment.py
   sample.py
+  sample_img.py
   testdphi.py
   vis.py
   )

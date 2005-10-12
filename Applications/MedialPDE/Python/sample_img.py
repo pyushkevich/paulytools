@@ -28,7 +28,7 @@ if len(sys.argv) <> 8:
 xOrigin = map(float, sys.argv[4:7])
 
 # Get the number of samples
-nSamples = int( sys.argv[8] );
+nSamples = int( sys.argv[7] );
 
 # Try loading all the files
 for fn in fnModel, fnImage:
