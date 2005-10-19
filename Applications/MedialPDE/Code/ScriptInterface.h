@@ -247,6 +247,11 @@ public:
    * a separate image. */
   void SampleImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zSamples);
 
+  /** This method is the opposite of SampleImage. Given an image in the medial coordinate
+   * system (it must match the sampling rate of the cm-rep), this with map this image back
+   * into the ambient space */
+  void SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zSamples);
+
   /** Assign an intensity image to the cm-rep */
   void SetIntensityImage(FloatImage *imgIntensity);
 

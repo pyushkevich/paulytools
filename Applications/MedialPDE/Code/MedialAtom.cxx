@@ -90,6 +90,8 @@ void AddScaleMedialAtoms(
   // The u and v coordinates stay the same
   C.u = A.u;
   C.v = A.v;
+  C.uIndex = A.uIndex;
+  C.vIndex = A.vIndex;
   C.flagCrest = A.flagCrest;
   C.flagValid = A.flagValid;
 

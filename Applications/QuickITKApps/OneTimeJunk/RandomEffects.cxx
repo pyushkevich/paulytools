@@ -95,7 +95,6 @@ int main(int argc, char *argv[])
 
   // Just compute the t-test on the pixel arrays
   size_t m = imgOutput->GetBufferedRegion().GetNumberOfPixels();
-  double sqrt_n = sqrt(1.0 * n);
   for(size_t j = 0; j < m; j++)
     {
     // Compute the sum and sum of squares of the values
@@ -121,7 +120,7 @@ int main(int argc, char *argv[])
     double ev = ( sx2 - n * xbar * xbar ) / (n - 1);
 
     // Compute the t statistic
-    double t = xbar / (ev / sqrt_n);
+    double t = xbar / sqrt(ev / n);
     
     // Set the output intensity to be that
     imgOutput->GetBufferPointer()[j] = (float) t;

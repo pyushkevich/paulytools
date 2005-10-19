@@ -10,20 +10,36 @@
 
 #include "itkImageRegionConstIteratorWithIndex.h"
 #include "itkNearestNeighborInterpolateImageFunction.h"
+#include "itkLinearInterpolateImageFunction.h"
 #include "itkBSplineInterpolateImageFunction.h"
+#include "itkBSplineDeformableTransform.h"
+#include "itkImageRegionIteratorWithIndex.h"
 #include "vnl/algo/vnl_symmetric_eigensystem.h"
 #include "ConjugateGradientMethod.h"
 #include "EvolutionaryStrategy.h"
 
+#include "vtkUnstructuredGrid.h"
+#include "vtkPointLocator.h"
+
+
+#include <vnl/algo/vnl_qr.h>
+
 #include <iostream>
 #include <fstream>
 
-void ExportMedialMeshToVTK(MedialAtomGrid *xGrid, MedialAtom *xAtoms, const char *file);
-void ExportBoundaryMeshToVTK(MedialAtomGrid *xGrid, MedialAtom *xAtoms, const char *file);
-//void ExportIntensityFieldToVTK(MedialAtomGrid *xGrid, MedialAtom *xAtoms, 
-//  ITKImageWrapper<float> *imgField, const char *file);
-using namespace std;
+// VTK Export Methods
+vtkUnstructuredGrid * ExportVolumeMeshToVTK(
+  MedialAtomGrid *xGrid, MedialAtom *xAtoms, size_t nSamples);
 
+void ExportMedialMeshToVTK(
+  MedialAtomGrid *xGrid, MedialAtom *xAtoms, 
+  ITKImageWrapper<float> *xImage, const char *file);
+
+void ExportBoundaryMeshToVTK(
+  MedialAtomGrid *xGrid, MedialAtom *xAtoms, 
+  ITKImageWrapper<float> *xImage, const char *file);
+
+using namespace std;
 
 void WriteMatrixFile(const vnl_matrix<double> &mat, const char *file)
 {
@@ -441,17 +457,19 @@ void MedialPDE::ExportIterationToVTK(unsigned int iter)
   string fBoundary = oss.str() + ".bnd.vtk";
 
   ExportMedialMeshToVTK(
-    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), fMedial.c_str());
+    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), NULL, fMedial.c_str());
   ExportBoundaryMeshToVTK(
-    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), fBoundary.c_str());
+    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), NULL, fBoundary.c_str());
 }
 
 void MedialPDE::SaveVTKMesh(const char *fMedial, const char *fBnd)
 {
   ExportMedialMeshToVTK(
-    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), fMedial);
+    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), 
+    imgIntensity.xImage, fMedial);
   ExportBoundaryMeshToVTK(
-    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), fBnd);
+    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), 
+    imgIntensity.xImage, fBnd);
 }
 
 void MedialPDE::ConjugateGradientOptimization(
@@ -889,7 +907,263 @@ void MedialPDE::SaveBYUMesh(const char *file)
   fout.close();
 }
 
-void MedialPDE::SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamples)
+// This method estimates the parameters of a transform to a set of point pairs
+// using least square fitting
+void LeastSquaresFit(
+  itk::BSplineDeformableTransform<double, 3, 3> *t, 
+  size_t nx, SMLVec3d *x, SMLVec3d *y)
+{
+  // Get the number of parameters
+  size_t np = t->GetNumberOfParameters(), p, i;
+
+  // Store the original parameters
+  typedef itk::BSplineDeformableTransform<double, 3, 3> TTransform;
+  TTransform::ParametersType p0(t->GetNumberOfParameters());
+
+  // Allocate three matrices
+  vnl_matrix<double> Z1(np, nx), Z2(np, nx), Z3(np, nx);
+
+  // Compute the right hand side vectors
+  vnl_vector<double> b1(nx), b2(nx), b3(nx);
+
+  
+  for(p = 0; p < np; p++)
+    {
+    // Create a basis function
+    p0.fill(0.0); p0[p] = 1.0;
+    t->SetParameters(p0);
+
+    // Compute values for all x
+    for(i = 0; i < nx; i++)
+      {
+      TTransform::InputPointType xin;
+      TTransform::OutputPointType xout;
+      xin[0] = x[i][0]; xin[1] = x[i][1]; xin[2] = x[i][2];
+      xout = t->TransformPoint(xin);
+      Z1[p][i] = xout[0]; Z2[p][i] = xout[1]; Z3[p][i] = xout[2];
+
+      b1[i] = y[i][0]; b2[i] = y[i][1]; b3[i] = y[i][2];
+      }
+    }
+
+  // Print stuff
+  cout << "Fitting BSpline parameters" << endl;
+  cout << "  Coefficients    : " << np << endl;
+  cout << "  Landmark Points : " << nx << endl;
+
+  // Compute the square matrix A
+  vnl_matrix<double> A = 
+    Z1 * Z1.transpose() + Z2 * Z2.transpose() + Z3 * Z3.transpose();
+  vnl_vector<double> B = Z1 * b1 + Z2 * b2 + Z3 * b3;
+
+  cout << "  Matrix A        : " << A.rows() << " x " << A.columns() << endl;
+  cout << "  Vector B        : " << B.size() << endl;
+
+  // Solve the system Ax = b (LU decomposition)
+	vnl_qr<double> qr(A);
+	vnl_vector<double> Y = qr.solve(B);
+
+  // Set the parameters
+  for(p = 0; p < np; p++) 
+    p0[p] = Y[p];
+
+  t->SetParametersByValue(p0);
+
+  // Double check that the mean squared difference is reasonable
+  double distMax = 0.0;
+  for(i = 0; i < nx; i++)
+    {
+    TTransform::InputPointType xin;
+    TTransform::OutputPointType xout;
+    xin[0] = x[i][0]; xin[1] = x[i][1]; xin[2] = x[i][2];
+    xout = t->TransformPoint(xin);
+    SMLVec3d z(xout[0], xout[1], xout[2]);
+    double dist = (z - y[i]).two_norm();
+    if(dist > distMax) distMax = dist;
+    }
+
+  cout << "  Max Sqr. Err   : " << sqrt(distMax) << endl;
+}
+
+// Update region by a point
+void UpdateRegion(itk::ImageRegion<3> &R, const itk::Index<3> &idx, bool first)
+{
+  if(first)
+    { 
+    R.SetIndex(idx); 
+    R.SetSize(0, 1); R.SetSize(1, 1); R.SetSize(2, 1); 
+    return;
+    }
+  
+  if(R.IsInside(idx))
+    { return; }
+
+  // Update the index
+  for(size_t i = 0; i < 3; i++)
+    {
+    if(R.GetIndex(i) < idx[i])
+      R.SetIndex(i, idx[i]);
+    if(R.GetSize(i) + R.GetIndex(i) <= idx[i])
+      R.SetSize(i, 1 + idx[i] - R.GetIndex(i));
+    }
+}
+
+
+
+// This is just one approach to doing this. Let's hope that it works
+void MedialPDE::
+SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zSamples)
+{
+  // Get the internal images
+  typedef FloatImage::WrapperType::ImageType ImageType;
+  ImageType::Pointer iInput = imgInput->xImage->GetInternalImage();
+  ImageType::Pointer iOutput = imgOutput->xImage->GetInternalImage();
+
+  // Get the image dimensions
+  size_t m = xSolver->GetNumberOfUPoints();
+  size_t n = xSolver->GetNumberOfVPoints();
+    
+  // The image dimensions must match the grid size
+  itk::Size<3> szInput = iInput->GetBufferedRegion().GetSize();
+  if ( szInput[0] != m || szInput[1] != n || szInput[2] != zSamples * 2 + 1)
+    {
+    cerr << "Input image dimensions do not match mpde size" << endl;
+    return;
+    }
+
+  // Create a flat image matched up with the internal iterator
+  size_t npix = xSolver->GetAtomGrid()->GetNumberOfInternalPoints(zSamples);
+  vnl_vector<float> xpix(npix, 0.0f);
+
+  MedialInternalPointIterator *it = 
+    xSolver->GetAtomGrid()->NewInternalPointIterator(zSamples);
+  for( ; !it->IsAtEnd(); ++(*it))
+    {
+    MedialAtom &xAtom = xSolver->GetAtomArray()[it->GetAtomIndex()];
+    itk::Index<3> idx;
+    idx[0] = xAtom.uIndex;
+    idx[1] = xAtom.vIndex;
+    idx[2] = it->GetBoundarySide() ?  
+      zSamples - it->GetDepth() : zSamples + it->GetDepth();
+    xpix[it->GetIndex()] = iInput->GetPixel(idx);
+    // cout << "xpix [ " << it->GetAtomIndex() << "] = iInput [ " << idx << "] = " << xpix[it->GetAtomIndex()] << endl;
+    }
+  delete it;
+
+  // Generate a VTK cell grid
+  vtkUnstructuredGrid *cells = ExportVolumeMeshToVTK(
+    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), zSamples);
+
+  // Create a VTk locator for these cells
+  vtkPointLocator *loc = vtkPointLocator::New();
+  loc->SetDataSet(cells);
+  loc->BuildLocator();
+
+  // Iterate over the voxels in the output image. The image should be initialized
+  // to a mask, so that we don't waste time on outside pixels
+  itk::ImageRegionIteratorWithIndex<ImageType> itOut(
+    iOutput, iOutput->GetBufferedRegion());
+  for( ; !itOut.IsAtEnd(); ++itOut)
+    {
+    // Only do something at masked points
+    if(itOut.Get() != 0.0f)
+      {
+      // Convert this voxel into a point
+      ImageType::PointType pVoxel;
+      iOutput->TransformIndexToPhysicalPoint(itOut.GetIndex(), pVoxel);
+
+      // Locate the cell that includes this point
+      size_t iClosest = (size_t) 
+        loc->FindClosestPoint(pVoxel.GetVnlVector().data_block());
+
+      // Convert this to a pixel index
+      itOut.Set(xpix[iClosest]);
+      }
+    }
+
+  loc->Delete();
+  cells->Delete();
+/*
+  // Compute the image region that includes the mask
+  itk::ImageRegion<3> xMaskRegion;
+
+  // Define an ITK transform for mapping the points
+  typedef itk::BSplineDeformableTransform<double, 3, 3> TransformType;
+  TransformType::Pointer tps = TransformType::New();
+
+  // Define the lanmark arrays
+  size_t nLMCuts = 2;
+  size_t nLandmarks = xSolver->GetAtomGrid()->GetNumberOfInternalPoints(nLMCuts);
+
+  SMLVec3d *lSource = new SMLVec3d[nLandmarks];
+  SMLVec3d *lTarget = new SMLVec3d[nLandmarks];
+  
+  // Define the landmarks
+  MedialInternalPointIterator *it = 
+    xSolver->GetAtomGrid()->NewInternalPointIterator(nLMCuts);
+  for( size_t i=0 ; !it->IsAtEnd(); ++(*it), ++i)
+    {
+    // The source are the positions in patient space
+    lSource[i] = GetInternalPoint(it, xSolver->GetAtomArray());
+
+    // Convert the source point to an image index
+    ImageType::PointType pt; ImageType::IndexType idx;
+    pt[0] = lSource[i][0]; pt[1] = lSource[i][1]; pt[2] = lSource[i][2];
+    iOutput->TransformPhysicalPointToIndex(pt, idx);
+    UpdateRegion(xMaskRegion, idx, i==0);
+    
+    // The target are the positions in cm-rep coordinate system
+    MedialAtom &xAtom = xSolver->GetAtomArray()[it->GetAtomIndex()];
+    lTarget[i][0] = round(xAtom.u * (m - 1));
+    lTarget[i][1] = round(xAtom.v * (n - 1));
+    lTarget[i][2] = it->GetBoundarySide() ?  
+      zSamples - it->GetDepth() : zSamples + it->GetDepth();
+    }
+
+  // Pass the ladmarks to the transform
+  xMaskRegion.SetIndex(0, 0);
+  xMaskRegion.SetIndex(1, 0);
+  xMaskRegion.SetIndex(2, 0);
+  xMaskRegion.SetSize(0, 6);
+  xMaskRegion.SetSize(1, 10);
+  xMaskRegion.SetSize(2, 6);
+
+  tps->SetGridRegion(xMaskRegion);
+  // tps->SetGridSpacing(iOutput->GetSpacing() / 10.0);
+  // tps->SetGridOrigin(iOutput->GetOrigin());
+
+  cout << "Selected Region: " << xMaskRegion << endl;
+  cout << "Number of params: " << tps->GetNumberOfParameters() << endl;
+
+  LeastSquaresFit(tps, nLandmarks, lSource, lTarget);
+
+  // Iterate over the voxels in the output image. The image should be initialized
+  // to a mask, so that we don't waste time on outside pixels
+  itk::ImageRegionIteratorWithIndex<ImageType> itOut(
+    iOutput, iOutput->GetBufferedRegion());
+  for( ; !itOut.IsAtEnd(); ++itOut)
+    {
+    // Only do something at masked points
+    if(itOut.Get() != 0.0f)
+      {
+      // Convert this voxel into a point
+      ImageType::PointType pVoxel;
+      iOutput->TransformIndexToPhysicalPoint(itOut.GetIndex(), pVoxel);
+
+      // Map this point into the other image space
+      TransformType::OutputPointType pReference = 
+        tps->TransformPoint(pVoxel); 
+
+      // Interpolate the second image at this point
+      itOut.Set(imgInput->Interpolate(
+          SMLVec3d(pReference[0], pReference[1], pReference[2])));
+      }
+    }
+*/
+}
+
+void MedialPDE::
+SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamples)
 {
   // Allocate the flattened intensity output image
   typedef FloatImage::WrapperType::ImageType ImageType;
@@ -928,7 +1202,9 @@ void MedialPDE::SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamp
   // Create a nearest neighbor interpolator
   //typedef itk::NearestNeighborInterpolateImageFunction<
   //  ImageType, double> InterpolatorType;
-  typedef itk::BSplineInterpolateImageFunction<
+  // typedef itk::BSplineInterpolateImageFunction<
+  //  ImageType, double> InterpolatorType;
+  typedef itk::LinearInterpolateImageFunction<
     ImageType, double> InterpolatorType;
   InterpolatorType::Pointer fInterp = InterpolatorType::New();
   fInterp->SetInputImage(imgInput);
@@ -945,8 +1221,8 @@ void MedialPDE::SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamp
     MedialAtom &xAtom = xSolver->GetAtomArray()[itPoint->GetAtomIndex()];
 
     // Get the i and j coordinates of the atom (using cartesian logic)
-    size_t i = (size_t) round(xAtom.u * (m - 1));
-    size_t j = (size_t) round(xAtom.v * (n - 1));
+    size_t i = xAtom.uIndex;
+    size_t j = xAtom.vIndex;
     size_t k = itPoint->GetBoundarySide() ? 
       zSamples - itPoint->GetDepth() :
        zSamples + itPoint->GetDepth();
@@ -967,6 +1243,16 @@ void MedialPDE::SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamp
     itk::ContinuousIndex<double, 3> idxZ;
     imgInput->TransformPhysicalPointToContinuousIndex(ptZ, idxZ);
     float f = fInterp->EvaluateAtContinuousIndex(idxZ);
+
+    // Print some random statistics
+    if(rand() % 4000 == 0)
+      {
+      cout << "MCoord : " << xAtom.u << ", " << xAtom.v << ", " << tau << "; ";
+      cout << "ZCoord : " << Z << "; ";
+      cout << "ICoord : " << round(idxZ[0]) << ", " << round(idxZ[1]) << ", " << round(idxZ[2]) << "; ";
+      cout << "PCoord : " << ptZ[0] << ", " << ptZ[1] << ", " << ptZ[2] << "; ";
+      cout << "IVal : " << f << endl;
+      }
 
     // Sample the input image
     // float f = imgInput->xImage->Interpolate(Z[0], Z[1], Z[2], 0.0f);

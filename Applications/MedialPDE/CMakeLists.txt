@@ -122,8 +122,10 @@ SET(SCRIPT_FILES
   pca_segment.py
   sample.py
   sample_img.py
+  sample_ref.py
   testdphi.py
   vis.py
+  vis_sample.py
   )
 
 FOREACH(FILE ${SCRIPT_FILES})  

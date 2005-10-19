@@ -23,6 +23,7 @@
 
 #include <math.h>
 #include <BrentLinearMethod.h>
+#include <iostream>
 
 // Begin namespace
 NAMESPACE_PAULY_START
@@ -323,7 +324,10 @@ GoldenRoutine::GoldenRoutine(Function *problem,double _ax, double _bx, double _c
 double Directional1DFunction::evaluate(const Vector &V) {
 	double u = V(0);
 	X1 = X + N * u;
-	return fnd->evaluate(X1);
+  double fEval = fnd->evaluate(X1);
+
+  std::cout << "Line search eval at " << u << " = " << fEval << std::endl;
+	return fEval;
 }
 
 Directional1DFunction::Directional1DFunction(Function *fnd,const Vector &X,const Vector &N) {

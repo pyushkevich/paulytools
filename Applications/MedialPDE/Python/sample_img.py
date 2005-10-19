@@ -45,11 +45,11 @@ mp.LoadFromParameterFile(fnModel)
 i1 = FloatImage()
 i1.LoadFromFile(fnImage)
 i1.SetOutsideValue(0.0)
-i1.SetOrigin(xOrigin[0], xOrigin[1], xOrigin[2])
+i1.SetImageOrigin(xOrigin[0], xOrigin[1], xOrigin[2])
 
 # Sample the image
 i2 = FloatImage()
 mp.SampleImage(i1, i2, nSamples)
 
 # Save the output
-i2.SaveToFile(fnOutput)
+i2.SaveToPath(fnOutput, "img.gz")

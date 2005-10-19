@@ -22,6 +22,9 @@ struct MedialAtom
 {
   // The coordinates of the atom in the domain
   double u, v;
+
+  // The index of the atom in a rectangular grid
+  size_t uIndex, vIndex;
   
   // The position on the medial surface and corresponding partial derivatives
   SMLVec3d X, Xu, Xv, Xuu, Xuv, Xvv;

@@ -329,6 +329,7 @@ void MedialPDESolver::InitializeSiteGeometry()
 
     // Set the atoms' domain coordinates
     xAtom.u = uGrid[i]; xAtom.v = vGrid[j];
+    xAtom.uIndex = i; xAtom.vIndex = j;
     double u = uGrid[i], v = vGrid[j];
     
     // Compute the surface jet and the laplacian    
@@ -710,6 +711,7 @@ MedialPDESolver
 
     // Set the atoms' domain coordinates
     dAtom.u = uGrid[i]; dAtom.v = vGrid[j];
+    dAtom.uIndex = i; dAtom.vIndex = j;
 
     // Evaluate the variation and its derivatives
     xVariation->EvaluateAtGridIndex(i, j, 0, 0, 0, 3, dAtom.X.data_block());
