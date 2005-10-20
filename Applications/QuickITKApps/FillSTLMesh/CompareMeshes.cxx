@@ -351,11 +351,11 @@ int main(int argc, char **argv)
   // Compute the maximum and average distances (this should be a surface integral...)
   double xOneNorm[2], xTwoNorm[2], xInfNorm[2];
   xOneNorm[0] = d1.one_norm() / d1.size(); 
-  xTwoNorm[0] = d1.two_norm() / sqrt(d1.size()); 
+  xTwoNorm[0] = d1.two_norm() / sqrt(1.0 * d1.size()); 
   xInfNorm[0] = d1.inf_norm();
   
   xOneNorm[1] = d2.one_norm() / d2.size(); 
-  xTwoNorm[1] = d2.two_norm() / sqrt(d2.size()); 
+  xTwoNorm[1] = d2.two_norm() / sqrt(1.0 * d2.size()); 
   xInfNorm[1] = d2.inf_norm();
   
   // Report our findings
