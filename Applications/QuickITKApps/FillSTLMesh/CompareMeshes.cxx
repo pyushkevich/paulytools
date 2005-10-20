@@ -230,6 +230,44 @@ void ScanConvertPolyData(vtkPolyData *pd, double *b0, double *b1, int *res, doub
   */
 }
 
+void ComputeAreaElement(vtkPolyData *poly, vnl_vector<double> &elt)
+{
+  // For each triangle in the polydata compute its area
+  vtkIdType nCells = poly->GetNumberOfCells();
+  
+  // Initialize the area elt array
+  elt.resize(poly->GetNumberOfPoints(), 0.0);
+  
+  for(vtkIdType iCell = 0; i < nCells; i++)
+    {
+    // Get the points in this cell
+    vtkIdType nPoints, *xPoints;
+    poly->GetCellPoints(iCell, nPoints, xPoints);
+    
+    // Only triangles are admitted
+    if(nPoints != 3)
+      { 
+      cerr << "Irregular face (n = " << nPoints << ") detected!" << endl;
+      break;
+      }
+
+    // Compute the area
+    double xArea = vtkTriangleCell::TriangleArea(
+      poly->GetPoint(xPoints[0]), 
+      poly->GetPoint(xPoints[1]), 
+      poly->GetPoint(xPoints[2])) / 3.0;
+    
+    if(xArea < 0)
+      {
+      cerr << "Negative area returned at cell " << iCell << endl;
+      break;
+      }
+
+    // Add the area to all points
+    elt[xPoints[0]] += xArea; elt[xPoints[1]] += xArea; elt[xPoints[2]] += xArea;
+    }
+}
+
 void ComputeExactMeshToMeshDistance(vtkPolyData *source, vtkPolyData *target, vnl_vector<double> &dist)
 {
   // Create a cell locator from the target mesh
@@ -344,18 +382,23 @@ int main(int argc, char **argv)
   */
 
   // Compute exact pointwise distances from mesh to mesh
-  vnl_vector<double> d1, d2;
+  vnl_vector<double> d1, d2, ae1, ae2;
   ComputeExactMeshToMeshDistance(p1, p2, d1);
   ComputeExactMeshToMeshDistance(p2, p1, d2);
+  ComputeAreaElement(p1, ae1);
+  ComputeAreaElement(p2, ae2);
+
+  // Scale the area by the total area to get a weight
+  ae1 /= ae1.one_norm(); ae2 /= ae2.one_norm();
 
   // Compute the maximum and average distances (this should be a surface integral...)
   double xOneNorm[2], xTwoNorm[2], xInfNorm[2];
-  xOneNorm[0] = d1.one_norm() / d1.size(); 
-  xTwoNorm[0] = d1.two_norm() / sqrt(1.0 * d1.size()); 
+  xOneNorm[0] = dot_product(d1, ae1); 
+  xTwoNorm[0] = dot_product(d1 * d1, ae1) 
   xInfNorm[0] = d1.inf_norm();
   
-  xOneNorm[1] = d2.one_norm() / d2.size(); 
-  xTwoNorm[1] = d2.two_norm() / sqrt(1.0 * d2.size()); 
+  xOneNorm[1] = dot_product(d2, ae2); 
+  xTwoNorm[1] = dot_product(d2 * d2, ae2);
   xInfNorm[1] = d2.inf_norm();
   
   // Report our findings
