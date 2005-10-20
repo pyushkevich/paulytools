@@ -47,12 +47,6 @@ void ExportMedialMeshToVTK(
   lDummy1->SetNumberOfComponents(1);
   lDummy1->SetNumberOfTuples(xGrid->GetNumberOfAtoms());
 
-  // Allocate the image intensity array
-  vtkFloatArray *lImage = vtkFloatArray::New();
-  lImage->SetName("Image");
-  lImage->SetNumberOfComponents(1);
-  lImage->SetNumberOfTuples(xGrid->GetNumberOfAtoms());
-  
   // Allocate the polydata
   vtkPolyData *pMedial = vtkPolyData::New();
   pMedial->Allocate(xGrid->GetNumberOfQuads());
@@ -62,8 +56,18 @@ void ExportMedialMeshToVTK(
   pMedial->GetPointData()->AddArray(lRho);
   pMedial->GetPointData()->AddArray(lRadius);
   pMedial->GetPointData()->AddArray(lDummy1);
-  pMedial->GetPointData()->AddArray(lImage);
 
+  // Allocate and add the image intensity array
+  bool flagImage = xImage && xImage->IsImageLoaded();
+  vtkFloatArray *lImage = vtkFloatArray::New();
+  if(flagImage)
+    {
+    lImage->SetName("Image");
+    lImage->SetNumberOfComponents(1);
+    lImage->SetNumberOfTuples(xGrid->GetNumberOfAtoms());
+    pMedial->GetPointData()->AddArray(lImage);
+    }
+  
   // Add all the points
   MedialAtomIterator *it = xGrid->NewAtomIterator();
   for(; !it->IsAtEnd(); ++(*it))
@@ -77,7 +81,7 @@ void ExportMedialMeshToVTK(
     lRho->SetTuple1(i, xAtoms[i].xLapR);
 
     // Sample the image along the middle
-    if(xImage)
+    if(flagImage)
       {
       itk::Index<3> idx;
       idx[0] = xAtoms[i].uIndex;
@@ -188,12 +192,6 @@ void ExportBoundaryMeshToVTK(
   vtkFloatArray *lNormals = vtkFloatArray::New();
   lNormals->SetNumberOfComponents(3);
   lNormals->SetNumberOfTuples(xGrid->GetNumberOfBoundaryPoints());
-
-  // Allocate the image intensity array
-  vtkFloatArray *lImage = vtkFloatArray::New();
-  lImage->SetName("Image");
-  lImage->SetNumberOfComponents(1);
-  lImage->SetNumberOfTuples(xGrid->GetNumberOfBoundaryPoints());
   
   // Allocate the polydata
   vtkPolyData *pMedial = vtkPolyData::New();
@@ -202,7 +200,17 @@ void ExportBoundaryMeshToVTK(
   
   // Add the arrays to the poly data
   pMedial->GetPointData()->SetNormals(lNormals);
-  pMedial->GetPointData()->AddArray(lImage);
+
+  // Allocate the image intensity array
+  bool flagImage = xImage && xImage->IsImageLoaded();
+  vtkFloatArray *lImage = vtkFloatArray::New();
+  if(flagImage)
+    {
+    lImage->SetName("Image");
+    lImage->SetNumberOfComponents(1);
+    lImage->SetNumberOfTuples(xGrid->GetNumberOfBoundaryPoints());
+    pMedial->GetPointData()->AddArray(lImage);
+    }
 
   // Add all the points
   MedialBoundaryPointIterator *it = xGrid->NewBoundaryPointIterator();
@@ -214,7 +222,7 @@ void ExportBoundaryMeshToVTK(
     lNormals->SetTuple3(i, B.N[0], B.N[1], B.N[2]);
 
     // Sample the image along the middle
-    if(xImage)
+    if(flagImage)
       {
       itk::Index<3> idx;
       idx[0] = xAtoms[it->GetAtomIndex()].uIndex;
@@ -249,6 +257,7 @@ void ExportBoundaryMeshToVTK(
   lNormals->Delete();
   lPoints->Delete();
   pMedial->Delete();
+  lImage->Delete();
 }
 
 /*
