@@ -82,7 +82,7 @@ def Stage_XYZ_CG_VO(id, expid, nmStart, nmEnd, imgType, nu, nv, nIter):
   # Set up the optimizer
   mp.SetOptimizerToConjugateGradientDescent(0.1);
   mp.SetMatchToVolumeOverlap();
-  mp.SetOptimizationToDeformable(1.0, 0.0);
+  mp.SetOptimizationToCoarseToFine(nu, nv, 0, 0);
   mp.EnableMeshDump(dirMesh + expid + "/" + id + "/" + nmEnd, 0.01);
   
   # Run the optimization

@@ -14,6 +14,7 @@
 #include <vtkBYUReader.h>
 #include <vtkSTLReader.h>
 #include <vtkTriangleFilter.h>
+#include <vtkTriangle.h>
 
 #include <itkImageFileWriter.h>
 #include <itkImageRegionConstIterator.h>
@@ -25,6 +26,8 @@
 #include <itkImage.h>
 
 #include "DrawTriangles.h"
+#include <vnl/vnl_vector_fixed.h>
+#include <vnl/vnl_cross.h>
 
 using namespace std;
 using namespace itk;
@@ -230,15 +233,25 @@ void ScanConvertPolyData(vtkPolyData *pd, double *b0, double *b1, int *res, doub
   */
 }
 
+inline double TriangleArea(
+  const vnl_vector_fixed<double,3> &A, 
+  const vnl_vector_fixed<double,3> &B, 
+  const vnl_vector_fixed<double,3> &C)
+{
+  return 0.5 * vnl_cross_3d(B - A, C - A).magnitude();
+}
+
+
 void ComputeAreaElement(vtkPolyData *poly, vnl_vector<double> &elt)
 {
   // For each triangle in the polydata compute its area
   vtkIdType nCells = poly->GetNumberOfCells();
   
   // Initialize the area elt array
-  elt.resize(poly->GetNumberOfPoints(), 0.0);
+  elt.set_size(poly->GetNumberOfPoints());
+  elt.fill(0.0);
   
-  for(vtkIdType iCell = 0; i < nCells; i++)
+  for(vtkIdType iCell = 0; iCell < nCells; iCell++)
     {
     // Get the points in this cell
     vtkIdType nPoints, *xPoints;
@@ -251,12 +264,13 @@ void ComputeAreaElement(vtkPolyData *poly, vnl_vector<double> &elt)
       break;
       }
 
+    // Get the three points
+    vnl_vector_fixed<double, 3> X0(poly->GetPoint(xPoints[0]));
+    vnl_vector_fixed<double, 3> X1(poly->GetPoint(xPoints[1]));
+    vnl_vector_fixed<double, 3> X2(poly->GetPoint(xPoints[2]));
+
     // Compute the area
-    double xArea = vtkTriangleCell::TriangleArea(
-      poly->GetPoint(xPoints[0]), 
-      poly->GetPoint(xPoints[1]), 
-      poly->GetPoint(xPoints[2])) / 3.0;
-    
+    double xArea = TriangleArea(X0, X1, X2);
     if(xArea < 0)
       {
       cerr << "Negative area returned at cell " << iCell << endl;
@@ -394,11 +408,11 @@ int main(int argc, char **argv)
   // Compute the maximum and average distances (this should be a surface integral...)
   double xOneNorm[2], xTwoNorm[2], xInfNorm[2];
   xOneNorm[0] = dot_product(d1, ae1); 
-  xTwoNorm[0] = dot_product(d1 * d1, ae1) 
+  xTwoNorm[0] = sqrt( dot_product(d1.apply(vnl_math_sqr), ae1) );
   xInfNorm[0] = d1.inf_norm();
   
   xOneNorm[1] = dot_product(d2, ae2); 
-  xTwoNorm[1] = dot_product(d2 * d2, ae2);
+  xTwoNorm[1] = sqrt( dot_product(d2.apply(vnl_math_sqr), ae2) );
   xInfNorm[1] = d2.inf_norm();
   
   // Report our findings

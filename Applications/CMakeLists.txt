@@ -5,6 +5,7 @@ OPTION(BUILD_APP_QuickITKApps "Build small ITK applications (ITK QuickApps)" OFF
 OPTION(BUILD_APP_GraphPartition "Build graph partitioning code" OFF)
 OPTION(BUILD_APP_MedialPDE "Build the PDE CM-Reps code" OFF)
 OPTION(BUILD_APP_BrainTracer "Build the BrainTracer Application" OFF)
+OPTION(BUILD_APP_CorpusCallosum "Build 2D CM-Reps PDE Application" OFF)
 
 VARIABLE_REQUIRES(BUILD_APP_CMRepTool2d DO_BUILD_CMRepTool2d 
   BUILD_EXTERNAL
@@ -24,6 +25,12 @@ VARIABLE_REQUIRES(BUILD_APP_MedialPDE DO_BUILD_MedialPDE
   USE_SWIG 
   USE_GLUT
   VTK_FOUND
+  ITK_FOUND
+  LAPACK_OR_MKL_FOUND
+  PARDISO_FOUND
+) 
+
+VARIABLE_REQUIRES(BUILD_APP_CorpusCallosum DO_BUILD_CorpusCallosum 
   ITK_FOUND
   LAPACK_OR_MKL_FOUND
   PARDISO_FOUND
@@ -64,6 +71,10 @@ ENDIF(BUILD_APP_GraphPartition)
 IF(BUILD_APP_MedialPDE)
   SUBDIRS(MedialPDE)
 ENDIF(BUILD_APP_MedialPDE)
+
+IF(BUILD_APP_CorpusCallosum)
+  SUBDIRS(CorpusCallosum)
+ENDIF(BUILD_APP_CorpusCallosum)
 
 IF(BUILD_APP_BrainTracer)
   SUBDIRS(BrainTracer)
