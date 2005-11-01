@@ -1,3 +1,5 @@
+# This is a great project!!!
+
 PROJECT(2DCMRep)
 
 INCLUDE_DIRECTORIES(${2DCMRep_SOURCE_DIR}/Code)
