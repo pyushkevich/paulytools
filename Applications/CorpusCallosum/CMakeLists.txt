@@ -84,7 +84,7 @@ TARGET_LINK_LIBRARIES(OptimizationTermsTest
   ${LAPACK_OR_MKL_LIBS} 
   ${PAULY_CORE_LIBS})
 
-ADD_EXECUTABLE(ImageCheck ImageCheck.cxx) 
+ADD_EXECUTABLE(ImageCheck Code/ImageCheck.cxx) 
 
 TARGET_LINK_LIBRARIES(ImageCheck ITKCommon ITKIO )
 
