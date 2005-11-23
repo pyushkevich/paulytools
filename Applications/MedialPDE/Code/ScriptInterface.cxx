@@ -24,6 +24,8 @@
 
 #include <vnl/algo/vnl_qr.h>
 
+#include <gsl/gsl_multimin.h>
+
 #include <iostream>
 #include <fstream>
 
@@ -437,6 +439,9 @@ void GradientDescentOptimization(MedialOptimizationProblem *xProblem,
     // Move in the gradient direction
     xSolution -= xStep * xGradient;
 
+    cout << "STEP " << p << "\t match " << xMatch << endl;
+    
+
     // Report the current state
     // fdump << "STEP " << p << endl;
     // xProblem->PrintReport(fdump);
@@ -472,12 +477,158 @@ void MedialPDE::SaveVTKMesh(const char *fMedial, const char *fBnd)
     imgIntensity.xImage, fBnd);
 }
 
+template<class TProblem>
+class GSLProblemWrapper
+{
+public:
+  double Evaluate(double *x)
+    { return problem->Evaluate(x); }
+
+  double ComputeGradient(double *x, double *df)
+    {
+    // if(flagFirstCall)
+    //  {
+      double f = problem->ComputeGradient(x, df);
+      xLast = vnl_vector<double>(x, n);
+      flagFirstCall = false;
+      return f;
+    //  }
+    /* else
+      {
+      size_t i;
+      double dfdv;
+      vnl_vector<double> v = vnl_vector<double>(x, n) - xLast;
+      cout << "DD !!" << endl;
+      double f = problem->ComputePartialDerivative(x, v.data_block(), dfdv);
+      
+      for(i = 0; i < n; i++) df[i] = 0.0;
+      for(size_t i = 0; i < n; i++)
+        if(v[i] != 0.0)
+          { df[i] = dfdv / v[i]; break; }
+      
+      return f;
+      } */
+    }
+
+    void OnNextIteration()
+      { flagFirstCall = true; }
+
+    GSLProblemWrapper(TProblem *problem, size_t n)
+      { 
+      this->problem = problem;
+      this->n = n;
+      flagFirstCall = true; 
+      }
+
+private:
+    TProblem *problem;
+    size_t n;
+    vnl_vector<double> xLast;
+    bool flagFirstCall;
+};
+
+double my_f(const gsl_vector *v, void *params)
+{
+  // Get a hold of the problem
+  typedef GSLProblemWrapper<MedialOptimizationProblem> ProblemType;
+  ProblemType *mop = 
+    static_cast<ProblemType *>(params);
+  
+  // Run the evaluation
+  return mop->Evaluate(v->data);
+}
+
+void my_df(const gsl_vector *v, void *params, gsl_vector *df)
+{
+  // Get a hold of the problem
+  typedef GSLProblemWrapper<MedialOptimizationProblem> ProblemType;
+  ProblemType *mop = 
+    static_cast<ProblemType *>(params);
+  
+  // Compute the jet
+  mop->ComputeGradient(v->data, df->data);
+}
+
+void my_fdf(const gsl_vector *v, void *params, double *f, gsl_vector *df)
+{
+  // Get a hold of the problem
+  typedef GSLProblemWrapper<MedialOptimizationProblem> ProblemType;
+  ProblemType *mop = 
+    static_cast<ProblemType *>(params);
+  
+  // Compute the jet
+  *f = mop->ComputeGradient(v->data, df->data);
+}
+
 void MedialPDE::ConjugateGradientOptimization(
   MedialOptimizationProblem *xProblem, 
   vnl_vector<double> &xSolution, unsigned int nSteps, double xStep)
 {
   size_t nCoeff = xSolution.size();
 
+  // Create a problem wrapper for fast computation of partial derivatives
+  typedef GSLProblemWrapper<MedialOptimizationProblem> ProblemType;
+  ProblemType my_problem(xProblem, nCoeff);
+  
+  // Create a GSL function object
+  gsl_multimin_function_fdf my_func;
+  my_func.f = &my_f;
+  my_func.df = &my_df;
+  my_func.fdf = &my_fdf;
+  my_func.n = nCoeff;
+  my_func.params = &my_problem;
+
+  // Create the initial solution
+  gsl_vector *my_start = gsl_vector_alloc(nCoeff);
+  memcpy(my_start->data, xSolution.data_block(), sizeof(double) * nCoeff);
+
+  // Create conjugate gradient minimizer
+  gsl_multimin_fdfminimizer *my_min = 
+    gsl_multimin_fdfminimizer_alloc( gsl_multimin_fdfminimizer_conjugate_pr, nCoeff);
+
+  //  gsl_multimin_fdfminimizer_alloc(gsl_multimin_fdfminimizer_vector_bfgs, nCoeff);
+
+  // Set up the parameters of the optimizer
+  gsl_multimin_fdfminimizer_set(my_min, &my_func, my_start, xStep, 1e-4);
+
+  // Perform the iterations
+  for(size_t i = 0; i < nSteps; i++)
+    {
+    // Perform iteration and get return code
+    int my_rc = gsl_multimin_fdfminimizer_iterate(my_min);
+    if(my_rc)
+      {
+      cout << "Error code " << my_rc << endl;
+      break;
+      }
+
+    // Print current solution
+    cout << "Step " << setw(5) << i << "  ";
+    cout << "Minimum " << setw(16) << gsl_multimin_fdfminimizer_minimum(my_min) << "  ";
+    cout << "F-value " << setw(16) << my_min->f << endl;
+
+    // Check for convergence
+    if(gsl_multimin_test_gradient(my_min->gradient, 1e-8) == GSL_SUCCESS)
+      {
+      cout << "Gradient magnitude terminate condition met!" << endl;
+      break;
+      }
+
+    // Reset the problem state
+    my_problem.OnNextIteration();
+    }
+
+  // Get the best ever solution
+  gsl_vector *my_best = gsl_multimin_fdfminimizer_x(my_min);
+  xSolution.copy_in(my_best->data);
+
+  // Clean up
+  gsl_multimin_fdfminimizer_free(my_min);
+  gsl_vector_free(my_start);
+}
+
+  
+/*
   // Construct the conjugate gradient optimizer
   ConjugateGradientMethod xMethod(*xProblem, Vector(nCoeff, xSolution.data_block()));
   xMethod.setStepSize(xStep);
@@ -530,6 +681,7 @@ void MedialPDE::ConjugateGradientOptimization(
   // Store the best result
   xSolution.copy_in(xMethod.getBestEverX().getDataArray());
 }
+  */
 
 inline vnl_vector<double> VectorCast(const pauly::Vector &Y)
 {
@@ -611,7 +763,7 @@ void MedialPDE
   // Create an image match term and a jacobian term
   EnergyTerm *xTermImage;
   if(eMatch == VOLUME)
-    xTermImage = new ProbabilisticEnergyTerm(image, 6);
+    xTermImage = new ProbabilisticEnergyTerm(image, 24);
   else
     xTermImage = new BoundaryImageMatchTerm(image);
   
@@ -619,13 +771,21 @@ void MedialPDE
   BoundaryJacobianEnergyTerm xTermJacobian;
   // CrestLaplacianEnergyTerm xTermCrest;
   AtomBadnessTerm xTermBadness;
-  // MedialRegularityTerm xTermRegularize(xSolver->GetAtomArray(), xSolver->GetAtomGrid());
+  MedialRegularityTerm 
+    xTermRegularize(xSolver->GetAtomGrid(), xSolver->GetAtomArray());
+  RadiusPenaltyTerm xTermRadius(0.1);
 
   // Add the terms to the problem
   xProblem.AddEnergyTerm(xTermImage, 1.0);
-  xProblem.AddEnergyTerm(&xTermJacobian, 0.5);
-  xProblem.AddEnergyTerm(&xTermBadness, 1.0);
-  // xProblem.AddEnergyTerm(&xTermRegularize, 1.0);
+  
+  // Add prior terms only for deformable registration
+  if(eMask != AFFINE && eMask != PCA)
+    {
+    xProblem.AddEnergyTerm(&xTermJacobian, 0.5);
+    xProblem.AddEnergyTerm(&xTermBadness, 1.0);
+    xProblem.AddEnergyTerm(&xTermRegularize, 0.01);
+    xProblem.AddEnergyTerm(&xTermRadius, 0.1);
+    }
 
   // Create the initial solution
   size_t nCoeff = xMask->GetNumberOfCoefficients();

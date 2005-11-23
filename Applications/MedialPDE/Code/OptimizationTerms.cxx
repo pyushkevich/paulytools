@@ -838,185 +838,6 @@ void ProbabilisticEnergyTerm::PrintReport(ostream &sout)
   sout << "    final value    : " << xRatio << endl;
 }
 
-
-/*
-double VolumeOverlapEnergyTerm::BeginGradientComputation(SolutionData *S)
-{
-  // Clear the intersection volume accumulator
-  xIntersect = 0;
-
-  // Make sure that the solution data has internal weights and points
-  S->UpdateInternalWeights(nCuts);
-
-  // Construct the 'match with the image' function
-  // FloatImageVolumeElementFunctionAdapter fImage(xImage);
-  FloatImageTestFunction fImage;
-
-  // Initialize the array of image values and gradients
-  xImageVal = new double[S->xAtomGrid->GetNumberOfInternalPoints(nCuts)];
-  xImageGrad = new SMLVec3d[S->xAtomGrid->GetNumberOfInternalPoints(nCuts)];
-
-  // Iterate over all the points inside the object and take the image value
-  MedialInternalPointIterator *it = S->xAtomGrid->NewInternalPointIterator(nCuts);
-  for(; !it->IsAtEnd(); ++(*it))
-    {
-    size_t iPoint = it->GetIndex();
-
-    // Take the image value and store it for later
-    xImageVal[iPoint] = fImage.Evaluate(S->xInternalPoints[iPoint]);
-
-    // Compute the image gradient as well
-    xImageGrad[iPoint] = fImage.ComputeGradient(S->xInternalPoints[iPoint]);
-
-    // Compute the weight and the weighted image value
-    double w = S->xInternalWeights[iPoint];
-    xIntersect += xImageVal[iPoint] * w; 
-    }
-  delete it;
-
-  // Get (remember) the object volume 
-  xObjectVolume = S->xInternalVolume;
-
-  // Compute the volume overlap measure
-  xUnion = xImageVolume + xObjectVolume - xIntersect;
-  xOverlap = xIntersect / xUnion;
-
-  // Return a value that can be minimized
-  return 1.0 - xOverlap;
-}
-
-double VolumeOverlapEnergyTerm::ComputePartialDerivative(
-  SolutionData *S, PartialDerivativeSolutionData *dS)
-{
-  // Make sure the weights are computed in the derivative data
-  dS->UpdateInternalWeights(nCuts);
-
-  // Compute the derivative of the intersection volume
-  double dIntersect = 0.0;
-
-  for(size_t i = 0; i < S->xAtomGrid->GetNumberOfInternalPoints(nCuts); i++)
-    {
-    // Simple chain rule applies
-    dIntersect += dS->xInternalWeights[i] * xImageVal[i] + 
-      S->xInternalWeights[i] * dot_product(dS->xInternalPoints[i], xImageGrad[i]);
-    }
-
-  // Now compute the derivative of the overlap volume
-  double dObjectVolume = dS->xInternalVolume;
-  double dUnion = dObjectVolume - dIntersect;
-  double dOverlap = 
-    ( dIntersect * xUnion - xIntersect * dUnion ) / (xUnion * xUnion );
-
-  // Done!
-  return -dOverlap;
-}
-
-void VolumeOverlapEnergyTerm::EndGradientComputation()
-{
-  delete xImageVal;
-  delete xImageGrad;
-}
-*/
-  
-  
-  /*
-double VolumeOverlapEnergyTerm::BeginGradientComputation(SolutionData *S)
-{
-  // Get info about the problem
-  MedialAtomGrid *xGrid = S->xAtomGrid;
-  size_t nPoints = xGrid->GetNumberOfBoundaryPoints();
-
-  // Create the image adapter for image interpolation at the boundary
-  FloatImageVolumeElementFunctionAdapter fImage(xImage);
-
-  // We require the weights from the central solution
-  S->UpdateBoundaryWeights();
-
-  // Interpolate the image at each sample point on the surface
-  xImageVal = new double[nPoints];
-  MedialBoundaryPointIterator *itBnd = xGrid->NewBoundaryPointIterator();
-  for( ; !itBnd->IsAtEnd() ; ++(*itBnd) )
-    {
-    // Compute and store the image value at the sample point
-    SMLVec3d &X = GetBoundaryPoint(itBnd, S->xAtoms).X;
-    xImageVal[itBnd->GetIndex()] = 1.0 + 0.5 * fImage.Evaluate(X);
-    }
-  delete itBnd;
-  
-  // Return the raw solution
-  return ComputeEnergy(S);
-}
-
-double
-VolumeOverlapEnergyTerm
-::ComputePartialDerivative(
-    SolutionData *SCenter, SolutionData *SFwd, SolutionData *SBck,
-    double xEpsilon)
-{
-  // Get info about the problem
-  MedialAtomGrid *xGrid = SCenter->xAtomGrid;
-  size_t nPoints = xGrid->GetNumberOfBoundaryPoints();
-
-  // We will compute the partial derivative of the absolute overlap and the
-  // partial derivative of the m-rep volume with respect to the coeff
-  double dOverlap = 0.0, dVolume = 0.0;
-
-  // Compute the partial derivative for this coefficient
-  MedialBoundaryPointIterator *itBnd = xGrid->NewBoundaryPointIterator();
-  
-  for( ; !itBnd->IsAtEnd(); ++(*itBnd))
-    {
-    // Get the index of this boundary point
-    size_t iPoint = itBnd->GetIndex();
-
-    // Get the boundary point before and after small deformation
-    BoundaryAtom &B = GetBoundaryPoint(itBnd, SCenter->xAtoms);
-    SMLVec3d X1 = GetBoundaryPoint(itBnd, SBck->xAtoms).X;
-    SMLVec3d X2 = GetBoundaryPoint(itBnd, SFwd->xAtoms).X;
-    SMLVec3d dX = 0.5 * (X2 - X1);
-
-    // Get the area weights for this point
-    double w = SCenter->xBoundaryWeights[ iPoint ];
-
-    // Compute the common term between the two
-    double z = dot_product( dX, B.N ) * w;
-
-    // Compute the two partials
-    dOverlap += z * xImageVal[iPoint];
-    dVolume += z;
-    }
-  
-  delete itBnd;
-
-  // Scale the partials by epsilon to get the derivative
-  dOverlap /= xEpsilon; dVolume /= xEpsilon;
-
-  // Compute the partial derivative of relative overlap match
-  double xUnion = (xImageVolume + xObjectVolume - xIntersect);        
-  double xPartial = 
-    (dVolume * xIntersect - dOverlap * (xImageVolume + xObjectVolume));
-  xPartial /= xUnion * xUnion;
-
-  // Return the partial derivative
-  return xPartial;
-}
-
-void VolumeOverlapEnergyTerm::EndGradientComputation()
-{
-  delete xImageVal;
-}
-*/
-/*
-void VolumeOverlapEnergyTerm::PrintReport(ostream &sout)
-{
-  sout << "  Volume Overlap Term: " << endl;
-  sout << "    image volume   : " << xImageVolume << endl;
-  sout << "    object volume  : " << xObjectVolume << endl;
-  sout << "    intersection   : " << xIntersect << endl;
-  sout << "    overlap ratio  : " << xOverlap << endl;
-}
-*/
-  
 /*********************************************************************************
  * Crest Laplacian Penalty Term: Assure negative Rho on the crest
  ********************************************************************************/
@@ -1265,196 +1086,154 @@ void MedialAnglesPenaltyTerm::PrintReport(ostream &sout)
  * Regularity term (used to maintain correspondence)
  ********************************************************************************/
 MedialRegularityTerm::MedialRegularityTerm(
-  MedialAtom *xTempAtoms, MedialAtomGrid *xTempGrid)
+  MedialAtomGrid *inAtomGrid, MedialAtom *inAtomArray)
 {
-  // Allocate appropriate space
-  xEdgeLength.reserve(xTempGrid->GetNumberOfQuads() * 6);
-
-  // Compute all the distances between adjacent atoms. This involves quad diagonals 
-  // as well as sides, because a quad can be deformed without changing edge lengths, 
-  // while a triangle is defined by the edge lengths.
-  MedialQuadIterator *itQuad = xTempGrid->NewQuadIterator();
-  for(; !itQuad->IsAtEnd(); ++(*itQuad))
-    {
-    // Get the four atoms at the corner of the quad
-    MedialAtom &a00 = xTempAtoms[itQuad->GetAtomIndex(0, 0)];
-    MedialAtom &a01 = xTempAtoms[itQuad->GetAtomIndex(0, 1)];
-    MedialAtom &a10 = xTempAtoms[itQuad->GetAtomIndex(1, 0)];
-    MedialAtom &a11 = xTempAtoms[itQuad->GetAtomIndex(1, 1)];
-
-    // Record the distances (repeat in this order later)
-    xEdgeLength.push_back( (a00.X - a01.X).two_norm() );
-    xEdgeLength.push_back( (a01.X - a11.X).two_norm() );
-    xEdgeLength.push_back( (a11.X - a10.X).two_norm() );
-    xEdgeLength.push_back( (a10.X - a00.X).two_norm() );
-    xEdgeLength.push_back( (a00.X - a11.X).two_norm() );
-    xEdgeLength.push_back( (a01.X - a10.X).two_norm() );
-    }
-
-  delete itQuad;
+  // Generate an array of weights for irregular grids
+  xDomainWeights.set_size(inAtomGrid->GetNumberOfAtoms());
+  xDomainArea = ComputeMedialDomainAreaWeights(
+    inAtomGrid, inAtomArray, xDomainWeights.data_block());
+  cout << "Domain Area: " << xDomainArea << endl;
 }
-
-double MedialRegularityTerm::DistortionPenalty(
-  double dTemplate, double dSubject)
-{
-  double xDistortion = dSubject - dTemplate;
-  double xPenalty = xDistortion * xDistortion;
-  
-  // Record the maximum and minimum distortion
-  if(xDistortion < xMinDistortion) xMinDistortion = xDistortion;
-  if(xDistortion < xMaxDistortion) xMaxDistortion = xDistortion;
-
-  // Return the squared distortion
-  return xPenalty;
-}
-
-double MedialRegularityTerm::DistortionPenaltyAndDerivative(
-  double dTemplate, const SMLVec3d &A, const SMLVec3d &B, double &xGradTerm)
-{
-  double dSubject = (A - B).two_norm();
-  double xDistortion = dSubject - dTemplate;
-  double xPenalty = xDistortion * xDistortion;
-  
-  // Record the maximum and minimum distortion
-  if(xDistortion < xMinDistortion) xMinDistortion = xDistortion;
-  if(xDistortion < xMaxDistortion) xMaxDistortion = xDistortion;
-
-  // Compute the derivative term
-  xGradTerm = 2.0 * xDistortion / dSubject;
-  
-  // Return the squared distortion
-  return xPenalty;
-}
-
 
 
 double MedialRegularityTerm::ComputeEnergy(SolutionDataBase *data)
 {
-  // The prior is based on the distortion in terms of distances between adjacent 
-  // atoms as compared to the template. We iterate over the edges on the medial 
-  // surface and compute these distortions
-  xTotalPenalty = 0.0;
-  xMaxDistortion = xMinDistortion = 0.0;
+  // Integral of (G2(1,11) + G(2,12))^2 + (G(1,21) + G(2,22)) du dv 
+  // (no area elt. scaling)
+  xGradMagIntegral = 0;
+  xGradMagMaximum = 0;
   
-  // Iterate over the quads
-  MedialQuadIterator *itQuad = data->xAtomGrid->NewQuadIterator();
-  for(size_t i = 0; !itQuad->IsAtEnd(); ++(*itQuad), i+=6)
+  // Integrate over all atoms
+  MedialAtomIterator *it = data->xAtomGrid->NewAtomIterator();
+  for(; !it->IsAtEnd(); ++(*it))
     {
-    // Get the four atoms at the corner of the quad
-    MedialAtom &a00 = data->xAtoms[itQuad->GetAtomIndex(0, 0)];
-    MedialAtom &a01 = data->xAtoms[itQuad->GetAtomIndex(0, 1)];
-    MedialAtom &a10 = data->xAtoms[itQuad->GetAtomIndex(1, 0)];
-    MedialAtom &a11 = data->xAtoms[itQuad->GetAtomIndex(1, 1)];
+    // Get the medial atom
+    MedialAtom &a = data->xAtoms[it->GetIndex()];
 
-    // Record the distances (repeat in this order later)
-    xTotalPenalty += DistortionPenalty(xEdgeLength[i]  , (a00.X - a01.X).two_norm());
-    xTotalPenalty += DistortionPenalty(xEdgeLength[i+1], (a01.X - a11.X).two_norm());
-    xTotalPenalty += DistortionPenalty(xEdgeLength[i+2], (a11.X - a10.X).two_norm());
-    xTotalPenalty += DistortionPenalty(xEdgeLength[i+3], (a10.X - a00.X).two_norm());
-    xTotalPenalty += DistortionPenalty(xEdgeLength[i+4], (a00.X - a11.X).two_norm());
-    xTotalPenalty += DistortionPenalty(xEdgeLength[i+5], (a01.X - a10.X).two_norm());
+    // Only compute the penalty if the atom is internal
+    if(a.flagCrest || !a.flagValid) 
+      continue;
+
+    // Compute the regularity term here
+    double reg1 = a.G.xChristoffelSecond[0][0][0] + a.G.xChristoffelSecond[1][0][1];
+    double reg2 = a.G.xChristoffelSecond[0][1][0] + a.G.xChristoffelSecond[1][1][1];
+    double reg = reg1 * reg1 + reg2 * reg2;
+
+    // Update the sum and the maximum
+    if(reg > xGradMagMaximum)
+      xGradMagMaximum = reg;
+
+    // Update the integral
+    xGradMagIntegral += xDomainWeights[it->GetIndex()] * reg;
     }
 
-  // Compute the average error
-  xTotalPenalty /= xEdgeLength.size();
-  xMeanSquareDistortion = xTotalPenalty;
+  delete it;
 
-  // Return the error
-  return xTotalPenalty; 
-}
-
-double MedialRegularityTerm::BeginGradientComputation(SolutionData *data)
-{
-  // The prior is based on the distortion in terms of distances between adjacent 
-  // atoms as compared to the template. We iterate over the edges on the medial 
-  // surface and compute these distortions
-  xTotalPenalty = 0.0;
-  xMaxDistortion = xMinDistortion = 0.0;
-
-  // Allocate an array to hold the derivative of the distortion function
-  xGradientCommon.resize( xEdgeLength.size(), 0.0 );
-  
-  // Iterate over the quads
-  MedialQuadIterator *itQuad = data->xAtomGrid->NewQuadIterator();
-  for(size_t i = 0; !itQuad->IsAtEnd(); ++(*itQuad), i+=6)
-    {
-    // Get the four atoms at the corner of the quad
-    MedialAtom &a00 = data->xAtoms[itQuad->GetAtomIndex(0, 0)];
-    MedialAtom &a01 = data->xAtoms[itQuad->GetAtomIndex(0, 1)];
-    MedialAtom &a10 = data->xAtoms[itQuad->GetAtomIndex(1, 0)];
-    MedialAtom &a11 = data->xAtoms[itQuad->GetAtomIndex(1, 1)];
-
-    // Record the distances (repeat in this order later)
-    xTotalPenalty += DistortionPenaltyAndDerivative(
-      xEdgeLength[i+0], a00.X, a01.X, xGradientCommon[i+0]);
-    xTotalPenalty += DistortionPenaltyAndDerivative(
-      xEdgeLength[i+1], a01.X, a11.X, xGradientCommon[i+1]);
-    xTotalPenalty += DistortionPenaltyAndDerivative(
-      xEdgeLength[i+2], a11.X, a10.X, xGradientCommon[i+2]);
-    xTotalPenalty += DistortionPenaltyAndDerivative(
-      xEdgeLength[i+3], a10.X, a00.X, xGradientCommon[i+3]);
-    xTotalPenalty += DistortionPenaltyAndDerivative(
-      xEdgeLength[i+4], a00.X, a11.X, xGradientCommon[i+4]);
-    xTotalPenalty += DistortionPenaltyAndDerivative(
-      xEdgeLength[i+5], a01.X, a10.X, xGradientCommon[i+5]);
-    }
-
-  // Compute the average error
-  xTotalPenalty /= xEdgeLength.size();
-  xMeanSquareDistortion = xTotalPenalty;
-
-  // Return the error
-  return xTotalPenalty; 
+  return xGradMagIntegral / xDomainArea;
 }
 
 double MedialRegularityTerm
 ::ComputePartialDerivative(SolutionData *S, PartialDerivativeSolutionData *dS)
 {
-  // The prior is based on the distortion in terms of distances between adjacent 
-  // atoms as compared to the template. We iterate over the edges on the medial 
-  // surface and compute these distortions
-  double dTotalPenalty = 0.0;
+  double dIntegral = 0.0;
   
-  // Iterate over the quads
-  MedialQuadIterator *itQuad = S->xAtomGrid->NewQuadIterator();
-  for(size_t i = 0; !itQuad->IsAtEnd(); ++(*itQuad), i+=6)
+  // Integrate over all atoms
+  MedialAtomIterator *it = S->xAtomGrid->NewAtomIterator();
+  for(; !it->IsAtEnd(); ++(*it))
     {
     // Get the four atoms at the corner of the quad
-    MedialAtom &a00 = S->xAtoms[itQuad->GetAtomIndex(0, 0)];
-    MedialAtom &a01 = S->xAtoms[itQuad->GetAtomIndex(0, 1)];
-    MedialAtom &a10 = S->xAtoms[itQuad->GetAtomIndex(1, 0)];
-    MedialAtom &a11 = S->xAtoms[itQuad->GetAtomIndex(1, 1)];
+    MedialAtom &a = S->xAtoms[it->GetIndex()];
+    MedialAtom &da = dS->xAtoms[it->GetIndex()];
 
-    // Get the four atom derivatives at the corner of the quad
-    MedialAtom &d00 = dS->xAtoms[itQuad->GetAtomIndex(0, 0)];
-    MedialAtom &d01 = dS->xAtoms[itQuad->GetAtomIndex(0, 1)];
-    MedialAtom &d10 = dS->xAtoms[itQuad->GetAtomIndex(1, 0)];
-    MedialAtom &d11 = dS->xAtoms[itQuad->GetAtomIndex(1, 1)];
+    // Only compute the penalty if the atom is internal
+    if(a.flagCrest || !a.flagValid) 
+      continue;
 
-    // Record the distances (repeat in this order later)
-    dTotalPenalty += xGradientCommon[i+0] * dot_product(a00.X - a01.X, d00.X - d01.X);
-    dTotalPenalty += xGradientCommon[i+1] * dot_product(a01.X - a11.X, d01.X - d11.X);
-    dTotalPenalty += xGradientCommon[i+2] * dot_product(a11.X - a10.X, d11.X - d10.X);
-    dTotalPenalty += xGradientCommon[i+3] * dot_product(a10.X - a00.X, d10.X - d00.X);
-    dTotalPenalty += xGradientCommon[i+4] * dot_product(a00.X - a11.X, d00.X - d11.X);
-    dTotalPenalty += xGradientCommon[i+5] * dot_product(a01.X - a10.X, d01.X - d10.X);
+    // Compute the regularity term here
+    double reg1 = a.G.xChristoffelSecond[0][0][0] + a.G.xChristoffelSecond[1][0][1];
+    double reg2 = a.G.xChristoffelSecond[0][1][0] + a.G.xChristoffelSecond[1][1][1];
+    double dreg1 = da.G.xChristoffelSecond[0][0][0] + da.G.xChristoffelSecond[1][0][1];
+    double dreg2 = da.G.xChristoffelSecond[0][1][0] + da.G.xChristoffelSecond[1][1][1];
+    double dreg = 2.0 * (reg1 * dreg1 + reg2 * dreg2);
+
+    // Update the integral
+    dIntegral += xDomainWeights[it->GetIndex()] * dreg;
     }
 
-  // Compute the average error
-  dTotalPenalty /= xEdgeLength.size();
+  delete it;
 
   // Return the error
-  return dTotalPenalty; 
+  return dIntegral / xDomainArea; 
 }
 
 void MedialRegularityTerm::PrintReport(ostream &sout)
 {
   sout << "  Medial Regularization Term: " << endl;
-  sout << "    minimum distortion:     " << xMinDistortion << endl;
-  sout << "    maximum distortion:     " << xMaxDistortion << endl;
-  sout << "    mean square distortion: " << xMeanSquareDistortion << endl;
-  sout << "    total penalty:          " << xTotalPenalty << endl;
+  sout << "    maximum grad mag sqr:     " << xGradMagMaximum << endl;
+  sout << "    grad mag sqr integral: " << xGradMagIntegral << endl;
+  sout << "    domain area: " << xDomainArea << endl;
 }
+
+
+/*********************************************************************************
+ * MEDIAL RADIUS PENALTY TERM
+ ********************************************************************************/
+double RadiusPenaltyTerm::ComputeEnergy(SolutionDataBase *S)
+{ 
+  xTotalPenalty = 0.0;
+  xMinR2 = 1e100;
+
+  for(size_t i = 0; i < S->xAtomGrid->GetNumberOfAtoms(); i++)
+    {
+    // Get the square of R
+    double phi = S->xAtoms[i].F;
+    if(phi < xMinR2)
+      xMinR2 = phi;
+
+    // Apply the penalty function
+    double x = phi / xScale;
+    double x2 = x * x;
+    double x4 = x2 * x2;
+    
+    xTotalPenalty += 1.0 / x4;
+    }
+
+  xTotalPenalty /= S->xAtomGrid->GetNumberOfAtoms();
+
+  return xTotalPenalty;
+}
+
+double RadiusPenaltyTerm
+::ComputePartialDerivative(SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  double dTotalPenalty = 0.0;
+
+  for(size_t i = 0; i < S->xAtomGrid->GetNumberOfAtoms(); i++)
+    {
+    // Get the square of R
+    double phi = S->xAtoms[i].F;
+    double dphi = dS->xAtoms[i].F;
+
+    // Apply the penalty function
+    double x = phi / xScale, dx = dphi / xScale;
+    double x2 = x * x;
+    double x4 = x2 * x2;
+
+    dTotalPenalty += -4.0 * dx / (x * x4);
+    }
+
+  dTotalPenalty /= S->xAtomGrid->GetNumberOfAtoms();
+
+  return dTotalPenalty;
+}  
+
+void RadiusPenaltyTerm::PrintReport(ostream &sout)
+{
+  sout << "  Radius Penalty Term : " << endl;
+  sout << "    total penalty            : " << xTotalPenalty << endl;
+  sout << "    smallest R^2             : " << xMinR2 << endl;
+}
+
 
 /*********************************************************************************
  * MEDIAL OPTIMIZATION PROBLEM
@@ -1473,16 +1252,22 @@ MedialOptimizationProblem
   flagLastEvalAvailable = false;
   flagPhiGuessAvailable = false;
   
-  // xLastPhiDerivField.set_size(
-  //  xSolver->GetPhiField().rows(),xSolver->GetPhiField().columns());
-  
-  dAtoms = new MedialAtom[xSolver->GetAtomGrid()->GetNumberOfAtoms()];
+  // Prepare medial atoms for gradient computation
+  for(size_t i = 0; i < nCoeff; i++)
+    {
+    MedialAtom *a = new MedialAtom[xSolver->GetAtomGrid()->GetNumberOfAtoms()];
+    IHyperSurface2D *xVariation = xCoeff->GetComponentSurface(i);
+    xSolver->PrepareAtomsForVariationalDerivative(xVariation, a);
+    xCoeff->ReleaseComponentSurface(xVariation);
+    dAtomArray.push_back(a);
+    }
 }
 
 MedialOptimizationProblem
 ::~MedialOptimizationProblem()
 {
-  delete dAtoms;
+  for(size_t i = 0; i < nCoeff; i++)
+    delete dAtomArray[i];
 }
 
 // Add the energy term
@@ -1530,75 +1315,6 @@ bool MedialOptimizationProblem::SolvePDE(double *xEvalPoint)
   return true;
 }
 
-/*
-void MedialOptimizationProblem::SolvePDE(double *xEvalPoint)
-{
-  // Update the surface with the new solution
-  xCoeff->SetCoefficientArray(xEvalPoint);
-
-  // Make a vector from the eval point
-  vnl_vector<double> X(xEvalPoint, nCoeff);
-  
-  // Solve the equation
-  xSolveTimer.Start();
-
-  // Check if the evaluation point is along the last gradient
-  if(flagGradAvailable) 
-    {
-    vnl_vector<double> dX = X - xLastGradEvalPoint;
-    double d2 = dot_product(dX, dX);
-    double mg2 = dot_product(xLastGrad, xLastGrad);
-    double xp = dot_product(dX, xLastGrad);
-
-    cout << "Gradient closeness : " << fabs(d2 * mg2 - xp * xp) << endl;
-    
-    double alpha;
-    if( fabs(d2 * mg2 - xp * xp) > 1.0e-10 ) 
-      {
-      // The search may be going in the conj. grad. direction
-      xLastGrad = dX;
-      xLastPhiDerivField.fill(0.0);
-      
-      // Repeat for each coefficient
-      for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)
-        {
-        // Get an adapter for evaluating the function
-        IHyperSurface2D *xVariation = xCoeff->GetComponentSurface(iCoeff);
-
-        // Compute the partial derivatives with respect to the coefficients
-        xSolveGradTimer.Start();
-        xSolver->ComputeVariationalDerivative(xVariation, dAtoms); 
-        xSolveGradTimer.Stop();
-
-        // Dump the gradient
-        // cout << iCoeff << "; " << XGradient[iCoeff] << endl;
-        cout << "." << flush;
-
-        // Update the directional derivative of the phi field
-        xLastPhiDerivField += 
-          xLastGrad[iCoeff] * xSolver->GetPhiDerivativeField();
-        }
-
-      alpha = 1.0;
-      }
-    else
-      {
-      alpha = xp / mg2;
-      }
-
-    cout << "Test " << alpha << " along gradient" << endl;
-    
-    // We can use the gradient to estimate the phi field at the current point
-    xSolver->Solve(xLastPhiField + alpha * xLastPhiDerivField, xPrecision);
-    }
-  else
-    xSolver->Solve(xPrecision);
-
-  // Stop timing
-  xSolveTimer.Stop();
-}
-*/
-
 double MedialOptimizationProblem::Evaluate(double *xEvalPoint)
 {
   // Solve the PDE - if there is no update, return the last solution value
@@ -1606,12 +1322,6 @@ double MedialOptimizationProblem::Evaluate(double *xEvalPoint)
     {
     // Create a solution data object representing current solution
     SolutionData S0(xSolver);
-
-    // TODO: Take this out!!!
-    xWeightsTimer.Start();
-    S0.UpdateBoundaryWeights();
-    S0.UpdateInternalWeights(6);
-    xWeightsTimer.Stop();
 
     // Compute the solution for each term
     xLastSolutionValue = 0.0;
@@ -1627,97 +1337,50 @@ double MedialOptimizationProblem::Evaluate(double *xEvalPoint)
   return xLastSolutionValue;
 }
 
-/* 
-double 
-MedialOptimizationProblem
-::ComputeGradient(double *xEvalPoint, double *xGradient)
+/*
+double MedialOptimizationProblem
+::ComputePartialDerivative(double *xEvalPoint, double *xDirection, double &df)
 {
-  size_t iTerm;
-
-  // Solve the PDE
+  // Solve the PDE at the current point
   SolvePDE(xEvalPoint);
 
-  // Create a solution data object representing current solution
+  // Initialize the problem with the current solution
+  xSolver->SetSolutionAsInitialGuess();
+
+  // Create a solution data 
   SolutionData S(xSolver);
 
-  // TODO: Take this out!!!
-  xWeightsTimer.Start();
-  S.UpdateBoundaryWeights();
-  S.UpdateInternalWeights(6);
-  xWeightsTimer.Stop();
+  // Compute the variation in the gradient direction and the var. deriv.
+  IHyperSurface2D *xVariation = xCoeff->GetVariationSurface(xDirection);
+  xSolveGradTimer.Start();
+  xSolver->ComputeVariationalDerivative(xVariation, dAtoms); 
+  xSolveGradTimer.Stop();
+  PartialDerivativeSolutionData dS(&S, dAtoms);
 
-  // Compute the value at the solution and init gradient computation
-  xSolution = 0.0;
-  for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
+  // Compute the solution at the current point
+  xLastSolutionValue = 0.0; df = 0.0;
+  for(size_t iTerm = 0; iTerm < xTerms.size(); iTerm++)
     {
+    // Compute the solution
     xTimers[iTerm].Start();
-    xSolution += 
+    xLastSolutionValue +=
       xWeights[iTerm] * xTerms[iTerm]->BeginGradientComputation(&S);
     xTimers[iTerm].Stop();
-    }
-    
-  // Store the phi field
-  xLastPhiField = xSolver->GetPhiField();
-  
-  // Clear the directional derivative of the phi field
-  xLastPhiDerivField.fill(0.0);
 
-  // Repeat for each coefficient
-  for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)
-    {
-    // Get an adapter for evaluating the function
-    IHyperSurface2D *xVariation = xCoeff->GetComponentSurface(iCoeff);
-
-    // Compute the partial derivatives with respect to the coefficients
+    // Compute the partial derivative
     xSolveGradTimer.Start();
-    xSolver->ComputeVariationalDerivative(xVariation, dAtoms); 
+    df += xWeights[iTerm] * xTerms[iTerm]->ComputePartialDerivative(&S, &dS);
     xSolveGradTimer.Stop();
 
-    // Create a solution partial derivative object
-    PartialDerivativeSolutionData dS(&S, dAtoms);
-    
-    // TODO: Take this out!!!
-    xWeightsGradTimer.Start();
-    dS.UpdateBoundaryWeights();
-    dS.UpdateInternalWeights(6);
-    xWeightsGradTimer.Stop();
-    
-    // Compute the partial derivatives for each term
-    xGradient[iCoeff] = 0.0;
-    for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
-      {
-      xGradTimers[iTerm].Start();
-      xGradient[iCoeff] += xWeights[iTerm] *
-        xTerms[iTerm]->ComputePartialDerivative(&S, &dS);
-      xGradTimers[iTerm].Stop();
-      }
-
-    // Dump the gradient
-    // cout << iCoeff << "; " << XGradient[iCoeff] << endl;
-    cout << "." << flush;
-
-    // Update the directional derivative of the phi field
-    xLastPhiDerivField += 
-      xGradient[iCoeff] * xSolver->GetPhiDerivativeField();
-
-    // Release the component surface
-    xCoeff->ReleaseComponentSurface(xVariation);
+    // Clean up
+    xTerms[iTerm]->EndGradientComputation();
     }
 
-  // Clear up gradient computation
-  for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
-    xTerms[iTerm]->EndGradientComputation();
+  // Release the variation surface
+  xCoeff->ReleaseVariationSurface(xVariation);
 
-  // Store the gradient evaluation point and value
-  xLastGradEvalPoint = vnl_vector<double>(xEvalPoint, nCoeff);
-  xLastGrad = vnl_vector<double>(xGradient, nCoeff);
-  flagGradAvailable = true;
-
-  // Increment the evaluation counter
-  evaluationCost += nCoeff;
-
-  // Return the solution value
-  return xSolution;
+  // Return the function value
+  return xLastSolutionValue;
 }
 */
 
@@ -1730,21 +1393,16 @@ MedialOptimizationProblem
   // Solve the PDE
   SolvePDE(xEvalPoint);
 
-  // Store the solution at this point as the new guess
-  // xLastPhiField = xSolver->GetPhiField();
-  // flagPhiGuessAvailable = true;
+  // Compute the gradient
+  xSolveGradTimer.Start();
+  xSolver->ComputeVariationalGradient(dAtomArray); 
+  xSolveGradTimer.Stop();
 
   // Store this solution as the new initialization for the PDE solver
   xSolver->SetSolutionAsInitialGuess();
 
   // Create a solution data object representing current solution
   SolutionData S(xSolver);
-
-  // TODO: Take this out!!!
-  xWeightsTimer.Start();
-  S.UpdateBoundaryWeights();
-  S.UpdateInternalWeights(6);
-  xWeightsTimer.Stop();
 
   // Compute the value at the solution and init gradient computation
   xLastSolutionValue = 0.0;
@@ -1759,22 +1417,8 @@ MedialOptimizationProblem
   // Repeat for each coefficient
   for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)
     {
-    // Get an adapter for evaluating the function
-    IHyperSurface2D *xVariation = xCoeff->GetComponentSurface(iCoeff);
-
-    // Compute the partial derivatives with respect to the coefficients
-    xSolveGradTimer.Start();
-    xSolver->ComputeVariationalDerivative(xVariation, dAtoms); 
-    xSolveGradTimer.Stop();
-
     // Create a solution partial derivative object
-    PartialDerivativeSolutionData dS(&S, dAtoms);
-    
-    // TODO: Take this out!!!
-    xWeightsGradTimer.Start();
-    dS.UpdateBoundaryWeights();
-    dS.UpdateInternalWeights(6);
-    xWeightsGradTimer.Stop();
+    PartialDerivativeSolutionData dS(&S, dAtomArray[iCoeff]);
     
     // Compute the partial derivatives for each term
     xGradient[iCoeff] = 0.0;
@@ -1789,9 +1433,6 @@ MedialOptimizationProblem
     // Dump the gradient
     // cout << iCoeff << "; " << XGradient[iCoeff] << endl;
     cout << "." << flush;
-
-    // Release the component surface
-    xCoeff->ReleaseComponentSurface(xVariation);
     }
 
   cout << endl;
@@ -1820,10 +1461,10 @@ void MedialOptimizationProblem::PrintReport(ostream &sout)
 
   for(size_t iTerm = 0; iTerm < xTerms.size(); iTerm++)
     {
-    cout << "Term " << iTerm << endl;
+    sout << "Term " << iTerm << endl;
     xTerms[iTerm]->PrintReport(sout);
-    cout << "    elapsed time: " << xTimers[iTerm].Read() << endl;
-    cout << "    gradient time: " << xGradTimers[iTerm].Read() << endl;
+    sout << "    elapsed time: " << xTimers[iTerm].Read() << endl;
+    sout << "    gradient time: " << xGradTimers[iTerm].Read() << endl;
     }
 }
 

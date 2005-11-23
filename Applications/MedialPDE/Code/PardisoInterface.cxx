@@ -77,6 +77,19 @@ UnsymmetricRealPARDISO
     NULL, &NRHS, IPARM, &MSGLVL, xRhs, xSoln, &ERROR);
 }
 
+void 
+UnsymmetricRealPARDISO
+::Solve(size_t nRHS, double *xRhs, double *xSoln)
+{
+  // Set the various parameters
+  int MAXFCT = 1, MNUM = 1, PHASE = 33, N = n, NRHS = nRHS, MSGLVL = 0, ERROR = 0; 
+  
+  // Perform the symbolic factorization phase
+  pardiso_(PT, &MAXFCT, &MNUM, &MTYPE, &PHASE, &N, 
+    xMatrix, idxRows, idxCols,
+    NULL, &NRHS, IPARM, &MSGLVL, xRhs, xSoln, &ERROR);
+}
+
 UnsymmetricRealPARDISO::
 ~UnsymmetricRealPARDISO()
 {

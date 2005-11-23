@@ -10,7 +10,8 @@ MedialAtom
 
 void MedialAtom ::ComputeNormalVector()
 {
-  N = vnl_cross_3d(Xu, Xv) * sqrt(G.gInv);
+  aelt = sqrt(G.g);
+  N = vnl_cross_3d(Xu, Xv) / aelt;
 }
 
 bool MedialAtom::ComputeBoundaryAtoms(bool flagEdgeAtom)
@@ -35,6 +36,7 @@ bool MedialAtom::ComputeBoundaryAtoms(bool flagEdgeAtom)
 
     // There is a zero badness value
     xGradRMagSqr = 1.0;
+    xNormalFactor = 0.0;
 
     // Simpler geometry, save a square root!
     xBnd[0].N = xBnd[1].N = -xGradR;
@@ -56,6 +58,7 @@ bool MedialAtom::ComputeBoundaryAtoms(bool flagEdgeAtom)
       flagValid = false;
 
       // Set the boundary atoms to zero
+      xNormalFactor = 0;
       xBnd[0].X = xBnd[1].X = X;
       xBnd[0].N = -N;
       xBnd[1].N = N;
@@ -66,7 +69,8 @@ bool MedialAtom::ComputeBoundaryAtoms(bool flagEdgeAtom)
       flagValid = true;
 
       // Compute the normal component of the sail vectors
-      SMLVec3d CN = N * sqrt(1.0 - xGradRMagSqr);
+      xNormalFactor = sqrt(1.0 - xGradRMagSqr);
+      SMLVec3d CN = N * xNormalFactor;
 
       // Compute the position and normals of boundary points
       xBnd[0].N = - xGradR - CN;
@@ -118,6 +122,7 @@ void AddScaleMedialAtoms(
   C.xGradR = A.xGradR + p * B.xGradR;
   C.xGradPhi = A.xGradPhi + p * B.xGradPhi;
   C.xGradRMagSqr = A.xGradRMagSqr + p * B.xGradRMagSqr;
+  C.xNormalFactor = A.xNormalFactor + p * B.xNormalFactor;
 
   // The differential geometry is also added and scaled 
   C.G.g = A.G.g + p * B.G.g;
@@ -410,6 +415,63 @@ double ComputeMedialBoundaryAreaWeights( MedialAtomGrid *xGrid,
   return xTotalArea;
 }
 */
+
+
+// This method computes the weights for integration over the domain of the medial
+// surface. Because the domain may be non-uniform, we must scale all integrals in
+// du dv by these weights
+double ComputeMedialDomainAreaWeights( MedialAtomGrid *xGrid, 
+  MedialAtom *xAtoms, double *xWeights)
+{
+  // A constant to hold 1/3
+  const static double THIRD = 1.0f / 3.0f;
+  double xTotalArea = 0.0f;
+
+  // Clear the content of the weights
+  memset(xWeights, 0, sizeof(double) * xGrid->GetNumberOfAtoms());
+  
+  // Create a quad-based iterator
+  MedialQuadIterator *itQuad = xGrid->NewQuadIterator();
+
+  // For each quad, compute the area associated with it
+  size_t iQuad = 0;
+  while(!itQuad->IsAtEnd())
+    {
+    // Access the four medial atoms
+    size_t i00 = itQuad->GetAtomIndex(0, 0);
+    size_t i01 = itQuad->GetAtomIndex(0, 1);
+    size_t i10 = itQuad->GetAtomIndex(1, 0);
+    size_t i11 = itQuad->GetAtomIndex(1, 1);
+
+    // Get the size of the quad. 
+    SMLVec3d X00(xAtoms[i00].u, xAtoms[i00].v, 0.0);
+    SMLVec3d X01(xAtoms[i01].u, xAtoms[i01].v, 0.0);
+    SMLVec3d X10(xAtoms[i10].u, xAtoms[i10].v, 0.0);
+    SMLVec3d X11(xAtoms[i11].u, xAtoms[i11].v, 0.0);
+
+    // Compute the areas of the two triangles involved
+    double A1 = THIRD * TriangleArea( X00, X01, X11 );
+    double A2 = THIRD * TriangleArea( X00, X11, X10 );
+    xTotalArea += (A1 + A2);
+
+    // Assign a third of each weight to each corner
+    xWeights[i00] += A1 + A2;
+    xWeights[i11] += A1 + A2;
+    xWeights[i01] += A1;
+    xWeights[i10] += A2;
+
+    // Go to the next boundary quad
+    ++(*itQuad);
+    }
+
+  // Delete the iterator object
+  delete itQuad;
+
+  // Return the total area
+  return 3.0f * xTotalArea;
+}
+
+
 
 // Old Method: always returns positive areas - dangerous!
 double ComputeMedialBoundaryAreaWeights( MedialAtomGrid *xGrid, 

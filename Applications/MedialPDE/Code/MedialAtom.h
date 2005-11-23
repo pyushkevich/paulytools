@@ -38,14 +38,17 @@ struct MedialAtom
   // The radius function and its partial derivatives
   double R; //, Ru, Rv, Ruu, Ruv, Rvv;
 
+  // Area element = sqrt(g)
+  double aelt;
+
   // The normal vector and the Riemannian gradient of R on the surface
   SMLVec3d N, xGradR, xGradPhi;
 
   // The Riemannian laplacian of R
   double xLapR;
 
-  // The badness of the atom
-  double xGradRMagSqr;
+  // The badness of the atom; the term sqrt(1-xGradRMagSqr)
+  double xGradRMagSqr, xNormalFactor;
 
   // Whether this is a 'crest' atom, and whether it's valid at all
   bool flagCrest, flagValid;
@@ -93,6 +96,13 @@ GetBoundaryPoint(MedialBoundaryQuadIterator *itBQuad, MedialAtom *xAtoms,
 /** Helper function to compute the coordinate of an internal medial point
  * that is referenced by an iterator */
 SMLVec3d GetInternalPoint(MedialInternalPointIterator *it, MedialAtom *xAtoms);
+
+
+// This method computes the weights for integration over the domain of the medial
+// surface. Because the domain may be non-uniform, we must scale all integrals in
+// du dv by these weights
+double ComputeMedialDomainAreaWeights( MedialAtomGrid *xGrid, 
+  MedialAtom *xAtoms, double *xWeights);
 
 /**
  * This function computes the area associated with each triangle on the

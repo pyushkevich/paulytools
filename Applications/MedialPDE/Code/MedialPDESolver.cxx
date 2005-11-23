@@ -642,7 +642,7 @@ void ComputeMedialAtomBoundaryDerivative(
   double H = dAtom->F, Hu = dAtom->Fu, Hv = dAtom->Fv;
   
   // This is the derivative of the normal vector
-  dAtom->N = (vnl_cross_3d(Xu, Nv) + vnl_cross_3d(Nu, Xv)) / sqrt(g) - 
+  dAtom->N = (vnl_cross_3d(Xu, Nv) + vnl_cross_3d(Nu, Xv)) / xAtom->aelt - 
     ( 0.5 * z / g ) * xAtom->N;
 
   // We will compute several intermediate terms
@@ -662,14 +662,14 @@ void ComputeMedialAtomBoundaryDerivative(
     dAtom->xBnd[0].N = dAtom->xBnd[1].N = 
       0.5 * ( (T2) / xAtom->R - xAtom->xBnd[0].N * (H / F) );
     dAtom->xGradRMagSqr = 0.0;
+    dAtom->xNormalFactor = 0.0;
     return;
     }
 
   // Compute the intermediate terms:
   // This is the coefficient of the normal before differentiation
-  double T1 = sqrt(4.0 * F - 
-    (g11 * Fu * Fu + 2.0 * g12 * Fu * Fv + g22 * Fv * Fv));
-
+  double T1 = 2.0 * xAtom->R * xAtom->xNormalFactor;
+    
   // This is the ugly term
   double T3 = 4.0 * H - ( 
     z11 * Fu * Fu + 2.0 * z12 * Fu * Fv + z22 * Fv * Fv +
@@ -692,15 +692,10 @@ void ComputeMedialAtomBoundaryDerivative(
 
 void
 MedialPDESolver
-::ComputeVariationalDerivative(IHyperSurface2D *xVariation, MedialAtom *dAtoms)
+::PrepareAtomsForVariationalDerivative(IHyperSurface2D *xVariation, MedialAtom *dAtoms)
 {
-  size_t i, j;
-
-  // First thing is to define the PDE's that will give us the variational
-  // derivative of the function phi.
-
-  // Compute the jet of nu at each site
-  for(i = 0; i < m; i++) for(j = 0; j < n; j++)
+  // Evaluate the variation over the atom grid
+  for(size_t i = 0; i < m; i++) for(size_t j = 0; j < n; j++)
     {
     // Get the index of the site
     size_t iGrid = xGrid->GetAtomIndex(i, j);
@@ -721,36 +716,73 @@ MedialPDESolver
     xVariation->EvaluateAtGridIndex(i, j, 1, 1, 0, 3, dAtom.Xuv.data_block());
     xVariation->EvaluateAtGridIndex(i, j, 0, 2, 0, 3, dAtom.Xvv.data_block());
     xVariation->EvaluateAtGridIndex(i, j, 0, 0, 3, 1, &dAtom.xLapR);
+    }
+}
 
-    // Prepare the matrices for the linear solver
-    xSites[iSite]->ComputeVariationalDerivative(
-        y, xSparseValues + xRowIndex[iSite] - 1, &b[i][j],
+void
+MedialPDESolver
+::ComputeVariationalGradient(vector<MedialAtom *> &dAtomArray)
+{
+  size_t i, j, k, n = dAtomArray.size();
+
+  // Create an array of right-hand sides
+  // Mat rhs(n, nSites), soln(n, nSites);
+  
+  // Repeat for each gradient component
+  for(k = 0; k < dAtomArray.size(); k++)
+    {
+    Mat rhs1(m, n, 0.0), soln1(m, n, 0.0);
+    
+    // Compute the right hand side equation at each atom
+    for(i = 0; i < m; i++) for(j = 0; j < n; j++)
+      {
+      // Get the index of the site
+      size_t iGrid = xGrid->GetAtomIndex(i, j);
+      size_t iSite = xSiteIndex[i][j];
+
+      // Access the medial atom underneath
+      MedialAtom &dAtom = dAtomArray[k][iGrid];
+
+      // Prepare the matrices for the linear solver
+      xSites[iSite]->ComputeVariationalDerivative(
+        y, xSparseValues + xRowIndex[iSite] - 1, &rhs1[i][j], // &rhs[k][iSite],
         &xAtoms[iGrid], &dAtom);
+      }
+
+    xPardiso.SymbolicFactorization(nSites, xRowIndex, xColIndex, xSparseValues);
+    xPardiso.NumericFactorization(xSparseValues);
+    xPardiso.Solve(rhs1.data_block(), soln1.data_block());
+/*    
     }
 
-  // Solve the partial differential equation
-  // TODO: Figure out if we can do factorization once for the whole gradient
-  // computation. That could save a significant amount of time overall
-  // xPardiso.SymbolicFactorization(nSites, xRowIndex, xColIndex, xSparseValues);
+  // Solve the linear system for all the RHS
   xPardiso.NumericFactorization(xSparseValues);
-  xPardiso.Solve(b.data_block(), dy.data_block());
+  xPardiso.Solve(n, rhs.data_block(), soln.data_block());
 
   // For each atom, compute the boundary derivatives
-  for(i = 0; i < m; i++) for(j = 0; j < n; j++)
+  for(k = 0; k < dAtomArray.size(); k++)
     {
-    // Get the index of the site
-    size_t iGrid = xGrid->GetAtomIndex(i, j);
-    size_t iSite = xSiteIndex[i][j];
+    // Access the phi matrix
+    vnl_matrix<double> phi = phi1.transpose();
+*/
+    // Compute phi-dependent atom quantities
+    for(i = 0; i < m; i++) for(j = 0; j < n; j++)
+      {
+      // Get the index of the site
+      size_t iGrid = xGrid->GetAtomIndex(i, j);
+      size_t iSite = xSiteIndex[i][j];
 
-    // Access the medial atom underneath
-    MedialAtom &dAtom = dAtoms[iGrid];
+      // Access the medial atom underneath
+      MedialAtom &dAtom = dAtomArray[k][iGrid];
 
-    // Compute the gradient of phi for the new atom
-    dAtom.F = xMasks[iSite]->ComputeOneJet(dy, dAtom.Fu, dAtom.Fv);
+      // Compute the gradient of phi for the new atom
+      dAtom.F = xMasks[iSite]->ComputeOneJet(soln1, dAtom.Fu, dAtom.Fv);
 
-    // Compute the rest of the atom derivative
-    ComputeMedialAtomBoundaryDerivative(
-      &xAtoms[iGrid], &dAtom, xSites[iSite]->IsBorderSite());
+      // Compute the rest of the atom derivative
+      ComputeMedialAtomBoundaryDerivative(
+        &xAtoms[iGrid], &dAtom, xSites[iSite]->IsBorderSite());
+      cout << i << " " << j << " " << "DONE - 1" << endl;
+      }
     }
 }
 

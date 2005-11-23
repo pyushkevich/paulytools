@@ -63,11 +63,20 @@ public:
     { return Solve(xInitSoln); }
 
   /**
-   * Compute the 'jet' of the equation with respect to the basis functions
+   * This is a prelimiary step for computing the gradient of the phi-function
+   * with respect to some set of basis functions. Call this method for each basis
+   * function just once to pre-compute values that are common between all subsequent
+   * gradient computations
+   */
+  void PrepareAtomsForVariationalDerivative(
+    IHyperSurface2D *xVariation, MedialAtom *dAtoms);
+
+  /**
+   * Compute the gradient of the equation with respect to the basis functions
    * that constitute the medial surface. This means solving the PDEs that define
    * the gradient of the phi function with respect to the basis functions, as 
    * well as computing the other partial derivatives */
-  void ComputeVariationalDerivative(IHyperSurface2D *xVariation, MedialAtom *dAtoms);
+  void ComputeVariationalGradient(vector<MedialAtom *> &dAtomArray);
 
   /** Get the array of atoms */
   MedialAtom *GetAtomArray()

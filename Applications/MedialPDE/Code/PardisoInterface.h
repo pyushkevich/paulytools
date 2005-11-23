@@ -22,6 +22,10 @@ public:
   // Solve the system for the given right hand side, solution in xSoln
   void Solve(double *xRhs, double *xSoln);
 
+  // Solve the system for a number of right hand sides, if the second vector
+  // is NULL, will solve in-place
+  void Solve(size_t nRHS, double *xRhs, double *xSoln);
+
 private:
   /** Internal data for PARDISO */
   size_t PT[64];

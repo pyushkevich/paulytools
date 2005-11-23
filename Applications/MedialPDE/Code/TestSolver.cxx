@@ -38,6 +38,8 @@ void TestGradientComputationPrintReport(
 int TestGradientComputation(
   MedialPDESolver *xSolver, IMedialCoefficientMask *xMask)
 {
+  size_t iVar;
+
   // Timers for different routines
   CodeTimer tCentral, tAnalytic;
   
@@ -98,29 +100,39 @@ int TestGradientComputation(
     xVariationNames.push_back(" Random Variation ");
     xVariationCoeffs.push_back(dx);
     }
+
+  // For each variation, allocate a derivative array
+  vector<MedialAtom *> dAtomArray;
   
   // Repeat for all variations
-  for(size_t iVar = 0; iVar < xVariations.size(); iVar++)
+  for(iVar = 0; iVar < xVariations.size(); iVar++)
     {
+    // Get an adapter corresponding to the i-th component of the surface
+    IHyperSurface2D *xEta = xVariations[iVar];
+
+    // Create an array of atoms to hold the derivative data
+    MedialAtom *dAtoms = 
+      new MedialAtom[xSolver->GetAtomGrid()->GetNumberOfAtoms()];
+    xSolver->PrepareAtomsForVariationalDerivative(xEta, dAtoms);
+    dAtomArray.push_back(dAtoms);
+    }
+
+  // Solve the medial PDE for all these variations
+  xSolver->Solve();
+  tAnalytic.Start();
+  xSolver->ComputeVariationalGradient(dAtomArray);
+  tAnalytic.Stop();
+
+  // Compute all the other derivatives
+  for(iVar = 0; iVar < xVariations.size(); iVar++) 
+    {
+    // Get an adapter corresponding to the i-th component of the surface
+    IHyperSurface2D *xEta = xVariations[iVar];
+
     cout << "----------------------------------------" << endl;
     cout << xVariationNames[iVar] << endl;
     cout << "----------------------------------------" << endl;
     
-    // Get an adapter corresponding to the i-th component of the surface
-    IHyperSurface2D *xEta = xVariations[iVar];
-
-    // Create an array of atoms to hold the derivative
-    MedialAtom *dAtoms = 
-      new MedialAtom[xSolver->GetAtomGrid()->GetNumberOfAtoms()];
-
-    // Solve for Phi at the current location
-    xSolver->Solve();
-
-    // Compute the variational derivative
-    tAnalytic.Start();
-    xSolver->ComputeVariationalDerivative(xEta, dAtoms);
-    tAnalytic.Stop();
-
     // Solve both problems
     tCentral.Start();
     xMask->SetCoefficientArray( (x0 + eps * xVariationCoeffs[iVar]).data_block() );
@@ -150,12 +162,15 @@ int TestGradientComputation(
       // Point to the atoms
       MedialAtom &a1 = S1.GetAtomArray()[i];
       MedialAtom &a2 = S2.GetAtomArray()[i];
-      MedialAtom &a0 = dAtoms[i];
+      MedialAtom &a0 = dAtomArray[iVar][i];
 
       // Take the largest difference in Phi
       double dcPhi = 0.5 * (a1.F - a2.F) / eps;
       double daPhi = a0.F;
       UpdateMax(fabs(dcPhi - daPhi), xMaxPhiDiff);
+
+      cout << daPhi << " = ";
+      cout << dcPhi << " ";
 
       // Also look at the differences in grad R mag sqr.
       double dcGRMS = 0.5 * (a1.xGradRMagSqr - a2.xGradRMagSqr) / eps;
@@ -175,9 +190,11 @@ int TestGradientComputation(
         }
       }
 
+    cout << endl;
+
     // Now, test the effect on SolutionData objects
     SolutionData sd0(xSolver), sd1(&S1), sd2(&S2);
-    PartialDerivativeSolutionData pdsd(&sd0, dAtoms);
+    PartialDerivativeSolutionData pdsd(&sd0, dAtomArray[iVar]);
 
     // Compute the boundary weights derivatives
     sd0.UpdateBoundaryWeights();
@@ -248,6 +265,9 @@ int TestGradientComputation(
     UpdateMax(xMaxCellVolumeDiff, xGlobalMaxCellVolumeDiff);
     UpdateMax(xTotalAreaDiff, xGlobalTotalAreaDiff);
     UpdateMax(xTotalVolumeDiff, xGlobalTotalVolumeDiff);
+
+    // Delete the atoms
+    delete dAtomArray[iVar];
     }
 
   // Release unused variations

@@ -264,6 +264,90 @@ void TestCellVolume()
 }
 
 
+/** Test differential geometry relationships */
+int TestDifferentialGeometry(const char *fnMPDE)
+{
+  // Load a medial PDE for the test
+  MedialPDE mp(2, 4, 25, 49);
+  mp.LoadFromParameterFile(fnMPDE);
+
+  // Pick a point to evaluate at
+  double u = 0.6, v = 0.2, eps = 0.0001;
+
+  // Compute the jet at this point
+  SMLVec3d X00, X10, X01, X20, X11, X02;
+  mp.GetSurface()->EvaluateDerivative(u, v, 0, 0, 0, 3, X00.data_block());
+  mp.GetSurface()->EvaluateDerivative(u, v, 1, 0, 0, 3, X10.data_block());
+  mp.GetSurface()->EvaluateDerivative(u, v, 0, 1, 0, 3, X01.data_block());
+  mp.GetSurface()->EvaluateDerivative(u, v, 2, 0, 0, 3, X20.data_block());
+  mp.GetSurface()->EvaluateDerivative(u, v, 1, 1, 0, 3, X11.data_block());
+  mp.GetSurface()->EvaluateDerivative(u, v, 0, 2, 0, 3, X02.data_block());
+
+  // Compute the differential geometry
+  GeometryDescriptor gd;
+  gd.SetJet(
+    X00.data_block(), X10.data_block(), X01.data_block(),
+    X20.data_block(), X11.data_block(), X02.data_block());
+
+  // Check the symbols
+  double E = dot_product(X10, X10);
+  double F = dot_product(X10, X01);
+  double G = dot_product(X01, X01);
+  double Eu = 2.0 * dot_product(X10, X20);
+  double Ev = 2.0 * dot_product(X10, X11);
+  double Gu = 2.0 * dot_product(X01, X11);
+  double Gv = 2.0 * dot_product(X01, X02);
+  double Fu = dot_product(X20, X01) + dot_product(X11, X10);
+  double Fv = dot_product(X11, X01) + dot_product(X02, X10);
+
+  double g = E * G - F * F;
+
+  double G111 = (G * Eu - 2 * F * Fu + F * Ev) / (2 * g);
+  double G121 = (G * Ev - F * Gu) / (2 * g);
+  double G221 = (2 * G * Fv - G * Gu - F * Gv) / (2 * g);
+  double G112 = (2 * E * Fu - E * Ev - F * Eu) / (2 * g);
+  double G122 = (E * Gu - F * Ev) / (2 * g);
+  double G222 = (E * Gv - 2 * F * Fv + F * Gu) / (2 * g);
+
+  cout << "E = " << E << " vs " << gd.xCovariantTensor[0][0] << endl;
+  cout << "F = " << F << " vs " << gd.xCovariantTensor[0][1] << endl;
+  cout << "G = " << G << " vs " << gd.xCovariantTensor[1][1] << endl;
+  cout << "g = " << g << " vs " << gd.g << endl;
+
+  cout << "G 11 1 = " << G111 << " vs " << gd.xChristoffelSecond[0][0][0] << endl;
+  cout << "G 12 1 = " << G121 << " vs " << gd.xChristoffelSecond[0][1][0] << endl;
+  cout << "G 22 1 = " << G221 << " vs " << gd.xChristoffelSecond[1][1][0] << endl;
+  cout << "G 11 2 = " << G112 << " vs " << gd.xChristoffelSecond[0][0][1] << endl;
+  cout << "G 12 2 = " << G122 << " vs " << gd.xChristoffelSecond[0][1][1] << endl;
+  cout << "G 22 2 = " << G222 << " vs " << gd.xChristoffelSecond[1][1][1] << endl;
+
+  gd.PrintSelf(cout);
+  
+  // Evaluate the nearby points
+  /*
+  SMLVec3d YPZ, YPP, YZP, YMP, YMZ, YMM, YZM, YPM;
+  mp.GetSurface()->EvaluateDerivative(u + eps, v      , 0, 0, 0, 3, YPZ.data_block()); 
+  mp.GetSurface()->EvaluateDerivative(u + eps, v + eps, 0, 0, 0, 3, YPP.data_block()); 
+  mp.GetSurface()->EvaluateDerivative(u      , v + eps, 0, 0, 0, 3, YZP.data_block()); 
+  mp.GetSurface()->EvaluateDerivative(u - eps, v + eps, 0, 0, 0, 3, YMP.data_block()); 
+  mp.GetSurface()->EvaluateDerivative(u - eps, v      , 0, 0, 0, 3, YMZ.data_block()); 
+  mp.GetSurface()->EvaluateDerivative(u - eps, v - eps, 0, 0, 0, 3, YMM.data_block()); 
+  mp.GetSurface()->EvaluateDerivative(u      , v - eps, 0, 0, 0, 3, YZM.data_block()); 
+  mp.GetSurface()->EvaluateDerivative(u + eps, v - eps, 0, 0, 0, 3, YPM.data_block()); 
+
+  // Compute the partial derivatives
+  SMLVec3d Y00, Y01, Y10, Y20, Y11, Y02;
+  Y10 = (YPZ - YMZ) / (2.0 * eps);
+  Y01 = (YZP - YZM) / (2.0 * eps);
+  Y20 = (YPZ + YMZ - X00) / (eps * eps);
+  Y02 = (YZP + YZM - X00) / (eps * eps);
+  Y11 = (YPP + YMM - YPM - YMP) / (4 * eps * eps);
+
+  // Compute the partial derivative tensor
+  */
+  return 0;
+}
+
 /**
  * This test routine checks the accuracy of basis function variation
  * computations, under various masks
@@ -448,7 +532,7 @@ int TestDerivativesWithImage(const char *fnMPDE)
   vector<EnergyTerm *> vt;
   vt.push_back(new MedialAnglesPenaltyTerm());
   vt.push_back(new MedialRegularityTerm(
-      mpTemplate.GetSolver()->GetAtomArray(), mpTemplate.GetSolver()->GetAtomGrid()));
+      mp.GetSolver()->GetAtomGrid(), mp.GetSolver()->GetAtomArray()));
   vt.push_back(new BoundaryJacobianEnergyTerm());
   vt.push_back(new BoundaryImageMatchTerm(&img));
   vt.push_back(new ProbabilisticEnergyTerm(&img, 4));
@@ -528,6 +612,8 @@ int main(int argc, char *argv[])
     return TestDerivativesWithImage(argv[2]);
   else if(0 == strcmp(argv[1], "DERIV3") && argc > 2)
     return TestBasisFunctionVariation(argv[2]);
+  else if(0 == strcmp(argv[1], "DERIV4") && argc > 2)
+    return TestDifferentialGeometry(argv[2]);
   else 
     return usage();
 }

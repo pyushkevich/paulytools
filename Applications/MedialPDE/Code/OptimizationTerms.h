@@ -255,53 +255,6 @@ private:
   double xObjectIntegral, xRatio;
 };
 
-/**
- * This term computes the amount of volume overlap between an image and the
- * m-rep. The image represents the object of interest with voxels of intensity
- * 1.0 and background with intensity 0.0. The image should have floating point
- * voxels, where values between 0 and 1 represent partial volume or
- * uncertainty
- */
-/*
-class VolumeOverlapEnergyTerm : public EnergyTerm
-{
-public:
-  // Initialize with an image and a number of sample points
-  VolumeOverlapEnergyTerm(FloatImage *image, size_t nCuts = 10);
-  
-  // Compute the volume overlap fraction between image and m-rep
-  double ComputeEnergy(SolutionDataBase *data);
-
-  // Initialize gradient computation and return the value of the solution
-  // at the current state
-  double BeginGradientComputation(SolutionData *SCenter);
-  
-  // Compute the partial derivative (must be called in the middle of Begin and
-  // End of GradientComputation.
-  double ComputePartialDerivative(
-    SolutionData *S, PartialDerivativeSolutionData *dS);
-
-  // Finish gradient computation, remove all temporary data
-  void EndGradientComputation();
-
-  // Print a verbose report
-  void PrintReport(ostream &sout);
-  
-private:
-  size_t nCuts;
-  FloatImage *xImage;
-  double xImageVolume;
-
-  // Temporary for gradient computation
-  double *xImageVal;
-  SMLVec3d *xImageGrad;
-  SMLVec3d *xBndNrm;
-
-  // Cached Terms for reporting match details
-  double xIntersect, xObjectVolume, xOverlap, xUnion;
-};
-*/
-
 class BoundaryJacobianEnergyTerm : public EnergyTerm
 {
 public:
@@ -373,27 +326,43 @@ private:
   size_t nBadAtoms, nAtoms;
 };
 
+/**
+ * Penalty for small values of the radius (phi / scale)^-8
+ */
+class RadiusPenaltyTerm : public EnergyTerm
+{
+public:
+  RadiusPenaltyTerm(double xScale)
+    { this->xScale = xScale; }
+
+  double ComputeEnergy(SolutionDataBase *data);
+  
+  void PrintReport(ostream &sout);
+
+  // Compute the partial derivative
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
+private:
+  double xMinR2, xTotalPenalty, xScale;
+};
+
 class MedialRegularityTerm : public NumericalGradientEnergyTerm
 {
 public:
+  /** Initialize with a sample solution */
+  MedialRegularityTerm(MedialAtomGrid *xGrid, MedialAtom *xAtoms);
+  
   /** Initialize the term with the template info */
-  MedialRegularityTerm(MedialAtom *xTempAtoms, MedialAtomGrid *xTempGrid);
   double ComputeEnergy(SolutionDataBase *data);
 
-  // Compute the value and set up common terms
-  double BeginGradientComputation(SolutionData *SCenter);
-  
   // Compute partial derivative
   double ComputePartialDerivative(
     SolutionData *S, PartialDerivativeSolutionData *dS);
   
   void PrintReport(ostream &sout);
 private:
-  double DistortionPenalty(double, double);
-  double DistortionPenaltyAndDerivative(double, const SMLVec3d &, const SMLVec3d &, double &);
-  vector<double> xEdgeLength;
-  double xMaxDistortion, xMinDistortion, xMeanSquareDistortion, xTotalPenalty;
-  vector<double> xGradientCommon;
+  double xGradMagIntegral, xGradMagMaximum, xDomainArea;
+  vnl_vector<double> xDomainWeights;
 };
 
 class CodeTimer 
@@ -445,6 +414,9 @@ public:
   /** Compute the function and the gradient (comes from optima library) */
   double ComputeGradient(double *X, double *XGrad);
 
+  /** Compute the function and the partial derivative in one given direction */
+  // double ComputePartialDerivative(double *xEvalPoint, double *xDirection, double &df);
+
   /** Print a detailed report */
   void PrintReport(ostream &sout);
 
@@ -487,7 +459,8 @@ private:
   bool SolvePDE(double *xEvalPoint);
 
   // The array of derivative atoms
-  MedialAtom *dAtoms;
+  // MedialAtom *dAtoms;
+  vector<MedialAtom *> dAtomArray;
 };
 
 #endif
