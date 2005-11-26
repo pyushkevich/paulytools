@@ -93,21 +93,6 @@ void FiniteDifferenceMask
 }
 
 double FiniteDifferenceMask
-::ComputeOneJet(const Mat &F, double &Fu, double &Fv)
-{
-  Fu = 0; Fv = 0;
-  for(size_t i = 0; i < n; i++)
-    {
-    double fi = F[iu + qu[i]][iv + qv[i]];
-    Fu += W[i][F10] * fi;
-    Fv += W[i][F01] * fi;
-    }
-
-  // Return the value of Y
-  return F[iu][iv];
-}
-
-double FiniteDifferenceMask
 ::ComputeTwoJet(const Mat &F, double &Fu, double &Fv,
   double &Fuu, double &Fuv, double &Fvv)
 {

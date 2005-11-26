@@ -41,11 +41,22 @@ public:
   virtual void ComputeWeights(const double *uGrid, const double *vGrid);
   
   // Compute the first derivatives of a function
-  virtual double ComputeOneJet(const Mat &F,
-    double &Fu, double &Fv);
-  
+  double ComputeOneJet(const Mat &F, double &Fu, double &Fv)
+    {
+    Fu = 0; Fv = 0;
+    for(size_t i = 0; i < n; i++)
+      {
+      double fi = F[iu + qu[i]][iv + qv[i]];
+      Fu += W[i][F10] * fi;
+      Fv += W[i][F01] * fi;
+      }
+
+    // Return the value of Y
+    return F[iu][iv];
+    }
+
   // Compute the second derivatives of the function
-  virtual double ComputeTwoJet(const Mat &F,
+  double ComputeTwoJet(const Mat &F,
     double &Fu, double &Fv, double &Fuu, double &Fuv, double &Fvv);
 
   // Get the contribution of a grid node to the first derivatives

@@ -62,6 +62,7 @@ SET(PDE_LIBS
   vtkCommon
   vtkIO
   ${LAPACK_OR_MKL_LIBS}
+  gsl gslcblas 
   )
 
 # Create a common library
@@ -98,6 +99,7 @@ ADD_TEST(TestDerivativesNoImage testpde
 
 ADD_TEST(TestDerivativesWithImage testpde DERIV2 ${MPDE_TEST_CMREP})
 ADD_TEST(TestBasisFunctionVariation testpde DERIV3 ${MPDE_TEST_CMREP})
+ADD_TEST(TestDifferentialGeometry testpde DERIV4 ${MPDE_TEST_CMREP})
 
 # Copy the script files
 SET(SCRIPT_FILES 

@@ -96,14 +96,17 @@ for file in samples:
   if(os.access(fnMPDE, os.R_OK)):
     
     # Load the m-rep if we can
-    if(m.LoadFromParameterFile(fnMPDE)):
+    m1=MedialPDE(8, 10, 
+        sampling["nu"], sampling["nv"], sampling["cut"], sampling["ncu"], sampling["ncv"]);
+
+    if(m1.LoadFromParameterFile(fnMPDE)):
 
       # Check the Jacobian penalty
-      m.ComputeBoundaryJacobianPenalty(True)
+      m1.ComputeBoundaryJacobianPenalty(True)
       
       # Add the sample to the PCA  
       print "Added " + id + " to the PCA"
-      pca.AddSample(m);
+      pca.AddSample(m1);
 
 # Compute the PCA proper
 print "Computing PCA!"

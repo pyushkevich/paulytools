@@ -82,7 +82,7 @@ def Stage_XYZ_CG_VO(id, expid, nmStart, nmEnd, imgType, nu, nv, nIter):
   # Set up the optimizer
   mp.SetOptimizerToConjugateGradientDescent(0.1);
   mp.SetMatchToVolumeOverlap();
-  mp.SetOptimizationToCoarseToFine(nu, nv, 0, 0);
+  mp.SetOptimizationToCoarseToFine(sampling["ncu"], sampling["ncv"], 0, 0)
   mp.EnableMeshDump(dirMesh + expid + "/" + id + "/" + nmEnd, 0.01);
   
   # Run the optimization
@@ -134,7 +134,7 @@ def Stage_CTF_CG_BM(id, expid, nmStart, nmEnd, imgType, nu, nv, nIter):
   mp.SetNumberOfCoefficients(nu, nv);
     
   # Set up the optimizer
-  mp.SetOptimizerToConjugateGradientDescent(0.1);
+  mp.SetOptimizerToConjugateGradientDescent(0.0001);
   mp.SetMatchToBoundaryGradient();
   mp.SetOptimizationToDeformable();
   mp.EnableMeshDump(dirMesh + expid + "/" + id + "/" + nmEnd, 0.01);

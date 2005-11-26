@@ -304,19 +304,6 @@ void MedialPDESolver::InitializeSiteGeometry()
 {
   size_t i, j;
   
-  /*
-  // Generate a matrix of x, y, z values
-  Mat vx(m, n), vy(m, n), vz(m, n);
-
-  // Sample the surface along the current grid
-	for(i = 0; i < m; i++) for(j = 0; j < n; j++)
-	  {
-	  double X[3];
-	  xSurface->EvaluateAtGridIndex(i, j, 0, 0, 0, 3, X);
-	  vx[i][j] = X[0]; vy[i][j] = X[1]; vz[i][j] = X[2];
-	  }
-  */
-
   // Initialize each site with the current surface properties
   for(i = 0; i < m; i++) for(j = 0; j < n; j++)
     {
@@ -340,24 +327,6 @@ void MedialPDESolver::InitializeSiteGeometry()
     xSurface->EvaluateAtGridIndex(i, j, 1, 1, 0, 3, xAtom.Xuv.data_block());
     xSurface->EvaluateAtGridIndex(i, j, 0, 2, 0, 3, xAtom.Xvv.data_block());
 
-		/*    
-    xAtom.X[0] = xMasks[iSite]->ComputeTwoJet(vx, xAtom.Xu[0], xAtom.Xv[0], xAtom.Xuu[0], xAtom.Xuv[0], xAtom.Xvv[0]);
-    xAtom.X[1] = xMasks[iSite]->ComputeTwoJet(vy, xAtom.Xu[1], xAtom.Xv[1], xAtom.Xuu[1], xAtom.Xuv[1], xAtom.Xvv[1]);
-    xAtom.X[2] = xMasks[iSite]->ComputeTwoJet(vz, xAtom.Xu[2], xAtom.Xv[2], xAtom.Xuu[2], xAtom.Xuv[2], xAtom.Xvv[2]);
-    */
-/*
-		double u = uGrid[i], v = vGrid[j];
-    xAtom.X[0]   = 10 * u; 
-    xAtom.X[1]   = 10 * v; 
-    xAtom.X[2]   = sin(u * v) + cos(u*u + v*v);
-
-    xAtom.Xu[0]  = 10;       xAtom.Xu[1]  = 0;        xAtom.Xu[2]  = v*cos(u*v) - 2*u*sin(u*u+v*v);
-    xAtom.Xv[0]  = 0;        xAtom.Xv[1]  = 10;       xAtom.Xv[2]  = u*cos(u*v) - 2*v*sin(u*u+v*v);
-    xAtom.Xuu[0] = 0;        xAtom.Xuu[1] = 0;        xAtom.Xuu[2] = -v*v*sin(u*v) - 2*sin(u*u+v*v) - 4*u*u*cos(u*u+v*v);
-    xAtom.Xuv[0] = 0;        xAtom.Xuv[1] = 0;        xAtom.Xuv[2] = cos(u*v)-u*v*sin(u+v) - 4*u*v*cos(u*u+v*v);
-    xAtom.Xvv[0] = 0;        xAtom.Xvv[1] = 0;        xAtom.Xvv[2] = -u*u*sin(u+v) - 2*sin(u*u+v*v) - 4*v*v*cos(u*u+v*v);
-  */
-
     // Compute the differential geometric tensors
     xAtom.ComputeDifferentialGeometry();
 
@@ -367,50 +336,9 @@ void MedialPDESolver::InitializeSiteGeometry()
     // Compute the laplacian of R 
     xSurface->EvaluateAtGridIndex(i, j, 0, 0, 3, 1, &xAtom.xLapR);
     
-    // if(xAtom.xLapR > 0 && xSites[iSite]->IsBorderSite()) 
-    //  cout << xAtom.xLapR << " ! " << flush;
-
     // Compute the solution at this point
     xSites[iSite]->SetGeometry( &xAtom.G, xAtom.xLapR);
     }
-    
-  /*
-  // Define test function
-	Mat phitest(m, n, 0.0);
-	for(i = 0; i < m; i++) for(j = 0; j < n; j++)
-		{
-		double u = uGrid[i], v = vGrid[j];
-		phitest(i, j) = sinh(u) + cosh(v * u);
-		}
-		
-	Mat LB1(m, n, 0.0), LB2(m, n, 0.0);
-	for(i = 1; i < m-1; i++) for(j = 1; j < n-1; j++)
-		{
-		LB1[i][j] = xSites[xSiteIndex[i][j]]->ComputeEquation(phitest) + xAtoms[xSiteIndex[i][j]].xLapR;
-		LB2[i][j] = EstimateLBOperator(phitest, i, j);
-		}
-
-  cout << "SURFACE INFO" << endl;
-  xSurface->PrintReport();
-
-  MedialAtom B;
-  B.X[0] = xMasks[xSiteIndex[8][8]]->ComputeTwoJet(vx, B.Xu[0], B.Xv[0], B.Xuu[0], B.Xuv[0], B.Xvv[0]);
-  B.X[1] = xMasks[xSiteIndex[8][8]]->ComputeTwoJet(vy, B.Xu[1], B.Xv[1], B.Xuu[1], B.Xuv[1], B.Xvv[1]);
-  B.X[2] = xMasks[xSiteIndex[8][8]]->ComputeTwoJet(vz, B.Xu[2], B.Xv[2], B.Xuu[2], B.Xuv[2], B.Xvv[2]);
-		
-  cout << "AT 0.04, 0.04 " << endl;
-  MedialAtom &A = xAtoms[xSiteIndex[8][8]];
-  cout << A.u << " " << A.v << endl;
-  cout << "X : " << A.X << " " << B.X << endl;
-  cout << "Xu : " << A.Xu << " " << B.Xu << endl;
-  cout << "Xv : " << A.Xv << " " << B.Xv << endl;
-  cout << "Xuu : " << A.Xuu << " " << B.Xuu << endl;
-  cout << "Xuv : " << A.Xuv << " " << B.Xuv << endl;
-  cout << "Xvv : " << A.Xvv << " " << B.Xvv << endl;
-		
-	cout << "ANALYTIC: " << LB1[8][8] << endl;
-	cout << "NUMERIC: " << LB2[8][8] << endl;
-  */
 }
 
 bool
@@ -488,7 +416,6 @@ bool MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
 
   // Compute the right hand side, put it into b
   bMagSqr = ComputeNewtonRHS(y, b);
-  // cout << " " << bMagSqr << " ";
 
   // We are now ready to perform the Newton loop
   for(iIter = 0; iIter < 50; iIter++)
@@ -544,21 +471,6 @@ bool MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
     // cout << "  Largest Epsilon: " << epsMax << endl;
     // cout << "  Largest Eqn Error: " << bMax << endl; 
 
-    /*
-    if(iIter > 12)
-      cout << "!";
-    else
-      cout << "+";
-      */
-
-      // cout << endl << "Step " << iIter << ":\t" << "eMax = " 
-      //   << epsMax << "\t" << "bMax = " << bMax << endl;
-    
-    // Test the matrix result
-    // SparseLinearTest(nSites, xRowIndex, xColIndex, xSparseValues, eps, zTest, b);
-    // double zMax = fabs(zTest[myidamax(nSites, zTest, 1)]);
-    // cout << "  Largest Solver Error: " << zMax << endl;
-   
     // Convergence is defined when epsilon is smaller than some threshold
     if(bMax < delta || epsMax < delta) 
       break;
@@ -576,31 +488,6 @@ bool MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
     cout << endl;
     return true;
     }
-
-  /* 
-  // Show the value of phi at the four corners
-  cout << "Corner Phi Values: " << 
-    y[0][0] << ", " << y[0][n-1] << ", " << y[m-1][1] << ", " << y[m-1][n-1] << endl;
-
-  cout << "Y piece: " << endl;
-  cout << y.extract(6, 6) << endl;
-  cout << "B piece: " << endl;
-  cout << b.extract(6, 6) << endl;
-
-  // Estimate the LBO for 1..5
-  Mat LBO(m, n, 0.0);
-  for(i = 1; i < m-1; i++) for(j = 1; j < n-1; j++)
-    {
-    LBO[i][j] = EstimateLBOperator(y, i, j);
-    }
-
-  cout << "LBO Estimate: " << endl;
-  cout << LBO.extract(16, 16) << endl;
-  
-
-  xSites[xSiteIndex[1][1]]->PrintReport();
-  xMasks[xSiteIndex[1][1]]->PrintReport();
-  */
 }
 
 bool
@@ -619,6 +506,129 @@ MedialPDESolver
   return flagValid && flagSolved;
 }
 
+struct AtomGradientTerms
+{
+  double x1_2R, Ru, Rv, x1_2F, Ru_R, Rv_R, Ru_2F, Rv_2F;
+  double g1iRi, g2iRi;
+  SMLVec3d N_2g, N_2nt, Xu_aelt, Xv_aelt;
+};
+
+void ComputeMedialAtomBoundaryDerivativeCommonTerms(
+  MedialAtom *xAtom, AtomGradientTerms &agt)
+{
+  // Get the relevant elements of the atoms
+  SMLVec3d &X = xAtom->X, &Xu = xAtom->Xu, &Xv = xAtom->Xv;
+  
+  // Get the elements of the first fundamental form and its derivative
+  double &g11 = xAtom->G.xContravariantTensor[0][0];
+  double &g12 = xAtom->G.xContravariantTensor[0][1];
+  double &g22 = xAtom->G.xContravariantTensor[1][1];
+
+  // Get the g's
+  double &g = xAtom->G.g; 
+
+  // Get the partials of Phi and its variational derivative
+  double &F = xAtom->F, &Fu = xAtom->Fu, &Fv = xAtom->Fv;
+
+  // Get the derivatives of R
+  double &R = xAtom->R; 
+  agt.x1_2R = 0.5 / R;
+  agt.Ru = Fu * agt.x1_2R, agt.Rv = Fv * agt.x1_2R;
+  agt.Ru_R = agt.Ru / R;
+  agt.Rv_R = agt.Rv / R;
+  agt.Ru_2F = 0.5 * agt.Ru / F;
+  agt.Rv_2F = 0.5 * agt.Rv / F;
+  
+  // Terms used to compute the derivative of the normal vector
+  agt.Xu_aelt = Xu / xAtom->aelt; agt.Xv_aelt = Xv / xAtom->aelt;
+  agt.N_2g = 0.5 * xAtom->N / g;
+
+  // We will compute several intermediate terms
+  agt.g1iRi = g11 * agt.Ru + g12 * agt.Rv;
+  agt.g2iRi = g12 * agt.Ru + g22 * agt.Rv;
+
+  // Compute the plus-minus term
+  agt.N_2nt = 0.5 * xAtom->N / xAtom->xNormalFactor;
+}
+
+void ComputeMedialAtomBoundaryDerivative(
+  MedialAtom *xAtom, MedialAtom *dAtom, AtomGradientTerms &agt, bool isEdge)
+{
+  // Get the relevant elements of the atoms
+  SMLVec3d &X = xAtom->X, &Xu = xAtom->Xu, &Xv = xAtom->Xv;
+  SMLVec3d &Y = dAtom->X, &Yu = dAtom->Xu, &Yv = dAtom->Xv;
+  
+  // Get the elements of the first fundamental form and its derivative
+  double &g11 = xAtom->G.xContravariantTensor[0][0];
+  double &g12 = xAtom->G.xContravariantTensor[0][1];
+  double &g22 = xAtom->G.xContravariantTensor[1][1];
+  double &z11 = dAtom->G.xContravariantTensor[0][0];
+  double &z12 = dAtom->G.xContravariantTensor[0][1];
+  double &z22 = dAtom->G.xContravariantTensor[1][1];
+
+  // Get the g's
+  double &g = xAtom->G.g; double &z = dAtom->G.g;
+
+  // Get the partials of Phi and its variational derivative
+  double &F = xAtom->F, &Fu = xAtom->Fu, &Fv = xAtom->Fv;
+  double &H = dAtom->F, &Hu = dAtom->Fu, &Hv = dAtom->Fv;
+
+  // Get the derivatives of R
+  double &R = xAtom->R;
+  double P = H * agt.x1_2R;
+  double Pu = Hu * agt.x1_2R - H * agt.Ru_2F;
+  double Pv = Hv * agt.x1_2R - H * agt.Rv_2F;
+  
+  // This is the derivative of the normal vector
+  dAtom->N =  vnl_cross_3d(agt.Xu_aelt, Yv);
+  dAtom->N += vnl_cross_3d(Yu, agt.Xv_aelt);
+  vmuladd(dAtom->N, agt.N_2g, -z);
+
+  // We will compute several intermediate terms
+  double z1iRi = z11 * agt.Ru + z12 * agt.Rv;
+  double z2iRi = z12 * agt.Ru + z22 * agt.Rv;
+
+  // Compute the derivative of grad R
+  vmulset(dAtom->xGradR, Xu, z1iRi + g11 * Pu + g12 * Pv);
+  vmuladd(dAtom->xGradR, Xv, z2iRi + g12 * Pu + g22 * Pv);
+  vmuladd(dAtom->xGradR, Yu, agt.g1iRi);
+  vmuladd(dAtom->xGradR, Yv, agt.g2iRi);
+
+  // Address the edge case first
+  if(isEdge) 
+    {
+    // The normal term vanishes
+    dAtom->xBnd[0].N = dAtom->xBnd[1].N = - dAtom->xGradR;
+    dAtom->xBnd[1].X = dAtom->xBnd[0].X = 
+      Y + R * dAtom->xBnd[0].N + P * xAtom->xBnd[0].N;
+    dAtom->xGradRMagSqr = 0.0;
+    dAtom->xNormalFactor = 0.0;
+    return;
+    }
+
+  // Compute the derivative of grad R . grad R
+  dAtom->xGradRMagSqr = z1iRi * agt.Ru + z2iRi * agt.Rv 
+    + 2.0 * (agt.g1iRi * Pu + agt.g2iRi * Pv);
+
+  // Compute the plus-minus term
+  SMLVec3d dNormalTerm;
+  vmulset(dNormalTerm, dAtom->N, xAtom->xNormalFactor);
+  vmuladd(dNormalTerm, agt.N_2nt, -dAtom->xGradRMagSqr);
+  
+  // Compute the boundary atom normals
+  dAtom->xBnd[0].N = dAtom->xBnd[1].N = - dAtom->xGradR;
+  dAtom->xBnd[0].N -= dNormalTerm;
+  dAtom->xBnd[1].N += dNormalTerm;
+
+  // Compute the boundary atoms
+  dAtom->xBnd[0].X = dAtom->xBnd[1].X = Y;
+  vmuladd(dAtom->xBnd[0].X, dAtom->xBnd[0].N, R);
+  vmuladd(dAtom->xBnd[0].X, xAtom->xBnd[0].N, P);
+  vmuladd(dAtom->xBnd[1].X, dAtom->xBnd[1].N, R);
+  vmuladd(dAtom->xBnd[1].X, xAtom->xBnd[1].N, P);
+}
+
+/*
 void ComputeMedialAtomBoundaryDerivative(
   MedialAtom *xAtom, MedialAtom *dAtom, bool isEdge)
 {
@@ -646,21 +656,27 @@ void ComputeMedialAtomBoundaryDerivative(
     ( 0.5 * z / g ) * xAtom->N;
 
   // We will compute several intermediate terms
-  // This is the derivative of - grad phi
-  SMLVec3d T2 = -(
-    z11 * Fu * Xu + z12 * (Fu * Xv + Fv * Xu) + z22 * Fv * Xv +
-    g11 * Hu * Xu + g12 * (Hu * Xv + Hv * Xu) + g22 * Hv * Xv +
-    g11 * Fu * Nu + g12 * (Fu * Nv + Fv * Nu) + g22 * Fv * Nv );
+  double g1iFi = g11 * Fu + g12 * Fv;
+  double g2iFi = g12 * Fu + g22 * Fv;
+  double z1iFi = z11 * Fu + z12 * Fv;
+  double z2iFi = z12 * Fu + z22 * Fv;
+  
+  // This is the derivative of grad phi
+  SMLVec3d T2(0.0), T4(0.0);
+  vmuladd(T2, Xu, z1iFi + g11 * Hu + g12 * Hv);
+  vmuladd(T2, Xv, z2iFi + g12 * Hu + g22 * Hv);
+  vmuladd(T2, Nu, g1iFi);
+  vmuladd(T2, Nv, g2iFi);
 
   // Record the grad-phi derivative
-  dAtom->xGradPhi = - T2;
+  dAtom->xGradPhi = T2;
 
   // Address the edge case first
   if(isEdge) 
     {
-    dAtom->xBnd[1].X = dAtom->xBnd[0].X = N + 0.5 * T2;
+    dAtom->xBnd[1].X = dAtom->xBnd[0].X = N - 0.5 * T2;
     dAtom->xBnd[0].N = dAtom->xBnd[1].N = 
-      0.5 * ( (T2) / xAtom->R - xAtom->xBnd[0].N * (H / F) );
+      - 0.5 * ( T2 * xAtom->R + xAtom->xBnd[0].N * H) / F;
     dAtom->xGradRMagSqr = 0.0;
     dAtom->xNormalFactor = 0.0;
     return;
@@ -668,27 +684,29 @@ void ComputeMedialAtomBoundaryDerivative(
 
   // Compute the intermediate terms:
   // This is the coefficient of the normal before differentiation
-  double T1 = 2.0 * xAtom->R * xAtom->xNormalFactor;
+  double T1 = - 2.0 * xAtom->R * xAtom->xNormalFactor;
     
-  // This is the ugly term
-  double T3 = 4.0 * H - ( 
-    z11 * Fu * Fu + 2.0 * z12 * Fu * Fv + z22 * Fv * Fv +
-    2.0 * ( g11 * Hu * Fu + g12 * (Hu * Fv + Hv * Fu) + g22 * Hv * Fv ) );
+  // Compute the derivative of gradPhi . gradPhi
+  double dGradPhiSqr = z1iFi * Fu + z2iFi * Fv + 2.0 * (g1iFi * Hu + g2iFi * Hv);
+
+  // This is the weight of the normal
+  double T3 = 2.0 * H - 0.5 * dGradPhiSqr;
 
   // The derivative of the out-out-tangent term
-  SMLVec3d T4 = ( 0.5 * T3 / T1 ) * xAtom->N + T1 * dAtom->N;
+  vmuladd(T4, xAtom->N, T3 / T1);
+  vmuladd(T4, dAtom->N, T1);
 
   // Compute the Y atoms
-  dAtom->xBnd[0].X = N + 0.5 * ( T2 - T4 );
-  dAtom->xBnd[1].X = N + 0.5 * ( T2 + T4 );
-  dAtom->xBnd[0].N = 0.5 * ( (T2 - T4) / xAtom->R - xAtom->xBnd[0].N * (H / F) );
-  dAtom->xBnd[1].N = 0.5 * ( (T2 + T4) / xAtom->R - xAtom->xBnd[1].N * (H / F) );
+  SMLVec3d T5 = T2 - T4, T6 = T2 + T4;
+  dAtom->xBnd[0].X = N + 0.5 * T5;
+  dAtom->xBnd[1].X = N + 0.5 * T6;
+  dAtom->xBnd[0].N = 0.5 * ( T5 / xAtom->R - xAtom->xBnd[0].N * (H / F) );
+  dAtom->xBnd[1].N = 0.5 * ( T6 / xAtom->R - xAtom->xBnd[1].N * (H / F) );
 
   // Compute the derivative of the gradient magnitude of R
-  dAtom->xGradRMagSqr = 0.25 * 
-    ( 2.0 * dot_product(dAtom->xGradPhi, xAtom->xGradPhi) * F
-      - dot_product(xAtom->xGradPhi, xAtom->xGradPhi) * H ) / ( F * F );
+  dAtom->xGradRMagSqr = (0.25 * dGradPhiSqr - xAtom->xGradRMagSqr * H) / F;
 }
+*/
 
 void
 MedialPDESolver
@@ -723,48 +741,52 @@ void
 MedialPDESolver
 ::ComputeVariationalGradient(vector<MedialAtom *> &dAtomArray)
 {
-  size_t i, j, k, n = dAtomArray.size();
+  size_t i, j, k, N = dAtomArray.size();
 
   // Create an array of right-hand sides
-  // Mat rhs(n, nSites), soln(n, nSites);
-  
-  // Repeat for each gradient component
-  for(k = 0; k < dAtomArray.size(); k++)
+  Mat rhs(N, nSites), soln(N, nSites);
+
+  // Create an array of helper structs for atom computation
+  vector<AtomGradientTerms> agt(nSites);
+
+  // Prepare for the gradient computation
+  double t0 = clock();
+  for(i = 0; i < m; i++) for(j = 0; j < n; j++)
     {
-    Mat rhs1(m, n, 0.0), soln1(m, n, 0.0);
-    
-    // Compute the right hand side equation at each atom
-    for(i = 0; i < m; i++) for(j = 0; j < n; j++)
-      {
-      // Get the index of the site
-      size_t iGrid = xGrid->GetAtomIndex(i, j);
-      size_t iSite = xSiteIndex[i][j];
+    // Get the index of the site
+    size_t iGrid = xGrid->GetAtomIndex(i, j);
+    size_t iSite = xSiteIndex[i][j];
 
-      // Access the medial atom underneath
-      MedialAtom &dAtom = dAtomArray[k][iGrid];
+    // Get the medial atom
+    MedialAtom &xAtom = xAtoms[iGrid];
 
-      // Prepare the matrices for the linear solver
-      xSites[iSite]->ComputeVariationalDerivative(
-        y, xSparseValues + xRowIndex[iSite] - 1, &rhs1[i][j], // &rhs[k][iSite],
-        &xAtoms[iGrid], &dAtom);
-      }
+    // Initialize the atom gradient terms
+    ComputeMedialAtomBoundaryDerivativeCommonTerms(&xAtom, agt[iSite]);
 
-    xPardiso.SymbolicFactorization(nSites, xRowIndex, xColIndex, xSparseValues);
-    xPardiso.NumericFactorization(xSparseValues);
-    xPardiso.Solve(rhs1.data_block(), soln1.data_block());
-/*    
+    // Compute the matrix for linear solver
+    xSites[iSite]->ComputeVariationalDerivativeMatrix(
+      y, xSparseValues + xRowIndex[iSite] - 1, &xAtom);
+
+    // Compute each of the right hand sides
+    for(k = 0; k < N; k++)
+      rhs[k][iSite] = xSites[iSite]->ComputeVariationalDerivativeRHS(
+        y, &xAtom, &dAtomArray[k][iGrid]);
     }
+  cout << " [" << (clock() - t0) / CLOCKS_PER_SEC << " ms] " << flush;
 
   // Solve the linear system for all the RHS
+  t0 = clock();
   xPardiso.NumericFactorization(xSparseValues);
-  xPardiso.Solve(n, rhs.data_block(), soln.data_block());
+  xPardiso.Solve(N, rhs.data_block(), soln.data_block());
+  cout << " [" << (clock() - t0) / CLOCKS_PER_SEC << " ms] " << flush;
 
   // For each atom, compute the boundary derivatives
-  for(k = 0; k < dAtomArray.size(); k++)
+  t0 = clock();
+  for(k = 0; k < N; k++)
     {
     // Access the phi matrix
-    vnl_matrix<double> phi = phi1.transpose();
-*/
+    vnl_matrix_ref<double> phi(m, n, soln.data_array()[k]);
+    
     // Compute phi-dependent atom quantities
     for(i = 0; i < m; i++) for(j = 0; j < n; j++)
       {
@@ -776,14 +798,14 @@ MedialPDESolver
       MedialAtom &dAtom = dAtomArray[k][iGrid];
 
       // Compute the gradient of phi for the new atom
-      dAtom.F = xMasks[iSite]->ComputeOneJet(soln1, dAtom.Fu, dAtom.Fv);
+      dAtom.F = xMasks[iSite]->ComputeOneJet(phi, dAtom.Fu, dAtom.Fv);
 
       // Compute the rest of the atom derivative
       ComputeMedialAtomBoundaryDerivative(
-        &xAtoms[iGrid], &dAtom, xSites[iSite]->IsBorderSite());
-      cout << i << " " << j << " " << "DONE - 1" << endl;
+        &xAtoms[iGrid], &dAtom, agt[iSite], xSites[iSite]->IsBorderSite());
       }
     }
+  cout << " [" << (clock() - t0) / CLOCKS_PER_SEC << " ms] " << flush;
 }
 
 double fnTestF01(double u, double v)

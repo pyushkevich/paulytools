@@ -29,13 +29,12 @@ public:
 
   // Setup the equation for computing variational derivative of Phi for a
   // variation of the surface
-  virtual void ComputeVariationalDerivative(const Mat &Y, double *A, double *b, 
-    MedialAtom *xAtom, MedialAtom *dAtom) = 0;
+  virtual void ComputeVariationalDerivativeMatrix(
+    const Mat &Y, double *A, MedialAtom *xAtom) = 0;
 
-  // Setup the equation for computing variational derivative of Phi for a
-  // variation of the rho function
-  // virtual void ComputeVariationalDerivativeRho(const Mat &Y, double *A, double *b, 
-  //  MedialAtom *xAtom, MedialAtom *dAtom) = 0;
+  // Compute the right hand side for the derivative PDE
+  virtual double ComputeVariationalDerivativeRHS(
+    const Mat &Y, MedialAtom *xAtom, MedialAtom *dAtom) = 0;
 
   // Returns the number of boundaries that a site touches 
   // (0 - int, 1 - border, 2 - corner)
@@ -84,9 +83,12 @@ public:
   FiniteDifferenceMask *GetMask()
     { return xMask; }
 
-  // Compute the variational derivative with respect to X-variation 
-  void ComputeVariationalDerivative(const Mat &Y, 
-    double *A, double *b, MedialAtom *xAtom, MedialAtom *dAtom);
+  // Compute the variational derivative 
+  void ComputeVariationalDerivativeMatrix(
+    const Mat &Y, double *A, MedialAtom *xAtom);
+  
+  double ComputeVariationalDerivativeRHS(
+    const Mat &Y, MedialAtom *xAtom, MedialAtom *dAtom);
 
   // Compute the variational derivative with respect to Rho-variation 
   // void ComputeVariationalDerivativeRho(const Mat &Y, 
@@ -99,6 +101,9 @@ protected:
 
   /** Coefficients of the finite differences in the equation */
   double Cuu, Cuv, Cvv, Cu, Cv;
+
+  /** Finite difference derivatives of F, computed for variational differentiation */
+  double F, Fu, Fv, Fuu, Fuv, Fvv;
 
   /** Derivatives with respect to each site */
   vnl_vector<double> xDerivative;
@@ -142,13 +147,12 @@ public:
   FiniteDifferenceMask *GetMask()
     { return xMask; }
 
-  // Compute the variational derivative with respect to X-variation 
-  void ComputeVariationalDerivative(const Mat &Y, 
-    double *A, double *b, MedialAtom *xAtom, MedialAtom *dAtom);
-
-  // Compute the variational derivative with respect to Rho-variation 
-  // void ComputeVariationalDerivativeRho(const Mat &Y, 
-  //  double *A, double *b, MedialAtom *xAtom, MedialAtom *dAtom);
+  // Compute the variational derivative 
+  void ComputeVariationalDerivativeMatrix(
+    const Mat &Y, double *A, MedialAtom *xAtom);
+  
+  double ComputeVariationalDerivativeRHS(
+    const Mat &Y, MedialAtom *xAtom, MedialAtom *dAtom);
 
 	// Print a report
 	void PrintReport();
@@ -157,6 +161,9 @@ protected:
 
   /** Coefficients of the finite differences in the equation */
   double CuCu, CuCv, CvCv;
+
+  /** Finite difference derivatives of F, computed for variational differentiation */
+  double F, Fu, Fv;
 
   /** Derivatives with respect to each site */
   Vec xDerivativeFu, xDerivativeFv, xDerivativeF;

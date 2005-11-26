@@ -606,6 +606,7 @@ void MedialPDE::ConjugateGradientOptimization(
     cout << "Step " << setw(5) << i << "  ";
     cout << "Minimum " << setw(16) << gsl_multimin_fdfminimizer_minimum(my_min) << "  ";
     cout << "F-value " << setw(16) << my_min->f << endl;
+    xProblem->PrintReport(cout);
 
     // Check for convergence
     if(gsl_multimin_test_gradient(my_min->gradient, 1e-8) == GSL_SUCCESS)
@@ -773,7 +774,7 @@ void MedialPDE
   AtomBadnessTerm xTermBadness;
   MedialRegularityTerm 
     xTermRegularize(xSolver->GetAtomGrid(), xSolver->GetAtomArray());
-  RadiusPenaltyTerm xTermRadius(0.1);
+  RadiusPenaltyTerm xTermRadius(0.025);
 
   // Add the terms to the problem
   xProblem.AddEnergyTerm(xTermImage, 1.0);

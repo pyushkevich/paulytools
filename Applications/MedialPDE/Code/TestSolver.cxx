@@ -19,13 +19,14 @@ inline void UpdateMax(double xValue, double &xMaxValue)
 }
 
 void TestGradientComputationPrintReport(
-  double xMaxPhiDiff, double xMaxGRMS, double xMaxBndDiff, 
+  double xMaxPhiDiff, double xMaxGradRDiff, double xMaxGRMS, double xMaxBndDiff, 
   double xMaxBndNrmDiff, double xMaxBndAreaDiff, double xMaxCellVolumeDiff,
   double xTotalAreaDiff, double xTotalVolumeDiff)
 {
     // Print out the max difference
     cout << "Maximal differences between numeric and analytic derivatives:" << endl;
     cout << "Phi                      : " <<  xMaxPhiDiff << endl;
+    cout << "Grad R                   : " <<  xMaxGradRDiff << endl;
     cout << "Sqr. Grad. Mag. of Phi   : " <<  xMaxGRMS << endl;
     cout << "Boundary Node Positions  : " <<  xMaxBndDiff << endl;
     cout << "Boundary Node Normals    : " <<  xMaxBndNrmDiff << endl;
@@ -47,7 +48,7 @@ int TestGradientComputation(
   double eps = 0.0001;
   
   // Max values for different classes of error
-  double xGlobalMaxPhiDiff = 0.0, xGlobalMaxGRMS = 0.0;
+  double xGlobalMaxPhiDiff = 0.0, xGlobalMaxGradR = 0.0, xGlobalMaxGRMS = 0.0;
   double xGlobalMaxBndDiff = 0.0, xGlobalMaxBndNrmDiff = 0.0;
   double xGlobalMaxBndAreaDiff = 0.0, xGlobalMaxCellVolumeDiff = 0.0;
   double xGlobalTotalAreaDiff = 0.0, xGlobalTotalVolumeDiff = 0.0;
@@ -156,6 +157,7 @@ int TestGradientComputation(
     double xMaxBndDiff = 0.0;
     double xMaxBndNrmDiff = 0.0;
     double xMaxGRMS = 0.0;
+    double xMaxGradRDiff = 0.0;
 
     for(unsigned int i = 0; i < n; i++)
       {
@@ -169,13 +171,15 @@ int TestGradientComputation(
       double daPhi = a0.F;
       UpdateMax(fabs(dcPhi - daPhi), xMaxPhiDiff);
 
-      cout << daPhi << " = ";
-      cout << dcPhi << " ";
-
       // Also look at the differences in grad R mag sqr.
       double dcGRMS = 0.5 * (a1.xGradRMagSqr - a2.xGradRMagSqr) / eps;
       double daGRMS = a0.xGradRMagSqr;
       UpdateMax(fabs(dcGRMS - daGRMS), xMaxGRMS);
+
+      // Look at the gradR difference
+      SMLVec3d dcGradR = 0.5 * (a1.xGradR - a2.xGradR) / eps;
+      SMLVec3d daGradR = a0.xGradR;
+      UpdateMax((dcGradR - daGradR).two_norm(), xMaxGradRDiff);
 
       // Take the largest difference in boundary derivs
       for(unsigned int k = 0; k < 2; k++)
@@ -252,13 +256,14 @@ int TestGradientComputation(
 
     // Print the report
     TestGradientComputationPrintReport(
-      xMaxPhiDiff, xMaxGRMS, xMaxBndDiff, 
+      xMaxPhiDiff, xMaxGradRDiff, xMaxGRMS, xMaxBndDiff, 
       xMaxBndNrmDiff, xMaxBndAreaDiff, xMaxCellVolumeDiff,
       xTotalAreaDiff, xTotalVolumeDiff);
 
     // Update the global maximum counters
     UpdateMax(xMaxPhiDiff, xGlobalMaxPhiDiff);
     UpdateMax(xMaxGRMS, xGlobalMaxGRMS);
+    UpdateMax(xMaxGradRDiff, xGlobalMaxGradR);
     UpdateMax(xMaxBndDiff, xGlobalMaxBndDiff);
     UpdateMax(xMaxBndNrmDiff, xGlobalMaxBndNrmDiff);
     UpdateMax(xMaxBndAreaDiff, xGlobalMaxBndAreaDiff);
@@ -284,7 +289,7 @@ int TestGradientComputation(
   cout << "----------------------------------------" << endl;
 
   TestGradientComputationPrintReport(
-    xGlobalMaxPhiDiff, xGlobalMaxGRMS, xGlobalMaxBndDiff, 
+    xGlobalMaxPhiDiff, xGlobalMaxGradR, xGlobalMaxGRMS, xGlobalMaxBndDiff, 
     xGlobalMaxBndNrmDiff, xGlobalMaxBndAreaDiff, xGlobalMaxCellVolumeDiff,
     xGlobalTotalAreaDiff, xGlobalTotalVolumeDiff);
 
@@ -296,6 +301,7 @@ int TestGradientComputation(
   // The return value is based on any of the error terms exceeding epsilon
   int iPass = 
     (xGlobalMaxPhiDiff > eps || xGlobalMaxGRMS > eps ||
+     xGlobalMaxGradR > eps ||
      xGlobalMaxBndDiff > eps || xGlobalMaxBndNrmDiff > eps ||
      xGlobalMaxBndAreaDiff > eps || xGlobalMaxCellVolumeDiff > eps ||
      xGlobalTotalAreaDiff > eps || xGlobalTotalVolumeDiff > eps) ? -1 : 0;

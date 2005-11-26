@@ -57,4 +57,28 @@ TransformPoint(
      M[2][0] * V[0] + M[2][1] * V[1] + M[2][2] * V[2] + M[2][3]);
 }
 
+inline double dot(const SMLVec3d &v1, const SMLVec3d &v2)
+{
+  return
+    v1.data_block()[0] * v2.data_block()[0] +
+    v1.data_block()[1] * v2.data_block()[1] +
+    v1.data_block()[2] * v2.data_block()[2];
+}
+
+inline double vmuladd(SMLVec3d &t, const SMLVec3d &v, double s)
+{
+  t.data_block()[0] += v.data_block()[0] * s;
+  t.data_block()[1] += v.data_block()[1] * s;
+  t.data_block()[2] += v.data_block()[2] * s;
+}
+
+inline double vmulset(SMLVec3d &t, const SMLVec3d &v, double s)
+{
+  t.data_block()[0] = v.data_block()[0] * s;
+  t.data_block()[1] = v.data_block()[1] * s;
+  t.data_block()[2] = v.data_block()[2] * s;
+}
+
+
+
 #endif // _MY_SML_MATH_

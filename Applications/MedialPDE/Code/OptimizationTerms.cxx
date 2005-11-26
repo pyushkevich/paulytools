@@ -1390,6 +1390,8 @@ MedialOptimizationProblem
 {
   size_t iTerm;
 
+  double t00 = clock();
+
   // Solve the PDE
   SolvePDE(xEvalPoint);
 
@@ -1405,6 +1407,7 @@ MedialOptimizationProblem
   SolutionData S(xSolver);
 
   // Compute the value at the solution and init gradient computation
+  double t0 = clock();
   xLastSolutionValue = 0.0;
   for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
     {
@@ -1413,8 +1416,10 @@ MedialOptimizationProblem
       xWeights[iTerm] * xTerms[iTerm]->BeginGradientComputation(&S);
     xTimers[iTerm].Stop();
     }
+  cout << " [" << (clock() - t0) / CLOCKS_PER_SEC << " ms] " << flush;
     
   // Repeat for each coefficient
+  t0 = clock();
   for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)
     {
     // Create a solution partial derivative object
@@ -1432,10 +1437,8 @@ MedialOptimizationProblem
 
     // Dump the gradient
     // cout << iCoeff << "; " << XGradient[iCoeff] << endl;
-    cout << "." << flush;
     }
-
-  cout << endl;
+  cout << " [" << (clock() - t0) / CLOCKS_PER_SEC << " ms] " << flush;
 
   // Clear up gradient computation
   for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
@@ -1444,6 +1447,9 @@ MedialOptimizationProblem
   // Increment the evaluation counter
   evaluationCost += nCoeff;
 
+  cout << " [[" << (clock() - t00) / CLOCKS_PER_SEC << " ms]] " << flush;
+
+  cout << endl;
   // Return the solution value
   return xLastSolutionValue;
 }
