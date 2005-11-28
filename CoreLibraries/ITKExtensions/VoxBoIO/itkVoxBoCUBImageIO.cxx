@@ -23,7 +23,11 @@
 #include <list>
 #include <string>
 #include <math.h>
+
+// Commented out because zlib is not available through Insight Applications
+#ifdef SNAP_GZIP_SUPPORT
 #include <zlib.h>
+#endif
 
 namespace itk {
 
@@ -71,6 +75,8 @@ public:
 /**
  * A reader for gzip files
  */
+#ifdef SNAP_GZIP_SUPPORT
+
 class CompressedCUBFileAdaptor : public GenericCUBFileAdaptor
 {
 public:
@@ -149,6 +155,8 @@ public:
 private:
   ::gzFile m_GzFile;
 };
+
+#endif // SNAP_GZIP_SUPPORT
 
 /**
  * A reader for non-gzip files
@@ -231,6 +239,32 @@ private:
   FILE *m_File;
 };
 
+
+/**
+ * A swap helper class, used to perform swapping for any input
+ * data type.
+ */
+template<typename TPixel> class VoxBoCUBImageIOSwapHelper
+{
+public:
+  typedef ImageIOBase::ByteOrder ByteOrder;
+  static void SwapIfNecessary(
+    void *buffer, unsigned long numberOfBytes, ByteOrder order)
+    {
+    if ( order == ImageIOBase::LittleEndian )
+      {
+      ByteSwapper<TPixel>::SwapRangeFromSystemToLittleEndian(
+        (TPixel*)buffer, numberOfBytes / sizeof(TPixel) );
+      }
+    else if ( order == ImageIOBase::BigEndian )
+      {
+      ByteSwapper<TPixel>::SwapRangeFromSystemToBigEndian(
+        (TPixel *)buffer, numberOfBytes / sizeof(TPixel) );
+      }
+    }
+};
+
+
 // Strings
 const char *VoxBoCUBImageIO::VB_IDENTIFIER_SYSTEM = "VB98";
 const char *VoxBoCUBImageIO::VB_IDENTIFIER_FILETYPE = "CUB1";
@@ -274,7 +308,11 @@ VoxBoCUBImageIO::CreateReader(const char *filename)
     bool compressed;
     if(CheckExtension(filename, compressed))
       if(compressed)
-        return new CompressedCUBFileAdaptor(filename, "rb");
+#ifdef SNAP_GZIP_SUPPORT
+          return new CompressedCUBFileAdaptor(filename, "rb");
+#else
+          return NULL;
+#endif
       else
         return new DirectCUBFileAdaptor(filename, "rb");
     else
@@ -294,7 +332,11 @@ VoxBoCUBImageIO::CreateWriter(const char *filename)
     bool compressed;
     if(CheckExtension(filename, compressed))
       if(compressed)
-        return new CompressedCUBFileAdaptor(filename, "wb");
+#ifdef SNAP_GZIP_SUPPORT
+          return new CompressedCUBFileAdaptor(filename, "rb");
+#else
+          return NULL;
+#endif        
       else
         return new DirectCUBFileAdaptor(filename, "wb");
     else
@@ -697,47 +739,40 @@ VoxBoCUBImageIO
 
 }
 
-template<class TPixel>
-void
-VoxBoCUBImageIO::SwapHelper<TPixel>
-::SwapIfNecessary(void *buffer, unsigned long numberOfBytes, ByteOrder order)
-{
-  if ( order == LittleEndian )
-    {
-    ByteSwapper<TPixel>::SwapRangeFromSystemToLittleEndian(
-      (TPixel*)buffer, numberOfBytes / sizeof(TPixel) );
-    }
-  else if ( order == BigEndian )
-    {
-    ByteSwapper<TPixel>::SwapRangeFromSystemToBigEndian(
-      (TPixel *)buffer, numberOfBytes / sizeof(TPixel) );
-    }
-}
-
 void 
 VoxBoCUBImageIO
 ::SwapBytesIfNecessary(void *buffer, unsigned long numberOfBytes)
 {
   if(m_ComponentType == CHAR)
-    SwapHelper<char>::SwapIfNecessary(buffer, numberOfBytes, m_ByteOrder);
+    VoxBoCUBImageIOSwapHelper<char>::SwapIfNecessary(
+      buffer, numberOfBytes, m_ByteOrder);
   else if(m_ComponentType == UCHAR)
-    SwapHelper<unsigned char>::SwapIfNecessary(buffer, numberOfBytes, m_ByteOrder);
+    VoxBoCUBImageIOSwapHelper<unsigned char>::SwapIfNecessary(
+      buffer, numberOfBytes, m_ByteOrder);
   else if(m_ComponentType == SHORT)
-    SwapHelper<short>::SwapIfNecessary(buffer, numberOfBytes, m_ByteOrder);
+    VoxBoCUBImageIOSwapHelper<short>::SwapIfNecessary(
+      buffer, numberOfBytes, m_ByteOrder);
   else if(m_ComponentType == USHORT)
-    SwapHelper<unsigned short>::SwapIfNecessary(buffer, numberOfBytes, m_ByteOrder);
+    VoxBoCUBImageIOSwapHelper<unsigned short>::SwapIfNecessary(
+      buffer, numberOfBytes, m_ByteOrder);
   else if(m_ComponentType == INT)
-    SwapHelper<int>::SwapIfNecessary(buffer, numberOfBytes, m_ByteOrder);
+    VoxBoCUBImageIOSwapHelper<int>::SwapIfNecessary(
+      buffer, numberOfBytes, m_ByteOrder);
   else if(m_ComponentType == UINT)
-    SwapHelper<unsigned int>::SwapIfNecessary(buffer, numberOfBytes, m_ByteOrder);
+    VoxBoCUBImageIOSwapHelper<unsigned int>::SwapIfNecessary(
+      buffer, numberOfBytes, m_ByteOrder);
   else if(m_ComponentType == LONG)
-    SwapHelper<long>::SwapIfNecessary(buffer, numberOfBytes, m_ByteOrder);
+    VoxBoCUBImageIOSwapHelper<long>::SwapIfNecessary(
+      buffer, numberOfBytes, m_ByteOrder);
   else if(m_ComponentType == ULONG)
-    SwapHelper<unsigned long>::SwapIfNecessary(buffer, numberOfBytes, m_ByteOrder);
+    VoxBoCUBImageIOSwapHelper<unsigned long>::SwapIfNecessary(
+      buffer, numberOfBytes, m_ByteOrder);
   else if(m_ComponentType == FLOAT)
-    SwapHelper<float>::SwapIfNecessary(buffer, numberOfBytes, m_ByteOrder);
+    VoxBoCUBImageIOSwapHelper<float>::SwapIfNecessary(
+      buffer, numberOfBytes, m_ByteOrder);
   else if(m_ComponentType == DOUBLE)
-    SwapHelper<double>::SwapIfNecessary(buffer, numberOfBytes, m_ByteOrder);
+    VoxBoCUBImageIOSwapHelper<double>::SwapIfNecessary(
+      buffer, numberOfBytes, m_ByteOrder);
   else 
     {
     ExceptionObject exception(__FILE__, __LINE__);
