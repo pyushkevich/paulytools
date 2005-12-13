@@ -146,6 +146,8 @@ VTKMeshVoronoiDiagram
 
     m_FullEdgeWeights[iDual] = m_FullEdgeWeights[iDualOpp] = 
       VoronoiDiagram::INFINITE_WEIGHT;
+
+    ++it;
     }
 }
 

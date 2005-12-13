@@ -449,6 +449,7 @@ TracerData
     lMarkerCells.push_back(m_Curves.GetMarkerFace(*itMarkerId++));
 
   // Compute shortest distances to that point
+  cout << "Computing the Voronoi Diagram" << endl;
   m_VoronoiDiagram->ComputeVoronoiDiagram(lMarkerCells);
 
   // Get the elapsed time

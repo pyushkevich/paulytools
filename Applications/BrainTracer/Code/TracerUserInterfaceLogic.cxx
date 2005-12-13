@@ -2,6 +2,13 @@
 #include "FL/Fl_File_Chooser.H"
 #include "FL/Fl_Color_Chooser.H"
 
+#include "DrawTriangles.h"
+#include "Danielsson.h"
+#include "itkImage.h"
+#include "itkImageFileReader.h"
+#include "itkImageRegionIteratorWithIndex.h"
+#include "itkImageFileWriter.h"
+
 // Constructor
 TracerUserInterfaceLogic 
 ::TracerUserInterfaceLogic() 
@@ -626,4 +633,194 @@ OnButtonComputeNecks()
   // Compute a distance transform from the curves to the rest of the mesh
   // using Dijkstra's algorithm
   m_Data->ComputeMedialSegmentation();
+}
+
+void 
+TracerUserInterfaceLogic
+::OnImagePropagateRegionsAction()
+{
+  // First of all, the regions must be computed already. 
+  fl_alert(
+    "THIS IS EXPERIMENTAL CODE! \n"
+    "You will be asked to specify two images: one for the mask of the \n"
+    "region to which the markers should be propagated, and another \n"
+    "where to save the result of the propagation \n");
+
+  // Ask the user to supply the source image
+  char *fin = fl_file_chooser("Select input mask image","*.hdr,*.gipl,*.mha", NULL);
+  if(!fin)
+    return;
+
+  // Try to read the input image
+  typedef itk::Image<unsigned char, 3> ImageType;
+  typedef itk::ImageFileReader<ImageType> ReaderType;
+  typedef itk::ImageRegionIteratorWithIndex<ImageType> IteratorType;
+  ReaderType::Pointer fltReader = ReaderType::New();
+  fltReader->SetFileName(fin);
+  ImageType::Pointer imask = fltReader->GetOutput();
+  try {
+    fltReader->Update();
+  } catch (itk::ExceptionObject &exc) {
+    fl_alert("Image could not be read!");
+    return;
+  }
+
+  // Create another image of the same dimensions as the input image
+  ImageType::Pointer idist = ImageType::New();
+  idist->SetRegions(imask->GetBufferedRegion());
+  idist->Allocate();
+  idist->FillBuffer(0);
+
+  // Create a rasterization image
+  ImageType::Pointer irast = ImageType::New();
+  irast->SetRegions(imask->GetBufferedRegion());
+  irast->Allocate();
+  irast->FillBuffer(0);
+
+  // Create the output image as well
+  ImageType::Pointer iout = ImageType::New();
+  iout->SetRegions(imask->GetBufferedRegion());
+  iout->Allocate();
+  iout->FillBuffer(0);
+
+  // Rasterize the cells in the mesh, and assign them labels in the mask image
+
+  // Get the marker ids
+  TracerCurves::IdList lMarkers;
+  m_Data->GetCurves()->GetMarkerIdList(lMarkers);
+
+  // Get the image dimensions as ints
+  int dims[] = { 
+    imask->GetBufferedRegion().GetSize(0),
+    imask->GetBufferedRegion().GetSize(1),
+    imask->GetBufferedRegion().GetSize(2) };
+
+  // Paint the corresponding meshes
+  TracerCurves::IdList::iterator it = lMarkers.begin();
+  while(it != lMarkers.end())
+    {
+    cout << "Rasterizing marker " << *it << endl;
+    vtkPolyData *poly = m_Data->GetMarkerMesh(*it);
+
+    // Create a vertex holder
+    double **vtx = new (double *)[3 * poly->GetNumberOfCells()];
+    poly->BuildCells();
+    
+    // Iterate over the cells in the mesh
+    vtkIdType iCell;
+    for(iCell = 0; iCell < poly->GetNumberOfCells(); iCell++)
+      {
+      // Get the points in the cell
+      vtkIdType nCellPoints, *xCellPoints;
+      poly->GetCellPoints(iCell,nCellPoints,xCellPoints);
+
+      // Pull out the triangle points
+      for(size_t k = 0; k < 3; k++) 
+        {
+        // Initialize the vertex
+        double *myvtx = vtx[3 * iCell + k] = new double[3];
+        size_t m;
+        
+        // First of all, map the position of the input point into the image space
+        itk::Point<double, 3> point;
+        itk::ContinuousIndex<double, 3> cindex;
+        for(size_t m = 0; m < 3; m++) point[m] = poly->GetPoint(xCellPoints[k])[m];
+        imask->TransformPhysicalPointToContinuousIndex(point, cindex);
+        
+        // Now put into an array that the filler understands
+        for(size_t m = 0; m < 3; m++) myvtx[m] = cindex[m];
+        }
+      }
+
+    // Clear the rasterization image
+    irast->FillBuffer(0);
+    
+    // Call the rasterizer routine
+    drawBinaryTrianglesSheetFilled( irast->GetBufferPointer(), dims, vtx, 
+      poly->GetNumberOfCells());
+
+    // Integrate the rasterization into the output mask
+    IteratorType it1(irast, irast->GetBufferedRegion());
+    IteratorType it2(iout, iout->GetBufferedRegion());
+    IteratorType it3(idist, idist->GetBufferedRegion());
+    while(!it1.IsAtEnd())
+      {
+      if(it1.Get() != 0)
+        {
+        it2.Set(*it);
+        it3.Set(1);
+        }
+      ++it1; ++it2; ++it3;
+      }
+
+    // Delete the vertices
+    for(iCell = 0; iCell < poly->GetNumberOfCells(); iCell++)
+      delete vtx[iCell];
+    delete vtx;
+
+    ++it;
+    }
+
+  // Save intermediate result
+  typedef itk::ImageFileWriter<ImageType> WriterType;
+  WriterType::Pointer fltWriter = WriterType::New();
+  fltWriter->SetInput(iout);
+  fltWriter->SetFileName("mtest.img.gz");
+  fltWriter->Update();
+
+  // Generate dx, dy, dz images from the distance transform
+  typedef itk::Image<short, 3> ShortImageType;
+  typedef itk::ImageRegionIteratorWithIndex<ShortImageType> ShortIteratorType;
+  ShortImageType::Pointer ioff[3];
+  short *ioffdata[3];
+  for(size_t q = 0; q < 3; q++)
+    {
+    ioff[q] = ShortImageType::New();
+    ioff[q]->SetRegions(idist->GetBufferedRegion());
+    ioff[q]->Allocate();
+    ioff[q]->FillBuffer(0);
+    ioffdata[q] = ioff[q]->GetBufferPointer();
+    }
+
+  // Compute a distance transform from the mesh
+  cout << "Computing Distance Transform" << endl;
+  edtSetVoxelSize(
+    imask->GetSpacing()[0], 
+    imask->GetSpacing()[1], 
+    imask->GetSpacing()[2]); 
+  edt3ddan(
+    (char *) idist->GetBufferPointer(), 
+    dims[0], dims[1], dims[2], 0,
+    &ioffdata[0], &ioffdata[1], &ioffdata[2]);
+
+  // Copy in the data
+  memcpy(ioff[0]->GetBufferPointer(), ioffdata[0], sizeof(short) * dims[0] * dims[1] * dims[2]);
+  memcpy(ioff[1]->GetBufferPointer(), ioffdata[1], sizeof(short) * dims[0] * dims[1] * dims[2]);
+  memcpy(ioff[2]->GetBufferPointer(), ioffdata[2], sizeof(short) * dims[0] * dims[1] * dims[2]);
+
+  // Assign a label in the output image
+  IteratorType itOut(iout, iout->GetBufferedRegion());
+  IteratorType itMask(imask, iout->GetBufferedRegion());
+  ShortIteratorType itOff[] = { 
+    ShortIteratorType(ioff[0], iout->GetBufferedRegion()),
+    ShortIteratorType(ioff[1], iout->GetBufferedRegion()),
+    ShortIteratorType(ioff[2], iout->GetBufferedRegion()) };
+  while(!itOut.IsAtEnd())
+    {
+    if(itMask.Get() != 0)
+      {
+      IteratorType::IndexType idx = itMask.GetIndex();
+      idx[0] += itOff[0].Get();
+      idx[1] += itOff[1].Get();
+      idx[2] += itOff[2].Get();
+      itOut.Set(iout->GetPixel(idx));
+      // cout << itOff[0].Get() << ", " << itOff[1].Get() << ", " << itOff[2].Get() << endl; 
+      }
+    ++itMask; ++itOut; ++itOff[0]; ++itOff[1]; ++itOff[2];
+    }
+
+  // Save
+  fltWriter->SetInput(iout);
+  fltWriter->SetFileName("mresult.img.gz");
+  fltWriter->Update();
 }

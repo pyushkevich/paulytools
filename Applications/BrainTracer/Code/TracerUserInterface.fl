@@ -1,5 +1,5 @@
 # data file for the Fltk User Interface Designer (fluid)
-version 1.0105 
+version 1.0103 
 header_name {.h} 
 code_name {.cxx}
 class TracerUserInterface {open : {public TracerUserInterfaceBase}
@@ -9,7 +9,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
     Fl_Window m_WinMain {
       label {GeeLab Brain Tracer}
       callback {OnMenuQuit();} open
-      xywh {268 132 925 710} type Double resizable
+      xywh {508 179 925 710} type Double resizable
       code0 {\#include "TracerUserInterfaceBase.h"}
       code1 {\#include "TracerMainWindow.h"} visible
     } {
@@ -138,6 +138,16 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
             xywh {30 30 100 20} shortcut 0xffc5 deactivate
           }
         }
+        submenu {} {
+          label {3D Image} open
+          xywh {5 5 100 20}
+        } {
+          menuitem m_MenuImagePropagate {
+            label {&Propagate Regions}
+            callback {OnImagePropagateRegionsAction();} selected
+            xywh {0 0 100 20}
+          }
+        }
       }
       Fl_Group {} {open
         xywh {655 290 270 415} color 31
@@ -146,7 +156,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
           xywh {655 685 260 10} resizable
         } {}
         Fl_Tabs m_TabControlPanel {open
-          xywh {655 295 265 410} box PLASTIC_THIN_UP_BOX selection_color 54
+          xywh {655 295 265 410} selection_color 54
         } {
           Fl_Group m_GrpCurves {
             label Curves open
@@ -262,7 +272,7 @@ class TracerUserInterface {open : {public TracerUserInterfaceBase}
             }
             Fl_Choice m_ChcVertexColoring {
               label {Vertex color map:}
-              callback {OnSelectVertexColoring(o->value());} open selected
+              callback {OnSelectVertexColoring(o->value());} open
               xywh {785 480 125 20} down_box BORDER_BOX labelsize 11 textsize 11
             } {
               menuitem {} {

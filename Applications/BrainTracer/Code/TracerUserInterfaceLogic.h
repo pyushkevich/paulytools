@@ -45,6 +45,8 @@ public:
   void OnButtonDeleteMarker();
   void OnButtonComputeRegions();
   void OnSelectMarker(int value);
+
+  void OnImagePropagateRegionsAction();
  
   void OnCheckDisplayEdges(int value);
   void OnSelectEdgeColoring(int value);

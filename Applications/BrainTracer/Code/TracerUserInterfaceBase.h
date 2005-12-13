@@ -26,6 +26,8 @@ public:
   virtual void OnButtonDeleteMarker() = 0;
   virtual void OnButtonComputeRegions() = 0;
   virtual void OnSelectMarker(int value) = 0;
+
+  virtual void OnImagePropagateRegionsAction() = 0;
  
   virtual void OnCheckDisplayEdges(int value) = 0;
   virtual void OnSelectVertexColoring(int value) = 0;
