@@ -1,10 +1,14 @@
 #include "itkImageFileReader.h"
+#include "itkVoxBoCUBImageIOFactory.h"
 #include <iostream>
 
 using namespace std;
 
 int main(int argc, char *argv[])
 {
+  // Enable support for VoxBo
+  itk::ObjectFactoryBase::RegisterFactory(itk::VoxBoCUBImageIOFactory::New());
+  
   if(argc < 2)
     {
     cerr << "Usage: identimg image_file" << endl;

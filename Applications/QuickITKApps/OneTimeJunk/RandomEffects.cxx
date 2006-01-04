@@ -1,6 +1,7 @@
 #include <itkImage.h>
 #include <itkImageFileReader.h>
 #include <itkImageFileWriter.h>
+#include "itkVoxBoCUBImageIOFactory.h"
 
 #include <iostream>
 
@@ -20,6 +21,9 @@ int usage()
 
 int main(int argc, char *argv[])
 {
+  // Enable support for VoxBo
+  itk::ObjectFactoryBase::RegisterFactory(itk::VoxBoCUBImageIOFactory::New());
+  
   if(argc < 4) return usage();
 
   // Process the command line options
@@ -70,10 +74,19 @@ int main(int argc, char *argv[])
   for(size_t i = 0; i < n; i++)
     {
     // Read the input image
-    ImageReader::Pointer fltReader = ImageReader::New();
-    fltReader->SetFileName(fnInput[i].c_str());
-    fltReader->Update();
-    imgInput.push_back(fltReader->GetOutput());
+    try 
+      {
+      ImageReader::Pointer fltReader = ImageReader::New();
+      fltReader->SetFileName(fnInput[i].c_str());
+      fltReader->Update();
+      imgInput.push_back(fltReader->GetOutput());
+      }
+    catch (itk::ExceptionObject &exc)
+      {
+      cerr << "Exception loading image " << fnInput[i] << endl;
+      cerr << exc << endl;
+      return -1;
+      }
 
     // Read the mask image
     if(flagMasks)

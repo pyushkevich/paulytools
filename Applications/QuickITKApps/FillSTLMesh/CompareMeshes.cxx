@@ -417,8 +417,9 @@ int main(int argc, char **argv)
   
   // Report our findings
   cout << endl;
-  cout << "Unbiased overlap between meshes is " << nIntersect * 1.0 / nUnion << endl;
-  cout << "Biased overlap between meshes is " << nIntersect * 1.0 / nReference << endl;
+  cout << "Unbiased overlap: " << nIntersect * 1.0 / nUnion << endl;
+  cout << "Biased overlap: " << nIntersect * 1.0 / nReference << endl;
+  cout << "Dice similarity index: " << 2.0 * nIntersect / (nReference + nModel) << endl;
   cout << "Reverse biased overlap between meshes is " << nIntersect * 1.0 / nModel << endl;
   cout << "Mesh 1 Volume is " << nModel * xVox * xVox * xVox << endl;
   cout << "Mesh 2 Volume is " << nReference * xVox * xVox * xVox << endl;
@@ -427,6 +428,7 @@ int main(int argc, char **argv)
   cout << "RESULT: " 
     << nIntersect * 1.0 / nUnion << "\t"
     << nIntersect * 1.0 / nReference << "\t"
+    << 2.0 * nIntersect / (nReference + nModel) << "\t"
     << xOneNorm[0] << "\t" << xOneNorm[1] << "\t"
     << xTwoNorm[0] << "\t" << xTwoNorm[1] << "\t"
     << xInfNorm[0] << "\t" << xInfNorm[1] << endl;
