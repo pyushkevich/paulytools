@@ -17,6 +17,7 @@ OPTION(USE_LAPACK "Use the Lapack Numerics Library" OFF)
 OPTION(USE_PARDISO "Use the PARDISO sparse solver library" OFF)
 OPTION(USE_METIS "Use the METIS Graph Partitioning Library" OFF)
 OPTION(USE_DART "Whether this project should be configured to use Dart" OFF)
+OPTION(USE_GSL "Use GSL (GNU Scientific Library)" OFF)
 
 # Define the optional inclusion (BUILD) variables 
 OPTION(BUILD_APPLICATIONS "Should I build standalone applications?" OFF)
@@ -128,6 +129,11 @@ IF(USE_METIS)
   INCLUDE(${PAULY_CMAKE_DIR}/FindMETIS.cmake)
 ENDIF(USE_METIS)
 
+# Set up GSL
+IF(USE_GSL)
+  INCLUDE(${PAULY_CMAKE_DIR}/FindGSL.cmake)
+ENDIF(USE_GSL)
+
 # Dart Support
 IF(USE_DART)
   # Include the standard Dart testing module
@@ -141,6 +147,7 @@ SET(PAULY_INCLUDE_DIRS
   ${PAULY_SOURCE_DIR}/CoreLibraries/BSpline
   ${PAULY_SOURCE_DIR}/CoreLibraries/FLTKViewers
   ${PAULY_SOURCE_DIR}/CoreLibraries/ITKExtensions/WindowedSincFilter/
+  ${PAULY_SOURCE_DIR}/CoreLibraries/ITKExtensions/VoxBoIO/
   ${PAULY_SOURCE_DIR}/CoreLibraries/Matrix
   ${PAULY_SOURCE_DIR}/CoreLibraries/MReps2d
   ${PAULY_SOURCE_DIR}/CoreLibraries/MReps2d/GLTools

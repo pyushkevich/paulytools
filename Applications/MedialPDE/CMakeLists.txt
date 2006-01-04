@@ -62,7 +62,7 @@ SET(PDE_LIBS
   vtkCommon
   vtkIO
   ${LAPACK_OR_MKL_LIBS}
-  gsl gslcblas 
+  ${GSL_LIBRARY} ${GSL_CBLAS_LIBRARY} 
   )
 
 # Create a common library
