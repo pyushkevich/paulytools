@@ -32,7 +32,7 @@ SET(TRACER_SRCS
 
 ADD_EXECUTABLE(braintracer ${TRACER_SRCS})
 
-LINK_LIBRARIES(
+TARGET_LINK_LIBRARIES(braintracer
   ITKCommon 
   ITKBasicFilters 
   ITKIO 

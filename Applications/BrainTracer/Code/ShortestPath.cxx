@@ -19,14 +19,14 @@ void TestShortestPath()
   // Reconstruct the shortest path to each vertex
   for(unsigned int i=1; i<5; i++)
     {
-    cout << "Path to 0 from " << i << " : ";
+    std::cout << "Path to 0 from " << i << " : ";
     unsigned int j = i;
     while(j != 0)
       {
-      cout << j << " - ";
+      std::cout << j << " - ";
       j = sp.GetPredecessorArray()[j];
       }
-    cout << "0" << endl;
+    std::cout << "0" << std::endl;
     }
 }
 

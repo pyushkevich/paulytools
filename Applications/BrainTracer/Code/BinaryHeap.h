@@ -162,12 +162,12 @@ public:
   void PrintHeap(std::ostream &out)
     {
     for(unsigned int j=0;j<m_ReserveSize;j++)
-      std::out << "[" << j << "," << m_WeightArray[j] << "] ";
-    std::out << std::endl;
+      std::cout << "[" << j << "," << m_WeightArray[j] << "] ";
+    std::cout << std::endl;
     for(unsigned int i=0;i<m_HeapSize;i++)
-      std::out << "[" << i << "," << m_Heap[i] << "," 
+      std::cout << "[" << i << "," << m_Heap[i] << "," 
         << m_WeightArray[m_Heap[i]] << "] ";
-    std::out << std::endl;
+    std::cout << std::endl;
     }
 
   /** 

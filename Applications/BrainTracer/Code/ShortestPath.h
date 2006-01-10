@@ -159,7 +159,7 @@ public:
     Superclass(nVertices, xAdjacencyIndex, xAdjacency, xEdgeLen)
     {
       m_Source = new unsigned int[nVertices];
-      cout << "GVD : " << nVertices << " " << m_NumberOfEdges << endl;
+      std::cout << "GVD : " << nVertices << " " << xAdjacency[nVertices] << std::endl;
     }
 
   virtual ~GraphVoronoiDiagram()
@@ -171,19 +171,19 @@ public:
     {
     unsigned int i;
 
-    cout << "Number of sources: " << nSources << endl;
-    cout << "Number of vertices: " << m_NumberOfVertices << endl;
-    cout << "Number of edges: " << m_NumberOfEdges << endl;
+    std::cout << "Number of sources: " << nSources << std::endl;
+    std::cout << "Number of vertices: " << this->m_NumberOfVertices << std::endl;
+    std::cout << "Number of edges: " << this->m_NumberOfEdges << std::endl;
 
     // Initialize the predecessor array and the source array 
-    for(i = 0; i < m_NumberOfVertices; i++)
+    for(i = 0; i < this->m_NumberOfVertices; i++)
       { 
-      m_Predecessor[i] = NO_PATH; 
-      m_Source[i] = NO_PATH;
+      this->m_Predecessor[i] = Superclass::NO_PATH; 
+      this->m_Source[i] = Superclass::NO_PATH;
       } 
 
     // Reset the binary heap and weights
-    m_Heap->InsertAllElementsWithEqualWeights(INFINITE_WEIGHT);
+    this->m_Heap->InsertAllElementsWithEqualWeights(Superclass::INFINITE_WEIGHT);
 
     // Initialize the heap with the sources
     for(unsigned int iSource = 0; iSource < nSources; iSource++)
@@ -192,37 +192,37 @@ public:
       unsigned int id = lSources[iSource];
 
       // Change the weight for all the sources to 0
-      m_Heap->DecreaseElementWeight(id, 0);
+      this->m_Heap->DecreaseElementWeight(id, 0);
 
       // Set the predecessor of iSource to itself
-      m_Source[id] = m_Predecessor[id] = id;
+      m_Source[id] = this->m_Predecessor[id] = id;
       }
 
     // Continue while the heap is not empty
-    while(m_Heap->GetSize())
+    while(this->m_Heap->GetSize())
       {
       // Pop off the closest vertex
-      unsigned int w = m_Heap->PopMinimum();
+      unsigned int w = this->m_Heap->PopMinimum();
 
       // Relax the vertices remaining in the heap
-      for(i = m_AdjacencyIndex[w]; i < m_AdjacencyIndex[w+1]; i++)
+      for(i = this->m_AdjacencyIndex[w]; i < this->m_AdjacencyIndex[w+1]; i++)
         {
         // Get the neighbor of i
-        unsigned int iNbr = m_Adjacency[i];
+        unsigned int iNbr = this->m_Adjacency[i];
 
         // Get the edge weight associated with it and update it in the queue
-        if(m_Heap->ContainsElement(iNbr))
+        if(this->m_Heap->ContainsElement(iNbr))
           {
           // If the distance to iNbr more than distance thru w, update it
-          TWeight dTest = m_Distance[w] + m_EdgeWeight[i];
+          TWeight dTest = this->m_Distance[w] + this->m_EdgeWeight[i];
 
-          if(dTest < m_Distance[iNbr])
+          if(dTest < this->m_Distance[iNbr])
             {
             // Update the weight
-            m_Heap->DecreaseElementWeight(iNbr, dTest);
+            this->m_Heap->DecreaseElementWeight(iNbr, dTest);
 
             // Set the predecessor
-            m_Predecessor[iNbr] = w;
+            this->m_Predecessor[iNbr] = w;
 
             // Set the source of the vertex
             m_Source[iNbr] = m_Source[w];

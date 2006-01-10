@@ -703,7 +703,7 @@ TracerUserInterfaceLogic
     vtkPolyData *poly = m_Data->GetMarkerMesh(*it);
 
     // Create a vertex holder
-    double **vtx = new (double *)[3 * poly->GetNumberOfCells()];
+    double **vtx = new double *[3 * poly->GetNumberOfCells()];
     poly->BuildCells();
     
     // Iterate over the cells in the mesh
