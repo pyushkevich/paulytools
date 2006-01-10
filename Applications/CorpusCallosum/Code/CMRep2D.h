@@ -3,7 +3,7 @@
 #define _CMRep2D_H
 
 class MedialAtom;
-class WaveletRep;
+class FunctionRep;
 
 #include "itkImage.h"
 #include "itkLinearInterpolateImageFunction.h"
@@ -25,10 +25,11 @@ class CMRep2D {
 	CMRep2D (const int _dim);
 	~CMRep2D ();
 	
-	double  buildCMRep2D (const WaveletRep& fx, const WaveletRep& fy, const WaveletRep& frho, double *phi);
+	double  buildCMRep2D (const FunctionRep& fx, const FunctionRep& fy, const FunctionRep& frho, double *phi);
 	void getBoundary(Vector &bx, Vector &by) ;
 	double checkBoundaryFold () const;	
 	double computeAreaOverlap (const ImageInterpolator *image, const double ratio, const int n, const int ne);
+	double overlapAndCMRep (const ImageInterpolator *image, const double ratio, const int n, const int ne, const double dx); 
 	double getAreaOfCMRep ();
 	double getArcLenVar();
 };

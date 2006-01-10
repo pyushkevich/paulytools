@@ -26,14 +26,14 @@ EquationSystem::~EquationSystem () {
 	delete[] coeff1stOrder;
 }
 
-void EquationSystem::buildEquationSystem (const WaveletRep& fx, const WaveletRep& fy, const WaveletRep& frho) {
+void EquationSystem::buildEquationSystem (const FunctionRep& fx, const FunctionRep& fy, const FunctionRep& frho) {
 	
 	// the step size of parameter t in x(t), y(t) and rho(t)
 	const double dt = 1.0/dim;
 	
 	double t;
 	// the discrete x y and their first and second derivative vectors
-	double x, y, rho, xt, yt, xtt, ytt;
+	double  rho, xt, yt, xtt, ytt;
 	// some intermedial coeffs
 	double coeff1, coeff2;
 	
@@ -42,8 +42,6 @@ void EquationSystem::buildEquationSystem (const WaveletRep& fx, const WaveletRep
 		t = (j - 1)*dt;
 		
 		// get function values at t
-		x = fx.get(t);
-		y = fy.get(t);
 		rho = frho.get(t);
 		xt = fx.get1stDeriv(t);
 		yt = fy.get1stDeriv(t);
@@ -67,9 +65,6 @@ void EquationSystem::buildEquationSystem (const WaveletRep& fx, const WaveletRep
 		t = j;
 		
 		// get function values at t
-		x = fx.get(t);
-		y = fy.get(t);
-		rho = frho.get(t);
 		xt = fx.get1stDeriv(t);
 		yt = fy.get1stDeriv(t);
 		

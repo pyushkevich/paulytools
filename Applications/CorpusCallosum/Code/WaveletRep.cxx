@@ -3,11 +3,15 @@
 #include <iostream>
 using namespace std;
 
-WaveletRep::WaveletRep (const double _coeff[], const int _jMax) : jMax(_jMax) {
+WaveletRep::WaveletRep (const double _coeff[], const int _dim) : dim(_dim) {
 	// size of coeff should be 2^(jMax + 1) + 1
-	dim = 2;
-	dim <<= jMax;
-	dim += 1;
+	int tmp = dim-1;
+	jMax = 0;
+	for (; tmp > 1; jMax++) {
+	  tmp /= 2;
+	}
+	jMax -= 1;
+
 	coeff = new double [dim];
 	setCoeff(_coeff);
 }

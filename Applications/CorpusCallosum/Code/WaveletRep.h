@@ -6,14 +6,12 @@
 
 class WaveletRep : public FunctionRep {
 	private:
-	const int jMax;
-	int dim;
+	int jMax;
+	const int dim;
 	double *coeff;
 	
-	void setJMax (const int _jMax);
-	
 	public:
-	WaveletRep (const double _coeff[], const int _jMax);
+	WaveletRep (const double _coeff[], const int _dim);
 	~WaveletRep ();
 	
 	void setCoeff (const double _coeff[]);

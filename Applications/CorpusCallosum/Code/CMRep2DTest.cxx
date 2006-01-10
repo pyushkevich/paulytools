@@ -3,7 +3,9 @@
 
 #include "itkImage.h"
 #include "itkImageFileReader.h"
+#include "itkImageFileWriter.h"
 #include "itkLinearInterpolateImageFunction.h"
+#include "itkDiscreteGaussianImageFilter.h"
 
 #include "CMRep2D.h"
 #include "TemplatedWaveletRep.h"
@@ -15,24 +17,42 @@ int main (int argc, char *argv[]) {
 	const int		Dimension = 2;
 	typedef itk::Image< PixelType, Dimension >	ImageType;
 	typedef itk::ImageFileReader< ImageType >	ImageReader;
+	typedef itk::ImageFileWriter< ImageType >	ImageWriter;
 	typedef itk::LinearInterpolateImageFunction< ImageType, double > ImageInterpolator;
+	typedef itk::DiscreteGaussianImageFilter< ImageType, ImageType > ImageSmoother;
 	
 	if (argc < 3) {
 		cerr << "Not enough arguments" << endl;
-		cerr << "Usage: " << argv[0] << " inputImageFile dim" << endl;
+		cerr << "Usage: " << argv[0] << " inputImageFile outputImageFile" << endl;
+//		cerr << "Usage: " << argv[0] << " inputImageFile dim" << endl;
 		exit (1);
 	}
 	
 	const char *inputImageFile = argv[1];
+	const char *outputImageFile = argv[2];
 	
 	cout << "input Image File is " << inputImageFile << endl;
+	cout << "output Image File is " << outputImageFile << endl;
 	
 	ImageReader::Pointer reader = ImageReader::New();
 	reader->SetFileName( inputImageFile );
 	reader->Update();
 	
+	// Gaussian smooth the image
+	ImageSmoother::Pointer smooth = ImageSmoother::New();
+	smooth->SetVariance(4.0);
+	smooth->SetInput(reader->GetOutput());
+	smooth->Update();
+	
+	ImageWriter::Pointer writer = ImageWriter::New();
+	writer->SetFileName( outputImageFile );
+	writer->SetInput( smooth->GetOutput() );
+	writer->Update();
+	
+/*	
 	ImageInterpolator::Pointer interpolator = ImageInterpolator::New();
 	interpolator->SetInputImage( reader->GetOutput() );
+
 	double areaOfImage = 0.0;
 	for (int i = 6; i < 250; ++i) {
 		for (int j = 6; j < 250; ++j) {
@@ -120,7 +140,7 @@ int main (int argc, char *argv[]) {
 	cout << "area of CMRep = " << areaCMRep << endl; 
 	double check = cm.checkBoundaryFold();
 	cout << "check = " << check << endl;
-	
+*/	
 	return 0;
 }
 

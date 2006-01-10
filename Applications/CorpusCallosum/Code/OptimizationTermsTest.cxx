@@ -15,19 +15,7 @@ int main(int argc, char *argv[]) {
     cerr <<"Usage: " << argv[0] << "inputImageFile imageBlurVariance dim"<<endl;
     exit(1);
   }
-
-  /*
-{56.0068, 58.6106, 68.3392, 62.8632, 49.797, 37.2775, 23.3805, 9.1962, 
--5.46414, -19.7429, -33.4751, -46.5852, -59.3993, -69.4148, -69.686, 
--68.479}, 
-{-26.3054, -23.613, -17.3027, -2.97595, 4.27851, 11.3017, 16.0621, 
-19.1998, 19.0956, 16.2316, 11.3509, 5.17381, -1.44601, -12.3681, -22.6114,
--26.6637}
-
-56.0068, 62.8632, 23.3805, -19.7429, -59.3993, -68.479
--26.3054, -2.97595, 16.0621, 16.2316, -1.44601, -26.6637
-*/
-const double p0[51] = {
+  const double p0[51] = {
 	-28.2364,
 	60.1971, -0.377662,
 	-4.78251, 4.24725,
@@ -96,7 +84,7 @@ const double p0[51] = {
 
   // generate a CMRep2DOptimizationProblem class object and test it
   CMRep2DOptimizationProblem fcm(inputImageFile, imageBlurVariance, dim, tx);
-  fcm.setGradientScaleFactor(1.0, 1.0, 1.0e-7);
+  fcm.setGradientScaleFactor(1.0, 1.0, 1.0);
   fcm.setStepEpsilon(1.0e-5,1.0e-5,1.0e-6);    
   double  fx =  fcm.computeOneJet(x,xGrad);
   cout <<"computeOneJet(x) = "<< fx << endl;
@@ -126,7 +114,7 @@ const double p0[51] = {
 
   // now fix the value we get from previous optimization, add 8*3 coeffs to optimize
   fcm.setFixedX(currentX);
-  fcm.setGradientScaleFactor(1.0, 1.0, 1.0e-4);
+  fcm.setGradientScaleFactor(1.0, 1.0, 1.0);
   x.setSize(8*3);
   for (int i = 0; i < x.size(); ++i) {
     x(i) = 0.0;
@@ -152,7 +140,7 @@ const double p0[51] = {
 
   // now fix the value we get from previous optimization, add 16*3 coeffs to optimize
   fcm.setFixedX(currentX);
-  fcm.setGradientScaleFactor(1.0, 1.0, 1.0e-3);
+  fcm.setGradientScaleFactor(1.0, 1.0, 1.0);
   x.setSize(16*3);
   for (int i = 0; i < x.size(); ++i) {
     x(i) = 0.0;
@@ -197,8 +185,8 @@ const double p0[51] = {
 
 double optimize(CMRep2DOptimizationProblem& fcm, Vector& x, Vector& xGrad) {
   ConjugateGradientMethod CG(fcm,x);
-  CG.setTolerance(1.0e-5);
-  CG.setStepSize(1.0e-2);
+  CG.setTolerance(1.0e-6);
+  CG.setStepSize(1.0e-4);
   int xSize = x.size()/3;  
   double objectiveF;
   bool finished = false;

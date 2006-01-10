@@ -1,20 +1,20 @@
 // Cubic uniform B-spline with precalculated blending function.
 
-#ifndef _BSplineCubUni_H
-#define _BSplineCubUni_H
+#ifndef _BSpline5Uni_H
+#define _BSpline5Uni_H
 
 #include "FunctionRep.h"
 
-class BSplineCubUni : public FunctionRep {
+class BSpline5Uni : public FunctionRep {
 	private:
-	static const double M[4][4];
+	static const double M[6][6];
 	int np;
 	double *ctrlPt;
 	
 	public:
-	BSplineCubUni () {np=1; ctrlPt[0] = 0;}
-	BSplineCubUni (const double _ctrlPt[], const int _np);
-	~BSplineCubUni ();
+	BSpline5Uni () {np=1; ctrlPt[0] = 0;}
+	BSpline5Uni (const double _ctrlPt[], const int _np);
+	~BSpline5Uni ();
 
 	void setCtrlPt (const double _ctrlPt[]);
 	virtual double get (const double x) const;

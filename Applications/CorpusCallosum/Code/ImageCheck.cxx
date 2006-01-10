@@ -3,6 +3,7 @@
 #include "itkImage.h"
 #include "itkImageFileReader.h"
 #include "itkLinearInterpolateImageFunction.h"
+#include "optima.h"
 
 using namespace std;
 
@@ -27,13 +28,17 @@ int main(int argc, char *argv[]) {
   im->SetInputImage(reader->GetOutput());
   
   double sumPixelValue = 0.0;
+  double sumNoneZeroPixel = 0.0;
   double lowerBound = 10000.0;
   double higherBound = -10000.0;
-  for (int i = 0; i < 256; ++i) {
-    for (int j = 0; j < 256; ++j) {
+  for (int i = 30; i < 220; ++i) {
+    for (int j = 30; j < 220; ++j) {
       double index[2] = {i,j};
       double tmp = im->Evaluate(index);
       sumPixelValue += im->Evaluate(index);
+      if(tmp > 0.5) {
+	sumNoneZeroPixel += 1.0;
+      }
       if (lowerBound > tmp) {lowerBound = tmp;}
       if (higherBound < tmp) {higherBound = tmp;}   
     }
@@ -54,6 +59,7 @@ int main(int argc, char *argv[]) {
   double index1[2] = {128, 128};
   double index2[2] = {10,10};
   cout << "Sum of Pixel Value = " << sumPixelValue << endl;
+  cout << " Sum of none zero pixel numbers = " << sumNoneZeroPixel << endl;
   cout << "lower Bound of image pixel value = " << lowerBound << endl;
   cout << "higher Bound of image pixel value = " << higherBound << endl;
   cout << "pixel value at (0 0) = " << im->Evaluate(index1) << endl;
@@ -61,6 +67,12 @@ int main(int argc, char *argv[]) {
   cout << "lower bound pixel number = " << counterlowerBound << endl;
   cout << "higher bound pixel number = " << counterhigherBound << endl;
 
+  Vector ve;
+  Vector ye;
+  ve.setSize(0);
+  ye = ve;
+  int size = ye.size();
+  cout << "size of vector = " << size << endl;
   return 0;
 
 }

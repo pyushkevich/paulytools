@@ -9,7 +9,7 @@ class TemplatedWaveletRep : public WaveletRep {
 	WaveletRep templateShape;
 	
 	public:
-	TemplatedWaveletRep (const double tCoeff[], const int tJMax, const double dCoeff[], const int dJMax);
+	TemplatedWaveletRep (const double tCoeff[], const int tdim, const double dCoeff[], const int ddim);
 	~TemplatedWaveletRep () {}
 	
 	double get (const double x) const;

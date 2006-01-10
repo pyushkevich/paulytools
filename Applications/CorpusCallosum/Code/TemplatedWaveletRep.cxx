@@ -1,6 +1,6 @@
 #include "TemplatedWaveletRep.h"
 
-TemplatedWaveletRep::TemplatedWaveletRep (const double tCoeff[], const int tJMax, const double dCoeff[], const int dJMax) : templateShape(tCoeff, tJMax), WaveletRep(dCoeff, dJMax) {
+TemplatedWaveletRep::TemplatedWaveletRep (const double tCoeff[], const int tdim, const double dCoeff[], const int ddim) : templateShape(tCoeff, tdim), WaveletRep(dCoeff, ddim) {
 }
 
 double TemplatedWaveletRep::get (const double x) const {

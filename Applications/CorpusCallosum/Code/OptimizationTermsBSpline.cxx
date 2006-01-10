@@ -1,4 +1,4 @@
-#include "OptimizationTerms.h"
+#include "OptimizationTermsBSpline.h"
 #include <cmath>
 
 using namespace std;
@@ -9,7 +9,7 @@ typedef itk::ImageFileReader< ImageType >	ImageReader;
 typedef itk::LinearInterpolateImageFunction< ImageType, double > ImageInterpolator;
 typedef itk::DiscreteGaussianImageFilter< ImageType, ImageType > ImageSmoother;
 
-CMRep2DOptimizationProblem::CMRep2DOptimizationProblem(const char *inputImageFile, double _imageBlurVariance, const int _dim, const Vector &TX) : imageBlurVariance(_imageBlurVariance), dim(_dim){
+CMRep2DOptimizationProblem::CMRep2DOptimizationProblem(char *_inputImageFile, double _imageBlurVariance, const int _dim) : inputImageFile(_inputImageFile), imageBlurVariance(_imageBlurVariance), dim(_dim){
   /* Initialize image */
 
   ImageReader::Pointer reader = ImageReader::New();
@@ -30,20 +30,17 @@ CMRep2DOptimizationProblem::CMRep2DOptimizationProblem(const char *inputImageFil
   image->SetInputImage(reader->GetOutput());
   */
   cm = new CMRep2D(dim);
-  
+  fixedX.setSize(3);
+  for (int i = 0; i<3; i++) {
+    fixedX(i) = 0.0;
+  };
   phi = new double[dim + 3];
-  for (int i = 0; i < dim + 3; ++i){
+  phi[0] = -100.0;
+  phi[dim+2] = -100.0;
+  for (int i = 1; i < dim + 2; ++i){
     phi[i] = 1.0;
   };
 
-  this->TX = TX;
-  tSize = TX.size()/3;
-
-  // the coeffs remain unchanged in optimization, useful in multiscale optimzation
-  fixedX.setSize(0);
-  fixedSize = 0;
-
-  // std::cout << "tJmax = " << tJmax << std::endl;
   stepEpsilon[0] = 1.0e-04;
   stepEpsilon[1] = 1.0e-04;
   stepEpsilon[2] = 1.0e-05;
@@ -56,6 +53,22 @@ CMRep2DOptimizationProblem::CMRep2DOptimizationProblem(const char *inputImageFil
 CMRep2DOptimizationProblem::~CMRep2DOptimizationProblem(){
   delete cm;
   delete[] phi;
+}
+void CMRep2DOptimizationProblem::setBlurVariance(double _imageBlurVariance) {
+  imageBlurVariance = _imageBlurVariance;
+  ImageReader::Pointer reader = ImageReader::New();
+  ImageSmoother::Pointer smooth = ImageSmoother::New();
+  reader->SetFileName(inputImageFile);
+  reader->Update();
+  if(imageBlurVariance > 0.0){
+    smooth->SetVariance(_imageBlurVariance);
+    smooth->SetInput(reader->GetOutput());
+    smooth->Update();
+    blurImage->SetInputImage(smooth->GetOutput()) ;
+  }
+  if(imageBlurVariance==0.0){
+    blurImage->SetInputImage(reader->GetOutput());
+  }
 }
 
 void CMRep2DOptimizationProblem::setStepEpsilon(double xEpsilon, double yEpsilon, double rhoEpsilon) {
@@ -71,40 +84,39 @@ void CMRep2DOptimizationProblem::setGradientScaleFactor(double xGf, double yGf, 
   gradientScaleFactor[2] = rhoGf;
 }
 
-void CMRep2DOptimizationProblem::setFixedX(const Vector& _fixedX) {
-  this->fixedX = _fixedX;
-  fixedSize = fixedX.size()/3;
+void  CMRep2DOptimizationProblem::setFixedX(const Vector& _fixedX) {
+ this->fixedX = _fixedX;
 }
 
 double CMRep2DOptimizationProblem::evaluate(const Vector &X) {
-  int dSize = X.size()/3 + fixedSize;
-  Vector allX;
-  allX.setSize(dSize*3);
-  for (int i = 0; i < fixedSize; i++) {
-    allX(i) = fixedX(i);
-    allX(i+dSize) = fixedX(i+fixedSize);
-    allX(i+2*dSize) = fixedX(i+2*fixedSize);
-  }
-  for (int i = 0; i < dSize - fixedSize; i++) {
-    allX(fixedSize + i) = X(i);
-    allX(fixedSize + i + dSize) = X(i + dSize - fixedSize);
-    allX(fixedSize + i + 2*dSize) = X(i + 2*dSize - 2*fixedSize);
-  }
-  TemplatedWaveletRep fx(TX.getDataArray(), tSize, allX.getDataArray(), dSize);
-  TemplatedWaveletRep fy(TX.getDataArray() + tSize, tSize, allX.getDataArray() + dSize, dSize);
-  TemplatedWaveletRep frho(TX.getDataArray() + tSize*2, tSize, allX.getDataArray() + 2*dSize, dSize);
-  
+  int fixedSize = fixedX.size()/3;
+  int xSize = X.size()/3;
+
+  SumBSplineCubUni fx(fixedX.getDataArray(), fixedSize, X.getDataArray(), xSize);
+  SumBSplineCubUni fy(fixedX.getDataArray() + fixedSize, fixedSize, X.getDataArray() + xSize, xSize);
+  SumBSplineCubUni frho(fixedX.getDataArray() + 2*fixedSize, fixedSize, X.getDataArray() + 2*xSize, xSize);
+
   double  minPhi = cm->buildCMRep2D(fx, fy, frho, phi);
   double foldJac = cm->checkBoundaryFold();
   double arcLenVar = cm->getArcLenVar();
-  arcLenVar *= 0.5;
-  //  cout << " arcLenVar = " << arcLenVar << endl;
+  arcLenVar *= 1;
+  // cout << " arcLenVar = " << arcLenVar << endl;
   double overlap = cm->computeAreaOverlap(blurImage, 0.8, 10, 5);
-  //cout << "overlap = " << overlap << endl;
+  // double overlap = cm->computeAreaOverlap(originalImage, 0.8, 10, 5);
+  //  cout << "overlap = " << overlap << endl;
+  //  cout << "minPhi = " << minPhi << endl;
+  // cout << "foldJac = " << foldJac << endl;
   double alpha = -50.0;
-  double eps = 0.1;
+  double eps1 = 0.03;
+  double eps2 = 0.03;
+  //   if( minPhi < 0) {
+  //  return -minPhi;  
+  // }
+  // if( foldJac < 0) {
+  // return -foldJac; 
+  // }
 
-  return  -overlap + arcLenVar + exp(alpha*(minPhi-eps)) + exp(alpha*(foldJac-eps));
+  return  -overlap + arcLenVar + exp(alpha*(minPhi-eps1)) + exp(alpha*(foldJac-eps2));
   
 }
 
@@ -142,6 +154,7 @@ double CMRep2DOptimizationProblem::computeOneJet(const Vector &X, Vector &XGrad)
   // check the norm of XGrad, make sure it's not too wild
   float len = XGrad.infinityNorm();
   if (len > 1.0e30) {
+    cout << " Gradient overflow!" << endl;
     XGrad /= len;
   }
 
@@ -149,25 +162,15 @@ double CMRep2DOptimizationProblem::computeOneJet(const Vector &X, Vector &XGrad)
 }
 
 bool CMRep2DOptimizationProblem::getBoundary(Vector &X, Vector &bx, Vector &by) {
-  int dSize = X.size()/3 + fixedSize;
-  Vector allX;
-  allX.setSize(dSize*3);
-  for (int i = 0; i < fixedSize; i++) {
-    allX(i) = fixedX(i);
-    allX(i+dSize) = fixedX(i+fixedSize);
-    allX(i+2*dSize) = fixedX(i+2*fixedSize);
-  }
-  for (int i = 0; i < dSize - fixedSize; i++) {
-    allX(fixedSize + i) = X(i);
-    allX(fixedSize + i + dSize) = X(i + dSize - fixedSize);
-    allX(fixedSize + i + 2*dSize) = X(i + 2*dSize - 2*fixedSize);
-  }
-  TemplatedWaveletRep fx(TX.getDataArray(), tSize, allX.getDataArray(), dSize);
-  TemplatedWaveletRep fy(TX.getDataArray() + tSize, tSize, allX.getDataArray() + dSize, dSize);
-  TemplatedWaveletRep frho(TX.getDataArray() + tSize*2, tSize, allX.getDataArray() + 2*dSize, dSize);
+  int fixedSize = fixedX.size()/3;
+  int xSize = X.size()/3;
+
+  SumBSplineCubUni fx(fixedX.getDataArray(), fixedSize, X.getDataArray(), xSize);
+  SumBSplineCubUni fy(fixedX.getDataArray() + fixedSize, fixedSize, X.getDataArray() + xSize, xSize);
+  SumBSplineCubUni frho(fixedX.getDataArray() + 2*fixedSize, fixedSize, X.getDataArray() + 2*xSize, xSize);
  
-  bool nonnegative = cm->buildCMRep2D(fx, fy, frho, phi);
-  if (!nonnegative) {
+  double minPhi = cm->buildCMRep2D(fx, fy, frho, phi);
+  if (minPhi <= 0) {
     return false;
   }
   cm->getBoundary(bx,by);
@@ -215,22 +218,12 @@ void CMRep2DOptimizationProblem::computeScaleFactors(const Vector &X, Vector &sc
 }
 
 double CMRep2DOptimizationProblem::areaOverlapRatio(const Vector& X) {
-  int dSize = X.size()/3 + fixedSize;
-  Vector allX;
-  allX.setSize(dSize*3);
-  for (int i = 0; i < fixedSize; i++) {
-    allX(i) = fixedX(i);
-    allX(i+dSize) = fixedX(i+fixedSize);
-    allX(i+2*dSize) = fixedX(i+2*fixedSize);
-  }
-  for (int i = 0; i < dSize - fixedSize; i++) {
-    allX(fixedSize + i) = X(i);
-    allX(fixedSize + i + dSize) = X(i + dSize - fixedSize);
-    allX(fixedSize + i + 2*dSize) = X(i + 2*dSize - 2*fixedSize);
-  }
-  TemplatedWaveletRep fx(TX.getDataArray(), tSize, allX.getDataArray(), dSize);
-  TemplatedWaveletRep fy(TX.getDataArray() + tSize, tSize, allX.getDataArray() + dSize, dSize);
-  TemplatedWaveletRep frho(TX.getDataArray() + tSize*2, tSize, allX.getDataArray() + 2*dSize, dSize);
+  int fixedSize = fixedX.size()/3;
+  int xSize = X.size()/3;
+
+  SumBSplineCubUni fx(fixedX.getDataArray(), fixedSize, X.getDataArray(), xSize);
+  SumBSplineCubUni fy(fixedX.getDataArray() + fixedSize, fixedSize, X.getDataArray() + xSize, xSize);
+  SumBSplineCubUni frho(fixedX.getDataArray() + 2*fixedSize, fixedSize, X.getDataArray() + 2*xSize, xSize);
   
   double  minPhi = cm->buildCMRep2D(fx, fy, frho, phi);
   if (minPhi <= 0) {
@@ -240,18 +233,20 @@ double CMRep2DOptimizationProblem::areaOverlapRatio(const Vector& X) {
   if (foldJac <= 0) {
     cout << "boundary folds!" << endl;
   }
-  double overlap = cm->computeAreaOverlap(originalImage, 0.8, 10, 5);
+  double overlapOri = cm->computeAreaOverlap(originalImage, 0.8, 200, 500);
+  double overlap = cm->overlapAndCMRep(originalImage, 0.8, 200, 500, 0.0);
   double areaOfCMRep = cm->getAreaOfCMRep();
 
   double areaOfImage = 0.0;
   for (int i = 6; i < 250; i++) {
     for (int j = 6; j< 250; j++) {
      double index[2] = {i,j};
-      areaOfImage += originalImage->Evaluate(index);
+     areaOfImage +=  originalImage->Evaluate(index);
     }
   }
   cout << "area of CMRep = " << areaOfCMRep << endl;
   cout << "area of Image = " << areaOfImage << endl;
+  cout << "area of overlap before shift = " << overlapOri << endl;
   cout << "area of overlap = " << overlap << endl;
   return overlap/(areaOfCMRep+areaOfImage-overlap);
 }

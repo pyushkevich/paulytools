@@ -6,7 +6,7 @@
 
 using namespace std;
 
-class WaveletRep;
+class FunctionRep;
 
 class EquationSystem {
 	public:
@@ -19,7 +19,7 @@ class EquationSystem {
 	EquationSystem (const int dim);
 	~EquationSystem ();
 	
-	void buildEquationSystem (const WaveletRep& fx, const WaveletRep& fy, const WaveletRep& frho);
+	void buildEquationSystem (const FunctionRep& fx, const FunctionRep& fy, const FunctionRep& frho);
 	
 	friend ostream& operator<< (ostream& out, const EquationSystem& es);
 };
