@@ -71,3 +71,7 @@ Stage_CTF_CG_VO(expdata, "ctf46",  "ctf57",  "med", 8, 10, 5, 7, 600);
 Stage_CTF_CG_VO(expdata, "ctf57",  "ctf68",  "med", 8, 10, 6, 8, 600);
 Stage_CTF_CG_VO(expdata, "ctf68",  "ctf79",  "med", 8, 10, 7, 9, 600);
 Stage_CTF_CG_VO(expdata, "ctf79",  "ctf80",  "med", 8, 10, 8, 10, 600);
+
+# Boundary image match stage
+Stage_CTF_CG_BM(expdata, "ctf80",  "bdm80",  "low", 8, 10, 8, 10, 600);
+Stage_CTF_CG_BM(expdata, "bdm80",  "bdm92",  "low", 9, 12, 9, 12, 600);

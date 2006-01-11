@@ -145,7 +145,7 @@ def Stage_CTF_CG_VO(expdata, nmStart, nmEnd, imgType, nu, nv, nuctf, nvctf, nIte
 
 
 
-def Stage_CTF_CG_BM(expdata, nmStart, nmEnd, imgType, nu, nv, nIter):
+def Stage_CTF_CG_BM(expdata, nmStart, nmEnd, imgType, nu, nv, nuctf, nvctf, nIter):
   """Run an optimization stage"""
 
   # Check if the output already exists
@@ -153,7 +153,7 @@ def Stage_CTF_CG_BM(expdata, nmStart, nmEnd, imgType, nu, nv, nIter):
     return;
     
   # Load the image from file
-  img = LoadBlurImageWithGradient(expdata, imgType);
+  img = LoadBlurImage(expdata, imgType);
   
   # Load the m-rep
   mp = MedialPDE(nu, nv, sampling["nu"], sampling["nv"], sampling["cut"], sampling["ncu"], sampling["ncv"]);
@@ -164,7 +164,7 @@ def Stage_CTF_CG_BM(expdata, nmStart, nmEnd, imgType, nu, nv, nIter):
   # Set up the optimizer
   mp.SetOptimizerToConjugateGradientDescent(0.1);
   mp.SetMatchToBoundaryGradient();
-  mp.SetOptimizationToDeformable();
+  mp.SetOptimizationToCoarseToFine(nuctf, nvctf, nuctf, nvctf);
   mp.EnableMeshDump(os.path.join(expdata["dump"], expdata["id"] + "_" + nmEnd), 0.01);
   
   # Run the optimization
