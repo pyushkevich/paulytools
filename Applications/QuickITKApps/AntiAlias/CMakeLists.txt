@@ -29,3 +29,5 @@ TARGET_LINK_LIBRARIES(labelribbons ${COMMON_LIBS})
 IF(USE_BOOST)
   ADD_EXECUTABLE(bpaint BrainPaint.cpp)
 ENDIF(USE_BOOST)
+
+INSTALL_TARGETS("/bin" aalias lsplit lcombine)
