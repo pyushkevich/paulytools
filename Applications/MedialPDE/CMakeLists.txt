@@ -58,6 +58,7 @@ SET(PDE_LIBS
   ITKIO
   ITKCommon
   ITKBasicFilters
+  ITKVoxBoIO
   ${GLUT_LIBRARY}
   vtkCommon
   vtkIO

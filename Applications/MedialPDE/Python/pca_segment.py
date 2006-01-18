@@ -20,8 +20,8 @@ if(len(sys.argv) <> 4):
 pcaData = {
   "mean":   os.path.join(sys.argv[2], "mean/mean.mpde"),
   "matrix": os.path.join(sys.argv[2], "matrix/shapemat.mat"),
-  "ncu":8, 
-  "ncv":10
+  "ncu":9, 
+  "ncv":12
 }
 
 # Check that the input image exists
@@ -52,26 +52,26 @@ for i in "root", "blur", "cmrep", "vtk", "dump":
 MakeImages(expdata, sys.argv[1], False)
 
 # Align template by moments of inertia
-Stage_MOInertia(expdata, pcaData["mean"], "align","med", 8, 10)
+Stage_MOInertia(expdata, pcaData["mean"], "align","med", 9, 12)
 
 # Affine stage
-Stage_AFF_CG_VO(expdata, "align",  "affine", "med", 8, 10, 600);
+Stage_AFF_CG_VO(expdata, "align",  "affine", "med", 9, 12, 600);
 
 # PCA Stage
-Stage_PCA_CG_VO(expdata, "affine", "pca04",  "med", 8, 10, 600, pcaData, 4);
+Stage_PCA_CG_VO(expdata, "affine", "pca04",  "med", 9, 12, 600, pcaData, 4);
 
 # Second PCA Stage
-Stage_PCA_CG_VO(expdata, "pca04",  "pca12",  "med", 8, 10, 600, pcaData, 12);
+Stage_PCA_CG_VO(expdata, "pca04",  "pca12",  "med", 9, 12, 600, pcaData, 12);
 
 # Deformation stages
-Stage_CTF_CG_VO(expdata, "pca12",  "ctf24",  "med", 8, 10, 2, 4, 1600);
-Stage_CTF_CG_VO(expdata, "ctf24",  "ctf35",  "med", 8, 10, 3, 5, 600);
-Stage_CTF_CG_VO(expdata, "ctf35",  "ctf46",  "med", 8, 10, 4, 6, 600);
-Stage_CTF_CG_VO(expdata, "ctf46",  "ctf57",  "med", 8, 10, 5, 7, 600);
-Stage_CTF_CG_VO(expdata, "ctf57",  "ctf68",  "med", 8, 10, 6, 8, 600);
-Stage_CTF_CG_VO(expdata, "ctf68",  "ctf79",  "med", 8, 10, 7, 9, 600);
-Stage_CTF_CG_VO(expdata, "ctf79",  "ctf80",  "med", 8, 10, 8, 10, 600);
+Stage_CTF_CG_VO(expdata, "pca12",  "ctf24",  "med", 9, 12, 2, 4, 1600);
+Stage_CTF_CG_VO(expdata, "ctf24",  "ctf35",  "med", 9, 12, 3, 5, 600);
+Stage_CTF_CG_VO(expdata, "ctf35",  "ctf46",  "med", 9, 12, 4, 6, 600);
+Stage_CTF_CG_VO(expdata, "ctf46",  "ctf57",  "med", 9, 12, 5, 7, 600);
+Stage_CTF_CG_VO(expdata, "ctf57",  "ctf68",  "med", 9, 12, 6, 8, 600);
+Stage_CTF_CG_VO(expdata, "ctf68",  "ctf79",  "med", 9, 12, 7, 9, 600);
+Stage_CTF_CG_VO(expdata, "ctf79",  "ctf80",  "med", 9, 12, 8, 10, 600);
 
 # Boundary image match stage
-Stage_CTF_CG_BM(expdata, "ctf80",  "bdm80",  "low", 8, 10, 8, 10, 600);
+Stage_CTF_CG_BM(expdata, "ctf80",  "bdm80",  "low", 9, 12, 8, 10, 600);
 Stage_CTF_CG_BM(expdata, "bdm80",  "bdm92",  "low", 9, 12, 9, 12, 600);
