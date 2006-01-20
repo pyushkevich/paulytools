@@ -25,9 +25,7 @@ SET(COMMON_SRCS
   Code/ScriptImaging.cxx
   Code/ScriptInterface.cxx
   Code/TestSolver.cxx
-  Code/VTKMedialMesh.cxx)
-
-SET(RENDER_SOURCES
+  Code/VTKMedialMesh.cxx
   ${PAULY_SOURCE_DIR}/Applications/CMRepTool3d/Code/fracviewer.cpp
   ${PAULY_SOURCE_DIR}/Applications/CMRepTool3d/Code/glengine.cpp
   Code/MedialPDERenderer.cxx)
@@ -77,7 +75,7 @@ TARGET_LINK_LIBRARIES("_medialpdemodule" medialpde)
 SET_TARGET_PROPERTIES("_medialpdemodule" PROPERTIES PREFIX "")
 
 # Create the test executable
-ADD_EXECUTABLE(testpde Code/ScriptTest.cxx ${RENDER_SOURCES})
+ADD_EXECUTABLE(testpde Code/ScriptTest.cxx)
 TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS} ${GLUT_LIBRARY})
 TARGET_LINK_LIBRARIES(testpde medialpde)
 
