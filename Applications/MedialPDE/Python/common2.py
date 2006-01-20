@@ -53,7 +53,7 @@ def LoadBlurImage(exp, type):
   return img
 
 # Function to load a blurred image and gradient, type is hi, med or low
-def LoadBlurImageWithGradient(id, type):
+def LoadBlurImageWithGradient(exp, type):
   """ Load blurred image from file """
   img = FloatImage()
   img.LoadFromPath(
