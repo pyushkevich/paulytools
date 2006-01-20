@@ -81,6 +81,10 @@ ADD_EXECUTABLE(testpde Code/ScriptTest.cxx ${RENDER_SOURCES})
 TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS} ${GLUT_LIBRARY})
 TARGET_LINK_LIBRARIES(testpde medialpde)
 
+# Create a statically linked profiling executable
+ADD_EXECUTABLE(mpdeprof Code/ProfilerDriver.cxx ${COMMON_SRCS})
+TARGET_LINK_LIBRARIES(mpdeprof ${PDE_LIBS} ${GLUT_LIBRARY})
+
 # Specify the data root
 FIND_PATH(MPDE_DATA_ROOT "t1")
 IF(MPDE_DATA_ROOT)

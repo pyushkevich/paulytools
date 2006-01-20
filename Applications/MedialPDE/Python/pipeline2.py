@@ -153,7 +153,7 @@ def Stage_CTF_CG_BM(expdata, nmStart, nmEnd, imgType, nu, nv, nuctf, nvctf, nIte
     return;
     
   # Load the image from file
-  img = LoadBlurImage(expdata, imgType);
+  img = LoadBlurImageWithGradient(expdata, imgType);
   
   # Load the m-rep
   mp = MedialPDE(nu, nv, sampling["nu"], sampling["nv"], sampling["cut"], sampling["ncu"], sampling["ncv"]);
