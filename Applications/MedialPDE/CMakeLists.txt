@@ -58,7 +58,8 @@ SET(PDE_LIBS
   ITKIO
   ITKCommon
   ITKBasicFilters
-  ITKVoxBoIO
+  ITKVoxBoIO 
+  ${GLUT_LIBRARY}
   vtkCommon
   vtkIO
   ${LAPACK_OR_MKL_LIBS}
@@ -76,7 +77,7 @@ SET_TARGET_PROPERTIES("_medialpdemodule" PROPERTIES PREFIX "")
 
 # Create the test executable
 ADD_EXECUTABLE(testpde Code/ScriptTest.cxx)
-TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS} ${GLUT_LIBRARY})
+TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS})
 TARGET_LINK_LIBRARIES(testpde medialpde)
 
 # Create a statically linked profiling executable
