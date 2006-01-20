@@ -4,6 +4,7 @@
 #include "itkLinearInterpolateImageFunction.h"
 #include "itkImageFileReader.h"
 #include "itkImageFileWriter.h"
+#include "itkVoxBoCUBImageIOFactory.h"
 
 template<typename TPixel>
 class ITKImageWrapperImpl : public virtual ITKImageWrapper<TPixel>
@@ -104,10 +105,19 @@ void ITKImageWrapperImpl<TPixel>
   fnInterpolator->SetInputImage(xImage);
 }
 
+static bool glob_ITKCUBFactoryRegistered = false;
+
 template<typename TPixel>
 void ITKImageWrapperImpl<TPixel>
 ::LoadFromFile(const char *file)
 {
+  // Ensure that the CUB file support is provided
+  if(!glob_ITKCUBFactoryRegistered)
+    {
+    itk::ObjectFactoryBase::RegisterFactory(itk::VoxBoCUBImageIOFactory::New());
+    glob_ITKCUBFactoryRegistered = true;
+    }
+  
   // Load the image
   typedef itk::ImageFileReader<ImageType> ReaderType;
   typename ReaderType::Pointer fltReader = ReaderType::New();

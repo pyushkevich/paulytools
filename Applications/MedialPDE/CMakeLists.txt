@@ -7,8 +7,6 @@ INCLUDE_DIRECTORIES(
 
 # Sources for the PDE executable
 SET(COMMON_SRCS 
-  ${PAULY_SOURCE_DIR}/Applications/CMRepTool3d/Code/fracviewer.cpp
-  ${PAULY_SOURCE_DIR}/Applications/CMRepTool3d/Code/glengine.cpp
   Code/BasisFunctions2D.cxx
   Code/CartesianMedialAtomGrid.cxx
   Code/CoefficientMask.cxx
@@ -16,7 +14,6 @@ SET(COMMON_SRCS
   Code/ITKImageWrapper.cxx
   Code/MedialAtom.cxx
   Code/MedialAtomGrid.cxx
-  Code/MedialPDERenderer.cxx
   Code/MedialPDEMasks.cxx 
   Code/MedialPDESites.cxx 
   Code/MedialPDESolver.cxx 
@@ -29,6 +26,11 @@ SET(COMMON_SRCS
   Code/ScriptInterface.cxx
   Code/TestSolver.cxx
   Code/VTKMedialMesh.cxx)
+
+SET(RENDER_SOURCES
+  ${PAULY_SOURCE_DIR}/Applications/CMRepTool3d/Code/fracviewer.cpp
+  ${PAULY_SOURCE_DIR}/Applications/CMRepTool3d/Code/glengine.cpp
+  Code/MedialPDERenderer.cxx)
 
 # Apply SWIG to the .i file
 SET(SWIG_SOURCE ${MedialPDE_SOURCE_DIR}/Code/medialpde.i)
@@ -59,7 +61,6 @@ SET(PDE_LIBS
   ITKCommon
   ITKBasicFilters
   ITKVoxBoIO
-  ${GLUT_LIBRARY}
   vtkCommon
   vtkIO
   ${LAPACK_OR_MKL_LIBS}
@@ -76,8 +77,8 @@ TARGET_LINK_LIBRARIES("_medialpdemodule" medialpde)
 SET_TARGET_PROPERTIES("_medialpdemodule" PROPERTIES PREFIX "")
 
 # Create the test executable
-ADD_EXECUTABLE(testpde Code/ScriptTest.cxx)
-TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS})
+ADD_EXECUTABLE(testpde Code/ScriptTest.cxx ${RENDER_SOURCES})
+TARGET_LINK_LIBRARIES(testpde ${PDE_LIBS} ${GLUT_LIBRARY})
 TARGET_LINK_LIBRARIES(testpde medialpde)
 
 # Specify the data root
@@ -118,6 +119,7 @@ SET(SCRIPT_FILES
   segment2.py
   segment2.py
   segment3.py
+  segment_new.py
   pipeline.py
   pipeline2.py
   pca.py

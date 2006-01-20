@@ -354,7 +354,7 @@ private:
 };
 
 /** Function to visualize the medial PDE result */
-void RenderMedialPDE(MedialPDE *model);
+// void RenderMedialPDE(MedialPDE *model);
 
 } // Namespace medial PDE!
 

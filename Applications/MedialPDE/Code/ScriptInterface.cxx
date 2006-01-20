@@ -2,7 +2,7 @@
 #include "MedialPDESolver.h"
 #include "BasisFunctions2D.h"
 #include "ITKImageWrapper.h"
-#include "MedialPDERenderer.h"
+// #include "MedialPDERenderer.h"
 #include "OptimizationTerms.h"
 #include "Procrustes.h"
 #include "PrincipalComponents.h"
@@ -1768,6 +1768,8 @@ void MedialPCA::GetShapeAtFSLocation(MedialPDE *target)
     }
 }
 
+/*
+
 void RenderMedialPDE(MedialPDE *model)
 {
   // Create a renderer
@@ -1794,5 +1796,6 @@ void RenderMedialPDE(MedialPDE *model)
   glutMainLoop();
 }
 
+*/
 
 } // namespace
