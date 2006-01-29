@@ -39,21 +39,12 @@ public:
 
   // Compute the weight matrix associated with the mask
   virtual void ComputeWeights(const double *uGrid, const double *vGrid);
+
+  // Call right after computing weights to allow faster jet computation
+  void OptimizeWeights(size_t uNodes, size_t vNodes);
   
   // Compute the first derivatives of a function
-  double ComputeOneJet(const Mat &F, double &Fu, double &Fv)
-    {
-    Fu = 0; Fv = 0;
-    for(size_t i = 0; i < n; i++)
-      {
-      double fi = F[iu + qu[i]][iv + qv[i]];
-      Fu += W[i][F10] * fi;
-      Fv += W[i][F01] * fi;
-      }
-
-    // Return the value of Y
-    return F[iu][iv];
-    }
+  double ComputeOneJet(const double *F, double &Fu, double &Fv);
 
   // Compute the second derivatives of the function
   double ComputeTwoJet(const Mat &F,
@@ -84,6 +75,11 @@ protected:
   // The meaning of the columns in W, i.e., ordering of the weights
   enum WeightMeaning
     { F00 = 0, F10, F01, F20, F02, F11, F30, F03, F21, F12 };
+
+  // Optimized array for weight storage
+  typedef std::pair<size_t, double> IndexWeightPair;
+  typedef std::vector<IndexWeightPair> FastWeightList;
+  FastWeightList fastWeights[10];
   
   // A list of weight vectors for the first six partial derivatives.
   Mat W;
@@ -92,7 +88,7 @@ protected:
   size_t n;
 
   // The position of the center node in the grid
-  size_t iu, iv;
+  size_t iu, iv, iraw;
 
   // The u and v offsets of the nodes. Conventionally they are encoded in
   // counterclockwise rings: central point is assigned 0, then starting from

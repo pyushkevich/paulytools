@@ -172,7 +172,7 @@ double FDBorderSite::ComputeEquation(const Mat &Y)
   double F, Fu, Fv;
   
   // Compute the partial derivatives of F with respect to u and v
-  F = xMask->ComputeOneJet(Y, Fu, Fv);
+  F = xMask->ComputeOneJet(Y.data_block(), Fu, Fv);
 
   // Compute the generalized gradient magnitude using precomputed values
   return CuCu * Fu * Fu + CuCv * Fu * Fv + CvCv * Fv * Fv - 4.0 * F;
@@ -185,7 +185,7 @@ void FDBorderSite
   double F, Fu, Fv;
   
   // Compute the partial derivatives of F with respect to u and v
-  F = xMask->ComputeOneJet(Y, Fu, Fv);
+  F = xMask->ComputeOneJet(Y.data_block(), Fu, Fv);
 
   // Because the equation is linear, there is no need to use values of 
   // Phi. We just copy the weightings
@@ -199,7 +199,7 @@ FDBorderSite
   const Mat &Y, double *A, MedialAtom *xAtom)
 {
   // First, let's compute grad phi
-  F = xMask->ComputeOneJet(Y, Fu, Fv);
+  F = xMask->ComputeOneJet(Y.data_block(), Fu, Fv);
 
   // Next, compute the weights for Hu and Hv and H
   double (*G1)[2] = xAtom->G.xCovariantTensor;

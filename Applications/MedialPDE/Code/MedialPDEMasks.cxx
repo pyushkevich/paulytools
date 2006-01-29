@@ -92,6 +92,47 @@ void FiniteDifferenceMask
   flagTransposed = !flagTransposed;
 }
 
+void
+FiniteDifferenceMask
+::OptimizeWeights(size_t uNodes, size_t vNodes)
+{
+  // Optimize weights for one/two jet computation
+  for(size_t i = 0; i < 10; i++)
+    {
+    FastWeightList &fw = fastWeights[i];
+    for(size_t j = 0; j < n; j++)
+      if(W[j][i] != 0.0)
+        fw.push_back(
+          IndexWeightPair(vNodes * (iu + qu[j]) + iv + qv[j], W[j][i]));
+    }
+  
+  // Set the raw position
+  iraw = vNodes * (iu) + iv;
+}
+
+double FiniteDifferenceMask
+::ComputeOneJet(const double *F, double &Fu, double &Fv)
+{
+  Fu = 0; Fv = 0;
+
+  int i;
+  FastWeightList &fw1 = fastWeights[F10];
+  for(i = fw1.size() - 1; i >= 0; i--)
+    Fu += fw1[i].second * F[fw1[i].first];
+  FastWeightList &fw2 = fastWeights[F01];
+  for(i = fw2.size() - 1; i >= 0; i--)
+    Fv += fw2[i].second * F[fw2[i].first];
+  
+  // FastWeightList::iterator it;
+  // for(it = fastWeights[F10].begin(); it != fastWeights[F10].end(); ++it)
+  //   Fu += it->second * F[it->first];
+  // for(it = fastWeights[F01].begin(); it != fastWeights[F01].end(); ++it)
+  //   Fv += it->second * F[it->first];
+  
+  // Return the value of Y
+  return F[iraw];
+}
+
 double FiniteDifferenceMask
 ::ComputeTwoJet(const Mat &F, double &Fu, double &Fv,
   double &Fuu, double &Fuv, double &Fvv)

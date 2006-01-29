@@ -505,10 +505,17 @@ double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
   // Place to store the Jacobian
   xTotalPenalty = 0.0;
   xMaxJacobian = 1.0, xMinJacobian = 1.0, xAvgJacobian = 0.0;
+
+  // Reset the QuadEntry vector
+  if(xQuadEntries.size() != S->xAtomGrid->GetNumberOfQuads())
+    xQuadEntries.resize(S->xAtomGrid->GetNumberOfQuads());
+
+  // Keep track of the entry index
+  QuadVector::iterator eit = xQuadEntries.begin();
   
   // Create a Quad-iterator through the atoms
   MedialQuadIterator *itQuad = S->xAtomGrid->NewQuadIterator();
-  for(; !itQuad->IsAtEnd(); ++(*itQuad))
+  for(; !itQuad->IsAtEnd(); ++(*itQuad), ++eit)
     {
     // Get the four atoms in this quad
     MedialAtom &A00 = S->xAtoms[itQuad->GetAtomIndex(0, 0)];
@@ -516,41 +523,38 @@ double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
     MedialAtom &A10 = S->xAtoms[itQuad->GetAtomIndex(1, 0)];
     MedialAtom &A11 = S->xAtoms[itQuad->GetAtomIndex(1, 1)];
 
-    // Compute the average Xu and Xv vectors
-    SMLVec3d XU = 0.5 * ((A11.X - A01.X) + (A10.X - A00.X));
-    SMLVec3d XV = 0.5 * ((A11.X - A10.X) + (A01.X - A00.X));
+    // Compute the average Xu and Xv vectors and the normal
+    eit->XU = 0.5 * ((A11.X - A01.X) + (A10.X - A00.X));
+    eit->XV = 0.5 * ((A11.X - A10.X) + (A01.X - A00.X));
+    eit->NX = vnl_cross_3d(eit->XU, eit->XV);
+    eit->gX2 = dot_product(eit->NX, eit->NX);
 
-    // Compute the same for the upper and lower boundaries
-    SMLVec3d Y0U = 
-      0.5 * ((A11.xBnd[0].X - A01.xBnd[0].X) + (A10.xBnd[0].X - A00.xBnd[0].X));
-    SMLVec3d Y0V = 
-      0.5 * ((A11.xBnd[0].X - A10.xBnd[0].X) + (A01.xBnd[0].X - A00.xBnd[0].X));
-    SMLVec3d Y1U = 
-      0.5 * ((A11.xBnd[1].X - A01.xBnd[1].X) + (A10.xBnd[1].X - A00.xBnd[1].X));
-    SMLVec3d Y1V = 
-      0.5 * ((A11.xBnd[1].X - A10.xBnd[1].X) + (A01.xBnd[1].X - A00.xBnd[1].X));
+    // Compute side-wise entries
+    for(size_t z = 0; z < 2; z++)
+      {
+      // Compute the same for the upper and lower boundaries
+      eit->YU[z] = 
+        0.5 * ((A11.xBnd[z].X - A01.xBnd[z].X) + (A10.xBnd[z].X - A00.xBnd[z].X));
+      eit->YV[z] = 
+        0.5 * ((A11.xBnd[z].X - A10.xBnd[z].X) + (A01.xBnd[z].X - A00.xBnd[z].X));
+      eit->NY[z] = vnl_cross_3d(eit->YU[z], eit->YV[z]);
+      
+      // Compute the Jacobian
+      eit->J[z] = dot_product(eit->NY[z], eit->NX) / eit->gX2;
 
-    // Compute the scaled normal vectors
-    SMLVec3d NX = vnl_cross_3d(XU, XV);
-    SMLVec3d NY0 = vnl_cross_3d(Y0U, Y0V);
-    SMLVec3d NY1 = vnl_cross_3d(Y1U, Y1V);
+      // Store the smallest and largest Jacobian values
+      if(eit->J[z] < xMinJacobian) xMinJacobian = eit->J[z];
+      if(eit->J[z] > xMaxJacobian) xMaxJacobian = eit->J[z];
 
-    // Compute the Jacobians
-    double J0 = dot_product(NY0, NX) / dot_product(NX, NX);
-    double J1 = dot_product(NY1, NX) / dot_product(NX, NX);
+      // Add to the average Jacobian
+      xAvgJacobian += eit->J[z];
 
-    // Store the smallest and largest Jacobian values
-    if(J0 < xMinJacobian) xMinJacobian = J0;
-    if(J1 < xMinJacobian) xMinJacobian = J1;
-    if(J0 > xMaxJacobian) xMaxJacobian = J0;
-    if(J1 > xMaxJacobian) xMaxJacobian = J1;
-
-    // Add to the average Jacobian
-    xAvgJacobian += J0 + J1;
-
-    // Compute the penalty function
-    xTotalPenalty += PenaltyFunction(J0, 10, 400);
-    xTotalPenalty += PenaltyFunction(J1, 10, 400);
+      // Compute the penalty terms
+      // return exp(-a * x) + exp(x - b); 
+      eit->PenA[z] = exp(-10 * eit->J[z]);
+      eit->PenB[z] = exp(eit->J[z] - 400);
+      xTotalPenalty += eit->PenA[z] + eit->PenB[z];
+      }
     }
   delete itQuad;
 
@@ -567,17 +571,17 @@ double BoundaryJacobianEnergyTerm
 {
   // Place to store the Jacobian
   double dTotalPenalty = 0.0;
+
+  // Make sure that the quad entry array has been initialized
+  assert(xQuadEntries.size() == S->xAtomGrid->GetNumberOfQuads());
+  
+  // Keep track of the entry index
+  QuadVector::iterator eit = xQuadEntries.begin();
   
   // Create a Quad-iterator through the atoms
   MedialQuadIterator *itQuad = S->xAtomGrid->NewQuadIterator();
-  for(; !itQuad->IsAtEnd(); ++(*itQuad))
+  for(; !itQuad->IsAtEnd(); ++(*itQuad), ++eit)
     {
-    // Get the four atoms in this quad
-    MedialAtom &A00 = S->xAtoms[itQuad->GetAtomIndex(0, 0)];
-    MedialAtom &A01 = S->xAtoms[itQuad->GetAtomIndex(0, 1)];
-    MedialAtom &A10 = S->xAtoms[itQuad->GetAtomIndex(1, 0)];
-    MedialAtom &A11 = S->xAtoms[itQuad->GetAtomIndex(1, 1)];
-
     // Get the derivative atoms too
     MedialAtom &dA00 = dS->xAtoms[itQuad->GetAtomIndex(0, 0)];
     MedialAtom &dA01 = dS->xAtoms[itQuad->GetAtomIndex(0, 1)];
@@ -585,54 +589,34 @@ double BoundaryJacobianEnergyTerm
     MedialAtom &dA11 = dS->xAtoms[itQuad->GetAtomIndex(1, 1)];
     
     // Compute the average Xu and Xv vectors and derivatives
-    SMLVec3d XU = 0.5 * ((A11.X - A01.X) + (A10.X - A00.X));
-    SMLVec3d XV = 0.5 * ((A11.X - A10.X) + (A01.X - A00.X));
     SMLVec3d dXU = 0.5 * ((dA11.X - dA01.X) + (dA10.X - dA00.X));
     SMLVec3d dXV = 0.5 * ((dA11.X - dA10.X) + (dA01.X - dA00.X));
-
-    // Compute the same for the upper and lower boundaries
-    SMLVec3d Y0U = 
-      0.5 * ((A11.xBnd[0].X - A01.xBnd[0].X) + (A10.xBnd[0].X - A00.xBnd[0].X));
-    SMLVec3d Y0V = 
-      0.5 * ((A11.xBnd[0].X - A10.xBnd[0].X) + (A01.xBnd[0].X - A00.xBnd[0].X));
-    SMLVec3d Y1U = 
-      0.5 * ((A11.xBnd[1].X - A01.xBnd[1].X) + (A10.xBnd[1].X - A00.xBnd[1].X));
-    SMLVec3d Y1V = 
-      0.5 * ((A11.xBnd[1].X - A10.xBnd[1].X) + (A01.xBnd[1].X - A00.xBnd[1].X));
-
-    SMLVec3d dY0U = 
-      0.5 * ((dA11.xBnd[0].X - dA01.xBnd[0].X) + (dA10.xBnd[0].X - dA00.xBnd[0].X));
-    SMLVec3d dY0V = 
-      0.5 * ((dA11.xBnd[0].X - dA10.xBnd[0].X) + (dA01.xBnd[0].X - dA00.xBnd[0].X));
-    SMLVec3d dY1U = 
-      0.5 * ((dA11.xBnd[1].X - dA01.xBnd[1].X) + (dA10.xBnd[1].X - dA00.xBnd[1].X));
-    SMLVec3d dY1V = 
-      0.5 * ((dA11.xBnd[1].X - dA10.xBnd[1].X) + (dA01.xBnd[1].X - dA00.xBnd[1].X));
-
-    // Compute the scaled normal vectors and derivatives
-    SMLVec3d NX  = vnl_cross_3d(XU,  XV);
-    SMLVec3d NY0 = vnl_cross_3d(Y0U, Y0V);
-    SMLVec3d NY1 = vnl_cross_3d(Y1U, Y1V);
-
-    SMLVec3d dNX  = vnl_cross_3d(dXU,  XV)  + vnl_cross_3d(XU,  dXV);
-    SMLVec3d dNY0 = vnl_cross_3d(dY0U, Y0V) + vnl_cross_3d(Y0U, dY0V);
-    SMLVec3d dNY1 = vnl_cross_3d(dY1U, Y1V) + vnl_cross_3d(Y1U, dY1V);
+    SMLVec3d dNX = 
+      vnl_cross_3d(dXU,  eit->XV) + vnl_cross_3d(eit->XU,  dXV);
 
     // Compute G and its derivative
-    double GX = dot_product(NX, NX);
-    double dGX = 2.0 * dot_product(dNX, NX);
+    double dgX2 = 2.0 * dot_product(dNX, eit->NX);
 
-    // Compute the Jacobians
-    double J0 = dot_product(NY0, NX) / GX;
-    double J1 = dot_product(NY1, NX) / GX;
-    
-    // Compute the derivatives of the Jacobians
-    double dJ0 = (dot_product(dNY0, NX) + dot_product(NY0, dNX) - J0 *dGX) / GX;
-    double dJ1 = (dot_product(dNY1, NX) + dot_product(NY1, dNX) - J1 *dGX) / GX;
+    // Compute side-wise derivatives
+    for(size_t z = 0; z < 2; z++)
+      {
+      // Compute boundary vector derivatives
+      SMLVec3d dYU = 
+        0.5 * ((dA11.xBnd[z].X - dA01.xBnd[z].X) + (dA10.xBnd[z].X - dA00.xBnd[z].X));
+      SMLVec3d dYV = 
+        0.5 * ((dA11.xBnd[z].X - dA10.xBnd[z].X) + (dA01.xBnd[z].X - dA00.xBnd[z].X));
+      SMLVec3d dNY = 
+        vnl_cross_3d(dYU, eit->YV[z]) + vnl_cross_3d(eit->YU[z], dYV);
 
-    // Compute the penalty function
-    dTotalPenalty += PenaltyFunctionDerivative(J0, 10, 400) * dJ0;
-    dTotalPenalty += PenaltyFunctionDerivative(J1, 10, 400) * dJ1;
+      // Compute the Jacobian derivative
+      double dJ = (
+        dot_product(dNY, eit->NX) + 
+        dot_product(eit->NY[z], dNX) - eit->J[z] * dgX2) / eit->gX2;
+
+      // Compute the penalty terms
+      dTotalPenalty += 
+        (-10 * eit->PenA[z] + eit->PenB[z]) * dJ;
+      }
     }
   delete itQuad;
 

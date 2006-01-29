@@ -273,6 +273,17 @@ private:
   // optimization
   double xMinJacobian, xMaxJacobian, xAvgJacobian, xTotalPenalty;
 
+  // In addition to the total values, we keep track of per-quad values
+  // computed in the course of calculating the penalty. This allows us
+  // to compute derivatives more quickly
+  struct QuadEntry {
+    SMLVec3d XU, XV, YU[2], YV[2], NX, NY[2];
+    double gX2, J[2], PenA[2], PenB[2];
+  };
+  
+  typedef vector<QuadEntry> QuadVector;
+  QuadVector xQuadEntries;
+
   /** Penalty function applied to the squared jacobian */
   double PenaltyFunction(double x, double a, double b)
     { return exp(-a * x) + exp(x - b); }
