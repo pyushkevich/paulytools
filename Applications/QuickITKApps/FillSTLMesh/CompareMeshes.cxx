@@ -302,7 +302,7 @@ void ComputeExactMeshToMeshDistance(vtkPolyData *source, vtkPolyData *target, vn
     }
 
   // Take square root
-  dist.apply(sqrt);
+  dist = dist.apply(sqrt);
 }
 
 int main(int argc, char **argv)
