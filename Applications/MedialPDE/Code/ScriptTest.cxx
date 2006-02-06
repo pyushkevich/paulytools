@@ -8,6 +8,10 @@
 #include "TestSolver.h"
 #include "vnl/vnl_erf.h"
 
+#include "vtkOBJReader.h"
+#include "vtkPolyData.h"
+#include "SubdivisionSurface.h"
+
 #include <string>
 #include <iostream>
 
@@ -419,6 +423,41 @@ int TestBasisFunctionVariation(const char *fnMPDE)
   return iReturn;
 }
 
+/**
+ * Test subdivision surface functionality
+ */
+bool TestSubdivisionSurface(const char *objMesh)
+{
+  // Read the input mesh
+  vtkOBJReader *reader = vtkOBJReader::New();
+  reader->SetFileName(objMesh);
+  reader->Update();
+  vtkPolyData *poly = reader->GetOutput();
+
+  // Create a subdivision surface
+  SubdivisionSurface ss;
+  SubdivisionSurface::MeshLevel mesh;
+  ss.ImportLevelFromVTK(poly, mesh);
+
+  // Describe the mesh
+  cout << "Input mesh has " << mesh.triangles.size() << " triangles";
+  cout << " and " << mesh.nVertices << " vertices" << endl;
+
+  // Check the mesh after loading
+  if(!ss.CheckMeshLevel(mesh))
+    return false;
+
+  // Subdivide the mesh once
+  SubdivisionSurface::MeshLevel meshsub;
+  ss.Subdivide(mesh, meshsub);
+
+  cout << "Subdivided mesh has " << meshsub.triangles.size() << " triangles";
+  cout << " and " << meshsub.nVertices << " vertices" << endl;
+
+  // Check the subdivided mesh
+  return ss.CheckMeshLevel(meshsub);
+}
+
 
 
 /**
@@ -614,6 +653,8 @@ int main(int argc, char *argv[])
     return TestBasisFunctionVariation(argv[2]);
   else if(0 == strcmp(argv[1], "DERIV4") && argc > 2)
     return TestDifferentialGeometry(argv[2]);
+  else if(0 == strcmp(argv[1], "SUBSURF1") && argc > 2)
+    return TestSubdivisionSurface(argv[2]);
   else 
     return usage();
 }

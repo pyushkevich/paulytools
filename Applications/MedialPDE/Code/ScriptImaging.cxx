@@ -173,6 +173,13 @@ public:
 
   float operator() (float x)
     { return vnl_erf( alpha * x ); }
+
+  bool operator == (const ErrorFunctor &x) const
+    { return x.alpha == alpha; }
+
+  bool operator != (const ErrorFunctor &x) const
+    { return !(*this == x); }
+
 private:
   float alpha;
 };
