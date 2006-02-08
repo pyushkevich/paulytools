@@ -7,8 +7,10 @@
 #include "CoefficientMask.h"
 #include "TestSolver.h"
 #include "vnl/vnl_erf.h"
+#include "vnl/vnl_random.h"
 
 #include "vtkOBJReader.h"
+#include "vtkBYUWriter.h"
 #include "vtkPolyData.h"
 #include "SubdivisionSurface.h"
 
@@ -426,7 +428,7 @@ int TestBasisFunctionVariation(const char *fnMPDE)
 /**
  * Test subdivision surface functionality
  */
-bool TestSubdivisionSurface(const char *objMesh)
+int TestSubdivisionSurface(const char *objMesh)
 {
   // Read the input mesh
   vtkOBJReader *reader = vtkOBJReader::New();
@@ -443,19 +445,97 @@ bool TestSubdivisionSurface(const char *objMesh)
   cout << "Input mesh has " << mesh.triangles.size() << " triangles";
   cout << " and " << mesh.nVertices << " vertices" << endl;
 
+  // Save the input surface for comparison
+  vtkBYUWriter *writer = vtkBYUWriter::New();
+  writer->SetInput(poly);
+  writer->SetGeometryFileName("byu_input.byu");
+  writer->Update();
+
   // Check the mesh after loading
   if(!ss.CheckMeshLevel(mesh))
-    return false;
+    return 1;
 
   // Subdivide the mesh once
   SubdivisionSurface::MeshLevel meshsub;
-  ss.Subdivide(mesh, meshsub);
+  ss.Subdivide(&mesh, &meshsub);
 
   cout << "Subdivided mesh has " << meshsub.triangles.size() << " triangles";
   cout << " and " << meshsub.nVertices << " vertices" << endl;
 
   // Check the subdivided mesh
-  return ss.CheckMeshLevel(meshsub);
+  if(!ss.CheckMeshLevel(meshsub))
+    return 1;
+
+  // Compute the subdivision surface
+  vtkPolyData *polysub = vtkPolyData::New();
+  ss.ApplySubdivision(poly, polysub, meshsub);
+
+  // Save the subdivision surface
+  writer->SetInput(polysub);
+  writer->SetGeometryFileName("byu_subdivide.byu");
+  writer->Update();
+
+  // Subdivide the mesh one more time
+  SubdivisionSurface::MeshLevel meshresub;
+  ss.Subdivide(&meshsub, &meshresub);
+
+  cout << "Subdivided mesh has " << meshresub.triangles.size() << " triangles";
+  cout << " and " << meshresub.nVertices << " vertices" << endl;
+
+  // Check the subdivided mesh
+  if(!ss.CheckMeshLevel(meshresub))
+    return 1;
+
+  // Save the subdivision surface
+  ss.ApplySubdivision(poly, polysub, meshresub);
+  writer->SetInput(polysub);
+  writer->SetGeometryFileName("byu_resubdivide.byu");
+  writer->Update();
+
+
+
+  return 0;
+}
+
+/**
+ * Test sparse matrix multiplication
+ */
+int TestSparseMatrix()
+{
+  // Create a sparse matrix with random elements
+  size_t i, j, k, N1 = 5, N2 = 4, N3 = 6;
+  typedef vnl_sparse_matrix<int> Mutable;
+  typedef ImmutableSparseMatrix<int> Immutable;
+
+  // Create two mutable matrices
+  Mutable A(N1, N2), B(N2, N3), C(N1, N3);
+
+  // Initialize them with some random values (-10 to 10)
+  vnl_random rnd;
+  for(i = 0; i < N1; i++) for(j = 0; j < N2; j++)
+    if(rnd.lrand32(0, 4) == 0)
+      A(i,j) = rnd.lrand32(0,18) - 9;
+
+  for(i = 0; i < N2; i++) for(j = 0; j < N3; j++)
+    if(rnd.lrand32(0, 4) == 0)
+      B(i,j) = rnd.lrand32(0,18) - 9;
+  
+  // Compute their product using VNL
+  A.mult(B, C);
+
+  // Compute the product using immutable matrices
+  Immutable AI, BI, CI, DI;
+  AI = A; BI = B; CI = C;
+  Immutable::Multiply(DI, AI, BI);
+
+  // Print the results
+  cout << "A is " << AI << endl;
+  cout << "B is " << BI << endl;
+  cout << "C is " << CI << endl;
+  cout << "D is " << DI << endl;
+
+  // Compare CI and DI
+  return CI == DI ? 0 : 1;
 }
 
 
@@ -635,6 +715,9 @@ int usage()
   cout << "    DERIV1 XX.mpde XX.mat      Check analytic derivative PDEs." << endl;
   cout << "    DERIV2 XX.mpde             Check gradient computation in image match terms." << endl;
   cout << "    DERIV3 XX.mpde             Check variations on basis functions." << endl;
+  cout << "    DERIV4 XX.mpde             Test diff. geom. operators." << endl;
+  cout << "    SUBSURF1 XX.obj            Test subdivision with OBJ mesh" << endl;
+  cout << "    SPARSEMAT                  Test sparse matrix routines" << endl;
   cout << endl;
   return -1;
 }
@@ -655,6 +738,8 @@ int main(int argc, char *argv[])
     return TestDifferentialGeometry(argv[2]);
   else if(0 == strcmp(argv[1], "SUBSURF1") && argc > 2)
     return TestSubdivisionSurface(argv[2]);
+  else if(0 == strcmp(argv[1], "SPARSEMAT"))
+    return TestSparseMatrix();
   else 
     return usage();
 }

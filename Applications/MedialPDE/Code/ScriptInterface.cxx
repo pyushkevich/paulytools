@@ -1234,8 +1234,9 @@ SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zS
       iOutput->TransformIndexToPhysicalPoint(itOut.GetIndex(), pVoxel);
 
       // Locate the cell that includes this point
+      vnl_vector<double> vox = pVoxel.GetVnlVector();
       size_t iClosest = (size_t) 
-        loc->FindClosestPoint(pVoxel.GetVnlVector().data_block());
+        loc->FindClosestPoint(vox(0), vox(1), vox(2));
 
       // Convert this to a pixel index
       itOut.Set(xpix[iClosest]);

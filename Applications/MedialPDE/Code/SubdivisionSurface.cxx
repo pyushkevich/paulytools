@@ -1,7 +1,15 @@
 #include "SubdivisionSurface.h"
 #include "vtkPolyData.h"
+#include "vtkCellArray.h"
+#include "vtkPoints.h"
+#include "vnl/vnl_vector_fixed.h"
 #include <string>
+#include <list>
 #include <map>
+
+#ifndef vtkFloatingPointType
+#define vtkFloatingPointType float
+#endif
 
 using namespace std;
 
@@ -18,80 +26,261 @@ SubdivisionSurface::Triangle::Triangle()
     }
 }
 
-void SubdivisionSurface::RecursiveAssignVertexLabel(MeshLevel &mesh, size_t t, size_t v, size_t id)
+void 
+SubdivisionSurface
+::SetOddVertexWeights(MutableSparseMatrix &W, 
+  MeshLevel *parent, MeshLevel *child, size_t t, size_t v)
 {
-  if(mesh.triangles[t].vertices[v] != NOID)
-    return;
+  // Weight constants
+  const static double W_INT_EDGE_CONN = 3.0 / 8.0;
+  const static double W_INT_FACE_CONN = 1.0 / 8.0;
+  const static double W_BND_EDGE_CONN = 1.0 / 2.0;
+  
+  // Get the parent and child triangles
+  Triangle &tp = parent->triangles[t / 4];
+  Triangle &tc = child->triangles[t];
+
+  // Get the child vertex index
+  size_t ivc = tc.vertices[v];
+
+  // Find out if this is a boundary vertex. Since the child triangle is a center
+  // triangle, we must check if the parent triangle has a neighbor accross edge v
+  if(tp.neighbors[v] != NOID)
+    {
+    // Get the neighbor of the parent triangle
+    Triangle &topp = parent->triangles[tp.neighbors[v]];
+    
+    // Internal triangle. It's weights are 3/8 for the edge-connected parent 
+    // vertices and 1/8 for the face-connected vertices
+    W(ivc,tp.vertices[(v+1)%3]) = W_INT_EDGE_CONN;
+    W(ivc,tp.vertices[(v+2)%3]) = W_INT_EDGE_CONN;
+    W(ivc,tp.vertices[v]) = W_INT_FACE_CONN;
+    W(ivc,topp.vertices[tp.nedges[v]]) = W_INT_FACE_CONN;
+    }
   else
-    mesh.triangles[t].vertices[v] = id;
-  if(mesh.triangles[t].neighbors[(v+1) % 3] != NOID)
-    RecursiveAssignVertexLabel(mesh, mesh.triangles[t].neighbors[(v+1) % 3],
-                               (mesh.triangles[t].nedges[(v+1) % 3] + 1) % 3, id);
-  if(mesh.triangles[t].neighbors[(v+2) % 3] != NOID)
-    RecursiveAssignVertexLabel(mesh, mesh.triangles[t].neighbors[(v+2) % 3],
-                               (mesh.triangles[t].nedges[(v+2) % 3] + 2) % 3, id);  
+    {
+    // Only the edge-connected vertices are involved
+    W(ivc,tp.vertices[(v+1)%3]) = W_BND_EDGE_CONN;
+    W(ivc,tp.vertices[(v+2)%3]) = W_BND_EDGE_CONN;
+    }
 }
 
-void SubdivisionSurface::Subdivide(MeshLevel &src, MeshLevel &dst)
+void SubdivisionSurface
+::ComputeWalks(MeshLevel *mesh)
+{
+  // Resize the vertex array to accommodate all vertices
+  mesh->vertices.resize(mesh->nVertices);
+  fill(mesh->vertices.begin(), mesh->vertices.end(), Vertex());
+
+  // Loop over all triangles, all vertices
+  for(size_t t = 0; t < mesh->triangles.size(); t++) for(size_t v = 0; v < 3; v++)
+    {
+    size_t ivtx = mesh->triangles[t].vertices[v];
+    if(mesh->vertices[ivtx].n == 0)
+      {
+      // Create a list to represent the walk
+      list< pair<size_t, size_t> > walk;
+
+      // Walk in one direction until looping around or reaching an end
+      // cout << "Walk started at T = " << t << ", v = " << v << " : " << mesh->triangles[t] << endl;
+      size_t tloop = t, twalk = t, vwalk = v;
+      do 
+        {
+        walk.push_back(make_pair(twalk, vwalk));
+        // cout << "Visited " << twalk << ", v = " << vwalk << " : " << mesh->triangles[twalk] << endl;
+        Triangle &tlast = mesh->triangles[twalk];
+        twalk = tlast.neighbors[(vwalk + 1) % 3];
+        vwalk = (tlast.nedges[(vwalk + 1) % 3] + 1) % 3;
+        }
+      while(twalk != NOID && twalk != tloop);
+      // cout << "Forward Walk ended at " << twalk << endl;
+
+      // If we reached a boundary edge, we need to walk backwards as well
+      if(twalk == NOID)
+        {
+        twalk = mesh->triangles[t].neighbors[(v + 2) % 3];
+        vwalk = (mesh->triangles[t].nedges[(v + 2) % 3] + 2) % 3;
+        while(twalk != NOID)
+          {
+          walk.push_front(make_pair(twalk, vwalk));
+          // cout << "Visited " << twalk << ", v = " << vwalk << " : " << mesh->triangles[twalk] << endl;
+          Triangle &tlast = mesh->triangles[twalk];
+          twalk = tlast.neighbors[(vwalk + 2) % 3];
+          vwalk = (tlast.nedges[(vwalk + 2) % 3] + 2) % 3;
+          }
+        }
+      // cout << "Backward Walk ended at " << twalk << endl;
+
+      // cout << "Walk size is " << walk.size() << endl;
+      // cout << "Walk is boundary : " << (twalk == NOID) << endl;
+      
+      // Store the walk essentials with the vertex
+      mesh->vertices[ivtx] = Vertex( 
+        walk.front().first, walk.front().second, 
+        walk.back().first, walk.back().second, 
+        walk.size(), twalk == NOID);
+      }
+    }
+}
+
+/** 
+ * This method should be called for child-level triangles whose index in the
+ * parent triangle matches the vertex id (v).
+ */
+void SubdivisionSurface
+::SetEvenVertexWeights(MutableSparseMatrix &W,
+  MeshLevel *parent, MeshLevel *child, size_t t, size_t v)
+{
+  // Weight constants
+  const static double W_BND_EDGE_CONN = 1.0 / 8.0;
+  const static double W_BND_SELF = 3.0 / 4.0;
+  
+  // Get the child vertex index
+  size_t ivc = child->triangles[t].vertices[v];
+
+  // Get the corresponding parent triangle and vertex index
+  size_t tp = t / 4;
+  size_t ivp = parent->triangles[tp].vertices[v];
+
+  // Get the vertex object for this vertex
+  VertexWalkIterator it(parent, ivp);
+  if(it.IsBoundary()) 
+    {
+    // Add the point itseld
+    W(ivc,ivp) = W_BND_SELF;
+
+    // Add the starting point
+    W(ivc,it.FromVertexId()) = W_BND_EDGE_CONN;
+
+    // Get the ending point
+    it.GoToEnd();
+    W(ivc,it.ToVertexId()) = W_BND_EDGE_CONN;
+    }
+  else
+    {
+    // Compute the beta constant
+    int n = it.Size();
+    double beta = (n > 3) ? 3.0 / (8.0 * n) : 3.0 / 16.0;
+
+    // Assign beta to each of the edge-adjacent vertices
+    for( ; !it.IsAtEnd(); ++it)
+      {
+      W(ivc, it.FromVertexId()) = beta;
+      }
+
+    // Assign the balance to the coincident vertex
+    W(ivc,ivp) = 1.0 - n * beta;
+    }
+}
+
+void 
+SubdivisionSurface
+::RecursiveAssignVertexLabel(
+  MeshLevel *mesh, size_t t, size_t v, size_t id)
+{
+  if(mesh->triangles[t].vertices[v] != NOID)
+    return;
+  else
+    mesh->triangles[t].vertices[v] = id;
+  if(mesh->triangles[t].neighbors[(v+1) % 3] != NOID)
+    RecursiveAssignVertexLabel(mesh, mesh->triangles[t].neighbors[(v+1) % 3],
+                               (mesh->triangles[t].nedges[(v+1) % 3] + 1) % 3, id);
+  if(mesh->triangles[t].neighbors[(v+2) % 3] != NOID)
+    RecursiveAssignVertexLabel(mesh, mesh->triangles[t].neighbors[(v+2) % 3],
+                               (mesh->triangles[t].nedges[(v+2) % 3] + 2) % 3, id);  
+}
+
+void SubdivisionSurface::Subdivide(MeshLevel *parent, MeshLevel *child)
 {
   // Get the numbers of triangles before and after
-  size_t ntParent = src.triangles.size();
+  size_t ntParent = parent->triangles.size();
   size_t ntChild = 4 * ntParent;
   size_t i, j, k;
 
+  // Connect the child to the parent
+  child->parent = parent;
+
   // Initialize the number of vertices in the new mesh
-  dst.nVertices = 0;
+  child->nVertices = 0;
 
   // Subdivide each triangle into four
-  dst.triangles.resize(ntChild);
+  child->triangles.resize(ntChild);
   for (i = 0; i < ntParent; i++)
     {
-    // Get pointers to the four children
-    Triangle &parent = src.triangles[i];
-    Triangle *child[4] = {
-      &dst.triangles[4*i], &dst.triangles[4*i+1], 
-      &dst.triangles[4*i+2], &dst.triangles[4*i+3]};
+    // Get pointers to the four ctren
+    Triangle &pt = parent->triangles[i];
+    Triangle *ct[4] = {
+      &child->triangles[4*i], &child->triangles[4*i+1], 
+      &child->triangles[4*i+2], &child->triangles[4*i+3]};
 
     // Set the neighbors within this triangle
     for (j = 0; j < 3; j++)
       {
-      // Assign the neighborhoods within the parent triangle
-      child[j]->neighbors[j] = 4*i + 3;
-      child[3]->neighbors[j] = 4*i + j;
-      child[j]->nedges[j] = j;
-      child[3]->nedges[j] = j;
+      // Assign the neighborhoods within the pt triangle
+      ct[j]->neighbors[j] = 4*i + 3;
+      ct[3]->neighbors[j] = 4*i + j;
+      ct[j]->nedges[j] = j;
+      ct[3]->nedges[j] = j;
 
-      // Assign neighborhoods outside the parent triangle
-      if (parent.neighbors[(j+1) % 3] != NOID)
+      // Assign neighborhoods outside the pt triangle
+      if (pt.neighbors[(j+1) % 3] != NOID)
         {
-        child[j]->neighbors[(j+1) % 3] = 
-        parent.neighbors[(j+1) % 3] * 4 + ((parent.nedges[(j+1) % 3] + 1) % 3);      
-        child[j]->nedges[(j+1) % 3] = parent.nedges[(j+1) % 3];
+        ct[j]->neighbors[(j+1) % 3] = 
+        pt.neighbors[(j+1) % 3] * 4 + ((pt.nedges[(j+1) % 3] + 1) % 3);      
+        ct[j]->nedges[(j+1) % 3] = pt.nedges[(j+1) % 3];
         }
-      if (parent.neighbors[(j+2) % 3] != NOID)
+      if (pt.neighbors[(j+2) % 3] != NOID)
         {
-        child[j]->neighbors[(j+2) % 3] = 
-        parent.neighbors[(j+2) % 3] * 4 + ((parent.nedges[(j+2) % 3] + 2) % 3);
-        child[j]->nedges[(j+2) % 3] = parent.nedges[(j+2) % 3];
+        ct[j]->neighbors[(j+2) % 3] = 
+        pt.neighbors[(j+2) % 3] * 4 + ((pt.nedges[(j+2) % 3] + 2) % 3);
+        ct[j]->nedges[(j+2) % 3] = pt.nedges[(j+2) % 3];
         }
       }
     }
 
-  // Now that the triangle neighborhoods are in place, we need to assign vertices to each of 
-  // the new triangles. Since each vertex can be shared by multiple triangles, we must be
-  // quite careful in doing this.
-  for (i = 0; i < ntChild; i++) for (j = 0; j < 3; j++)
-    if (dst.triangles[i].vertices[j] == NOID)
-      RecursiveAssignVertexLabel(dst, i, j, dst.nVertices++);
+  // Compute the number of edges in the pt graph
+  size_t neParent = 0;
+  for(i = 0; i < ntParent; i++) for(j = 0; j < 3; j++)
+    neParent += (parent->triangles[i].neighbors[j] == NOID) ? 2 : 1;
+  neParent >>= 1;
 
-  // Now, we have a second-level mesh that should be valid. We should test the validity separately
+  // Assign vertex ids and weights. Under this scheme, the vertex ids
+  // of the pt and ct should match (for even vertices) and odd
+  // vertices appear at the end of the list
+  
+  // Create a mutable sparse matrix representation for the weights
+  MutableSparseMatrix W(parent->nVertices + neParent, parent->nVertices);
+  
+  // Visit each of the even vertices, assigning it an id and weights
+  for(i = 0; i < ntParent; i++) for(j = 0; j < 3; j++)
+    if (child->triangles[4 * i + j].vertices[j] == NOID)
+      {
+      RecursiveAssignVertexLabel(child, 4*i+j, j, parent->triangles[i].vertices[j]);
+      SetEvenVertexWeights(W, parent, child, 4*i+j, j);
+      }
+  
+  // Visit each of the odd vertices, assigning it an id, and weights
+  child->nVertices = parent->nVertices;
+  for(i = 0; i < ntParent; i++) for(j = 0; j < 3; j++)
+    if (child->triangles[4 * i + 3].vertices[j] == NOID)
+      {
+      RecursiveAssignVertexLabel(child, 4*i+3, j, child->nVertices++);
+      SetOddVertexWeights(W, parent, child, 4*i+3, j);
+      }
+
+  // Copy the sparse matrix into immutable form
+  child->weights = W;
+
+  // If the parent's parent is not NULL, we need to multiply the sparse
+  // matrices of the parent and child
+  if(parent->parent)
+    ImmutableSparseMatrix<double>::Multiply(
+      child->weights, child->weights, parent->weights);
+
+
+  // Compute the walks in the child mesh
+  ComputeWalks(child);
 }
-
-struct ImportEdge
-{
-  size_t v1, v2;
-  size_t t1, t2;
-};
 
 void SubdivisionSurface::ImportLevelFromVTK(vtkPolyData *mesh, MeshLevel &dest)
 {
@@ -156,8 +345,61 @@ void SubdivisionSurface::ImportLevelFromVTK(vtkPolyData *mesh, MeshLevel &dest)
       dest.triangles[trep.first].nedges[trep.second] = itopp->second.second;
       }
     }
+
+  // Set the mesh's parent to NULL
+  dest.parent = NULL;
+
+  // Finally, compute the walks in this mesh
+  ComputeWalks(&dest);
 }
 
+void SubdivisionSurface
+::ApplySubdivision(vtkPolyData *src, vtkPolyData *target, MeshLevel &m)
+{
+  size_t i, j, k;
+
+  // Initialize the target mesh
+  vtkPoints *tpoints = vtkPoints::New();
+  vtkCellArray *tcells = vtkCellArray::New();
+  
+  // Add the points to the output mesh
+  for(i = 0; i < m.nVertices; i++)
+    {
+    // Output point
+    vnl_vector_fixed<vtkFloatingPointType, 3> p(0.0);
+    
+    // Iterate over columns
+    typedef ImmutableSparseMatrix<double>::RowIterator IteratorType;
+    for(IteratorType it = m.weights.Row(i); !it.IsAtEnd(); ++it)
+      {
+      vnl_vector_fixed<vtkFloatingPointType, 3> x(src->GetPoints()->GetPoint(it.Column()));
+      p += x * (vtkFloatingPointType) it.Value();
+      }
+    
+    // Add the point to the output mesh
+    tpoints->InsertNextPoint(p.data_block());
+    }
+
+  // Add the cells to the mesh
+  for(i = 0; i < m.triangles.size(); i++)
+    {
+    Triangle &t = m.triangles[i];
+    vtkIdType ids[3];
+    ids[0] = t.vertices[0];
+    ids[1] = t.vertices[1];
+    ids[2] = t.vertices[2];
+    tcells->InsertNextCell(3, ids);
+    }
+
+  // Set the points in the mesh
+  target->SetPoints(tpoints);
+  target->SetPolys(tcells);
+  tpoints->Delete();
+  tcells->Delete();
+}
+
+
+  
 bool SubdivisionSurface::CheckMeshLevel (MeshLevel &mesh)
 {
   // Check the following rules for all triangles in the mesh
@@ -200,5 +442,22 @@ bool SubdivisionSurface::CheckMeshLevel (MeshLevel &mesh)
       }
     }
 
+  // Now check that the walks about all the vertices are legit
+  for(size_t v = 0; v < mesh.nVertices; v++)
+    {
+    // Create a walk iterator
+    VertexWalkIterator it(&mesh, v);
+
+    // Make sure the same vertex is walked around
+    for( ; !it.IsAtEnd(); ++it)
+      {
+      if(it.CenterVertexId() != v)
+        cout << "Error " << nerr++ << 
+          " Walk about vertex " << v << " is broken" << endl;
+      }
+
+    // Make sure the walk is sequential
+    }
+  
   return (nerr == 0);
 }

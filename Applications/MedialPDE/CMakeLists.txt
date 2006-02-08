@@ -24,6 +24,7 @@ SET(COMMON_SRCS
   Code/Registry.cxx
   Code/ScriptImaging.cxx
   Code/ScriptInterface.cxx
+  Code/SparseMatrix.cxx
   Code/SubdivisionSurface.cxx
   Code/TestSolver.cxx
   Code/VTKMedialMesh.cxx
@@ -103,11 +104,11 @@ SET(MPDE_TEST_OBJMESH ${MPDE_TESTDATA_DIR}/triangle_mesh.obj)
 # Test various derivative computations
 ADD_TEST(TestDerivativesNoImage testpde 
   DERIV1 ${MPDE_TEST_CMREP} ${MPDE_TEST_PCA})
-
 ADD_TEST(TestDerivativesWithImage testpde DERIV2 ${MPDE_TEST_CMREP})
 ADD_TEST(TestBasisFunctionVariation testpde DERIV3 ${MPDE_TEST_CMREP})
 ADD_TEST(TestDifferentialGeometry testpde DERIV4 ${MPDE_TEST_CMREP})
 ADD_TEST(TestSubdivisionSurface testpde SUBSURF1 ${MPDE_TEST_OBJMESH})
+ADD_TEST(TestSparseMatrix testpde SPARSEMAT)
 
 # Copy the script files
 SET(SCRIPT_FILES 
