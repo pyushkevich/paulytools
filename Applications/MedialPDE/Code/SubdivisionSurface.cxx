@@ -13,9 +13,6 @@
 
 using namespace std;
 
-// Not an ID
-const size_t SubdivisionSurface::NOID = 0xFFFFFFFF;
-
 SubdivisionSurface::Triangle::Triangle()
 {
   for(size_t i = 0; i < 3; i++)
@@ -68,59 +65,86 @@ SubdivisionSurface
 void SubdivisionSurface
 ::ComputeWalks(MeshLevel *mesh)
 {
-  // Resize the vertex array to accommodate all vertices
-  mesh->vertices.resize(mesh->nVertices);
-  fill(mesh->vertices.begin(), mesh->vertices.end(), Vertex());
+  // Create a temporary mutable structure that represents walk info
+  typedef std::pair<size_t, NeighborInfo> Entry;
+  typedef std::list<Entry> Row;
+  std::vector<Row> walks(mesh->triangles.size());
 
   // Loop over all triangles, all vertices
   for(size_t t = 0; t < mesh->triangles.size(); t++) for(size_t v = 0; v < 3; v++)
     {
+    // This is the index of the current vertex
     size_t ivtx = mesh->triangles[t].vertices[v];
-    if(mesh->vertices[ivtx].n == 0)
+
+    // Check if the walk around the vertex has already been generated
+    if(walks[ivtx].size() == 0)
       {
-      // Create a list to represent the walk
-      list< pair<size_t, size_t> > walk;
+      // The current position in the walk
+      size_t tWalk = t; short vWalk = v;
 
-      // Walk in one direction until looping around or reaching an end
-      // cout << "Walk started at T = " << t << ", v = " << v << " : " << mesh->triangles[t] << endl;
-      size_t tloop = t, twalk = t, vwalk = v;
-      do 
-        {
-        walk.push_back(make_pair(twalk, vwalk));
-        // cout << "Visited " << twalk << ", v = " << vwalk << " : " << mesh->triangles[twalk] << endl;
-        Triangle &tlast = mesh->triangles[twalk];
-        twalk = tlast.neighbors[(vwalk + 1) % 3];
-        vwalk = (tlast.nedges[(vwalk + 1) % 3] + 1) % 3;
-        }
-      while(twalk != NOID && twalk != tloop);
-      // cout << "Forward Walk ended at " << twalk << endl;
-
-      // If we reached a boundary edge, we need to walk backwards as well
-      if(twalk == NOID)
-        {
-        twalk = mesh->triangles[t].neighbors[(v + 2) % 3];
-        vwalk = (mesh->triangles[t].nedges[(v + 2) % 3] + 2) % 3;
-        while(twalk != NOID)
-          {
-          walk.push_front(make_pair(twalk, vwalk));
-          // cout << "Visited " << twalk << ", v = " << vwalk << " : " << mesh->triangles[twalk] << endl;
-          Triangle &tlast = mesh->triangles[twalk];
-          twalk = tlast.neighbors[(vwalk + 2) % 3];
-          vwalk = (tlast.nedges[(vwalk + 2) % 3] + 2) % 3;
-          }
-        }
-      // cout << "Backward Walk ended at " << twalk << endl;
-
-      // cout << "Walk size is " << walk.size() << endl;
-      // cout << "Walk is boundary : " << (twalk == NOID) << endl;
+      // The position at which the walk will loop around
+      size_t tLoop = t;
       
-      // Store the walk essentials with the vertex
-      mesh->vertices[ivtx] = Vertex( 
-        walk.front().first, walk.front().second, 
-        walk.back().first, walk.back().second, 
-        walk.size(), twalk == NOID);
+      // Walk until reaching a NOID triangle or looping around
+      // cout << "Walk around vtx. " << ivtx << endl;
+      do
+        {
+        // Get a reference to the current triangle
+        Triangle &T = mesh->triangles[tWalk];
+
+        // Represent the next triangle in the walk
+        size_t tNext = T.neighbors[ror(vWalk)];
+        short vNext = ror(T.nedges[ror(vWalk)]);
+        
+        // Put the current edge in the triangle into the list
+        walks[ivtx].push_back( make_pair(
+            T.vertices[rol(vWalk)], 
+            NeighborInfo(tNext, vNext, tWalk, vWalk)));
+        // cout << "Fwd walk: visiting vtx. " << T.vertices[rol(vWalk)] <<
+        //   "; behind: (" << tWalk << "," << vWalk <<
+        //   "); ahead: (" << tNext << "," << vNext << endl;
+              
+        // Update the position in the walk
+        tWalk = tNext; vWalk = vNext;
+        } 
+      while(tWalk != NOID && tWalk != tLoop);
+
+      // Now, if we hit a NOID, we can need to walk in the opposite direction,
+      // starting from the same triangle as before
+      if(tWalk == NOID)
+        {
+        // Reset the position in the walk
+        tWalk = t; vWalk = v;
+
+        // Walk again, in a symmetrical loop
+        do
+          {
+          // Get a reference to the current triangle
+          Triangle &T = mesh->triangles[tWalk];
+
+          // Represent the next triangle in the walk
+          size_t tNext = T.neighbors[rol(vWalk)];
+          short vNext = rol(T.nedges[rol(vWalk)]);
+          
+          // Put the current edge in the triangle into the list
+          walks[ivtx].push_front( make_pair(
+              T.vertices[ror(vWalk)], 
+              NeighborInfo(tWalk, vWalk, tNext, vNext)));
+          // cout << "Rev walk: visiting vtx. " << T.vertices[ror(vWalk)] <<
+          //   "; behind: (" << tNext << "," << vNext <<
+          //   "); ahead: (" << tWalk << "," << vWalk << endl;
+
+          // Update the position in the walk
+          tWalk = tNext; vWalk = vNext;
+          } 
+        while(tWalk != NOID);
+        }
       }
     }
+
+  // Now we have visited all the vertices and computed a walk around each one.
+  // All that is left is to transfer this result into a sparse matrix
+  mesh->nbr.SetFromSTL(walks, mesh->triangles.size());
 }
 
 /** 
@@ -143,33 +167,31 @@ void SubdivisionSurface
   size_t ivp = parent->triangles[tp].vertices[v];
 
   // Get the vertex object for this vertex
-  VertexWalkIterator it(parent, ivp);
-  if(it.IsBoundary()) 
+  EdgeWalkAroundVertex it(parent, ivp);
+  if(it.IsOpen()) 
     {
-    // Add the point itseld
-    W(ivc,ivp) = W_BND_SELF;
+    // Add the point itself
+    W(ivc, ivp) = W_BND_SELF;
 
     // Add the starting point
-    W(ivc,it.FromVertexId()) = W_BND_EDGE_CONN;
+    W(ivc, it.MovingVertexId()) = W_BND_EDGE_CONN;
 
     // Get the ending point
-    it.GoToEnd();
-    W(ivc,it.ToVertexId()) = W_BND_EDGE_CONN;
+    it.GoToLastEdge();
+    W(ivc, it.MovingVertexId()) = W_BND_EDGE_CONN;
     }
   else
     {
     // Compute the beta constant
-    int n = it.Size();
+    int n = it.Valence();
     double beta = (n > 3) ? 3.0 / (8.0 * n) : 3.0 / 16.0;
 
     // Assign beta to each of the edge-adjacent vertices
     for( ; !it.IsAtEnd(); ++it)
-      {
-      W(ivc, it.FromVertexId()) = beta;
-      }
+      W(ivc, it.MovingVertexId()) = beta;
 
     // Assign the balance to the coincident vertex
-    W(ivc,ivp) = 1.0 - n * beta;
+    W(ivc, ivp) = 1.0 - n * beta;
     }
 }
 
@@ -269,7 +291,7 @@ void SubdivisionSurface::Subdivide(MeshLevel *parent, MeshLevel *child)
       }
 
   // Copy the sparse matrix into immutable form
-  child->weights = W;
+  child->weights.SetFromVNL(W);
 
   // If the parent's parent is not NULL, we need to multiply the sparse
   // matrices of the parent and child
@@ -398,7 +420,6 @@ void SubdivisionSurface
   tcells->Delete();
 }
 
-
   
 bool SubdivisionSurface::CheckMeshLevel (MeshLevel &mesh)
 {
@@ -442,22 +463,10 @@ bool SubdivisionSurface::CheckMeshLevel (MeshLevel &mesh)
       }
     }
 
-  // Now check that the walks about all the vertices are legit
-  for(size_t v = 0; v < mesh.nVertices; v++)
-    {
-    // Create a walk iterator
-    VertexWalkIterator it(&mesh, v);
-
-    // Make sure the same vertex is walked around
-    for( ; !it.IsAtEnd(); ++it)
-      {
-      if(it.CenterVertexId() != v)
-        cout << "Error " << nerr++ << 
-          " Walk about vertex " << v << " is broken" << endl;
-      }
-
-    // Make sure the walk is sequential
-    }
-  
   return (nerr == 0);
 }
+
+// We need to instantiate sparse matrix of NeighborInfo objects
+#include "SparseMatrix.txx"
+template ImmutableSparseArray<SubdivisionSurface::NeighborInfo>;
+

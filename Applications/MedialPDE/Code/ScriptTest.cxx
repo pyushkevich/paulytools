@@ -525,7 +525,9 @@ int TestSparseMatrix()
 
   // Compute the product using immutable matrices
   Immutable AI, BI, CI, DI;
-  AI = A; BI = B; CI = C;
+  AI.SetFromVNL(A); 
+  BI.SetFromVNL(B);
+  CI.SetFromVNL(C);
   Immutable::Multiply(DI, AI, BI);
 
   // Print the results

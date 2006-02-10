@@ -9,6 +9,17 @@ class vtkPolyData;
 
 using namespace std;
 
+// Useful global-level inline routines.
+// TODO: are there faster ops for this?
+inline short ror(short x) { return (x + 1) % 3; }
+inline short rol(short x) { return (x + 2) % 3; }
+
+// Constant used for unreasonable size_t objects
+#define NOID 0xffffffff
+
+/**
+ * Subdivision surface representation 
+ */
 class SubdivisionSurface 
 {
 public:
@@ -44,12 +55,32 @@ public:
     bool bnd;
 
     // Is this a boundary vertex
-    bool IsBoundary() { return bnd; }
+    bool IsBoundary() const { return bnd; }
+
+    // Get the valence of the vertex. For internal vertices it is equal to the
+    // number of triangles that share the vertex, but for boundary vertices it
+    // is equal to 1 plus that (when the mesh has a disk topology)
+    size_t Valence() const { return bnd ? n + 1 : n; } 
     
     // Constructors
     Vertex(size_t it0, short iv0, size_t it1, short iv1, size_t in, bool ibnd) 
       : t0(it0), v0(iv0), t1(it1), v1(iv1), n(in), bnd(ibnd) {}
     Vertex() : t0(NOID), t1(NOID), v0(-1), v1(-1), n(0), bnd(false) {}
+  };
+
+  // Information describing vertex neighborhood relationship
+  struct NeighborInfo
+  {
+    // Triangle in front and behind
+    size_t tFront, tBack;
+
+    // Index of the vertex relative to these triangles
+    short vFront, vBack;
+
+    // Constructor and destructor
+    NeighborInfo() : tFront(NOID), tBack(NOID), vFront(-1), vBack(-1) {}
+    NeighborInfo(size_t tf, short vf, size_t tb, short vb)
+      : tFront(tf), vFront(vf), tBack(tb), vBack(vb) {}
   };
 
   struct MeshLevel
@@ -60,7 +91,7 @@ public:
     vector<Triangle> triangles;
 
     // List of vertices in this mesh level
-    vector<Vertex> vertices;
+    // vector<Vertex> vertices;
 
     // Number of vertices at this mesh level
     size_t nVertices;
@@ -76,106 +107,18 @@ public:
     // Sparse matrix mapping the mesh level to the parent level
     ImmutableSparseMatrix<double> weights;
 
+    // Sparse matrix representing the neighborhood relationship between
+    // vertices in the mesh. This information allows easy walk-line iteration
+    // around vertices.
+    ImmutableSparseArray<NeighborInfo> nbr;
+
+    // Return the valence of a vertex
+    size_t GetVertexValence(size_t ivtx)
+      { return nbr.GetRowIndex(ivtx+1) - nbr.GetRowIndex(ivtx); }
+
     // Constructor
     MeshLevel()
       { parent = NULL; nVertices = 0; }
-  };
-
-  // A vertex walk is a walk around a vertex 'over the faces' of triangles.
-  // The walk has a consistant direction on the mesh and it terminates before
-  // reaching a boundary or making a loop. The 'center of the walk' is the 
-  // vertex that is being walked about. The other two vertices in the current
-  // triangle are called to and from, indicating which is visited first in the
-  // walk direction.
-  class VertexWalkIterator {
-  public:
-    // Constructor: takes, mesh starting triangle and vertex
-    VertexWalkIterator(MeshLevel *inMesh, size_t iVertex)
-      : vtx(inMesh->vertices[iVertex]), mesh(inMesh)
-      { 
-      T = &mesh->triangles[vtx.t0]; n = vtx.n - 1; t = vtx.t0; v = vtx.v0;
-      }
-
-    // Check whether the vertex is internal
-    bool IsBoundary()
-      { return vtx.bnd; }
-
-    // Move the iterator to the end
-    void GoToEnd()
-      { n = 0; t = vtx.t1; v = vtx.v1; T = &mesh->triangles[t]; }
-
-    // Move the iterator to the beginning
-    void GoToBegin()
-      { n = vtx.n - 1; } 
-
-    // Get the size of the walk
-    size_t Size()
-      { return vtx.n; }
-    
-    // Walk forward to the next triangle in the walk. Check end condition
-    // first; walks around internal vertices do not loop around!
-    VertexWalkIterator &operator++()
-      { 
-      n--;
-      short ifrom = FromVertexIndex();
-      t = T->neighbors[ifrom];
-      v = (T->nedges[ifrom] + 1) % 3;
-      T = &mesh->triangles[t];
-      return *this;
-      }
-
-    // Check if we've reached the end of the walk
-    bool IsAtEnd()
-      { return n < 0; }
-
-    // Get the triangle that we are standing on right now
-    size_t Triangle()
-      { return t; }
-    
-    // Get the index of the center vertex in the current triangle (not its
-    // vertex id, this is a number between 0 and 2
-    short CenterVertexIndex()
-      { return v; }
-
-    // Get the vertex that we are walking from
-    short FromVertexIndex()
-      { return (v + 1) % 3; }
-
-    // Get the vertex that we are walking towards
-    short ToVertexIndex()
-      { return (v + 2) % 3; }
-
-    // Get the vertex ids (1 .. n)
-    size_t CenterVertexId() { return T->vertices[v]; }
-    size_t FromVertexId() { return T->vertices[FromVertexIndex()]; }
-    size_t ToVertexId() { return T->vertices[ToVertexIndex()]; }
-    
-    // Get the next triangle in the walk (can be NOID)
-    size_t NextTriangle()
-      { return T->neighbors[FromVertexIndex()]; }
-      
-    // Get the previous triangle in the walk (can be NOID)
-    size_t PreviousTriangle()
-      { return T->neighbors[ToVertexIndex()]; }
-    
-  private:
-    // A reference to the vertex about which we are walking
-    Vertex &vtx;
-    
-    // The current triangle in the walk
-    size_t t;
-
-    // The index of the center vertex in the current triangle
-    size_t v;
-
-    // The number of triangles left in the walk
-    int n;
-
-    // A pointer to the triangle we are on
-    SubdivisionSurface::Triangle *T;
-
-    // A mesh level
-    MeshLevel *mesh;
   };
 
   /** Subdivide a mesh level once */
@@ -213,7 +156,129 @@ private:
   // triangle, which makes subsequent processing a lot easier
   void ComputeWalks(MeshLevel *mesh);
 
-  const static size_t NOID;
+};
+
+/**
+ * This is an iterator that represents a walk around the vertex where at each
+ * point in time you are standing on one edge. To your right is a vertex that
+ * you are walking around, to your left is a neighbor vertex. In front of you
+ * or behind of you may be a triangle (unless you are at the beginning). The
+ * number of steps is equal to the valence of the vertex
+ */
+class EdgeWalkAroundVertex
+{
+public:
+  /** Constructor: takes a vertex in a fully initialized mesh level */
+  EdgeWalkAroundVertex(SubdivisionSurface::MeshLevel *mesh, size_t iVertex)
+    { 
+    this->mesh = mesh;
+    this->iVertex = iVertex;
+    this->pos = mesh->nbr.GetRowIndex()[iVertex];
+    this->end = mesh->nbr.GetRowIndex()[iVertex + 1];
+    }
+
+  /** Check if this walk is closed or open (boundary vertex) */
+  bool IsOpen()
+    { return mesh->nbr.GetSparseData()[end - 1].tFront == NOID; }
+
+  /** Return the valence of the vertex in the center */
+  size_t Valence()
+    { return mesh->nbr.GetRowIndex()[iVertex + 1] - mesh->nbr.GetRowIndex()[iVertex]; }
+
+  /** 
+   * Are we at the end of the walk? The end is reached when you have made a
+   * full circle or moved past the end of the mesh. No operations should be
+   * performed once you are at the end of the walk
+   */
+  bool IsAtEnd() const
+    { return pos >= end; }
+
+  /** Increment operator */
+  EdgeWalkAroundVertex &operator++ ()
+    { pos++; }
+
+  /** Go to the last edge in the walk (next step puts you at end) */
+  void GoToLastEdge()
+    { pos = end - 1; }
+
+  /** Get the id of the 'fixed' vertex. This is always the same id */
+  size_t FixedVertexId() 
+    { return iVertex; }
+
+  /** Get the moving vertex id */
+  size_t MovingVertexId() 
+    { return mesh->nbr.GetColIndex()[pos]; }
+
+  /** Get the triangle ahead */
+  size_t TriangleAhead() 
+    { return mesh->nbr.GetSparseData()[pos].tFront; }
+
+  /** Get the triangle behind */
+  size_t TriangleBehind() 
+    { return mesh->nbr.GetSparseData()[pos].tBack; }
+
+  /** Get the index of the fixed vertex in the triangle ahead */
+  short FixedVertexIndexInTriangleAhead() 
+    { return mesh->nbr.GetSparseData()[pos].vFront; }
+  
+  /** Get the index of the fixed vertex in the triangle behind */
+  short FixedVertexIndexInTriangleBehind() 
+    { return mesh->nbr.GetSparseData()[pos].vBack; }
+
+  /** Get the index of the moving vertex in the triangle ahead */
+  short MovingVertexIndexInTriangleAhead() 
+    { return ror(FixedVertexIndexInTriangleAhead()); }
+
+  /** Get the index of the moving vertex in the triangle behind */
+  short MovingVertexIndexInTriangleBehind() 
+    { return rol(FixedVertexIndexInTriangleBehind()); }
+
+  /** Get the index of the face-connected vertex in triangle ahead */
+  short OppositeVertexIndexInTriangleAhead() 
+    { return rol(FixedVertexIndexInTriangleAhead()); }
+
+  /** Get the index of the face-connected vertex in triangle behind */
+  short OppositeVertexIndexInTriangleBehind() 
+    { return ror(FixedVertexIndexInTriangleBehind()); }
+
+  /** Get the id of the face-connected vertex ahead */
+  size_t VertexIdAhead()
+    { 
+    if(pos == end - 1) 
+      if(mesh->nbr.GetSparseData()[pos].tFront == NOID)
+        return NOID;
+      else 
+        return mesh->nbr.GetColIndex()[mesh->nbr.GetRowIndex()[iVertex]];
+    else 
+      return mesh->nbr.GetColIndex()[pos + 1];
+    }
+    
+  /** Get the id of the face-connected vertex behind */
+  size_t VertexIdBehind()
+    { 
+    if(pos == mesh->nbr.GetRowIndex()[iVertex]) 
+      if(mesh->nbr.GetSparseData()[pos].tBack == NOID)
+        return NOID;
+      else 
+        return mesh->nbr.GetColIndex()[end - 1];
+    else 
+      return mesh->nbr.GetColIndex()[pos - 1];
+    }
+
+  /** Get the index of the iterator's position in the sparse array */
+  size_t GetPositionInMeshSparseArray() const
+    { return pos; }
+
+private:
+  // The mesh being iterated around
+  SubdivisionSurface::MeshLevel *mesh;
+  
+  // The index of the vertex walked around by this iterator
+  size_t iVertex;
+  
+  // The position in the walk, points to the column entry in the mesh's nbr
+  // sparse matrix
+  size_t pos, end;
 };
 
 ostream &operator << (ostream &out, const SubdivisionSurface::Triangle &t)
