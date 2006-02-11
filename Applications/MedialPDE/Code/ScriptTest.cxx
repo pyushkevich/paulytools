@@ -13,6 +13,7 @@
 #include "vtkBYUWriter.h"
 #include "vtkPolyData.h"
 #include "SubdivisionSurface.h"
+#include "MeshMedialPDESolver.h"
 
 #include <string>
 #include <iostream>
@@ -540,6 +541,55 @@ int TestSparseMatrix()
   return CI == DI ? 0 : 1;
 }
 
+int TestSubdivisionPDE(const char *objMesh)
+{
+  // Read the input mesh
+  vtkOBJReader *reader = vtkOBJReader::New();
+  reader->SetFileName(objMesh);
+  reader->Update();
+  vtkPolyData *poly = reader->GetOutput();
+
+  // Create a subdivision surface
+  SubdivisionSurface ss;
+  SubdivisionSurface::MeshLevel mesh;
+  ss.ImportLevelFromVTK(poly, mesh);
+
+  // Get the polygon data
+  SMLVec3d *xCtl = new SMLVec3d[mesh.nVertices];
+  double *rhoCtl = new double[mesh.nVertices];
+  for(size_t i = 0; i < mesh.nVertices; i++)
+    {
+    xCtl[i][0] = poly->GetPoint(i)[0];
+    xCtl[i][1] = poly->GetPoint(i)[1];
+    xCtl[i][2] = poly->GetPoint(i)[2];
+    rhoCtl[i] = -0.25;
+    }
+
+  // Subdivide the mesh once
+  SubdivisionSurface::MeshLevel meshsub;
+  ss.Subdivide(&mesh, &meshsub);
+
+  // Compute the subdivision surface
+  SMLVec3d *xData = new SMLVec3d[meshsub.nVertices];
+  double *rhoData = new double[meshsub.nVertices];
+  ss.ApplySubdivision(xCtl, rhoCtl, xData, rhoData, meshsub);
+
+  for(size_t j = 0; j < meshsub.nVertices; j++)
+    cout << "Vertex " << j << " is " << xData[j] << endl;
+
+  // Create arrays for solver
+  double *phi = new double[meshsub.nVertices];
+  double *soln = new double[meshsub.nVertices];
+  fill_n(phi, meshsub.nVertices, 0.0);
+
+  // Create a mesh-based PDE solver
+  MeshMedialPDESolver solver;
+  solver.SetMeshTopology(&meshsub);
+  solver.SolveEquation(xData, rhoData, phi, soln);
+
+  return 0;
+}
+
 
 
 /**
@@ -719,6 +769,7 @@ int usage()
   cout << "    DERIV3 XX.mpde             Check variations on basis functions." << endl;
   cout << "    DERIV4 XX.mpde             Test diff. geom. operators." << endl;
   cout << "    SUBSURF1 XX.obj            Test subdivision with OBJ mesh" << endl;
+  cout << "    SUBSURF2 XX.obj            Test subdivision PDE" << endl;
   cout << "    SPARSEMAT                  Test sparse matrix routines" << endl;
   cout << endl;
   return -1;
@@ -740,6 +791,8 @@ int main(int argc, char *argv[])
     return TestDifferentialGeometry(argv[2]);
   else if(0 == strcmp(argv[1], "SUBSURF1") && argc > 2)
     return TestSubdivisionSurface(argv[2]);
+  else if(0 == strcmp(argv[1], "SUBSURF2") && argc > 2)
+    return TestSubdivisionPDE(argv[2]);
   else if(0 == strcmp(argv[1], "SPARSEMAT"))
     return TestSparseMatrix();
   else 

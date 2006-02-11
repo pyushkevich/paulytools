@@ -80,6 +80,13 @@ public:
   TVal &GetValueBySparseIndex(size_t iRow, size_t iNZInRow)
     { return xSparseValues[xRowIndex[iRow] + iNZInRow]; }
 
+  // Get the number of sparse values
+  size_t GetNumberOfSparseValues() { return nSparseEntries; }
+
+  // Get the number of rows and columns
+  size_t GetNumberOfRows() { return nRows; }
+  size_t GetNumberOfColumns() { return nColumns; }  
+
 protected:
   
   /** Representation for the sparse matrix */

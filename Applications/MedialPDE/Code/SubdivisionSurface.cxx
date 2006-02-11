@@ -68,7 +68,7 @@ void SubdivisionSurface
   // Create a temporary mutable structure that represents walk info
   typedef std::pair<size_t, NeighborInfo> Entry;
   typedef std::list<Entry> Row;
-  std::vector<Row> walks(mesh->triangles.size());
+  std::vector<Row> walks(mesh->nVertices);
 
   // Loop over all triangles, all vertices
   for(size_t t = 0; t < mesh->triangles.size(); t++) for(size_t v = 0; v < 3; v++)
@@ -86,7 +86,7 @@ void SubdivisionSurface
       size_t tLoop = t;
       
       // Walk until reaching a NOID triangle or looping around
-      // cout << "Walk around vtx. " << ivtx << endl;
+      cout << "Walk around vtx. " << ivtx << endl;
       do
         {
         // Get a reference to the current triangle
@@ -97,12 +97,12 @@ void SubdivisionSurface
         short vNext = ror(T.nedges[ror(vWalk)]);
         
         // Put the current edge in the triangle into the list
+        cout << "Fwd walk: visiting vtx. " << T.vertices[rol(vWalk)] <<
+           "; behind: (" << tWalk << "," << vWalk <<
+           "); ahead: (" << tNext << "," << vNext << ")" <<  endl;
         walks[ivtx].push_back( make_pair(
             T.vertices[rol(vWalk)], 
             NeighborInfo(tNext, vNext, tWalk, vWalk)));
-        // cout << "Fwd walk: visiting vtx. " << T.vertices[rol(vWalk)] <<
-        //   "; behind: (" << tWalk << "," << vWalk <<
-        //   "); ahead: (" << tNext << "," << vNext << endl;
               
         // Update the position in the walk
         tWalk = tNext; vWalk = vNext;
@@ -127,12 +127,12 @@ void SubdivisionSurface
           short vNext = rol(T.nedges[rol(vWalk)]);
           
           // Put the current edge in the triangle into the list
+          cout << "Rev walk: visiting vtx. " << T.vertices[ror(vWalk)] <<
+            "; behind: (" << tNext << "," << vNext <<
+            "); ahead: (" << tWalk << "," << vWalk << ")" << endl;
           walks[ivtx].push_front( make_pair(
               T.vertices[ror(vWalk)], 
               NeighborInfo(tWalk, vWalk, tNext, vNext)));
-          // cout << "Rev walk: visiting vtx. " << T.vertices[ror(vWalk)] <<
-          //   "; behind: (" << tNext << "," << vNext <<
-          //   "); ahead: (" << tWalk << "," << vWalk << endl;
 
           // Update the position in the walk
           tWalk = tNext; vWalk = vNext;
@@ -420,6 +420,28 @@ void SubdivisionSurface
   tcells->Delete();
 }
 
+void SubdivisionSurface
+::ApplySubdivision(SMLVec3d *xSrc, double *rhoSrc, SMLVec3d *xTrg, double *rhoTrg, MeshLevel &m)
+{
+  size_t i, j, k;
+
+  // Add the points to the output mesh
+  for(i = 0; i < m.nVertices; i++)
+    {
+    // Output point
+    xTrg[i].fill(0.0); rhoTrg[i] = 0;
+    
+    // Iterate over columns
+    typedef ImmutableSparseMatrix<double>::RowIterator IteratorType;
+    for(IteratorType it = m.weights.Row(i); !it.IsAtEnd(); ++it)
+      {
+      xTrg[i] += it.Value() * xSrc[it.Column()];
+      rhoTrg[i] += it.Value() * rhoSrc[it.Column()];
+      }
+    }
+}
+
+
   
 bool SubdivisionSurface::CheckMeshLevel (MeshLevel &mesh)
 {
@@ -468,5 +490,5 @@ bool SubdivisionSurface::CheckMeshLevel (MeshLevel &mesh)
 
 // We need to instantiate sparse matrix of NeighborInfo objects
 #include "SparseMatrix.txx"
-template ImmutableSparseArray<SubdivisionSurface::NeighborInfo>;
+template class ImmutableSparseArray<SubdivisionSurface::NeighborInfo>;
 

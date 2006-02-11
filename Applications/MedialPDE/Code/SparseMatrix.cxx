@@ -3,8 +3,8 @@
 #include <vnl/vnl_sparse_matrix.txx>
 
 // Need an instantiation of sparse matrix
-template vnl_sparse_matrix<int>;
-template ImmutableSparseArray<double>;
-template ImmutableSparseArray<int>;
-template ImmutableSparseMatrix<double>;
-template ImmutableSparseMatrix<int>;
+template class vnl_sparse_matrix<int>;
+template class ImmutableSparseArray<double>;
+template class ImmutableSparseArray<int>;
+template class ImmutableSparseMatrix<double>;
+template class ImmutableSparseMatrix<int>;

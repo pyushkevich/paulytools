@@ -2,6 +2,7 @@
 #define __SubdivisionSurface_h_
 
 #include <vector>
+#include "smlmath.h"
 #include "Registry.h"
 #include "SparseMatrix.h"
 
@@ -114,8 +115,12 @@ public:
 
     // Return the valence of a vertex
     size_t GetVertexValence(size_t ivtx)
-      { return nbr.GetRowIndex(ivtx+1) - nbr.GetRowIndex(ivtx); }
+      { return nbr.GetRowIndex()[ivtx+1] - nbr.GetRowIndex()[ivtx]; }
 
+    // Check if the vertex is on the boundary
+    bool IsVertexInternal(size_t ivtx)
+      { return nbr.GetSparseData()[nbr.GetRowIndex()[ivtx]].tBack != NOID; }
+    
     // Constructor
     MeshLevel()
       { parent = NULL; nVertices = 0; }
@@ -130,6 +135,11 @@ public:
   /** Apply a subdivision to a vtk mesh */
   void ApplySubdivision(
     vtkPolyData *src, vtkPolyData *target, MeshLevel &m);
+
+  /** Apply subdivision to raw data */
+  void ApplySubdivision(
+    SMLVec3d *xSrc, double *rhoSrc, 
+    SMLVec3d *xTrg, double *rhoTrg, MeshLevel &m);
 
   /** Load a mesh level from a registry */
   void LoadMeshLevel(Registry &registry);
@@ -200,6 +210,10 @@ public:
   /** Go to the last edge in the walk (next step puts you at end) */
   void GoToLastEdge()
     { pos = end - 1; }
+
+  /** Go to the first edge in the walk (next step puts you at end) */
+  void GoToFirstEdge()
+    { pos = mesh->nbr.GetRowIndex()[iVertex]; }
 
   /** Get the id of the 'fixed' vertex. This is always the same id */
   size_t FixedVertexId() 
@@ -281,7 +295,7 @@ private:
   size_t pos, end;
 };
 
-ostream &operator << (ostream &out, const SubdivisionSurface::Triangle &t)
+inline ostream &operator << (ostream &out, const SubdivisionSurface::Triangle &t)
 {
   out << "[V=(" << t.vertices[0] << "," << t.vertices[1] << "," << t.vertices[2] << ")";
   out << " N=(" << t.neighbors[0] << "," << t.neighbors[1] << "," << t.neighbors[2] << ")";

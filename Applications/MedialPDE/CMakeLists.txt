@@ -17,6 +17,7 @@ SET(COMMON_SRCS
   Code/MedialPDEMasks.cxx 
   Code/MedialPDESites.cxx 
   Code/MedialPDESolver.cxx 
+  Code/MeshMedialPDESolver.cxx
   Code/OptimizationTerms.cxx
   Code/PardisoInterface.cxx
   Code/PrincipalComponents.cxx
@@ -99,7 +100,8 @@ ENABLE_TESTING()
 SET(MPDE_TESTDATA_DIR ${MedialPDE_SOURCE_DIR}/Testing/Input)
 SET(MPDE_TEST_CMREP ${MPDE_TESTDATA_DIR}/st1001L.align.mpde)
 SET(MPDE_TEST_PCA ${MPDE_TESTDATA_DIR}/shapemat.mat)
-SET(MPDE_TEST_OBJMESH ${MPDE_TESTDATA_DIR}/triangle_mesh.obj)
+# SET(MPDE_TEST_OBJMESH ${MPDE_TESTDATA_DIR}/triangle_mesh.obj)
+SET(MPDE_TEST_OBJMESH ${MPDE_TESTDATA_DIR}/tiny_mesh.obj)
 
 # Test various derivative computations
 ADD_TEST(TestDerivativesNoImage testpde 
@@ -107,8 +109,10 @@ ADD_TEST(TestDerivativesNoImage testpde
 ADD_TEST(TestDerivativesWithImage testpde DERIV2 ${MPDE_TEST_CMREP})
 ADD_TEST(TestBasisFunctionVariation testpde DERIV3 ${MPDE_TEST_CMREP})
 ADD_TEST(TestDifferentialGeometry testpde DERIV4 ${MPDE_TEST_CMREP})
-ADD_TEST(TestSubdivisionSurface testpde SUBSURF1 ${MPDE_TEST_OBJMESH})
 ADD_TEST(TestSparseMatrix testpde SPARSEMAT)
+ADD_TEST(TestSubdivisionSurface testpde SUBSURF1 ${MPDE_TEST_OBJMESH})
+ADD_TEST(TestSubdivisionPDE testpde SUBSURF2 ${MPDE_TEST_OBJMESH})
+
 
 # Copy the script files
 SET(SCRIPT_FILES 

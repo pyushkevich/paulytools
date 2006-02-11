@@ -79,6 +79,15 @@ inline double vmulset(SMLVec3d &t, const SMLVec3d &v, double s)
   t.data_block()[2] = v.data_block()[2] * s;
 }
 
+template<class T>
+inline T
+squared_distance(const vnl_vector_fixed<T, 3> &A, const vnl_vector_fixed<T, 3> &B)
+{
+  double d0 = A[0] - B[0], d1 = A[1] - B[1], d2 = A[2] - B[2];
+  return d0 * d0 + d1 * d1 + d2 * d2;
+}
+
+
 
 
 #endif // _MY_SML_MATH_

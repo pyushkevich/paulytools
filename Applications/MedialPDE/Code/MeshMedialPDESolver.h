@@ -3,6 +3,7 @@
 
 #include "SparseMatrix.h"
 #include "SubdivisionSurface.h"
+#include <smlmath.h>
 #include <vnl/vnl_matrix.h>
 #include <vnl/vnl_vector.h>
 
@@ -26,6 +27,7 @@ class MeshMedialPDESolver
 {
 public:
   typedef ImmutableSparseMatrix<double> SparseMat;
+  typedef SubdivisionSurface::MeshLevel MeshLevel;
   typedef vnl_matrix<double> Mat;
   typedef vnl_vector<double> Vec;
 
@@ -41,14 +43,29 @@ public:
   void SetMeshTopology(MeshLevel *topology);
 
   // Our first attempt at a solver method
-  void SolveEquation(const Mat &data, Vec &soln);
+  void SolveEquation(const SMLVec3d *X, const double *rho, const double *phi, double *soln);
 
 private:
+
+  // This method resets all the pointers associated with a mesh
+  void Reset();
+
+  // This method is used to compute the sparse matrix A for Newton's method
+  void FillNewtonMatrix(const SMLVec3d *X, const double *phi);
+
+  // This method is used to compute the right hand side B for Newton's method
+  void FillNewtonRHS(const SMLVec3d *X, const double *rho, const double *phi);
+
+  // This computes the geometry associated with a mesh before running the solver
+  void ComputeMeshGeometry(const SMLVec3d *X);
 
   // An immutable sparse matrix used to represent the PDE. Each row
   // corresponds to a vertex, non-zero values are found between adjacent
   // vertices (those contributing to gradient and LBO computations)
   SparseMat A;
+
+  // Arrays B and epsilon used in Newton's solver
+  double *xRHS, *xEpsilon;
   
   // A pointer to the mesh topology
   MeshLevel *topology;
@@ -60,7 +77,7 @@ private:
     double xArea;
 
     // Cotangent of the three angles
-    SMLVec3d xCotangent[3];
+    SMLVec3d xCotangent;
     };
   
   // A structure representing vertex geometry in the mesh (temp)
@@ -75,18 +92,19 @@ private:
     // The first fundamental form and its inverse
     double gCovariant[2][2], gContravariant[2][2];
     };
-  
+
   // Geometry arrays that store triangle-related and vertex-related info
   TriangleGeom *xTriangleGeom;
   VertexGeom *xVertexGeom;
+
+  // An array of weights used to compute the tangent vectors at each vertex. These correspond 
+  // to the sparse matrix A, i.e., include the neighbors of the vertex and the vertex itself
+  double *xTangentWeights[2];
   
   // This utility array maps the entries in the nbr sparse array stored in the
   // mesh to elements of the sparse matrix A. This mapping is needed because
   // the entries of array A are sorted and include diagonal entries
   size_t *xMapVertexNbrToA, *xMapVertexToA;
-
-  // Cosine lookup array
-  const static vnl_matrix<double> xCosTable, xSinTable;
 };
 
 

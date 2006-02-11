@@ -124,21 +124,21 @@ ImmutableSparseMatrix<TVal>
 ::operator == (const Self &B)
 {
   // Metastructure must match
-  if(nColumns != B.nColumns || nRows != B.nRows 
-    || nSparseEntries != B.nSparseEntries)
+  if(this->nColumns != B.nColumns || this->nRows != B.nRows 
+    || this->nSparseEntries != B.nSparseEntries)
     return false;
 
   // Compare row indices, etc
-  for(size_t i = 0; i < nRows; i++)
+  for(size_t i = 0; i < this->nRows; i++)
     {
     // Row size must match
-    if(xRowIndex[i+1] != B.xRowIndex[i+1])
+    if(this->xRowIndex[i+1] != B.xRowIndex[i+1])
       return false;
     
     // Column entries and values must match
-    for(size_t j = xRowIndex[i]; j < xRowIndex[i+1]; j++)
-      if(xColIndex[j] != B.xColIndex[j] ||
-        xSparseValues[j] != B.xSparseValues[j])
+    for(size_t j = this->xRowIndex[i]; j < this->xRowIndex[i+1]; j++)
+      if(this->xColIndex[j] != B.xColIndex[j] ||
+        this->xSparseValues[j] != B.xSparseValues[j])
         return false;
     }
 
@@ -189,9 +189,9 @@ ImmutableSparseMatrix<TVal>
 {
   size_t i, j;
   out << "ImmutableSparseArray: [ ";
-  for(i = 0; i < nRows; i++) 
-    for(j = xRowIndex[i]; j < xRowIndex[i+1]; j++)
-      out << "(" << i << "," << xColIndex[j] << "," << xSparseValues[j] << ") ";
+  for(i = 0; i < this->nRows; i++) 
+    for(j = this->xRowIndex[i]; j < this->xRowIndex[i+1]; j++)
+      out << "(" << i << "," << this->xColIndex[j] << "," << this->xSparseValues[j] << ") ";
   out << "]";
 }
 
