@@ -1,6 +1,7 @@
 #include "MeshMedialPDESolver.h"
 #include <vector>
 #include <vnl/vnl_math.h>
+#include "PardisoInterface.h"
 
 using namespace std;
 
@@ -91,9 +92,18 @@ MeshMedialPDESolver
   A.SetArrays(topology->nVertices, topology->nVertices, 
     xRowIndex, xColIndex, xSparseValues);
 
+  // This is sad, but in addition to the immutable matrix A, we have to store a 
+  // PARDISO-compatible column and row index array with 1-based indexing
+  xPardisoRowIndex = new int[topology->nVertices+1];
+  xPardisoColIndex = new int[nSparseEntries];
+  for(i = 0; i <= topology->nVertices; i++)
+    xPardisoRowIndex[i] = xRowIndex[i] + 1;
+  for(j = 0; j < nSparseEntries; j++)
+    xPardisoColIndex[j] = xColIndex[j] + 1;
+
   // Initialize the right hand side and epsilon
-  xRHS = new double[topology->nVertices];
-  xEpsilon = new double[topology->nVertices];
+  xRHS.set_size(topology->nVertices);
+  xEpsilon.set_size(topology->nVertices);
 
   // Initialize the triangle area array and other such arrays
   xTriangleGeom = new TriangleGeom[topology->triangles.size()];
@@ -183,8 +193,8 @@ MeshMedialPDESolver
   xMapVertexToA = NULL;
   topology = NULL;
   xTangentWeights[0] = xTangentWeights[1] = NULL;
-  xEpsilon = NULL;
-  xRHS = NULL;
+  xPardisoColIndex = NULL;
+  xPardisoRowIndex = NULL;
 }
 
 MeshMedialPDESolver
@@ -203,8 +213,8 @@ MeshMedialPDESolver
   reset_ptr(xMapVertexToA);
   reset_ptr(xTangentWeights[0]); 
   reset_ptr(xTangentWeights[1]);
-  reset_ptr(xEpsilon);
-  reset_ptr(xRHS);
+  reset_ptr(xPardisoColIndex); 
+  reset_ptr(xPardisoRowIndex);
 }
 
 void
@@ -270,6 +280,22 @@ MeshMedialPDESolver
       G.t2 += xn * xTangentWeights[1][j];
       }
 
+    cout << "Vertex " << (i+1) << " Tangent 1 = ";
+    for(j = xRowIndex[i]; j < xRowIndex[i+1]; j++)
+      cout << xTangentWeights[0][j] << " X[" << xColIndex[j] + 1 << "] + ";
+    cout << endl;
+    
+    cout << "Vertex " << (i+1) << " Tangent 2 = ";
+    for(j = xRowIndex[i]; j < xRowIndex[i+1]; j++)
+      cout << xTangentWeights[1][j] << " X[" << xColIndex[j] + 1 << "] + ";
+    cout << endl;
+
+    // cout << "Vertex " << i << ", Tangent 1: " << G.t1 << endl;
+    // cout << "Vertex " << i << ", Tangent 2: " << G.t2 << endl;
+    SMLVec3d nrm = vnl_cross_3d(G.t1, G.t2);
+    nrm /= nrm.magnitude();
+    cout << "Vertex " << i << ", Normal Vector: " << nrm << endl;
+
     // Now we can compute the covariant metric tensor
     G.gCovariant[0][0] = dot_product(G.t1, G.t1);
     G.gCovariant[1][1] = dot_product(G.t2, G.t2);
@@ -325,7 +351,7 @@ MeshMedialPDESolver
         double weight = scale * (cota + cotb);
 
         // Set the weight for the moving vertex (to be scaled)
-        A.GetSparseData()[xMapVertexNbrToA[it.MovingVertexId()]] = weight;
+        A.GetSparseData()[xMapVertexNbrToA[it.GetPositionInMeshSparseArray()]] = weight;
 
         // Update accumulators
         w_accum += weight;
@@ -333,6 +359,9 @@ MeshMedialPDESolver
 
       // Set the diagonal entry in A
       A.GetSparseData()[xMapVertexToA[i]] = -w_accum;
+
+      for(j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
+        cout << "Open Vertex " << i << ", Neighbor " << A.GetColIndex()[j] << " = " << A.GetSparseData()[j] << endl;
       }
     else
       {
@@ -362,6 +391,9 @@ MeshMedialPDESolver
 
       // Finally, add the weight for the point itself (-4 \epsilon)
       A.GetSparseData()[xMapVertexToA[i]] += -4.0;
+
+      for(j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
+        cout << "Closed Vertex " << i << ", Neighbor " << A.GetColIndex()[j] << " = " << A.GetSparseData()[j] << endl;
       }
     }
 }
@@ -407,11 +439,43 @@ MeshMedialPDESolver
   // Compute the mesh geometry
   ComputeMeshGeometry(X);
 
-  // First, fill in the A matrix
-  FillNewtonMatrix(X, phi);
+  // Initialize the solver
+  UnsymmetricRealPARDISO xPardiso;
 
-  // Now, fill in the right hand side 
-  FillNewtonRHS(X, rho, phi);
+  // Set the solution to phi
+  vnl_vector<double> xSoln(phi, topology->nVertices);
 
-  cout << "A = " << A << endl;
+  // Run for up to 50 iterations
+  for(size_t i = 0; i < 10; i++)
+    {
+    // First, fill in the A matrix
+    FillNewtonMatrix(X, xSoln.data_block());
+
+    // Now, fill in the right hand side 
+    FillNewtonRHS(X, rho, xSoln.data_block());
+
+    // Check if the right hand side is close enough to zero that we can terminate
+    cout << "Iteration: " << i << ", error: " << xRHS.inf_norm() << endl;
+    cout << "Sparse Mat: " << A << endl;
+    cout << "RHS: " << xRHS << endl;
+
+    if(xRHS.inf_norm() < 1.0e-10) break;
+
+    // During the first iteration perform factorization
+    if(i == 0)
+      xPardiso.SymbolicFactorization(
+        topology->nVertices, xPardisoRowIndex, xPardisoColIndex, A.GetSparseData());
+
+    // In the subsequent iterations, only do the numeric factorization and solve
+    xPardiso.NumericFactorization(A.GetSparseData());
+    xPardiso.Solve(xRHS.data_block(), xEpsilon.data_block());
+
+    // Add epsilon to the current guess
+    xSoln += xEpsilon;
+
+    cout << "Epsilon: " << xEpsilon << endl;
+    cout << "Solution: " << xSoln << endl;
+
+    // Perform backtracking (later)
+    }
 }

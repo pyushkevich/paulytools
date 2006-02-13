@@ -62,6 +62,13 @@ SubdivisionSurface
     }
 }
 
+inline bool NeighborPairPredicate (
+  const pair<size_t, SubdivisionSurface::NeighborInfo> &p1,
+  const pair<size_t, SubdivisionSurface::NeighborInfo> &p2)
+{
+  return p1.first < p2.first;  
+}
+
 void SubdivisionSurface
 ::ComputeWalks(MeshLevel *mesh)
 {
@@ -138,6 +145,14 @@ void SubdivisionSurface
           tWalk = tNext; vWalk = vNext;
           } 
         while(tWalk != NOID);
+        }
+      else
+        {
+        // Rotate the walk so that the smallest member is the first element
+        // (for consistency with MMA code)
+        rotate(walks[ivtx].begin(), 
+          min_element(walks[ivtx].begin(), walks[ivtx].end(), &NeighborPairPredicate), 
+          walks[ivtx].end());
         }
       }
     }

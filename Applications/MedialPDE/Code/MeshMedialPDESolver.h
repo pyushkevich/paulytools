@@ -65,7 +65,7 @@ private:
   SparseMat A;
 
   // Arrays B and epsilon used in Newton's solver
-  double *xRHS, *xEpsilon;
+  vnl_vector<double> xRHS, xEpsilon;
   
   // A pointer to the mesh topology
   MeshLevel *topology;
@@ -105,6 +105,9 @@ private:
   // mesh to elements of the sparse matrix A. This mapping is needed because
   // the entries of array A are sorted and include diagonal entries
   size_t *xMapVertexNbrToA, *xMapVertexToA;
+
+  // Pardiso-compatible 1-based index into the matrix A (redundant, really)
+  int *xPardisoRowIndex, *xPardisoColIndex;
 };
 
 
