@@ -1,8 +1,11 @@
 #ifndef __MeshMedialPDESolver_h_
 #define __MeshMedialPDESolver_h_
 
+#include "MedialAtom.h"
 #include "SparseMatrix.h"
 #include "SubdivisionSurface.h"
+#include "GenericMedialModel.h"
+#include "SubdivisionSurfaceMedialIterationContext.h"
 #include <smlmath.h>
 #include <vnl/vnl_matrix.h>
 #include <vnl/vnl_vector.h>
@@ -23,19 +26,20 @@
  * where each vertex represents a row, and has non-zero values in the
  * columns that correspond to the adjacent vertices
  */
-class MeshMedialPDESolver
+class MeshMedialModel : public GenericMedialModel
 {
 public:
+  // Matrix typedefs
   typedef ImmutableSparseMatrix<double> SparseMat;
   typedef SubdivisionSurface::MeshLevel MeshLevel;
   typedef vnl_matrix<double> Mat;
   typedef vnl_vector<double> Vec;
 
   // Constructor
-  MeshMedialPDESolver();
+  MeshMedialModel();
 
   // Destructor
-  ~MeshMedialPDESolver();
+  ~MeshMedialModel();
 
   // Set the topology of the mesh. This determines the connectivity of the
   // vertices which, in turn, determines the structure of the sparse matrix
@@ -58,6 +62,9 @@ private:
 
   // This computes the geometry associated with a mesh before running the solver
   void ComputeMeshGeometry(const SMLVec3d *X);
+
+  // This computes the medial atoms once the phi has been solved for
+  void ComputeMedialAtoms(const double *soln);
 
   // An immutable sparse matrix used to represent the PDE. Each row
   // corresponds to a vertex, non-zero values are found between adjacent
@@ -87,10 +94,10 @@ private:
     double xFanArea;
 
     // The two Loop tangent vectors at the vertex
-    SMLVec3d t1, t2;
+    // SMLVec3d t1, t2;
 
     // The first fundamental form and its inverse
-    double gCovariant[2][2], gContravariant[2][2];
+    // double gCovariant[2][2], gContravariant[2][2];
     };
 
   // Geometry arrays that store triangle-related and vertex-related info

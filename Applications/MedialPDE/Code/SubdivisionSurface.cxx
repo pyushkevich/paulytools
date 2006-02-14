@@ -93,7 +93,7 @@ void SubdivisionSurface
       size_t tLoop = t;
       
       // Walk until reaching a NOID triangle or looping around
-      cout << "Walk around vtx. " << ivtx << endl;
+      // cout << "Walk around vtx. " << ivtx << endl;
       do
         {
         // Get a reference to the current triangle
@@ -104,9 +104,9 @@ void SubdivisionSurface
         short vNext = ror(T.nedges[ror(vWalk)]);
         
         // Put the current edge in the triangle into the list
-        cout << "Fwd walk: visiting vtx. " << T.vertices[rol(vWalk)] <<
-           "; behind: (" << tWalk << "," << vWalk <<
-           "); ahead: (" << tNext << "," << vNext << ")" <<  endl;
+        // cout << "Fwd walk: visiting vtx. " << T.vertices[rol(vWalk)] <<
+        //    "; behind: (" << tWalk << "," << vWalk <<
+        //    "); ahead: (" << tNext << "," << vNext << ")" <<  endl;
         walks[ivtx].push_back( make_pair(
             T.vertices[rol(vWalk)], 
             NeighborInfo(tNext, vNext, tWalk, vWalk)));
@@ -134,9 +134,9 @@ void SubdivisionSurface
           short vNext = rol(T.nedges[rol(vWalk)]);
           
           // Put the current edge in the triangle into the list
-          cout << "Rev walk: visiting vtx. " << T.vertices[ror(vWalk)] <<
-            "; behind: (" << tNext << "," << vNext <<
-            "); ahead: (" << tWalk << "," << vWalk << ")" << endl;
+          // cout << "Rev walk: visiting vtx. " << T.vertices[ror(vWalk)] <<
+          //   "; behind: (" << tNext << "," << vNext <<
+          //   "); ahead: (" << tWalk << "," << vWalk << ")" << endl;
           walks[ivtx].push_front( make_pair(
               T.vertices[ror(vWalk)], 
               NeighborInfo(tWalk, vWalk, tNext, vNext)));

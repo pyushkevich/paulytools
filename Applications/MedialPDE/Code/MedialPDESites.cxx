@@ -1,4 +1,8 @@
 #include "MedialPDESites.h"
+#include <iostream>
+
+using namespace std;
+
 
 double FDInternalSite::ComputeEquation(const Mat &Y)
 {

@@ -15,7 +15,7 @@ void reset_ptr(T* &x)
 }
 
 void
-MeshMedialPDESolver
+MeshMedialModel
 ::SetMeshTopology(MeshLevel *topology)
 {
   // We must first set the dimensions of the matrix A. The finite difference
@@ -108,6 +108,7 @@ MeshMedialPDESolver
   // Initialize the triangle area array and other such arrays
   xTriangleGeom = new TriangleGeom[topology->triangles.size()];
   xVertexGeom = new VertexGeom[topology->nVertices];
+  xAtoms = new MedialAtom[topology->nVertices];
 
   // Initialize the tangent weights
   xTangentWeights[0] = new double[nSparseEntries]; 
@@ -144,15 +145,15 @@ MeshMedialPDESolver
       size_t idxLast = xMapVertexNbrToA[it.GetPositionInMeshSparseArray()];
 
       // We can now set the along-the-edge tangent vector
-      xTangentWeights[0][idxFirst] = 1.0;
-      xTangentWeights[0][idxLast] = -1.0;
+      xTangentWeights[1][idxFirst] = 1.0;
+      xTangentWeights[1][idxLast] = -1.0;
 
       // Now we branch according to the valence
       if(n == 2)
         {
-        xTangentWeights[1][idxFirst] = 1.0;
-        xTangentWeights[1][idxLast] = 1.0;
-        xTangentWeights[1][xMapVertexToA[i]] = -2.0;
+        xTangentWeights[0][idxFirst] = -1.0;
+        xTangentWeights[0][idxLast] = -1.0;
+        xTangentWeights[0][xMapVertexToA[i]] = 2.0;
         }
       else if (n == 3)
         {
@@ -163,29 +164,32 @@ MeshMedialPDESolver
         size_t idxMiddle = xMapVertexNbrToA[it.GetPositionInMeshSparseArray()];
 
         // Set the weights
-        xTangentWeights[1][idxMiddle] = 1.0;
-        xTangentWeights[1][xMapVertexToA[i]] = -1.0;
+        xTangentWeights[0][idxMiddle] = -1.0;
+        xTangentWeights[0][xMapVertexToA[i]] = 1.0;
         }
       else
         {
         // Compute the angle theta
         double theta = vnl_math::pi / (n - 1);
-        xTangentWeights[1][idxFirst] = xTangentWeights[1][idxLast] = sin(theta);
+        xTangentWeights[0][idxFirst] = xTangentWeights[0][idxLast] = sin(theta);
 
         // Assign the weights to intermediate vertices
         it.GoToFirstEdge(); ++it;
         for(j = 1; j < n - 1; ++j, ++it)
           {
           size_t idxInt = xMapVertexNbrToA[it.GetPositionInMeshSparseArray()];
-          xTangentWeights[1][idxInt] = (2.0 * cos(theta) - 2.0) * sin(theta * j);
+          xTangentWeights[0][idxInt] = (2.0 * cos(theta) - 2.0) * sin(theta * j);
           }
         }
       }
     }
+
+  // Last step: set the atom iteration context
+  xIterationContext = new SubdivisionSurfaceMedialIterationContext(topology);
 }
 
-MeshMedialPDESolver
-::MeshMedialPDESolver()
+MeshMedialModel
+::MeshMedialModel()
 {
   xTriangleGeom = NULL;
   xVertexGeom = NULL;
@@ -197,28 +201,30 @@ MeshMedialPDESolver
   xPardisoRowIndex = NULL;
 }
 
-MeshMedialPDESolver
-::~MeshMedialPDESolver()
+MeshMedialModel
+::~MeshMedialModel()
 {
   Reset();
 }
 
 void
-MeshMedialPDESolver
+MeshMedialModel
 ::Reset()
 {
   reset_ptr(xTriangleGeom);
   reset_ptr(xVertexGeom);
+  reset_ptr(xAtoms);
   reset_ptr(xMapVertexNbrToA);
   reset_ptr(xMapVertexToA);
   reset_ptr(xTangentWeights[0]); 
   reset_ptr(xTangentWeights[1]);
   reset_ptr(xPardisoColIndex); 
   reset_ptr(xPardisoRowIndex);
+  reset_ptr(xIterationContext);
 }
 
 void
-MeshMedialPDESolver
+MeshMedialModel
 ::ComputeMeshGeometry(const SMLVec3d *X)
 {
   size_t i, j;
@@ -255,9 +261,9 @@ MeshMedialPDESolver
     xTriangleGeom[i].xCotangent = SMLVec3d(l2 + l1 - l0, l0 + l2 - l1, l1 + l0 - l2);
     xTriangleGeom[i].xCotangent *= 0.25 / xTriangleGeom[i].xArea;
 
-    cout << "Triangle geometry at " << i << ": ";
-    cout << "Area = " << xTriangleGeom[i].xArea;
-    cout << " Cot = " << xTriangleGeom[i].xCotangent << endl;
+    // cout << "Triangle geometry at " << i << ": ";
+    // cout << "Area = " << xTriangleGeom[i].xArea;
+    // cout << " Cot = " << xTriangleGeom[i].xCotangent << endl;
     }
 
   // Now, compute the tangent vectors for all the points. Tangent vectors are 
@@ -265,29 +271,33 @@ MeshMedialPDESolver
   for(i = 0; i < topology->nVertices; i++)
     {
     // Get a reference to the geometry object
-    VertexGeom &G = xVertexGeom[i];
+    MedialAtom &a = xAtoms[i];
+
+    // Initialize the atom
+    a.X = X[i];
 
     // Clear the tangent for this vertex
-    G.t1.fill(0.0);
-    G.t2.fill(0.0);
+    a.Xu.fill(0.0);
+    a.Xv.fill(0.0);
 
     // Computing the tangent is easy. We use the sparse matrix structure from A to do it
     size_t *xRowIndex = A.GetRowIndex(), *xColIndex = A.GetColIndex();
     for(j = xRowIndex[i]; j < xRowIndex[i+1]; j++)
       {
       const SMLVec3d &xn = X[xColIndex[j]];
-      G.t1 += xn * xTangentWeights[0][j];
-      G.t2 += xn * xTangentWeights[1][j];
+      a.Xu += xn * xTangentWeights[0][j];
+      a.Xv += xn * xTangentWeights[1][j];
       }
-
+    
+    /*
     cout << "Vertex " << (i+1) << " Tangent 1 = ";
     for(j = xRowIndex[i]; j < xRowIndex[i+1]; j++)
-      cout << xTangentWeights[0][j] << " X[" << xColIndex[j] + 1 << "] + ";
+      cout << xTangentWeights[0][j] << " X[" << xColIndex[j] << "] + ";
     cout << endl;
     
     cout << "Vertex " << (i+1) << " Tangent 2 = ";
     for(j = xRowIndex[i]; j < xRowIndex[i+1]; j++)
-      cout << xTangentWeights[1][j] << " X[" << xColIndex[j] + 1 << "] + ";
+      cout << xTangentWeights[1][j] << " X[" << xColIndex[j] << "] + ";
     cout << endl;
 
     // cout << "Vertex " << i << ", Tangent 1: " << G.t1 << endl;
@@ -295,23 +305,33 @@ MeshMedialPDESolver
     SMLVec3d nrm = vnl_cross_3d(G.t1, G.t2);
     nrm /= nrm.magnitude();
     cout << "Vertex " << i << ", Normal Vector: " << nrm << endl;
+    */
 
     // Now we can compute the covariant metric tensor
-    G.gCovariant[0][0] = dot_product(G.t1, G.t1);
-    G.gCovariant[1][1] = dot_product(G.t2, G.t2);
-    G.gCovariant[0][1] = G.gCovariant[1][0] = dot_product(G.t1, G.t2);
+    a.G.xCovariantTensor[0][0] = dot_product(a.Xu, a.Xu);
+    a.G.xCovariantTensor[1][1] = dot_product(a.Xv, a.Xv);
+    a.G.xCovariantTensor[0][1] = 
+      a.G.xCovariantTensor[1][0] = dot_product(a.Xu, a.Xv);
 
-    // The contravariant tensor as well
-    double gInv = 1.0 / (G.gCovariant[0][0] * G.gCovariant[1][1] - 
-                         G.gCovariant[0][1] * G.gCovariant[0][1]);
-    G.gContravariant[0][0] = gInv * G.gCovariant[1][1];
-    G.gContravariant[1][1] = gInv * G.gCovariant[0][0];
-    G.gContravariant[0][1] = G.gContravariant[1][0] = - gInv * G.gCovariant[0][1];
+    // The determinant of the tensor
+    a.G.g = 
+      a.G.xCovariantTensor[0][0] * a.G.xCovariantTensor[1][1] -
+      a.G.xCovariantTensor[0][1] * a.G.xCovariantTensor[1][0];
+    a.G.gInv = 1.0 / a.G.g;
+
+    // Compute the contravariant tensor
+    a.G.xContravariantTensor[0][0] = a.G.gInv * a.G.xCovariantTensor[1][1];
+    a.G.xContravariantTensor[1][1] = a.G.gInv * a.G.xCovariantTensor[0][0];
+    a.G.xContravariantTensor[0][1] = 
+      a.G.xContravariantTensor[1][0] = - a.G.gInv * a.G.xCovariantTensor[0][1];
+
+    // Compute the normal vector
+    a.ComputeNormalVector();
     }  
 }
 
 void
-MeshMedialPDESolver
+MeshMedialModel
 ::FillNewtonMatrix(const SMLVec3d *X, const double *phi)
 {
   size_t i, j, k;
@@ -344,10 +364,10 @@ MeshMedialPDESolver
         // to 1.5 / A(p_i), the sum of triangle areas around p_i
 
         // Compute the weight associated with this neighbor vertex
-        double cota = 
-          xTriangleGeom[it.TriangleAhead()].xCotangent[it.OppositeVertexIndexInTriangleAhead()];
-        double cotb = 
-          xTriangleGeom[it.TriangleBehind()].xCotangent[it.OppositeVertexIndexInTriangleBehind()];
+        double cota = xTriangleGeom[it.TriangleAhead()].xCotangent[
+          it.OppositeVertexIndexInTriangleAhead()];
+        double cotb = xTriangleGeom[it.TriangleBehind()].xCotangent[
+          it.OppositeVertexIndexInTriangleBehind()];
         double weight = scale * (cota + cotb);
 
         // Set the weight for the moving vertex (to be scaled)
@@ -360,14 +380,15 @@ MeshMedialPDESolver
       // Set the diagonal entry in A
       A.GetSparseData()[xMapVertexToA[i]] = -w_accum;
 
-      for(j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
-        cout << "Open Vertex " << i << ", Neighbor " << A.GetColIndex()[j] << " = " << A.GetSparseData()[j] << endl;
+      // for(j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
+      //  cout << "Open Vertex " << i << ", Neighbor " 
+      //    << A.GetColIndex()[j] << " = " << A.GetSparseData()[j] << endl;
       }
     else
       {
       // V is a boundary vertex for which we compute the Riemannian gradient.
       // This gradient is computed using Loop's tangent formula.
-      VertexGeom &G = xVertexGeom[i];
+      MedialAtom &a = xAtoms[i];
 
       // Compute the partials of phi in the tangent directions
       double phi_1 = 0.0, phi_2 = 0.0;
@@ -379,8 +400,13 @@ MeshMedialPDESolver
         }
 
       // Multiply by the contravariant tensor to get weights
-      double xi_1 = G.gContravariant[0][0] * phi_1 + G.gContravariant[1][0] * phi_2;
-      double xi_2 = G.gContravariant[1][0] * phi_1 + G.gContravariant[1][1] * phi_2;
+      double xi_1 = 
+        a.G.xContravariantTensor[0][0] * phi_1 + 
+        a.G.xContravariantTensor[1][0] * phi_2;
+
+      double xi_2 = 
+        a.G.xContravariantTensor[0][1] * phi_1 + 
+        a.G.xContravariantTensor[1][1] * phi_2;
 
       // Add up to get the weights in the sparse matrix
       for(j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
@@ -392,14 +418,15 @@ MeshMedialPDESolver
       // Finally, add the weight for the point itself (-4 \epsilon)
       A.GetSparseData()[xMapVertexToA[i]] += -4.0;
 
-      for(j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
-        cout << "Closed Vertex " << i << ", Neighbor " << A.GetColIndex()[j] << " = " << A.GetSparseData()[j] << endl;
+      // for(j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
+      //  cout << "Closed Vertex " << i << ", Neighbor " 
+      //    << A.GetColIndex()[j] << " = " << A.GetSparseData()[j] << endl;
       }
     }
 }
 
 void
-MeshMedialPDESolver
+MeshMedialModel
 ::FillNewtonRHS(const SMLVec3d *X, const double *rho, const double *phi)
 {
   size_t i, j, k;
@@ -433,7 +460,46 @@ MeshMedialPDESolver
 }
 
 void
-MeshMedialPDESolver
+MeshMedialModel
+::ComputeMedialAtoms(const double *soln)
+{
+  // Loop over all vertices in the mesh
+  for(size_t i = 0; i < topology->nVertices; i++)
+    {
+    // Get the medial atom corresponding to a
+    MedialAtom &a = xAtoms[i];
+
+    // Set the phi in the atom
+    a.F = soln[i];
+
+    // Compute the partials of phi in the tangent directions
+    double phi_1 = 0.0, phi_2 = 0.0;
+    for(size_t j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
+      {
+      double phi_i = soln[A.GetColIndex()[j]];
+      phi_1 += xTangentWeights[0][j] * phi_i;
+      phi_2 += xTangentWeights[1][j] * phi_i;
+      }
+
+    // Multiply by the contravariant tensor to get weights
+    double xi_1 = 
+      a.G.xContravariantTensor[0][0] * phi_1 + 
+      a.G.xContravariantTensor[1][0] * phi_2;
+
+    double xi_2 = 
+      a.G.xContravariantTensor[0][1] * phi_1 + 
+      a.G.xContravariantTensor[1][1] * phi_2;
+
+    // Compute the gradient vector
+    SMLVec3d gradPhi = xi_1 * a.Xu + xi_2 * a.Xv;
+
+    // Compute the medial atom from the gradient vector
+    a.ComputeBoundaryAtoms(gradPhi, !topology->IsVertexInternal(i));
+    }
+}
+
+void
+MeshMedialModel
 ::SolveEquation(const SMLVec3d *X, const double *rho, const double *phi, double *soln)
 {
   // Compute the mesh geometry
@@ -456,8 +522,8 @@ MeshMedialPDESolver
 
     // Check if the right hand side is close enough to zero that we can terminate
     cout << "Iteration: " << i << ", error: " << xRHS.inf_norm() << endl;
-    cout << "Sparse Mat: " << A << endl;
-    cout << "RHS: " << xRHS << endl;
+    // cout << "Sparse Mat: " << A << endl;
+    // cout << "RHS: " << xRHS << endl;
 
     if(xRHS.inf_norm() < 1.0e-10) break;
 
@@ -473,9 +539,12 @@ MeshMedialPDESolver
     // Add epsilon to the current guess
     xSoln += xEpsilon;
 
-    cout << "Epsilon: " << xEpsilon << endl;
-    cout << "Solution: " << xSoln << endl;
+    // cout << "Epsilon: " << xEpsilon << endl;
+    // cout << "Solution: " << xSoln << endl;
 
     // Perform backtracking (later)
     }
+
+  // Compute the medial atoms
+  ComputeMedialAtoms(xSoln.data_block());
 }
