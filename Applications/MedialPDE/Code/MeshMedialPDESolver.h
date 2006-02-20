@@ -45,9 +45,23 @@ public:
   // vertices which, in turn, determines the structure of the sparse matrix
   // passed to the sparse solver 
   void SetMeshTopology(MeshLevel *topology);
+  
+  // Set the input data as an array of positions and rho values. Another way
+  // to set the input data is to manipulate the values of the atoms directly
+  // The third (optional) parameter is the 'guess' solution, which serves as 
+  // the initial solution for Newton iteration
+  void SetInputData(const SMLVec3d *X, const double *rho, const double *phi = NULL);
 
-  // Our first attempt at a solver method
-  void SolveEquation(const SMLVec3d *X, const double *rho, const double *phi, double *soln);
+  // Our first attempt at a solver method. The flag specifies whether the
+  // terms involved in gradient computation should also be computed
+  void SolveEquation(bool flagGradient = false);
+
+  // Compute the gradient of the solution with respect to some basis. 
+  void ComputeGradient(vector<MedialAtom *> dAtoms);
+
+  // Test the accuracy of partial derivative computations in the gradient code
+  // this method should be called after calling solve with some data
+  void TestPartialDerivatives();
 
 private:
 
@@ -55,16 +69,19 @@ private:
   void Reset();
 
   // This method is used to compute the sparse matrix A for Newton's method
-  void FillNewtonMatrix(const SMLVec3d *X, const double *phi);
+  void FillNewtonMatrix(const double *phi);
 
   // This method is used to compute the right hand side B for Newton's method
-  void FillNewtonRHS(const SMLVec3d *X, const double *rho, const double *phi);
+  void FillNewtonRHS(const double *phi);
 
   // This computes the geometry associated with a mesh before running the solver
-  void ComputeMeshGeometry(const SMLVec3d *X);
+  void ComputeMeshGeometry(bool flagGradient);
 
   // This computes the medial atoms once the phi has been solved for
   void ComputeMedialAtoms(const double *soln);
+
+  // Compute the weight matrix used for gradient computations
+  void ComputeRHSGradientMatrix(const double *phi);
 
   // An immutable sparse matrix used to represent the PDE. Each row
   // corresponds to a vertex, non-zero values are found between adjacent
@@ -84,7 +101,13 @@ private:
     double xArea;
 
     // Cotangent of the three angles
-    SMLVec3d xCotangent;
+    double xCotangent[3];
+
+    // The gradient of the area with respect to each vertex
+    SMLVec3d xAreaGrad[3];
+
+    // The gradient of the cotangent with respect to each vertex
+    SMLVec3d xCotGrad[3][3];
     };
   
   // A structure representing vertex geometry in the mesh (temp)
@@ -112,6 +135,11 @@ private:
   // mesh to elements of the sparse matrix A. This mapping is needed because
   // the entries of array A are sorted and include diagonal entries
   size_t *xMapVertexNbrToA, *xMapVertexToA;
+
+  // For gradient computation, there is an array W, which contains the
+  // Jacobian of each finite difference equation with respect to each of the
+  // neighbor atoms's positions. This is an array of vectors
+  SMLVec3d *W;
 
   // Pardiso-compatible 1-based index into the matrix A (redundant, really)
   int *xPardisoRowIndex, *xPardisoColIndex;

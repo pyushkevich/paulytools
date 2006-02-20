@@ -1,6 +1,7 @@
 #include "MeshMedialPDESolver.h"
 #include <vector>
 #include <vnl/vnl_math.h>
+#include <vnl/vnl_random.h>
 #include "PardisoInterface.h"
 
 using namespace std;
@@ -184,6 +185,9 @@ MeshMedialModel
       }
     }
 
+  // Initialize the weight array for gradient computation
+  W = new SMLVec3d[nSparseEntries];
+
   // Last step: set the atom iteration context
   xIterationContext = new SubdivisionSurfaceMedialIterationContext(topology);
 }
@@ -199,6 +203,7 @@ MeshMedialModel
   xTangentWeights[0] = xTangentWeights[1] = NULL;
   xPardisoColIndex = NULL;
   xPardisoRowIndex = NULL;
+  W = NULL;
 }
 
 MeshMedialModel
@@ -221,11 +226,12 @@ MeshMedialModel
   reset_ptr(xPardisoColIndex); 
   reset_ptr(xPardisoRowIndex);
   reset_ptr(xIterationContext);
+  reset_ptr(W);
 }
 
 void
 MeshMedialModel
-::ComputeMeshGeometry(const SMLVec3d *X)
+::ComputeMeshGeometry(bool flagGradient)
 {
   size_t i, j;
   
@@ -237,29 +243,78 @@ MeshMedialModel
   // area of each of the mesh triangles. Unfortunately, this requires sqrt...
   for(i = 0; i < topology->triangles.size(); i++)
     {
+    // References to the triangle data
+    TriangleGeom &TG = xTriangleGeom[i];
+    
     // Get the triangle and its three vertices
     SubdivisionSurface::Triangle &t = topology->triangles[i];
-    const SMLVec3d &X0 = X[t.vertices[0]];
-    const SMLVec3d &X1 = X[t.vertices[1]];
-    const SMLVec3d &X2 = X[t.vertices[2]];
+    const SMLVec3d &A = xAtoms[t.vertices[0]].X;
+    const SMLVec3d &B = xAtoms[t.vertices[1]].X;
+    const SMLVec3d &C = xAtoms[t.vertices[2]].X;
+
+    // Compute edge vectors
+    SMLVec3d BC = B - C, CA = C - A, AB = A - B;
 
     // Get the squared lengths of the three segments
-    double l0 = squared_distance(X1, X2);
-    double l1 = squared_distance(X2, X0);
-    double l2 = squared_distance(X0, X1);
+    double a = BC.squared_magnitude();
+    double b = CA.squared_magnitude();
+    double c = AB.squared_magnitude();
     
     // Compute the area of the triange (use lengths)
-    xTriangleGeom[i].xArea = 0.25 * sqrt(
-      (l0 + l0 - l1) * l1 + (l1 + l1 - l2) * l2 + (l2 + l2 - l0) * l0); 
+    TG.xArea = 0.25 * sqrt(
+      (a + a - b) * b + (b + b - c) * c + (c + c - a) * a); 
+
+    // Compute the terms of the form (a + b - c)
+    double qc = a + b - c, qb = a + c - b, qa = b + c - a;
+
+    // Compute the cotangent of each angle
+    double xOneOverFourArea = 0.25 / TG.xArea; 
+    TG.xCotangent[0] = xOneOverFourArea * qa;
+    TG.xCotangent[1] = xOneOverFourArea * qb;
+    TG.xCotangent[2] = xOneOverFourArea * qc;
 
     // Add the weights to the fan-weight array
     xVertexGeom[t.vertices[0]].xFanArea += xTriangleGeom[i].xArea;
     xVertexGeom[t.vertices[1]].xFanArea += xTriangleGeom[i].xArea;
     xVertexGeom[t.vertices[2]].xFanArea += xTriangleGeom[i].xArea;
-    
-    // Compute the cotangent of each angle
-    xTriangleGeom[i].xCotangent = SMLVec3d(l2 + l1 - l0, l0 + l2 - l1, l1 + l0 - l2);
-    xTriangleGeom[i].xCotangent *= 0.25 / xTriangleGeom[i].xArea;
+      
+    // Now compute the derivatives of these terms with respect to each vertex
+    if(flagGradient) 
+      {
+      // Compute the terms of the form qa * (B - C)
+      SMLVec3d pa = qa * BC, pb = qb * CA, pc = qc * AB;
+
+      // Compute the derivatives of the area
+      double xOneOverEightArea = 0.5 * xOneOverFourArea;
+      TG.xAreaGrad[0] = xOneOverEightArea * (pc - pb);
+      TG.xAreaGrad[1] = xOneOverEightArea * (pa - pc);
+      TG.xAreaGrad[2] = xOneOverEightArea * (pb - pa);
+
+      // Compute intermediates for the derivatives of the cotangent
+      double xOneOverTwoArea = xOneOverFourArea + xOneOverFourArea;
+      SMLVec3d wAB = AB * xOneOverTwoArea;
+      SMLVec3d wBC = BC * xOneOverTwoArea;
+      SMLVec3d wCA = CA * xOneOverTwoArea;
+
+      // Compute quantities Cot[A] / Area
+      double xOneOverArea = xOneOverTwoArea + xOneOverTwoArea;
+      double xCOA_A = TG.xCotangent[0] * xOneOverArea;
+      double xCOA_B = TG.xCotangent[1] * xOneOverArea;
+      double xCOA_C = TG.xCotangent[2] * xOneOverArea;
+
+      // Compute the cotangent derivatives
+      TG.xCotGrad[0][0] =  wAB - wCA - TG.xAreaGrad[0] * xCOA_A;
+      TG.xCotGrad[0][1] =        wCA - TG.xAreaGrad[1] * xCOA_A;
+      TG.xCotGrad[0][2] = -wAB       - TG.xAreaGrad[2] * xCOA_A;
+      
+      TG.xCotGrad[1][0] = -wBC       - TG.xAreaGrad[0] * xCOA_B;
+      TG.xCotGrad[1][1] =  wBC - wAB - TG.xAreaGrad[1] * xCOA_B;
+      TG.xCotGrad[1][2] =        wAB - TG.xAreaGrad[2] * xCOA_B;
+
+      TG.xCotGrad[2][0] =        wBC - TG.xAreaGrad[0] * xCOA_C;
+      TG.xCotGrad[2][1] = -wCA       - TG.xAreaGrad[1] * xCOA_C;
+      TG.xCotGrad[2][2] =  wCA - wBC - TG.xAreaGrad[2] * xCOA_C;
+      }
 
     // cout << "Triangle geometry at " << i << ": ";
     // cout << "Area = " << xTriangleGeom[i].xArea;
@@ -273,9 +328,6 @@ MeshMedialModel
     // Get a reference to the geometry object
     MedialAtom &a = xAtoms[i];
 
-    // Initialize the atom
-    a.X = X[i];
-
     // Clear the tangent for this vertex
     a.Xu.fill(0.0);
     a.Xv.fill(0.0);
@@ -284,7 +336,7 @@ MeshMedialModel
     size_t *xRowIndex = A.GetRowIndex(), *xColIndex = A.GetColIndex();
     for(j = xRowIndex[i]; j < xRowIndex[i+1]; j++)
       {
-      const SMLVec3d &xn = X[xColIndex[j]];
+      const SMLVec3d &xn = xAtoms[xColIndex[j]].X;
       a.Xu += xn * xTangentWeights[0][j];
       a.Xv += xn * xTangentWeights[1][j];
       }
@@ -327,12 +379,12 @@ MeshMedialModel
 
     // Compute the normal vector
     a.ComputeNormalVector();
-    }  
+    } 
 }
 
 void
 MeshMedialModel
-::FillNewtonMatrix(const SMLVec3d *X, const double *phi)
+::FillNewtonMatrix(const double *phi)
 {
   size_t i, j, k;
 
@@ -427,7 +479,7 @@ MeshMedialModel
 
 void
 MeshMedialModel
-::FillNewtonRHS(const SMLVec3d *X, const double *rho, const double *phi)
+::FillNewtonRHS(const double *phi)
 {
   size_t i, j, k;
 
@@ -444,7 +496,7 @@ MeshMedialModel
         lap_phi += A.GetSparseData()[j] * phi[A.GetColIndex()[j]];
 
       // Now, the right hand side has the form \rho - \Delta \phi
-      xRHS[i] = rho[i] - lap_phi;
+      xRHS[i] = xAtoms[i].xLapR - lap_phi;
       }
     else 
       {
@@ -500,25 +552,43 @@ MeshMedialModel
 
 void
 MeshMedialModel
-::SolveEquation(const SMLVec3d *X, const double *rho, const double *phi, double *soln)
+::SetInputData(const SMLVec3d *X, const double *rho, const double *phi)
 {
+  // Fill the X and rho values of the atoms
+  for(size_t i = 0; i < topology->nVertices; ++i)
+    {
+    xAtoms[i].X = X[i];
+    xAtoms[i].xLapR = rho[i];
+    if(phi)
+      xAtoms[i].F = phi[i];
+    }
+}
+
+void
+MeshMedialModel
+::SolveEquation(bool flagGradient)
+{
+  size_t i;
+
   // Compute the mesh geometry
-  ComputeMeshGeometry(X);
+  ComputeMeshGeometry(flagGradient);
 
   // Initialize the solver
   UnsymmetricRealPARDISO xPardiso;
 
-  // Set the solution to phi
-  vnl_vector<double> xSoln(phi, topology->nVertices);
+  // Set the solution to the current values of phi
+  vnl_vector<double> xSoln(topology->nVertices);
+  for(i = 0; i < topology->nVertices; i++)
+    xSoln[i] = xAtoms[i].F;
 
   // Run for up to 50 iterations
-  for(size_t i = 0; i < 10; i++)
+  for(i = 0; i < 40; i++)
     {
     // First, fill in the A matrix
-    FillNewtonMatrix(X, xSoln.data_block());
+    FillNewtonMatrix(xSoln.data_block());
 
     // Now, fill in the right hand side 
-    FillNewtonRHS(X, rho, xSoln.data_block());
+    FillNewtonRHS(xSoln.data_block());
 
     // Check if the right hand side is close enough to zero that we can terminate
     cout << "Iteration: " << i << ", error: " << xRHS.inf_norm() << endl;
@@ -547,4 +617,212 @@ MeshMedialModel
 
   // Compute the medial atoms
   ComputeMedialAtoms(xSoln.data_block());
+}
+
+void
+MeshMedialModel
+::ComputeRHSGradientMatrix(const double *phi)
+{
+  // Fill the elements of matrix W
+  size_t i, j, k;
+
+  // At this point, the structure of the matrix W has been specified. We have
+  // to specify the values. This is done one vertex at a time.
+  for(i = 0; i < topology->nVertices; i++)
+    {
+    EdgeWalkAroundVertex it(topology, i);
+    if(!it.IsOpen())
+      {
+      // Compute the laplacian of phi (TODO: is it needed?)
+      double xLapPhi = 0.0;
+      for(j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
+        xLapPhi += A.GetSparseData()[j] * phi[A.GetColIndex()[j]];
+      
+      // The first component of the partial derivative is the derivative 
+      // of the term (xFanArea). It is relatively easy to compute.
+      double xRhoOverFanArea = xLapPhi / xVertexGeom[i].xFanArea;
+
+      // Scaling factor for cotangent derivatives
+      double xScale = 1.5 / xVertexGeom[i].xFanArea;
+      
+      // Reference to the weight for the fixed vertex
+      SMLVec3d &wii = W[xMapVertexToA[i]];
+      wii.fill(0.0);
+
+      // Get the value of phi at the center
+      double phiFixed = phi[i];
+
+      for( ; !it.IsAtEnd(); ++it)
+        {
+        // The weight vector for the moving vertex
+        SMLVec3d &wij = W[xMapVertexNbrToA[it.GetPositionInMeshSparseArray()]];
+
+        // Get the triangle index in front and behind
+        size_t ta = it.TriangleAhead(), tb = it.TriangleBehind();
+        size_t va = it.MovingVertexIndexInTriangleAhead();
+        size_t vb = it.MovingVertexIndexInTriangleBehind();
+        size_t qa = it.OppositeVertexIndexInTriangleAhead();
+        size_t qb = it.OppositeVertexIndexInTriangleBehind();
+        size_t pa = it.FixedVertexIndexInTriangleAhead();
+        size_t pb = it.FixedVertexIndexInTriangleBehind();
+
+        // Get the phi's at the surrounding vertices
+        double phiAhead = phi[it.VertexIdAhead()];
+        double phiBehind = phi[it.VertexIdBehind()];
+        double phiMoving = phi[it.MovingVertexId()];
+
+        // Assign the first component of the weight
+        wij = (phiMoving - phiFixed) *
+          (xTriangleGeom[ta].xCotGrad[qa][va] + xTriangleGeom[tb].xCotGrad[qb][vb]);
+        wij += (phiAhead - phiFixed) * xTriangleGeom[ta].xCotGrad[va][va];
+        wij += (phiBehind - phiFixed) * xTriangleGeom[tb].xCotGrad[vb][vb];
+
+        // Scale the vector accumulated so far
+        wij *= xScale;
+
+        // Assign the second half of the value to the vector
+        wij -= xRhoOverFanArea * 
+          (xTriangleGeom[ta].xAreaGrad[va] + xTriangleGeom[tb].xAreaGrad[vb]);
+
+        // The cental value can be computed based on the fact that all weights must
+        // add up to zero, so the sum of the derivatives should also be zero
+        // wii += xScale * (phiMoving - phiFixed) *
+        //  (xTriangleGeom[ta].xCotGrad[qa][pa] + xTriangleGeom[tb].xCotGrad[qb][pb]);
+        // wii -= xRhoOverFanArea * xTriangleGeom[ta].xAreaGrad[pa];
+        wii -= wij;
+        }
+      }
+    else
+      {
+      }
+    }
+}
+
+void
+MeshMedialModel
+::ComputeGradient(vector<MedialAtom *> dAtoms)
+{
+}
+
+
+void
+MeshMedialModel
+::TestPartialDerivatives()
+{
+  bool flagSuccess = true;
+  size_t i, j, k;
+  
+  // Epsilon for central differences
+  double xEpsilon = 0.0001;
+  double z = 0.5 / xEpsilon;
+  
+  // Create a pair of alternative solutions
+  MeshMedialModel m1, m2;
+  m1.SetMeshTopology(topology);
+  m2.SetMeshTopology(topology);
+
+  // Random generator
+  vnl_random rnd;
+
+  // Create a pair of offsets (random variations)
+  vector<SMLVec3d> varX(topology->nVertices);
+  vector<double> varRho(topology->nVertices);
+  vnl_vector<double> phi(topology->nVertices);
+  for(i = 0; i < topology->nVertices; i++)
+    {
+    // Set the offsets
+    varX[i][0] = rnd.drand32(-1.0, 1.0);
+    varX[i][1] = rnd.drand32(-1.0, 1.0);
+    varX[i][2] = rnd.drand32(-1.0, 1.0);
+    varRho[i] = rnd.drand32(-1.0, 1.0);
+    phi[i] = rnd.drand32(0.25, 1.0);
+
+    // varX[i] = (i == 239) ? SMLVec3d(1., 0., 0.) : SMLVec3d(0.);
+
+    // Apply to the atoms
+    m1.xAtoms[i].X = xAtoms[i].X + xEpsilon * varX[i];
+    m2.xAtoms[i].X = xAtoms[i].X - xEpsilon * varX[i];
+    m1.xAtoms[i].xLapR = xAtoms[i].xLapR + xEpsilon * varRho[i];
+    m2.xAtoms[i].xLapR = xAtoms[i].xLapR - xEpsilon * varRho[i];
+    }
+
+  // Compute the geometry in all three cases
+  m1.ComputeMeshGeometry(false);
+  m2.ComputeMeshGeometry(false);
+  this->ComputeMeshGeometry(true);
+
+  // Compare the gradient with the results
+  for(j = 0; j < topology->triangles.size(); j++)
+    {
+    // Get the triangles
+    TriangleGeom &T = xTriangleGeom[j];
+    TriangleGeom &T1 = m1.xTriangleGeom[j];
+    TriangleGeom &T2 = m2.xTriangleGeom[j];
+
+    // Look at the triangle areas
+    double cdArea = z * (T1.xArea - T2.xArea);
+    double adArea = 
+      dot_product(T.xAreaGrad[0], varX[topology->triangles[j].vertices[0]]) +
+      dot_product(T.xAreaGrad[1], varX[topology->triangles[j].vertices[1]]) +
+      dot_product(T.xAreaGrad[2], varX[topology->triangles[j].vertices[2]]);
+    if(fabs(cdArea - adArea) > 2.0 * xEpsilon)
+      {
+      flagSuccess = false;
+      cout << "j = " << j << "; cdArea = " << cdArea 
+        << "; adArea = " << adArea << endl;
+      }
+
+    // Look at the cotangents of the angles
+    for(k = 0; k < 3; k++)
+      {
+      double cdCot = z * (T1.xCotangent[k] - T2.xCotangent[k]);
+      double adCot =
+        dot_product(T.xCotGrad[k][0], varX[topology->triangles[j].vertices[0]]) +
+        dot_product(T.xCotGrad[k][1], varX[topology->triangles[j].vertices[1]]) +
+        dot_product(T.xCotGrad[k][2], varX[topology->triangles[j].vertices[2]]);
+      if(fabs(cdCot - adCot) > 2.0 * xEpsilon)
+        {
+        flagSuccess = false;
+        cout << "j = " << j << "; k = " << k << "; cdCot = " << cdCot 
+          << "; adCot = " << adCot << endl;
+        }
+      }
+    }
+
+  // Access matrix A in the offset models
+  size_t *xRowIndex = A.GetRowIndex();
+  size_t *xColIndex = A.GetColIndex();
+  double *A1 = m1.A.GetSparseData();
+  double *A2 = m2.A.GetSparseData();
+
+  // Perform the gradient computation
+  this->FillNewtonMatrix(phi.data_block());
+  this->ComputeRHSGradientMatrix(phi.data_block());
+  m1.FillNewtonMatrix(phi.data_block());
+  m2.FillNewtonMatrix(phi.data_block());
+
+  // Now, compute the derivative of the laplacian at every vertex
+  for(i = 0; i < topology->nVertices; i++)
+    {
+    if(topology->IsVertexInternal(i))
+      {
+      double L1 = 0, L2 = 0, cdLap = 0, adLap = 0;
+      for(j = xRowIndex[i]; j < xRowIndex[i+1]; j++)
+        {
+        L1 += A1[j] * phi[xColIndex[j]];
+        L2 += A2[j] * phi[xColIndex[j]];
+        adLap += dot_product(W[j], varX[xColIndex[j]]);
+        
+        }
+      cdLap = z * (L1 - L2);
+      
+      if(fabs(cdLap - adLap) > 2.0 * xEpsilon)
+        {
+        flagSuccess = false;
+        cout << "i = " << i << "; cdLap = " << cdLap 
+          << "; adLap = " << adLap << endl;
+        }
+      }
+    }
+
 }

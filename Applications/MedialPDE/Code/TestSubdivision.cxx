@@ -174,7 +174,11 @@ int TestSubdivisionPDE(const char *objMesh)
   // Create a mesh-based PDE solver
   MeshMedialModel solver;
   solver.SetMeshTopology(&meshsub);
-  solver.SolveEquation(xData, rhoData, phi, soln);
+  solver.SetInputData(xData, rhoData, phi);
+  solver.SolveEquation();
+
+  // Temp: test derivatives
+  solver.TestPartialDerivatives();
 
   // Save the result
   ExportMedialMeshToVTK(&solver, "mesh_medial.vtk");
