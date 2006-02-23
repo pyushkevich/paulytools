@@ -13,35 +13,45 @@ int usage()
 {
   cout << "threshimage: applies a threshold to an image" << endl;
   cout << "usage: " << endl;
-  cout << "   threshimage input.img output.img tLower tUpper vInside vOutside" << endl;
+  cout << "   threshimage [options] input.img output.img tLower tUpper vInside vOutside" << endl;
+  cout << "options: " << endl;
+  cout << "  -f              Floating point input and output (def: short)" << endl;
   return -1;
 }
 
-int main(int argc, char *argv[])
+template<class TPixel>
+inline TPixel atox(char *data)
 {
-  // Check parameters  
-  if(argc < 6) return usage();
+  istringstream iss(data);
+  TPixel x;
+  iss >> x;
+  return x;
+}
+
+template <class TPixel>
+inline int thresh(int argc, char *argv[])
+{
   
   // Read filename parameters
   const char *fnSource = argv[argc - 6];
   const char *fnOutput = argv[argc - 5];
 
   // Command line options
-  short tLower = atoi(argv[argc - 4]);
-  short tUpper = atoi(argv[argc - 3]);
-  short vInside = atoi(argv[argc - 2]);
-  short vOutside = atoi(argv[argc - 1]);
+  TPixel tLower = atox<TPixel>(argv[argc - 4]);
+  TPixel tUpper = atox<TPixel>(argv[argc - 3]);
+  TPixel vInside = atox<TPixel>(argv[argc - 2]);
+  TPixel vOutside = atox<TPixel>(argv[argc - 1]);
 
   // Define images
-  typedef itk::Image<short, 3> ImageType;
-  ImageType::Pointer imgSource, imgOutput;
+  typedef itk::Image<TPixel, 3> ImageType;
+  typename ImageType::Pointer imgSource, imgOutput;
   
   // Read images
   ReadImage(imgSource, fnSource);
 
   // Apply filter
   typedef itk::BinaryThresholdImageFilter<ImageType,ImageType> FilterType;
-  FilterType::Pointer fltThresh = FilterType::New();
+  typename FilterType::Pointer fltThresh = FilterType::New();
   fltThresh->SetInput(imgSource);
   fltThresh->SetLowerThreshold(tLower);
   fltThresh->SetUpperThreshold(tUpper);
@@ -53,5 +63,23 @@ int main(int argc, char *argv[])
   // Write output
   imgOutput = fltThresh->GetOutput();
   WriteImage(imgOutput, fnOutput);
+}
+
+int main(int argc, char *argv[])
+{
+  // Check parameters  
+  if(argc < 6) return usage();
+
+  // Read command line parameters
+  string type = "short";
+  for(size_t i = 1; i < argc-6;i++)
+    if(!strcmp(argv[i], "-f"))
+      type = "float";
+
+  // Run the program
+  if(type == "short")
+    return thresh<short>(argc, argv);
+  else if(type == "float")
+    return thresh<float>(argc, argv);
 }
   
