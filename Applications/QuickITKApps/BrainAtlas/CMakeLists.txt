@@ -74,3 +74,7 @@ FOREACH(SCRIPT ${BATLAS_SCRIPTS})
     ${PAULY_BINARY_DIR}/Applications/QuickITKApps/BrainAtlas/${SCRIPT}
   )
 ENDFOREACH(SCRIPT)
+
+INSTALL_TARGETS(
+  "/bin"
+  maskimage threshimage)
