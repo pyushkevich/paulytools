@@ -7,6 +7,7 @@ ADD_EXECUTABLE(randfx RandomEffects.cxx)
 ADD_EXECUTABLE(tempfile TempFile.c)
 ADD_EXECUTABLE(maskmunge MaskMunge.cxx)
 ADD_EXECUTABLE(findpeaks FindPeaks.cxx)
+ADD_EXECUTABLE(overlaps SegmentationOverlaps.cxx)
 
 SET(COMMON_LIBS
   ITKCommon 
@@ -20,7 +21,11 @@ TARGET_LINK_LIBRARIES(unc_mart2sean ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(convert3d ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(blur3d ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(randfx ${COMMON_LIBS})
+TARGET_LINK_LIBRARIES(overlaps ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(maskmunge ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(findpeaks ${COMMON_LIBS})
 
-INSTALL_TARGETS("/bin" convert3d blur3d randfx tempfile maskmunge findpeaks)
+INSTALL_TARGETS("/bin" 
+  convert3d blur3d randfx 
+  tempfile maskmunge findpeaks
+  overlaps)
