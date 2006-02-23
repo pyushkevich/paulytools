@@ -1,6 +1,7 @@
 #include <itkImage.h>
 #include <itkImageFileReader.h>
 #include <itkImageRegionConstIterator.h>
+#include "itkVoxBoCUBImageIOFactory.h"
 
 #include <iostream>
 #include <vector>
@@ -42,6 +43,9 @@ struct ImageEntry
 
 int main(int argc, char *argv[])
 {
+  // Enable support for VoxBo
+  itk::ObjectFactoryBase::RegisterFactory(itk::VoxBoCUBImageIOFactory::New());
+  
   // Must have at least two images in input
   if(argc < 3) return usage();
 
