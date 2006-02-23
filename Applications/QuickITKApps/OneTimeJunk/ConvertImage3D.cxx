@@ -78,6 +78,7 @@ int usage()
   cout << "  -f                 Convert to floating point" << endl;
   cout << "  -b                 Convert to byte" << endl;
   cout << "  -d                 Convert to double" << endl;
+  cout << "  -us                Convert to unsigned short" << endl;
   cout << "  -o X Y Z           Set the origin in the output image" << endl;
   cout << "  -scale X.XX        Scale the image by factor x.xx" << endl;
   cout << "  -shift X.XX        Shift the image intensity by x.xx" << endl;
@@ -118,6 +119,8 @@ int main(int argc, char *argv[])
       if(k==2) converter = new Converter<unsigned char,2>; else converter = new Converter<unsigned char,3>;
     else if(arg == "-d")
       if(k==2) converter =  new Converter<double,2>; else converter = new Converter<double,3>;
+    else if(arg == "-us")
+      if(k==2) converter =  new Converter<unsigned short,2>; else converter = new Converter<unsigned short,3>;
     else if(arg == "-scale")
       xScale = atof(argv[++i]);
     else if(arg == "-shift")
