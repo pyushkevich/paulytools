@@ -5,6 +5,7 @@
  */
 
 #include "itkBinaryThresholdImageFilter.h"
+#include "itkVoxBoCUBImageIOFactory.h"
 #include "ReadWriteImage.h"
 
 using namespace std;
@@ -67,6 +68,9 @@ inline int thresh(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
+  // Enable support for VoxBo
+  itk::ObjectFactoryBase::RegisterFactory(itk::VoxBoCUBImageIOFactory::New());
+  
   // Check parameters  
   if(argc < 6) return usage();
 

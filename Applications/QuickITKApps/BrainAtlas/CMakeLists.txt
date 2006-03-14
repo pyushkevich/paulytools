@@ -28,6 +28,7 @@ SET(COMMON_LIBS
   ITKIO 
   ITKNumerics
   ITKStatistics
+  ITKVoxBoIO
   ${PAULY_CORE_LIBS}
   vtkCommon 
   vtkFiltering
@@ -77,4 +78,4 @@ ENDFOREACH(SCRIPT)
 
 INSTALL_TARGETS(
   "/bin"
-  maskimage threshimage)
+  maskimage threshimage binary2mesh)

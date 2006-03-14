@@ -35,3 +35,5 @@ TARGET_LINK_LIBRARIES(avgmesh ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(identimg ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(scalemesh ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(mesh2img ${COMMON_LIBS})
+
+INSTALL_TARGETS("/bin" mesh2img meshdiff avgmesh identimg scalemesh)

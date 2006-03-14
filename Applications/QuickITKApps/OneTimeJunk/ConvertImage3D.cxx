@@ -4,11 +4,13 @@
 #include "itkVoxBoCUBImageIOFactory.h"
 #include <itkImageRegionIterator.h>
 #include <itkExtractImageFilter.h>
+#include <itkByteSwapper.h>
 
 #include <iostream>
 
-using namespace std;
-using namespace itk;
+using std::cout;
+using std::cerr;
+using std::endl;
 
 class ConverterBase
 {
@@ -16,25 +18,37 @@ public:
   virtual void Convert(const char *in, const char *out, double *origin, double xScale, double xShift) = 0;
 };
 
-template<class TPixel, unsigned int Dim>
+template<class TPixelIn, class TPixelOut, unsigned int Dim>
 class Converter : public ConverterBase
 {
 public:
-  typedef Image<TPixel, Dim> ImageType;
-  typedef typename ImageType::Pointer ImagePointer;
-  typedef ImageFileReader<ImageType> ReaderType;
+  typedef itk::Image<TPixelIn, Dim> InputImageType;
+  typedef itk::Image<TPixelOut, Dim> OutputImageType;
+  typedef itk::ImageFileReader<InputImageType> ReaderType;
+  typedef itk::ImageFileWriter<OutputImageType> WriterType;
 
-  void ScaleAndShift(ImageType *img, double xScale, double xShift)
+  void ScaleAndShift(InputImageType *in, OutputImageType *out, double xScale, double xShift)
     {
-    typedef ImageRegionIterator<ImageType> Iterator;
-    Iterator it(img, img->GetBufferedRegion());
-    for( ; !it.IsAtEnd(); ++it)
+    typedef itk::ImageRegionIterator<InputImageType> IteratorIn;
+    typedef itk::ImageRegionIterator<OutputImageType> IteratorOut;
+    IteratorIn itIn(in, in->GetBufferedRegion());
+    IteratorOut itOut(out, out->GetBufferedRegion());
+    for( ; !itIn.IsAtEnd(); ++itIn, ++itOut)
       {
-      double val = xShift + xScale * it.Get();
-      if(typeid(TPixel) != typeid(float))
-        it.Set((TPixel)round(val));
+      TPixelIn z = itIn.Get();
+      if(!vnl_math_isfinite(z))
+        z = 0;
+      
+      if(xScale == 1.0 && xShift == 0.0)
+        itOut.Set((TPixelOut) z);
       else
-        it.Set((TPixel)val);
+        {
+        double val = xShift + xScale * z;
+        if(typeid(TPixelOut) != typeid(float))
+          itOut.Set((TPixelOut)round(val));
+        else
+          itOut.Set((TPixelOut)val);
+        }
       }
     }
   
@@ -52,22 +66,62 @@ public:
       cerr << exc << endl;
       return;
     }
-    typename ImageType::Pointer img = fltReader->GetOutput();
+
+    // Input and output images
+    typename InputImageType::Pointer imgInput = fltReader->GetOutput();
+    typename OutputImageType::Pointer imgOutput = OutputImageType::New();
+    imgOutput->SetRegions(imgInput->GetBufferedRegion());
+    imgOutput->SetSpacing(imgInput->GetSpacing());
+    imgOutput->Allocate();
 
     // Set the origin if necessary
     if(origin)
-      img->SetOrigin(origin);
+      imgOutput->SetOrigin(origin);
+    else
+      imgOutput->SetOrigin(imgInput->GetOrigin());
 
     // Scale and shift image
-    if(xScale != 1.0 || xShift != 0.0)
-      ScaleAndShift(img, xScale, xShift);
+    ScaleAndShift(imgInput, imgOutput, xScale, xShift);
 
-    // Save the output image
-    typedef ImageFileWriter<ImageType> WriterType;
-    typename WriterType::Pointer fltWriter = WriterType::New();
-    fltWriter->SetInput(fltReader->GetOutput());
-    fltWriter->SetFileName(out);
-    fltWriter->Update();
+    // Check for custom writer
+    if(strstr(out,".df3") != NULL)
+      {
+      WriteDF3(imgOutput, out);
+      }
+    else
+      {
+      // Save the output image
+      typename WriterType::Pointer fltWriter = WriterType::New();
+      fltWriter->SetInput(imgOutput);
+      fltWriter->SetFileName(out);
+      fltWriter->Update();
+      }
+    }
+
+  void WriteDF3(OutputImageType *img, const char *file)
+    {
+    FILE *f = fopen(file, "wb");
+    unsigned short xyz[3];
+    xyz[0] = (unsigned short) img->GetBufferedRegion().GetSize(0);
+    xyz[1] = (unsigned short) img->GetBufferedRegion().GetSize(1);
+    xyz[2] = (unsigned short) img->GetBufferedRegion().GetSize(2);
+
+    itk::ByteSwapper<unsigned short>::SwapRangeFromSystemToBigEndian(xyz, 3);
+    itk::ByteSwapper<TPixelOut>::SwapRangeFromSystemToBigEndian(
+      img->GetBufferPointer(), 
+      img->GetBufferedRegion().GetNumberOfPixels());
+
+    cout << xyz[0] << " " << xyz[1] << " " << xyz[2] << endl;
+    cout << (int)(((char *)xyz)[0]) << " ";
+    cout << (int)(((char *)xyz)[1]) << " ";
+    cout << (int)(((char *)xyz)[2]) << " ";
+    cout << (int)(((char *)xyz)[3]) << " ";
+    cout << (int)(((char *)xyz)[4]) << " ";
+    cout << (int)(((char *)xyz)[5]) << endl;
+
+    fwrite(xyz, sizeof(char), 3 * sizeof(short), f);
+    fwrite(img->GetBufferPointer(), sizeof(TPixelOut), img->GetBufferedRegion().GetNumberOfPixels(), f);
+    fclose(f);
     }
 };
 
@@ -112,15 +166,22 @@ int main(int argc, char *argv[])
   // Parse arguments
   for(int i = 1; i < argc; i++)
     {
-    string arg(argv[i]);
+    std::string arg(argv[i]);
     if(arg == "-f")
-      if(k==2) converter = new Converter<float,2>; else converter = new Converter<float,3>;
+      if(k==2) converter = new Converter<float, float, 2>; 
+      else converter = new Converter<float, float, 3>;
     else if(arg == "-b")
-      if(k==2) converter = new Converter<unsigned char,2>; else converter = new Converter<unsigned char,3>;
+      if(k==2) converter = new Converter<unsigned char, unsigned char, 2>; 
+      else converter = new Converter<unsigned char, unsigned char, 3>;
     else if(arg == "-d")
-      if(k==2) converter =  new Converter<double,2>; else converter = new Converter<double,3>;
+      if(k==2) converter = new Converter<double, double, 2>; 
+      else converter = new Converter<double, double, 3>;
     else if(arg == "-us")
-      if(k==2) converter =  new Converter<unsigned short,2>; else converter = new Converter<unsigned short,3>;
+      if(k==2) converter = new Converter<unsigned short, unsigned short, 2>; 
+      else converter = new Converter<unsigned short, unsigned short, 3>;
+    else if(arg == "-fus")
+      if(k==2) converter = new Converter<float, unsigned short, 2>; 
+      else converter = new Converter<float, unsigned short, 3>;
     else if(arg == "-scale")
       xScale = atof(argv[++i]);
     else if(arg == "-shift")
@@ -136,7 +197,7 @@ int main(int argc, char *argv[])
 
   // Check the converter
   if(!converter)
-    if(k==2) converter =  new Converter<short,2>; else converter = new Converter<short,3>;
+    if(k==2) converter =  new Converter<short, short, 2>; else converter = new Converter<short, short, 3>;
 
   // Perform the conversion
   converter->Convert(argv[argc-2], argv[argc-1], origin, xScale, xShift);

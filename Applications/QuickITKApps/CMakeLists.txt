@@ -1,6 +1,7 @@
 SUBDIRS(
   BrainAtlas
   AntiAlias
+  Convert3d
   FillSTLMesh
   Ovoids
   OneTimeJunk
