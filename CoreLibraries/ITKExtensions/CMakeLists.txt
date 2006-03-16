@@ -1,2 +1,3 @@
 SUBDIRS(WindowedSincFilter)
 SUBDIRS(VoxBoIO)
+SUBDIRS(PovRayIO)
