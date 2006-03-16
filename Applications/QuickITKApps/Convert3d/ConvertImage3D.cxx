@@ -5,7 +5,6 @@
 #include "itkImage.h"
 #include "itkImageFileReader.h"
 #include "itkImageFileWriter.h"
-#include "itkVoxBoCUBImageIOFactory.h"
 #include "itkImageRegionIterator.h"
 #include "itkExtractImageFilter.h"
 #include "itkByteSwapper.h"
@@ -18,6 +17,7 @@
 #include "itkLinearInterpolateImageFunction.h" 
 #include "itkDiscreteGaussianImageFilter.h"
 #include "itkShiftScaleImageFilter.h"
+#include "itkBinaryThresholdImageFilter.h"
 #include "itkVoxBoCUBImageIOFactory.h"
 #include "itkPovRayDF3ImageIOFactory.h"
 
@@ -49,6 +49,8 @@ private:
   void WriteImage(const char *file);
   void CopyImage();
   void ScaleShiftImage(double a, double b);
+  void PrintImageInfo(bool flagFullInfo);
+  void ThresholdImage(double u1, double u2, double vIn, double vOut);
   int ProcessCommand(int argc, char *argv[]);
   int ProcessResampleCommand(int argc, char *argv[]);
   int ProcessSmoothCommand(int argc, char *argv[]);
@@ -107,6 +109,12 @@ ImageConverter<TPixel, VDim>
   if(cmd == "-background")
     { m_Background = atof(argv[1]); return 1; }
 
+  else if(cmd == "-info")
+    { PrintImageInfo(false); return 0; }
+
+  else if(cmd == "-info-full")
+    { PrintImageInfo(true); return 0; }
+
   else if(cmd == "-interpolation")
     { m_Interpolation = argv[1]; return 1; }
 
@@ -132,6 +140,7 @@ ImageConverter<TPixel, VDim>
     }
 
   // Select command: push image on the stack
+  /*
   else if (cmd == "-select")
     {
     int number = atoi(argv[1]);
@@ -145,6 +154,7 @@ ImageConverter<TPixel, VDim>
       m_ImageStack.push_back(m_ImageStack[m_ImageStack.size()+number]);
     return 1;
     }
+  */
 
   else if(cmd == "-shift")
     {
@@ -174,6 +184,17 @@ ImageConverter<TPixel, VDim>
     return 4;
     }
 
+  // Thresholding
+  else if(cmd == "-threshold" || cmd == "-thresh")
+    {
+    double u1 = strcmp(argv[1],"-inf") == 0 ? -vnl_huge_val(0.0) : atof(argv[1]);
+    double u2 = strcmp(argv[2],"inf") == 0 ? vnl_huge_val(0.0) : atof(argv[2]);
+    double v1 = atof(argv[3]);
+    double v2 = atof(argv[4]);
+    ThresholdImage(u1, u2, v1, v2);
+    return 4;
+    }
+
   // Output type specification
   else if(cmd == "-type")
     { 
@@ -190,6 +211,9 @@ ImageConverter<TPixel, VDim>
   // Unknown command
   else
     { cerr << "Unknown command " << cmd << endl; throw -1; }
+
+  cerr << "Fell through!" << endl;
+  throw -1;
 }
 
 
@@ -202,7 +226,7 @@ ImageConverter<TPixel, VDim>
   string fnOutput = argv[argc-1];
   
   // Command line processing
-  for(size_t i = 1; i < argc-1; ++i)
+  for(size_t i = 1; i < argc; ++i)
     {
     string cmd = argv[i];
     if(cmd[0] == '-')
@@ -212,13 +236,14 @@ ImageConverter<TPixel, VDim>
       }
     else
       {
-      // An image file name has been provided. Read and push in the pipeline
-      ReadImage(argv[i]);
+      // An image file name has been provided. If this image is followed by commands
+      // read it and push in the pipeline.
+      if(i != argc-1)
+        ReadImage(argv[i]);
+      else
+        WriteImage(argv[i]);
       }
     }
-
-  // Write the last image 
-  WriteImage(argv[argc-1]);
 }
 
 template<class TPixel, unsigned int VDim> 
@@ -471,6 +496,7 @@ ImageConverter<TPixel, VDim>
   filter->Update();
 
   // Save the output
+  m_ImageStack.pop_back();
   m_ImageStack.push_back(filter->GetOutput());
 
   // Return the number of parameters used
@@ -533,6 +559,7 @@ ImageConverter<TPixel, VDim>
   fltSample->UpdateLargestPossibleRegion();
     
   // Change the source to the output 
+  m_ImageStack.pop_back();
   m_ImageStack.push_back(fltSample->GetOutput());
 
   // Return the number of parameters read
@@ -561,7 +588,34 @@ ImageConverter<TPixel, VDim>
     output->GetBufferPointer()[i] = input->GetBufferPointer()[i];
 
   // Put on the end of the stack
+  m_ImageStack.pop_back();
   m_ImageStack.push_back(output);
+}
+
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
+::ThresholdImage(double u1, double u2, double vIn, double vOut)
+{
+  // Get the input image
+  ImagePointer input = m_ImageStack.back();
+  
+  // Say what we are doing
+  *verbose << "Thresholding #" << m_ImageStack.size() << endl;
+  *verbose << "  Mapping range [" << u1 << ", " << u2 << "] to " << vIn << endl;
+  *verbose << "  Values outside are mapped to " << vOut << endl;
+
+  // Do the thresholding
+  typedef itk::BinaryThresholdImageFilter<ImageType, ImageType> FilterType;
+  typename FilterType::Pointer filter = FilterType::New();
+  filter->SetInput(input);
+  filter->SetLowerThreshold(u1);
+  filter->SetUpperThreshold(u2);
+  filter->SetInsideValue(vIn);
+  filter->SetOutsideValue(vOut);
+  filter->Update();
+  m_ImageStack.pop_back();
+  m_ImageStack.push_back(filter->GetOutput());
 }
 
 template<class TPixel, unsigned int VDim>
@@ -590,9 +644,88 @@ ImageConverter<TPixel, VDim>
   filter->SetScale(a);
   filter->SetShift(b / a);
   filter->Update();
+  m_ImageStack.pop_back();
   m_ImageStack.push_back(filter->GetOutput());
 }
 
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
+::PrintImageInfo(bool full)
+{
+  // Get the input image
+  ImagePointer image = m_ImageStack.back();
+
+  // Print the image number
+  cout << "Image #" << m_ImageStack.size() << ":";
+
+  // Compute the bounding box
+  RealVector bb0, bb1, ospm;
+  for(size_t i = 0; i < VDim; i++)
+    {
+    bb0[i] = image->GetOrigin()[i];
+    bb1[i] = bb0[i] + image->GetSpacing()[i] * image->GetBufferedRegion().GetSize()[i];
+    ospm[i] = -image->GetOrigin()[i] / image->GetSpacing()[i];
+    }
+
+  // Compute the intensity range of the image
+  size_t n = image->GetBufferedRegion().GetNumberOfPixels();
+  double *vox = image->GetBufferPointer();
+  double iMax = vox[0], iMin = vox[0], iMean = vox[0];
+  for(size_t i = 1; i < n; i++)
+    {
+    iMax = (iMax > vox[i]) ? iMax : vox[i];
+    iMin = (iMin < vox[i]) ? iMin : vox[i];
+    iMean += vox[i];
+    }
+  iMean /= n;
+
+  // Short or long?
+  if(!full) 
+    {
+    cout << " dim = " << image->GetBufferedRegion().GetSize() << "; ";
+    cout << " bb = {[" << bb0 << "], [" << bb1 << "]}; ";
+    cout << " vox = " << image->GetSpacing() << "; ";
+    cout << " range = [" << iMin << ", " << iMax << "]; ";
+    cout << endl;
+    }
+  else
+    {
+    cout << endl;
+    cout << "  Image Dimensions: " << image->GetBufferedRegion().GetSize() << endl;
+    cout << "  Bounding Box: " << "{[" << bb0 << "], [" << bb1 << "]}" << endl;
+    cout << "  Voxel Size: " << image->GetSpacing() << endl;
+    cout << "  Position of Origin in Voxel Units (SPM Origin): " << ospm << endl;
+    cout << "  Intensity Range: [" << iMin << ", " << iMax << "]" << endl;
+    cout << "  Mean Intensity: " << iMean << endl;
+    cout << "  Image Metadata: " << endl;
+
+    // Print metadata
+    itk::MetaDataDictionary &mdd = image->GetMetaDataDictionary();
+    itk::MetaDataDictionary::ConstIterator itMeta;
+    for(itMeta = mdd.Begin(); itMeta != mdd.End(); ++itMeta)
+      {
+      // Get the metadata as a generic object
+      string key = itMeta->first, value;
+      if(itk::ExposeMetaData<string>(mdd, key, value))
+        {
+        // For some weird reason, some of the strings returned by this method
+        // contain '\0' characters. We will replace them by spaces
+        std::ostringstream sout("");
+        for(unsigned int i=0;i<value.length();i++)
+          if(value[i] >= ' ') sout << value[i];
+        value = sout.str();
+
+        // Make sure the value has more than blanks
+        if(value.find_first_not_of(" ") != value.npos)
+          cout << "    " << key << " = " << value << endl;
+        }
+      }
+    }
+}
+
+
+  
 int main(int argc, char *argv[])
 {
   if(argc == 1)

@@ -13,6 +13,7 @@
 #include "itkLinearInterpolateImageFunction.h" 
 #include "itkDiscreteGaussianImageFilter.h"
 #include "itkShiftScaleImageFilter.h"
+#include "itkBinaryThresholdImageFilter.h"
 #include "itkVoxBoCUBImageIOFactory.h"
 #include "itkPovRayDF3ImageIOFactory.h"
 
@@ -35,6 +36,7 @@ template itk::NearestNeighborInterpolateImageFunction<DoubleImage>;
 template itk::BSplineInterpolateImageFunction<DoubleImage>;
 template itk::MetaDataObject<std::string>;
 template itk::Transform<double, 3, 3>;
+template itk::BinaryThresholdImageFilter<DoubleImage, DoubleImage>;
 
 
 // Stuff associated with writing images

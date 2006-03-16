@@ -78,4 +78,4 @@ ENDFOREACH(SCRIPT)
 
 INSTALL_TARGETS(
   "/bin"
-  maskimage threshimage binary2mesh)
+  maskimage threshimage binary2meshi viewmesh)

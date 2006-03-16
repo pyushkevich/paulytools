@@ -5,6 +5,8 @@
 
 #include "vtkPolyDataReader.h"
 #include "vtkPolyDataMapper.h"
+#include "vtkOBJReader.h"
+#include "vtkBYUReader.h"
 #include "vtkLODActor.h"
 #include "vtkRenderer.h"
 #include "vtkRenderWindow.h"
@@ -48,14 +50,36 @@ int main(int argc, char *argv[])
     }
       
   // Load the mesh
-  vtkPolyDataReader *fltReader = vtkPolyDataReader::New();
-  fltReader->SetFileName(fnInput);
-  fltReader->Update();
-  cout << "Read the mesh " << fnInput << endl;
+  vtkPolyData *poly = NULL;
+  if(0 != strstr(fnInput, ".byu"))
+    {
+    vtkBYUReader *byu = vtkBYUReader::New();
+    byu->SetFileName(fnInput);
+    byu->Update();
+    poly = byu->GetOutput();
+    }
+  else if(0 != strstr(fnInput, ".obj"))
+    {
+    vtkOBJReader *obj = vtkOBJReader::New();
+    obj->SetFileName(fnInput);
+    obj->Update();
+    poly = obj->GetOutput();
+    }
+  else if(0 != strstr(fnInput, ".vtk"))
+    {
+    vtkPolyDataReader *fltReader = vtkPolyDataReader::New();
+    fltReader->SetFileName(fnInput);
+    fltReader->Update();
+    poly = fltReader->GetOutput();
+    }
+  else
+    {
+    cerr << "Unknown format!" << endl; return -1;
+    }
 
   // Triangulate the mesh
   vtkStripper *fltStripper = vtkStripper::New();
-  fltStripper->SetInput(fltReader->GetOutput());
+  fltStripper->SetInput(poly);
   fltStripper->Update();
   cout << "Converted to triangle strips " << endl;
 
