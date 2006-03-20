@@ -139,6 +139,7 @@ SET(SCRIPT_FILES
   example6.py
   common.py 
   common2.py 
+  getmesh.py
   imageprep.py
   segment.py
   segment2.py
