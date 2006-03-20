@@ -11,12 +11,18 @@
 #include <vtkPolyDataMapper.h>
 #include <vtkBYUReader.h>
 #include <vtkSTLReader.h>
+#include <vtkPolyDataReader.h>
 #include <vtkTriangleFilter.h>
 
 #include <itkImageFileWriter.h>
 #include <itkImage.h>
 
 #include "DrawTriangles.h"
+
+#ifndef vtkFloatingPointType
+#define vtkFloatingPointType vtkFloatingPointType
+typedef float vtkFloatingPointType;
+#endif
 
 using namespace std;
 using namespace itk;
@@ -35,6 +41,7 @@ int usage()
   cout << "usage: " << endl;
   cout << "   stltoimg [options] output.img" << endl;
   cout << "options: " << endl;
+  cout << "   -vtk file                   Specify input as a VTK mesh" << endl;
   cout << "   -stl file                   Specify input as an STL mesh" << endl;
   cout << "   -byu file                   Specify input as a BYU mesh" << endl;
   cout << "   -f                          Fill the interior of the mesh also" << endl;
@@ -87,7 +94,7 @@ int main(int argc, char **argv)
   bool doRender = false, doFloodFill = false, flagInputGiven = false, flagAutoSize = false;
 
   // Input specifications
-  enum MeshType {NONE, BYU, STL} iMeshType = NONE;
+  enum MeshType {NONE, BYU, STL, VTK} iMeshType = NONE;
   string fnOutput, fnInput;
 
   // Check the parameters
@@ -102,7 +109,12 @@ int main(int argc, char **argv)
     for(unsigned int i=1;i<argc-2;i++)
       {
       string arg = argv[i];
-      if(arg == "-stl")
+      if(arg == "-vtk")
+        {
+        fnInput = argv[++i];
+        iMeshType = VTK;
+        }
+      else if(arg == "-stl")
         {
         fnInput = argv[++i];
         iMeshType = STL;
@@ -209,6 +221,16 @@ int main(int argc, char **argv)
     fltGenericReader = reader;
     polyInput = reader->GetOutput();
     }
+  else if(iMeshType == VTK)
+    {
+    vtkPolyDataReader *reader = vtkPolyDataReader::New();
+    reader->SetFileName(fnInput.c_str());
+    cout << "Reading the VTK file ..." << endl;
+    reader->Update();
+
+    fltGenericReader = reader;
+    polyInput = reader->GetOutput();
+    }
 
   // Convert the model to triangles
   vtkTriangleFilter *tri = vtkTriangleFilter::New();
@@ -274,7 +296,7 @@ int main(int argc, char **argv)
     {
     for(unsigned int i=0;i<3;i++)
       {
-      double *x = pd->GetPoints()->GetPoint(pts[i]);
+      vtkFloatingPointType *x = pd->GetPoints()->GetPoint(pts[i]);
       // float *x = pd->GetPoints()->GetPoint(pts[i]);
       vtx[it] = (double *) malloc(3*sizeof(double));
       for(unsigned int j=0;j<3;j++)

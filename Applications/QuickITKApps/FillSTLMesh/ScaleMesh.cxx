@@ -31,6 +31,11 @@
 using namespace std;
 using namespace itk;
 
+#ifndef vtkFloatingPointType
+#define vtkFloatingPointType vtkFloatingPointType
+typedef float vtkFloatingPointType;
+#endif
+
 int usage()
 {
   cout << "scalemesh - scale a BYU mesh in x, y and z" << endl;
@@ -125,7 +130,7 @@ int main(int argc, char **argv)
   // Scale all the points in the mesh
   for(size_t iPoint = 0; iPoint < pts->GetNumberOfPoints(); iPoint++)
     {
-    double *x = pts->GetPoint(iPoint);
+    vtkFloatingPointType *x = pts->GetPoint(iPoint);
     x[0] *= sx;
     x[1] *= sy;
     x[2] *= sz;

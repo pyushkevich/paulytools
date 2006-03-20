@@ -109,7 +109,7 @@ void ProgressCommand(Object *, const EventObject &, void *)
 int main(int argc, char **argv)
 {
   // Check the parameters
-  if(argc != 6) return usage();
+  if(argc != 2) return usage();
 
   // Get the file names
   string fn = argv[argc-1];
@@ -120,6 +120,7 @@ int main(int argc, char **argv)
 
   // Scale all the points in the mesh
   cout << pts->GetNumberOfPoints() << endl;
+  cout << 3 << endl;
   for(size_t iPoint = 0; iPoint < pts->GetNumberOfPoints(); iPoint++)
     cout << pts->GetPoint(iPoint)[0] << " " 
       << pts->GetPoint(iPoint)[1] << " " 
