@@ -442,7 +442,7 @@ int TestDerivativesNoImage(const char *fnMPDE, const char *fnPCA)
   cout << "**************************************************" << endl;
  
   PassThroughCoefficientMask xMask(mp.GetSurface());
-  iReturn += TestGradientComputation(mp.GetSolver(), &xMask);
+  iReturn += TestGradientComputation(mp.GetSolver(), &xMask, 3);
 
   // Test affine transform gradient computation
   cout << "**************************************************" << endl;
@@ -458,7 +458,7 @@ int TestDerivativesNoImage(const char *fnMPDE, const char *fnPCA)
   
   AffineTransform3DCoefficientMask xAffineMask(mp.GetSurface());
   xAffineMask.SetCoefficientArray(xAffinePosn);
-  iReturn += TestGradientComputation(mp.GetSolver(), &xAffineMask);
+  iReturn += TestGradientComputation(mp.GetSolver(), &xAffineMask, 3);
 
   // Test the most convoluted mask that we have
   cout << "**************************************************" << endl;
@@ -477,11 +477,22 @@ int TestDerivativesNoImage(const char *fnMPDE, const char *fnPCA)
   mp.SetPCAMatrix(8, 10, fnPCA);
   IMedialCoefficientMask *xPCAMask = mp.CreatePCACoefficientMask(5);
   xPCAMask->SetCoefficientArray(xAPCAPosn);
-  iReturn += TestGradientComputation(mp.GetSolver(), xPCAMask);
+  iReturn += TestGradientComputation(mp.GetSolver(), xPCAMask, 3);
   mp.ReleasePCACoefficientMask(xPCAMask);
 
   // Return the total of the test values
   return iReturn;
+}
+
+int TestGradientTiming(const char *fnMPDE)
+{
+  // Create and read the MPDE
+  MedialPDE mp(2, 4, 32, 80);
+  mp.LoadFromParameterFile(fnMPDE);
+
+  // Test straight-through gradient computation
+  PassThroughCoefficientMask xMask(mp.GetSurface());
+  return TestGradientComputation(mp.GetSolver(), &xMask);
 }
 
 void MakeFlatTemplate(FourierSurface *xSurface)
@@ -618,6 +629,8 @@ int main(int argc, char *argv[])
     return TestBasisFunctionVariation(argv[2]);
   else if(0 == strcmp(argv[1], "DERIV4") && argc > 2)
     return TestDifferentialGeometry(argv[2]);
+  else if(0 == strcmp(argv[1], "DERIV5") && argc > 2)
+    return TestGradientTiming(argv[2]);
   else 
     return usage();
 }

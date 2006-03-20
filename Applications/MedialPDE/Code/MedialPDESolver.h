@@ -12,6 +12,29 @@
 
 using namespace std;
 
+class CodeTimer 
+{
+public:
+  CodeTimer() 
+    { tElapsed = 0.0; }
+
+  void Start()
+    { tStart = clock(); }
+  
+  void Stop()
+    { tElapsed += (clock() - tStart) * 1.0 / CLOCKS_PER_SEC; }
+
+  void Reset()
+    { tElapsed = 0.0; }
+
+  double Read()
+    { return tElapsed; }
+
+private:
+  clock_t tStart;
+  double tElapsed;
+};
+
 class MedialPDESolver
 {
 public:
@@ -110,6 +133,7 @@ public:
 
   void TestFiniteDifferenceConvergence();
 
+  CodeTimer tSolver;
 private:
 
   // Numbers of grid points
@@ -162,6 +186,7 @@ private:
   double ComputeNewtonRHS(const Mat& x, Mat &b);
 
   bool flagReuseLastSolution;
+
 };
 
 /* *********************** Template Code ************************** */

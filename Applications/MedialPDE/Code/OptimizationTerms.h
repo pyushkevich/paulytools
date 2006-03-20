@@ -376,29 +376,6 @@ private:
   vnl_vector<double> xDomainWeights;
 };
 
-class CodeTimer 
-{
-public:
-  CodeTimer() 
-    { tElapsed = 0.0; }
-
-  void Start()
-    { tStart = clock(); }
-  
-  void Stop()
-    { tElapsed += (clock() - tStart) * 1.0 / CLOCKS_PER_SEC; }
-
-  void Reset()
-    { tElapsed = 0.0; }
-
-  double Read()
-    { return tElapsed; }
-
-private:
-  clock_t tStart;
-  double tElapsed;
-};
-
 class MedialOptimizationProblem : public DifferentiableFunction
 {
 public:
@@ -468,6 +445,9 @@ private:
   // This method solves the MedialPDE, potentially using the last gradient
   // evaluation as the guess
   bool SolvePDE(double *xEvalPoint);
+
+  // Legacy central difference solver
+  void ComputeCentralDifferenceGradientPhi(double *x);
 
   // The array of derivative atoms
   // MedialAtom *dAtoms;

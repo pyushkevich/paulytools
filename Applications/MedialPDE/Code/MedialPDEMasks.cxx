@@ -42,6 +42,21 @@ vector<size_t> SortTwoArrays(vector<T> &a1, vector<T> &a2)
   return vOutput;
 }
 
+const size_t FiniteDifferenceMask::NUM_WEIGHTS = 6;
+
+FiniteDifferenceMask::FiniteDifferenceMask(size_t nNodes)
+: n(nNodes), W(nNodes, NUM_WEIGHTS, 0.0), flagTransposed(false)
+{ 
+  qu.resize(nNodes); 
+  qv.resize(nNodes); 
+  for(size_t i = 0; i < NUM_WEIGHTS; i++)
+    {
+    fwWeight[i] = NULL;
+    fwIndex[i] = NULL;
+    fwCount[i] = 0;
+    }
+}
+
 void FiniteDifferenceMask
 ::PrintReport()
 {
@@ -92,18 +107,55 @@ void FiniteDifferenceMask
   flagTransposed = !flagTransposed;
 }
 
+FiniteDifferenceMask
+::~FiniteDifferenceMask()
+{
+  for(size_t i = 0; i < NUM_WEIGHTS; i++)
+    {
+    if(fwCount[i])
+      {
+      delete fwIndex[i];
+      delete fwWeight[i];
+      }
+    }
+}
+
 void
 FiniteDifferenceMask
 ::OptimizeWeights(size_t uNodes, size_t vNodes)
 {
   // Optimize weights for one/two jet computation
-  for(size_t i = 0; i < 10; i++)
+  for(size_t i = 0; i < NUM_WEIGHTS; i++)
     {
-    FastWeightList &fw = fastWeights[i];
-    for(size_t j = 0; j < n; j++)
+    // Clean up existing weights
+    size_t j;
+    if(fwCount[i])
+      {
+      delete fwIndex[i];
+      delete fwWeight[i];
+      fwCount[i] = 0;
+      }
+
+    // Count non-zero weights
+    for(j = 0; j < n; j++)
       if(W[j][i] != 0.0)
-        fw.push_back(
-          IndexWeightPair(vNodes * (iu + qu[j]) + iv + qv[j], W[j][i]));
+        fwCount[i]++;
+
+    if(fwCount[i])
+      {
+      fwIndex[i] = new size_t[fwCount[i]];
+      fwWeight[i] = new double[fwCount[i]];
+
+      // Assign the weights
+      size_t k = 0;
+      for(size_t j = 0; j < n; j++)
+        if(W[j][i] != 0.0)
+          {
+          fwIndex[i][k] = vNodes * (iu + qu[j]) + iv + qv[j];
+          fwWeight[i][k] = W[j][i];
+          k++;
+          }
+      }
     }
   
   // Set the raw position
@@ -115,20 +167,13 @@ double FiniteDifferenceMask
 {
   Fu = 0; Fv = 0;
 
-  int i;
-  FastWeightList &fw1 = fastWeights[F10];
-  for(i = fw1.size() - 1; i >= 0; i--)
-    Fu += fw1[i].second * F[fw1[i].first];
-  FastWeightList &fw2 = fastWeights[F01];
-  for(i = fw2.size() - 1; i >= 0; i--)
-    Fv += fw2[i].second * F[fw2[i].first];
-  
-  // FastWeightList::iterator it;
-  // for(it = fastWeights[F10].begin(); it != fastWeights[F10].end(); ++it)
-  //   Fu += it->second * F[it->first];
-  // for(it = fastWeights[F01].begin(); it != fastWeights[F01].end(); ++it)
-  //   Fv += it->second * F[it->first];
-  
+  size_t i;
+
+  for(i = 0; i < fwCount[F10]; i++)
+    Fu += fwWeight[F10][i] * F[fwIndex[F10][i]];
+  for(i = 0; i < fwCount[F01]; i++)
+    Fv += fwWeight[F01][i] * F[fwIndex[F01][i]];
+
   // Return the value of Y
   return F[iraw];
 }

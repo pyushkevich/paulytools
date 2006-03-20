@@ -428,15 +428,17 @@ bool MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
         ComputeDerivative(y, xSparseValues + xRowIndex[iSite] - 1, iSite+1);
       
     // Perform the symbolic factorization only for the first iteration
+    tSolver.Start();
     if(iIter == 0)
       xPardiso.SymbolicFactorization(nSites, xRowIndex, xColIndex, xSparseValues);
 
     // Compute the Jacobian inverse
     xPardiso.NumericFactorization(xSparseValues);
     xPardiso.Solve(b.data_block(), eps.data_block());
+    tSolver.Stop();
 
     // A plus means solver step
-    cout << "+";
+    // cout << "+";
 
     // Advance y to the new Newton position
     y += eps; 
@@ -456,7 +458,7 @@ bool MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
       bMagSqrTest = ComputeNewtonRHS(y, b);
 
       // A "-" means backtrack step
-      cout << "-";
+      // cout << "-";
       }
 
     // Store the new b magnitude value
@@ -487,7 +489,7 @@ bool MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
     }
   else
     {
-    cout << endl;
+    // cout << endl;
     return true;
     }
 }
@@ -698,8 +700,10 @@ MedialPDESolver
 
   // Solve the linear system for all the RHS
   t0 = clock();
+  tSolver.Start();
   xPardiso.NumericFactorization(xSparseValues);
   xPardiso.Solve(N, rhs.data_block(), soln.data_block());
+  tSolver.Stop();
   cout << " [SLV: " << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
 
   // For each atom, compute the boundary derivatives

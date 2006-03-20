@@ -1368,6 +1368,50 @@ double MedialOptimizationProblem
 }
 */
 
+void
+MedialOptimizationProblem
+::ComputeCentralDifferenceGradientPhi(double *x)
+{
+  // Create the first problem
+  MedialPDESolver S1(xSolver->GetGridU(), xSolver->GetGridV());
+  S1.SetMedialSurface(xSolver->GetMedialSurface());
+
+  // Create the second problem
+  MedialPDESolver S2(xSolver->GetGridU(), xSolver->GetGridV());
+  S2.SetMedialSurface(xSolver->GetMedialSurface());
+
+  double t1 = S1.tSolver.Read();
+  double t2 = S2.tSolver.Read();
+  for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)
+    {
+    // Compute central difference
+    double c = xCoeff->GetCoefficient(iCoeff);
+    double eps = 0.0001;
+    xCoeff->SetCoefficient(iCoeff, c + eps);
+    S1.Solve(xSolver->GetPhiField());
+
+    xCoeff->SetCoefficient(iCoeff, c - eps);
+    S2.Solve(xSolver->GetPhiField());
+
+    // Reset the coefficient
+    xCoeff->SetCoefficient(iCoeff, c);
+
+    // Compute the atom derivative arrays
+    MedialAtom *dat = dAtomArray[iCoeff];
+    MedialAtom *a1 = S1.GetAtomArray();
+    MedialAtom *a2 = S2.GetAtomArray();
+
+    for(size_t i = 0; i< xSolver->GetAtomGrid()->GetNumberOfAtoms(); i++)
+      {
+      MedialAtomCentralDifference(a1[i], a2[i], eps, dat[i]);
+      }
+    }
+  t1 = S1.tSolver.Read() - t1;
+  t2 = S2.tSolver.Read() - t2;
+  cout << "[CDG: " << (t1+t2) << " ms] " << flush;
+  
+}
+
 double 
 MedialOptimizationProblem
 ::ComputeGradient(double *xEvalPoint, double *xGradient)
@@ -1377,11 +1421,14 @@ MedialOptimizationProblem
   double t00 = clock();
 
   // Solve the PDE
+  double t0 = clock();
   SolvePDE(xEvalPoint);
+  cout << " [SLV: " << (clock() - t0) / CLOCKS_PER_SEC << " ms] " << flush;
 
   // Compute the gradient
   xSolveGradTimer.Start();
   xSolver->ComputeVariationalGradient(dAtomArray); 
+  // ComputeCentralDifferenceGradientPhi(xGradient);
   xSolveGradTimer.Stop();
 
   // Store this solution as the new initialization for the PDE solver
@@ -1391,7 +1438,7 @@ MedialOptimizationProblem
   SolutionData S(xSolver);
 
   // Compute the value at the solution and init gradient computation
-  double t0 = clock();
+  t0 = clock();
   xLastSolutionValue = 0.0;
   for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
     {

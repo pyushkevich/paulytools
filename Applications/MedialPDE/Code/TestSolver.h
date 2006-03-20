@@ -5,7 +5,7 @@ class MedialPDESolver;
 class IMedialCoefficientMask;
 
 int TestGradientComputation(
-  MedialPDESolver *xSolver, IMedialCoefficientMask *xMask);
+  MedialPDESolver *xSolver, IMedialCoefficientMask *xMask, int nRandVariations = 0);
 
 int TestOptimizerGradientComputation(
   MedialOptimizationProblem &mop, 

@@ -37,12 +37,12 @@ void TestGradientComputationPrintReport(
 }
 
 int TestGradientComputation(
-  MedialPDESolver *xSolver, IMedialCoefficientMask *xMask)
+  MedialPDESolver *xSolver, IMedialCoefficientMask *xMask, int nRandVar)
 {
   size_t iVar;
 
   // Timers for different routines
-  CodeTimer tCentral, tAnalytic;
+  CodeTimer tCentral, tAnalytic, tInitialSolver;
   
   // The epsilon for central difference tests
   double eps = 0.0001;
@@ -91,7 +91,7 @@ int TestGradientComputation(
     }
 
   // Create mixed variations
-  for(size_t i = 0; i < 3; i++)
+  for(size_t i = 0; i < nRandVar; i++)
     {    
     vnl_vector<double> dx(xMask->GetNumberOfCoefficients());
     for(size_t j=0; j<dx.size(); j++)
@@ -100,7 +100,8 @@ int TestGradientComputation(
     xVariations.push_back(xMask->GetVariationSurface(dx.data_block()));
     xVariationNames.push_back(" Random Variation ");
     xVariationCoeffs.push_back(dx);
-    }
+   }
+  
 
   // For each variation, allocate a derivative array
   vector<MedialAtom *> dAtomArray;
@@ -118,11 +119,22 @@ int TestGradientComputation(
     dAtomArray.push_back(dAtoms);
     }
 
+  // Dis-initialize the solver for timing
+  vnl_matrix<double> phi = xSolver->GetPhiField();
+  phi.fill(0.0);
+
   // Solve the medial PDE for all these variations
-  xSolver->Solve();
+  tInitialSolver.Start();
+  xSolver->Solve(phi);
+  tInitialSolver.Stop();
+
   tAnalytic.Start();
   xSolver->ComputeVariationalGradient(dAtomArray);
   tAnalytic.Stop();
+
+  // Initialze S1 and S2 to the solution at the center
+  S1.Solve(xSolver->GetPhiField()); S1.SetSolutionAsInitialGuess();
+  S2.Solve(xSolver->GetPhiField()); S2.SetSolutionAsInitialGuess();
 
   // Compute all the other derivatives
   for(iVar = 0; iVar < xVariations.size(); iVar++) 
@@ -255,10 +267,11 @@ int TestGradientComputation(
         - pdsd.xBoundaryArea);
 
     // Print the report
+    /*
     TestGradientComputationPrintReport(
       xMaxPhiDiff, xMaxGradRDiff, xMaxGRMS, xMaxBndDiff, 
       xMaxBndNrmDiff, xMaxBndAreaDiff, xMaxCellVolumeDiff,
-      xTotalAreaDiff, xTotalVolumeDiff);
+      xTotalAreaDiff, xTotalVolumeDiff); */
 
     // Update the global maximum counters
     UpdateMax(xMaxPhiDiff, xGlobalMaxPhiDiff);
@@ -296,6 +309,7 @@ int TestGradientComputation(
   cout << "----------------------------------------" << endl;
   cout << "Numeric Gradient CPU Secs. :" << tCentral.Read() << endl;
   cout << "Analytic Gradient CPU Secs.:" << tAnalytic.Read() << endl; 
+  cout << "Initial Solution CPU Secs.:" << tInitialSolver.Read() << endl; 
   cout << "----------------------------------------" << endl;
 
   // The return value is based on any of the error terms exceeding epsilon

@@ -161,4 +161,68 @@ void AddScaleMedialAtoms(
     }
 }
 
+void MedialAtomCentralDifference(
+  const MedialAtom &A, const MedialAtom &B, double eps, MedialAtom &C)
+{
+  double p = 0.5 / eps;
+  
+  // The u and v coordinates stay the same
+  C.u = A.u;
+  C.v = A.v;
+  C.uIndex = A.uIndex;
+  C.vIndex = A.vIndex;
+  C.flagCrest = A.flagCrest;
+  C.flagValid = A.flagValid;
 
+  // The other objects are simply added and scaled
+  C.X = p * (A.X - B.X);
+  C.Xu = p * (A.Xu - B.Xu);
+  C.Xv = p * (A.Xv - B.Xv);
+  C.Xuu = p * (A.Xuu - B.Xuu);
+  C.Xuv = p * (A.Xuv - B.Xuv);
+  C.Xvv = p * (A.Xvv - B.Xvv);
+
+  C.R = p * (A.R - B.R);
+  // C.Ru = A.Ru + p * B.Ru;
+  // C.Rv = A.Rv + p * B.Rv;
+  // C.Ruu = A.Ruu + p * B.Ruu;
+  // C.Ruv = A.Ruv + p * B.Ruv;
+  // C.Rvv = A.Rvv + p * B.Rvv;
+
+  C.F = p * (A.F - B.F);
+  C.Fu = p * (A.Fu - B.Fu);
+  C.Fv = p * (A.Fv - B.Fv);
+
+  C.N = p * (A.N - B.N);
+  C.xGradR = p * (A.xGradR - B.xGradR);
+  C.xGradPhi = p * (A.xGradPhi - B.xGradPhi);
+  C.xGradRMagSqr = p * (A.xGradRMagSqr - B.xGradRMagSqr);
+  C.xNormalFactor = p * (A.xNormalFactor - B.xNormalFactor);
+
+  // The differential geometry is also added and scaled 
+  C.G.g = p * (A.G.g - B.G.g);
+  C.G.gInv = p * (A.G.gInv - B.G.gInv);
+
+  for(size_t i=0; i<2; i++) for(size_t j=0; j<2; j++)
+    {
+    C.G.xContravariantTensor[i][j] = 
+      p * (A.G.xContravariantTensor[i][j] - B.G.xContravariantTensor[i][j]);
+    C.G.xCovariantTensor[i][j] = 
+      p * (A.G.xCovariantTensor[i][j] - B.G.xCovariantTensor[i][j]);
+    C.G.xChristoffelSecond[i][j][0] = 
+      p * (A.G.xChristoffelSecond[i][j][0] - B.G.xChristoffelSecond[i][j][0]);
+    C.G.xChristoffelFirst[i][j][0] = 
+      p * (A.G.xChristoffelFirst[i][j][0] - B.G.xChristoffelFirst[i][j][0]);
+    C.G.xChristoffelSecond[i][j][1] = 
+      p * (A.G.xChristoffelSecond[i][j][1] - B.G.xChristoffelSecond[i][j][1]);
+    C.G.xChristoffelFirst[i][j][1] = 
+      p * (A.G.xChristoffelFirst[i][j][1] - B.G.xChristoffelFirst[i][j][1]);
+    }
+
+  // The boundary atoms are scaled as well
+  for(size_t k=0; k<2; k++)
+    {
+    C.xBnd[k].X = p * (A.xBnd[k].X - B.xBnd[k].X);
+    C.xBnd[k].N = p * (A.xBnd[k].N - B.xBnd[k].N);
+    }
+}

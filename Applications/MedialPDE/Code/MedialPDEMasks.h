@@ -15,9 +15,8 @@ public:
   typedef vnl_vector<double> Vec;
   
   // Constructor: initializes the data to the number of nodes
-  FiniteDifferenceMask(size_t nNodes)
-    : n(nNodes), W(nNodes, 6, 0.0), flagTransposed(false)
-      { qu.resize(nNodes); qv.resize(nNodes); }
+  FiniteDifferenceMask(size_t nNodes);
+  virtual ~FiniteDifferenceMask();
 
   // Initialize the location of the mask, also specifying rotation
   // Weights must be recomputed after this operation, and flips and
@@ -77,9 +76,10 @@ protected:
     { F00 = 0, F10, F01, F20, F02, F11, F30, F03, F21, F12 };
 
   // Optimized array for weight storage
-  typedef std::pair<size_t, double> IndexWeightPair;
-  typedef std::vector<IndexWeightPair> FastWeightList;
-  FastWeightList fastWeights[10];
+  static const size_t NUM_WEIGHTS;
+  size_t *fwIndex[6];
+  double *fwWeight[6];
+  size_t fwCount[6];
   
   // A list of weight vectors for the first six partial derivatives.
   Mat W;

@@ -77,4 +77,7 @@ struct MedialAtom
 void AddScaleMedialAtoms(
   const MedialAtom &A, const MedialAtom &B, double p, MedialAtom &C);
 
+void MedialAtomCentralDifference(
+  const MedialAtom &A, const MedialAtom &B, double eps, MedialAtom &C);
+
 #endif
