@@ -267,6 +267,9 @@ public:
   // Compute the partial derivative term
   double ComputePartialDerivative(
     SolutionData *S, PartialDerivativeSolutionData *dS);
+
+  // Get the worst Jacobian
+  double GetMinJacobian() { return xMinJacobian; }
   
 private:
   // Maximum and minimum values of the Jacobian encountered during
@@ -332,6 +335,11 @@ public:
   // Compute the partial derivative
   double ComputePartialDerivative(
     SolutionData *S, PartialDerivativeSolutionData *dS);
+
+  // Get the number of bad atoms
+  size_t GetNumberOfBadAtoms() 
+    { return nBadAtoms; }
+  
 private:
   double xMaxBadness, xAvgBadness, xTotalPenalty;
   size_t nBadAtoms, nAtoms;

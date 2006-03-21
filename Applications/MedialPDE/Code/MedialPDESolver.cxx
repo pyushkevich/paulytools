@@ -373,7 +373,7 @@ MedialPDESolver
     else
       {
       // What are we supposed to do?
-      cout << "Negative F at " << xAtom.u << ", " << xAtom.v << endl;
+      // cout << "Negative F at " << xAtom.u << ", " << xAtom.v << endl;
       xAtom.R = xAtom.F = xAtom.Fu = xAtom.Fv = 0.0;
       xAtom.flagValid = false;
       }

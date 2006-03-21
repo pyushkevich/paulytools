@@ -23,6 +23,7 @@
 
 
 #include <vnl/algo/vnl_qr.h>
+#include <vnl/vnl_random.h>
 
 #include <gsl/gsl_multimin.h>
 
@@ -1233,13 +1234,37 @@ SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zS
       ImageType::PointType pVoxel;
       iOutput->TransformIndexToPhysicalPoint(itOut.GetIndex(), pVoxel);
 
+      // Define the extent
+      double x0 = pVoxel[0] - 0.5 * iOutput->GetSpacing()[0];
+      double x1 = pVoxel[0] + 0.5 * iOutput->GetSpacing()[0];
+      double y0 = pVoxel[1] - 0.5 * iOutput->GetSpacing()[1];
+      double y1 = pVoxel[1] + 0.5 * iOutput->GetSpacing()[1];
+      double z0 = pVoxel[2] - 0.5 * iOutput->GetSpacing()[2];
+      double z1 = pVoxel[2] + 0.5 * iOutput->GetSpacing()[2];
+
+      // Find all samples inside that pixel
+      double xMax = 0.0;
+      MedialInternalPointIterator *it =
+        xSolver->GetAtomGrid()->NewInternalPointIterator(zSamples);
+      for( ; !it->IsAtEnd(); ++(*it))
+        {
+        SMLVec3d x = GetInternalPoint(it, xSolver->GetAtomArray());
+        if(x[0] <= x1 && x[0] > x0 && x[1] <= y1 && x[1] > y0 && x[2] <= z1 && x[2] > z0)
+          {
+          xMax = xMax < xpix[it->GetIndex()] ? xpix[it->GetIndex()] : xMax;
+          }
+        }
+      delete it;
+
       // Locate the cell that includes this point
       vnl_vector<double> vox = pVoxel.GetVnlVector();
       size_t iClosest = (size_t) 
         loc->FindClosestPoint(vox(0), vox(1), vox(2));
 
       // Convert this to a pixel index
-      itOut.Set(xpix[iClosest]);
+      // itOut.Set(xpix[iClosest]);
+      itOut.Set(xMax);
+      
       }
     }
 
@@ -1584,6 +1609,12 @@ void MedialPCA::ComputePCA()
   double *s = new double[xSurfaces.size()];
   size_t i, j;
   
+  // Generate same parameters for the boundary-based alignment and PCA
+  Mat *Abnd = new Mat[xSurfaces.size()];
+  Mat *Rbnd = new Mat[xSurfaces.size()];
+  Vec *tbnd = new Vec[xSurfaces.size()];
+  double *sbnd = new double[xSurfaces.size()];
+  
   // Populate the input matrices
   MedialPDESolver xSolver(32, 80);
   for(i = 0; i < xSurfaces.size(); i++)
@@ -1610,6 +1641,20 @@ void MedialPCA::ComputePCA()
       ++(*it); ++j;
       }
     delete it;
+
+    // Same for boundary atoms
+    Abnd[i].set_size(xSolver.GetAtomGrid()->GetNumberOfBoundaryPoints(), 3);
+    Rbnd[i].set_size(3,3);
+    tbnd[i].set_size(3);
+
+    MedialBoundaryPointIterator *bit = xSolver.GetAtomGrid()->NewBoundaryPointIterator();
+    for(j = 0; !bit->IsAtEnd(); ++(*bit), ++j)
+      {
+      Vec p = GetBoundaryPoint(bit, xSolver.GetAtomArray()).X;
+      Abnd[i][j][0] = p[0];
+      Abnd[i][j][1] = p[1];
+      Abnd[i][j][2] = p[2];
+      }
     }
 
   // cout << "Testing Procrustes" << endl;
@@ -1684,7 +1729,74 @@ void MedialPCA::ComputePCA()
   for(size_t l = 0; l < xPCA->GetNumberOfModes(); l++)
     { cout << xPCA->GetEigenvalue(l) << " "; }
   cout << endl;
+
+  /*
+  // Compute the boundary PCA (just to compare)
+  GeneralizedProcrustesAnalysis(xSurfaces.size(), Abnd, Rbnd, tbnd, sbnd);
+  Mat xBndMat(n, Abnd[0].rows() * 3);
+  for(i = 0; i < n; i++) for(j = 0; j < Abnd[0].rows(); j++)
+    {
+    size_t k = j * 3;
+    Vec p = tbnd[i] + sbnd[i] * Rbnd[i].transpose() * Abnd[i].get_row(j);
+    xBndMat[i][k] = p[0];
+    xBndMat[i][k+1] = p[1];
+    xBndMat[i][k+2] = p[2];
+    if(j == 0) 
+      cout << p << endl;
+    }
+
+  PrincipalComponents xPCABnd(xBndMat);
+  cout << "BND EIGENVALUES: " << endl;
+  for(size_t l = 0; l < xPCABnd.GetNumberOfModes(); l++)
+    { cout << xPCABnd.GetEigenvalue(l) << " "; }
+  cout << endl;
+  */
+
+  // Sample shapes at random along the first 8 eigenvectors
+  size_t k = 8, nt = 10000;
+  vnl_random myrand;
   
+  for(i = 0; i < nt; i++)
+    {
+    // Generate random vector with uniform-distributed Mahalanobis distance
+    Vec y(k); 
+    double d = myrand.drand32(0.0, 10.0), l = 2.0;
+    while(l > 1.0)
+      {
+      for(j = 0; j < k; j++)
+        y[j] = myrand.drand32(-1.0, 1.0);
+      l = y.two_norm();
+      }
+    y *= d / l;
+
+    // Map this position to coefficient space
+    Vec x = xPCA->MapToFeatureSpace(y);
+
+    double x0 = 0, x1 = 0;
+
+    // Create the shape
+    MedialPDE xJunk(8,12,32,80);
+    xJunk.xSurface = new FourierSurface(*xSurfaces[0]);
+    xJunk.xSolver->SetMedialSurface(xJunk.xSurface);
+    xJunk.xSurface->SetCoefficientArray(x.data_block());
+    if(!xJunk.Solve())
+      x0 = 0;
+    else
+      {
+      x0 = 1;
+
+      // Create a solution object
+      SolutionData S(xJunk.xSolver);
+
+      // Compute the penalty term
+      BoundaryJacobianEnergyTerm bjet;
+      bjet.ComputeEnergy(&S);
+      x1 = bjet.GetMinJacobian();
+      }
+    cout << "MCARLO: " << d << " " << x0 << " " << x1 << " " << y[0] << " " << y[1] << endl;
+    }
+  
+
   /*
   // Generate shapes along the first four eigenvectors
   for(i = 0; i < 4; i++)
