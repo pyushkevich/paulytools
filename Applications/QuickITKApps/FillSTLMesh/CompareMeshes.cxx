@@ -44,6 +44,7 @@ int usage()
   cout << "   meshdiff [options] mesh1.vtk mesh2.vtk" << endl;
   cout << "options: " << endl;
   cout << "   -s X.XX             Size of the voxel for overlap/distance measurements" << endl;
+  cout << "   -d file.vtk         Save pointwise mesh-to-mesh distance to a file" << endl;
   return -1;
 }
 
@@ -321,7 +322,7 @@ int main(int argc, char **argv)
   int res[3];
 
   // Input specifications
-  string fn1, fn2;
+  string fn1, fn2, fnMesh = "";
 
   // Check the parameters
   if(argc < 3) return usage();
@@ -339,6 +340,10 @@ int main(int argc, char **argv)
       if(arg == "-s")
         {
         xVox = atof(argv[++i]);
+        }
+      else if(arg == "-d")
+        {
+        fnMesh = argv[++i];
         }
       }
     }
@@ -409,6 +414,22 @@ int main(int argc, char **argv)
   ComputeExactMeshToMeshDistance(p2, p1, d2);
   ComputeAreaElement(p1, ae1);
   ComputeAreaElement(p2, ae2);
+
+  // Save the pointwise mesh distance if asked to
+  if(fnMesh != "")
+    {
+    vtkFloatArray *dist = vtkFloatArray::New();
+    dist->SetName("Distance");
+    dist->SetNumberOfComponents(1);
+    dist->SetNumberOfTuples(d1.size());
+    p1->GetPointData()->AddArray(dist);
+    for(size_t q=0; q < d1.size(); q++)
+      dist->SetTuple1(q, d1[q]);
+    vtkPolyDataWriter pdw = vtkPolyDataWriter::New();
+    pdw->SetFileName(fnMesh.c_str());
+    pdw->SetInput(p1);
+    pdw->Update();
+    }
 
   // Scale the area by the total area to get a weight
   ae1 /= ae1.one_norm(); ae2 /= ae2.one_norm();
