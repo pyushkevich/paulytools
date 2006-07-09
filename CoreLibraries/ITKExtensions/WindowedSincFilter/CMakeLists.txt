@@ -15,7 +15,7 @@ ELSE(ITK_FOUND)
 ENDIF(ITK_FOUND)
 
 # Link Libraries
-LINK_LIBRARIES(
+TARGET_LINK_LIBRARIES(sincfilter2d
   ITKCommon 
   ITKBasicFilters 
   ITKIO 
