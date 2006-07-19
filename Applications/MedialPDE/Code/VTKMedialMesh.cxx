@@ -6,51 +6,51 @@
 #include "vtkUnstructuredGrid.h"
 #include "MedialAtom.h"
 #include "MedialAtomGrid.h"
+#include "GenericMedialModel.h"
 #include "ITKImageWrapper.h"
 #include "itkImage.h"
 
 void ExportMedialMeshToVTK(
-  MedialAtomGrid *xGrid, 
-  MedialAtom *xAtoms, 
+  GenericMedialModel *xModel,
   ITKImageWrapper<float> *xImage,
   const char *file)
 {
   // Add the points to the poly data
   vtkPoints *lPoints = vtkPoints::New();
-  lPoints->Allocate(xGrid->GetNumberOfAtoms());
+  lPoints->Allocate(xModel->GetNumberOfAtoms());
   
   // Allocate the array of normals
   vtkFloatArray *lNormals = vtkFloatArray::New();
   lNormals->SetNumberOfComponents(3);
-  lNormals->SetNumberOfTuples(xGrid->GetNumberOfAtoms());
+  lNormals->SetNumberOfTuples(xModel->GetNumberOfAtoms());
 
   // Allocate the metric tensor array
   vtkFloatArray *lMetric = vtkFloatArray::New();
   lMetric->SetName("Covariant Tensor Determinant");
   lMetric->SetNumberOfComponents(1);
-  lMetric->SetNumberOfTuples(xGrid->GetNumberOfAtoms());
+  lMetric->SetNumberOfTuples(xModel->GetNumberOfAtoms());
   
   // Allocate the metric tensor array
   vtkFloatArray *lRho = vtkFloatArray::New();
   lRho->SetName("Rho Function");
   lRho->SetNumberOfComponents(1);
-  lRho->SetNumberOfTuples(xGrid->GetNumberOfAtoms());
+  lRho->SetNumberOfTuples(xModel->GetNumberOfAtoms());
   
   // Allocate the metric tensor array
   vtkFloatArray *lRadius = vtkFloatArray::New();
   lRadius->SetName("Radius Function");
   lRadius->SetNumberOfComponents(1);
-  lRadius->SetNumberOfTuples(xGrid->GetNumberOfAtoms());
+  lRadius->SetNumberOfTuples(xModel->GetNumberOfAtoms());
 
   // Allocate another dummy array
   vtkFloatArray *lDummy1 = vtkFloatArray::New();
   lDummy1->SetName("Dummy1");
   lDummy1->SetNumberOfComponents(1);
-  lDummy1->SetNumberOfTuples(xGrid->GetNumberOfAtoms());
+  lDummy1->SetNumberOfTuples(xModel->GetNumberOfAtoms());
 
   // Allocate the polydata
   vtkPolyData *pMedial = vtkPolyData::New();
-  pMedial->Allocate(xGrid->GetNumberOfQuads());
+  pMedial->Allocate(xModel->GetNumberOfTriangles());
   pMedial->SetPoints(lPoints);
   pMedial->GetPointData()->SetNormals(lNormals);
   pMedial->GetPointData()->AddArray(lMetric);
@@ -65,15 +65,18 @@ void ExportMedialMeshToVTK(
     {
     lImage->SetName("Image");
     lImage->SetNumberOfComponents(1);
-    lImage->SetNumberOfTuples(xGrid->GetNumberOfAtoms());
+    lImage->SetNumberOfTuples(xModel->GetNumberOfAtoms());
     pMedial->GetPointData()->AddArray(lImage);
     }
   
+  // Get the internals of the medial model
+  MedialIterationContext *xGrid = xModel->GetIterationContext();
+  MedialAtom *xAtoms = xModel->GetAtomArray();
+
   // Add all the points
-  MedialAtomIterator *it = xGrid->NewAtomIterator();
-  for(; !it->IsAtEnd(); ++(*it))
+  for(MedialAtomIterator it(xGrid); !it.IsAtEnd(); ++it)
     {
-    size_t i = it->GetIndex();
+    size_t i = it.GetIndex();
     SMLVec3d X = xAtoms[i].X; SMLVec3d N = xAtoms[i].N;
     lPoints->InsertNextPoint(X[0], X[1], X[2]);
     lNormals->SetTuple3(i, N[0], N[1], N[2]);
@@ -94,20 +97,16 @@ void ExportMedialMeshToVTK(
     int q = (int)(xAtoms[i].u * 64);
     lDummy1->SetTuple1(i, q % 8 == 0 ? 1 : 0);
     }
-  delete it;
 
   // Add all the quads
-  MedialQuadIterator *itq = xGrid->NewQuadIterator();
-  for(; !itq->IsAtEnd(); ++(*itq))
+  for(MedialTriangleIterator itt(xGrid); !itt.IsAtEnd(); ++itt)
     {
-    vtkIdType xQuad[4];
-    xQuad[0] = itq->GetAtomIndex(0, 0);
-    xQuad[1] = itq->GetAtomIndex(1, 0);
-    xQuad[2] = itq->GetAtomIndex(1, 1);
-    xQuad[3] = itq->GetAtomIndex(0, 1);
-    pMedial->InsertNextCell(VTK_QUAD, 4, xQuad);
+    vtkIdType xTri[4];
+    xTri[0] = itt.GetAtomIndex(0);
+    xTri[1] = itt.GetAtomIndex(1);
+    xTri[2] = itt.GetAtomIndex(2);
+    pMedial->InsertNextCell(VTK_TRIANGLE, 3, xTri);
     }
-  delete itq;
 
   vtkPolyDataWriter *fltWriter = vtkPolyDataWriter::New();
   fltWriter->SetInput(pMedial);
@@ -127,43 +126,41 @@ void ExportMedialMeshToVTK(
 }
 
 vtkUnstructuredGrid *
-ExportVolumeMeshToVTK(MedialAtomGrid *xGrid, MedialAtom *xAtoms, size_t nSamples)
+ExportVolumeMeshToVTK(GenericMedialModel *xModel, size_t nSamples)
 {
   // Add the points to the poly data
   vtkPoints *lPoints = vtkPoints::New();
-  lPoints->Allocate(xGrid->GetNumberOfInternalPoints(nSamples));
+  lPoints->Allocate(xModel->GetNumberOfInternalPoints(nSamples));
   
   // Allocate the polydata
   vtkUnstructuredGrid *pMedial = vtkUnstructuredGrid::New();
-  pMedial->Allocate(xGrid->GetNumberOfCells(nSamples));
+  pMedial->Allocate(xModel->GetNumberOfCells(nSamples));
   pMedial->SetPoints(lPoints);
 
+  // Get the internals of the medial model
+  MedialIterationContext *xGrid = xModel->GetIterationContext();
+  MedialAtom *xAtoms = xModel->GetAtomArray();
+
   // Add all the points
-  MedialInternalPointIterator *it = xGrid->NewInternalPointIterator(nSamples);
-  for(; !it->IsAtEnd(); ++(*it))
+  for(MedialInternalPointIterator it(xGrid,nSamples); !it.IsAtEnd(); ++it)
     {
-    size_t i = it->GetIndex();
+    size_t i = it.GetIndex();
     SMLVec3d X = GetInternalPoint(it, xAtoms);
     lPoints->InsertPoint(i, X[0], X[1], X[2]);
     }
-  delete it;
 
   // Add all the quads
-  MedialInternalCellIterator *itq = xGrid->NewInternalCellIterator(nSamples);
-  for(; !itq->IsAtEnd(); ++(*itq))
+  for(MedialInternalCellIterator itc(xGrid,nSamples); !itc.IsAtEnd(); ++itc)
     {
-    vtkIdType xQuad[8];
-    xQuad[0] = itq->GetInternalPointIndex(0, 0, 0);
-    xQuad[3] = itq->GetInternalPointIndex(1, 0, 0);
-    xQuad[1] = itq->GetInternalPointIndex(0, 1, 0);
-    xQuad[2] = itq->GetInternalPointIndex(1, 1, 0);
-    xQuad[0] = itq->GetInternalPointIndex(0, 0, 1);
-    xQuad[3] = itq->GetInternalPointIndex(1, 0, 1);
-    xQuad[1] = itq->GetInternalPointIndex(0, 1, 1);
-    xQuad[2] = itq->GetInternalPointIndex(1, 1, 1);
-    pMedial->InsertNextCell(VTK_HEXAHEDRON, 8, xQuad);
+    vtkIdType xWedge[6];
+    xWedge[0] = itc.GetInternalPointIndex(0, 0);
+    xWedge[1] = itc.GetInternalPointIndex(1, 0);
+    xWedge[2] = itc.GetInternalPointIndex(2, 0);
+    xWedge[3] = itc.GetInternalPointIndex(0, 1);
+    xWedge[4] = itc.GetInternalPointIndex(1, 1);
+    xWedge[5] = itc.GetInternalPointIndex(2, 1);
+    pMedial->InsertNextCell(VTK_WEDGE, 6, xWedge);
     }
-  delete itq;
 
   /*
   vtkPolyDataWriter *fltWriter = vtkPolyDataWriter::New();
@@ -175,28 +172,26 @@ ExportVolumeMeshToVTK(MedialAtomGrid *xGrid, MedialAtom *xAtoms, size_t nSamples
   */
 
   return pMedial;
-
 }
 
 
 void ExportBoundaryMeshToVTK(
-  MedialAtomGrid *xGrid, 
-  MedialAtom *xAtoms, 
+  GenericMedialModel *xModel,
   ITKImageWrapper<float> *xImage,
   const char *file)
 {
   // Add the points to the poly data
   vtkPoints *lPoints = vtkPoints::New();
-  lPoints->Allocate(xGrid->GetNumberOfBoundaryPoints());
+  lPoints->Allocate(xModel->GetNumberOfBoundaryPoints());
   
   // Allocate the array of normals
   vtkFloatArray *lNormals = vtkFloatArray::New();
   lNormals->SetNumberOfComponents(3);
-  lNormals->SetNumberOfTuples(xGrid->GetNumberOfBoundaryPoints());
+  lNormals->SetNumberOfTuples(xModel->GetNumberOfBoundaryPoints());
   
   // Allocate the polydata
   vtkPolyData *pMedial = vtkPolyData::New();
-  pMedial->Allocate(xGrid->GetNumberOfBoundaryQuads());
+  pMedial->Allocate(xModel->GetNumberOfBoundaryTriangles());
   pMedial->SetPoints(lPoints);
   
   // Add the arrays to the poly data
@@ -209,15 +204,18 @@ void ExportBoundaryMeshToVTK(
     {
     lImage->SetName("Image");
     lImage->SetNumberOfComponents(1);
-    lImage->SetNumberOfTuples(xGrid->GetNumberOfBoundaryPoints());
+    lImage->SetNumberOfTuples(xModel->GetNumberOfBoundaryPoints());
     pMedial->GetPointData()->AddArray(lImage);
     }
 
+  // Get the internals of the medial model
+  MedialIterationContext *xGrid = xModel->GetIterationContext();
+  MedialAtom *xAtoms = xModel->GetAtomArray();
+
   // Add all the points
-  MedialBoundaryPointIterator *it = xGrid->NewBoundaryPointIterator();
-  for(; !it->IsAtEnd(); ++(*it))
+  for(MedialBoundaryPointIterator it(xGrid); !it.IsAtEnd(); ++it)
     {
-    size_t i = it->GetIndex();
+    size_t i = it.GetIndex();
     BoundaryAtom &B = GetBoundaryPoint(it, xAtoms);
     lPoints->InsertNextPoint(B.X[0], B.X[1], B.X[2]);
     lNormals->SetTuple3(i, B.N[0], B.N[1], B.N[2]);
@@ -226,27 +224,23 @@ void ExportBoundaryMeshToVTK(
     if(flagImage)
       {
       itk::Index<3> idx;
-      idx[0] = xAtoms[it->GetAtomIndex()].uIndex;
-      idx[1] = xAtoms[it->GetAtomIndex()].vIndex;
-      idx[2] = it->GetBoundarySide() ? 0 : xImage->GetImageSize(2) - 1;
+      idx[0] = xAtoms[it.GetAtomIndex()].uIndex;
+      idx[1] = xAtoms[it.GetAtomIndex()].vIndex;
+      idx[2] = it.GetBoundarySide() ? 0 : xImage->GetImageSize(2) - 1;
       lImage->SetTuple1(i, xImage->GetInternalImage()->GetPixel(idx));
       }
 
     }
-  delete it;
 
   // Add all the quads
-  MedialBoundaryQuadIterator *itq = xGrid->NewBoundaryQuadIterator();
-  for(; !itq->IsAtEnd(); ++(*itq))
+  for(MedialBoundaryTriangleIterator itt(xGrid); !itt.IsAtEnd(); ++itt)
     {
-    vtkIdType xQuad[4];
-    xQuad[0] = itq->GetBoundaryIndex(0, 0);
-    xQuad[1] = itq->GetBoundaryIndex(0, 1);
-    xQuad[2] = itq->GetBoundaryIndex(1, 1);
-    xQuad[3] = itq->GetBoundaryIndex(1, 0);
-    pMedial->InsertNextCell(VTK_QUAD, 4, xQuad);
+    vtkIdType xTri[3];
+    xTri[0] = itt.GetBoundaryIndex(0);
+    xTri[1] = itt.GetBoundaryIndex(1);
+    xTri[2] = itt.GetBoundaryIndex(2);
+    pMedial->InsertNextCell(VTK_TRIANGLE, 3, xTri);
     }
-  delete itq;
 
   vtkPolyDataWriter *fltWriter = vtkPolyDataWriter::New();
   fltWriter->SetInput(pMedial);

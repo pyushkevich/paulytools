@@ -16,7 +16,7 @@ void reset_ptr(T* &x)
 }
 
 void
-MeshMedialModel
+MeshMedialPDESolver
 ::SetMeshTopology(MeshLevel *topology)
 {
   // We must first set the dimensions of the matrix A. The finite difference
@@ -187,13 +187,10 @@ MeshMedialModel
 
   // Initialize the weight array for gradient computation
   W = new SMLVec3d[nSparseEntries];
-
-  // Last step: set the atom iteration context
-  xIterationContext = new SubdivisionSurfaceMedialIterationContext(topology);
 }
 
-MeshMedialModel
-::MeshMedialModel()
+MeshMedialPDESolver
+::MeshMedialPDESolver()
 {
   xTriangleGeom = NULL;
   xVertexGeom = NULL;
@@ -203,17 +200,18 @@ MeshMedialModel
   xTangentWeights[0] = xTangentWeights[1] = NULL;
   xPardisoColIndex = NULL;
   xPardisoRowIndex = NULL;
+  xAtoms = NULL;
   W = NULL;
 }
 
-MeshMedialModel
-::~MeshMedialModel()
+MeshMedialPDESolver
+::~MeshMedialPDESolver()
 {
   Reset();
 }
 
 void
-MeshMedialModel
+MeshMedialPDESolver
 ::Reset()
 {
   reset_ptr(xTriangleGeom);
@@ -225,12 +223,11 @@ MeshMedialModel
   reset_ptr(xTangentWeights[1]);
   reset_ptr(xPardisoColIndex); 
   reset_ptr(xPardisoRowIndex);
-  reset_ptr(xIterationContext);
   reset_ptr(W);
 }
 
 void
-MeshMedialModel
+MeshMedialPDESolver
 ::ComputeMeshGeometry(bool flagGradient)
 {
   size_t i, j;
@@ -383,7 +380,7 @@ MeshMedialModel
 }
 
 void
-MeshMedialModel
+MeshMedialPDESolver
 ::FillNewtonMatrix(const double *phi)
 {
   size_t i, j, k;
@@ -478,7 +475,7 @@ MeshMedialModel
 }
 
 void
-MeshMedialModel
+MeshMedialPDESolver
 ::FillNewtonRHS(const double *phi)
 {
   size_t i, j, k;
@@ -512,7 +509,7 @@ MeshMedialModel
 }
 
 void
-MeshMedialModel
+MeshMedialPDESolver
 ::ComputeMedialAtoms(const double *soln)
 {
   // Loop over all vertices in the mesh
@@ -551,7 +548,7 @@ MeshMedialModel
 }
 
 void
-MeshMedialModel
+MeshMedialPDESolver
 ::SetInputData(const SMLVec3d *X, const double *rho, const double *phi)
 {
   // Fill the X and rho values of the atoms
@@ -565,8 +562,8 @@ MeshMedialModel
 }
 
 void
-MeshMedialModel
-::SolveEquation(bool flagGradient)
+MeshMedialPDESolver
+::SolveEquation(double *xInitSoln, bool flagGradient)
 {
   size_t i;
 
@@ -576,10 +573,11 @@ MeshMedialModel
   // Initialize the solver
   UnsymmetricRealPARDISO xPardiso;
 
-  // Set the solution to the current values of phi
+  // Set the solution to the current values of phi (or to the initial solution
+  // passed in to the method)
   vnl_vector<double> xSoln(topology->nVertices);
   for(i = 0; i < topology->nVertices; i++)
-    xSoln[i] = xAtoms[i].F;
+    xSoln[i] = xInitSoln == NULL ? xAtoms[i].F : xInitSoln[i];
 
   // Run for up to 50 iterations
   for(i = 0; i < 40; i++)
@@ -620,7 +618,7 @@ MeshMedialModel
 }
 
 void
-MeshMedialModel
+MeshMedialPDESolver
 ::ComputeRHSGradientMatrix(const double *phi)
 {
   // Fill the elements of matrix W
@@ -699,14 +697,14 @@ MeshMedialModel
 }
 
 void
-MeshMedialModel
+MeshMedialPDESolver
 ::ComputeGradient(vector<MedialAtom *> dAtoms)
 {
 }
 
 
 void
-MeshMedialModel
+MeshMedialPDESolver
 ::TestPartialDerivatives()
 {
   bool flagSuccess = true;
@@ -717,7 +715,7 @@ MeshMedialModel
   double z = 0.5 / xEpsilon;
   
   // Create a pair of alternative solutions
-  MeshMedialModel m1, m2;
+  MeshMedialPDESolver m1, m2;
   m1.SetMeshTopology(topology);
   m2.SetMeshTopology(topology);
 

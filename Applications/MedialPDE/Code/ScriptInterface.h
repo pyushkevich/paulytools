@@ -5,7 +5,8 @@
 #include <vector>
 #include <smlmath.h>
 
-class MedialPDESolver;
+class GenericMedialModel;
+class CartesianMedialModel;
 class FourierSurface;
 class MedialOptimizationProblem;
 class IMedialCoefficientMask;
@@ -101,6 +102,7 @@ private:
 
   // Allow the medial PDE to access this class
   friend class MedialPDE;
+  friend class CartesianMPDE;
   friend class MedialPCA;
   friend class FloatImageEuclideanFunctionAdapter;
 };
@@ -129,29 +131,18 @@ private:
 class MedialPDE
 {
 public:
-  /** Create a new instance of the medial PDE object with a given number of 
-   * surface coefficients and a given number of samples */
-  MedialPDE(unsigned int nBasesU, unsigned int nBasesV, 
-    unsigned int xResU, unsigned int xResV, 
-    double xFineScale = 0.0, 
-    unsigned int xFineU = 0, unsigned int xFineV = 0);
 
-  ~MedialPDE();
+  /** Constructor. Takes the medial model from child class. */
+  MedialPDE();
+
+  /** Virtual destructor. Child must delete the medial model. */
+  virtual ~MedialPDE() {};
   
-  /** Initialize the surface using a discrete m-rep */
-  void LoadFromDiscreteMRep(const char *file, double xInitRho);
-
   /** Save to a parameter file */
   void SaveToParameterFile(const char *file);
 
   /** Load from a parameter file */
   bool LoadFromParameterFile(const char *file);
-
-  /** Set the number of fourier coefficients */
-  void SetNumberOfCoefficients(unsigned int m, unsigned int n);
-
-  /** Some default initialization */
-  void GenerateSampleModel();
 
   /** Compute the match between the model and a floating point image */
   double ComputeImageMatch(FloatImage *image);
@@ -162,8 +153,31 @@ public:
   /** Fit the model to the binary image by matching moments of inertia */
   void MatchImageByMoments(FloatImage *image, unsigned int nCuts);
 
-  /** Perform gradient descent */
-  void RunOptimization(FloatImage *image, unsigned int nSteps);
+  /** 
+   * Perform an optimization step. Optimization parameters must be specified
+   * in a parameter file. They have the following keys:
+   *
+   * Optimizer        String (ConjGrad, EvolStrat, Gradient)
+   * Mapping          String (Identity, Affine, CoarseFine, PCA)
+   * ImageMatch       String (VolumeOverlap, BoundaryIntegral)
+   * TermWeights      Folder; each entry is a weight for a specific term
+   *   BoundaryJacobian
+   *   AtomBadness
+   *   MedialRegularity
+   *   RadiusPenalty
+   *
+   * Finally, the coarse-to-fine mapping can be fine-tuned. At the basic
+   * level, the user can select a CTF level, which is a number between 1 and N
+   * where N is the number of levels and 1 is the coarsest level. The finest
+   * level can also be denoted as -1, down to N. However, for additional
+   * fine-tuning, model-specific parameters can be provided.
+   *
+   * The idea is to eventually have a user interface for designing these
+   * parameter files.
+   */
+  void RunOptimization(
+    FloatImage *image, size_t nSteps, 
+    const char *paramfile, const char *folderName = NULL);
   
   /** Save the model as a BYU mesh */
   void SaveBYUMesh(const char *file);
@@ -172,54 +186,7 @@ public:
   void SaveVTKMesh(const char *fileMedial, const char *fileBoundary);
 
   /** Compute the radius function after surface/pho update */
-  bool Solve();
-
-  /** Set the optimization mode to affine */
-  void SetOptimizationToAffine()
-    { eMask = AFFINE; }
-
-  /** 
-   * Set optimization to a subset of the coefficients. The first ncu, ncv 
-   * coefficients in X and Rho will be used. This makes sense for Fourier
-   * style masks
-   */
-  void SetOptimizationToCoarseToFine(
-    int ncuX, int ncvX, int ncuRho, int ncvRho)
-    { 
-    eMask = COARSE_TO_FINE;
-    xCoarseFineParams[0] = ncuX;
-    xCoarseFineParams[1] = ncvX;
-    xCoarseFineParams[2] = ncuRho;
-    xCoarseFineParams[3] = ncvRho;
-    }
-
-  /** Set the optimization mode to deformable */
-  void SetOptimizationToDeformable()
-    { eMask = FULL; }
-
-  /** 
-   * Set optimization mode to use the PCA matrix. The matrix file must be
-   * specified separately
-   */
-  void SetOptimizationToPCA(size_t nModes)
-    { eMask = PCA; nPCAModes = nModes; }
-
-  /** Set the optimization mode */
-  void SetOptimizerToGradientDescent(double xStep)
-    { eOptimizer = GRADIENT; xStepSize = xStep; }
-  
-  void SetOptimizerToConjugateGradientDescent(double xStep)
-    { eOptimizer = CONJGRAD; xStepSize = xStep; }
-
-  void SetOptimizerToEvolutionaryMethod(double xStep)
-    { eOptimizer = EVOLUTION; }
-
-  /** Set the match type */
-  void SetMatchToVolumeOverlap()
-    { eMatch = VOLUME; }
-
-  void SetMatchToBoundaryGradient()
-    { eMatch = BOUNDARY; }
+  void Solve();
 
   /** Set the optimizer dump path. As the optimizer runs, it will periodically
    * dump meshes into path.number.med.vtk and path.number.bnd.vtk */
@@ -237,20 +204,7 @@ public:
     { strOptimizerDump = ""; }
 
   /** Should not be here! */
-  MedialPDESolver *GetSolver() { return xSolver; }
-
-  // Get a pointer to the surface
-  FourierSurface *GetSurface() { return xSurface; }
-
-  /** This method takes an image and an m-rep and samples the image using the 
-   * m-reps coordinate system, with linear interpolation. The result is stored in 
-   * a separate image. */
-  void SampleImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zSamples);
-
-  /** This method is the opposite of SampleImage. Given an image in the medial coordinate
-   * system (it must match the sampling rate of the cm-rep), this with map this image back
-   * into the ambient space */
-  void SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zSamples);
+  GenericMedialModel *GetMedialModel() { return xMedialModel; }
 
   /** Assign an intensity image to the cm-rep */
   void SetIntensityImage(FloatImage *imgIntensity);
@@ -261,27 +215,10 @@ public:
   /** Set the PCA data for PCA-based optimization */
   void SetPCAMatrix(size_t ncu, size_t ncv, const char *fnMatrix);
 
-  /** Create a PCACoefficientMask based on this medial PDE and the previously
-   * specified coefficient matrix */
-  IMedialCoefficientMask *CreatePCACoefficientMask(size_t nModes);
-
-  /** Release resources from a coefficient mask */
-  void ReleasePCACoefficientMask(IMedialCoefficientMask *xMask);
-
-private:
-  // Optimization modes and optimizers
-  enum OptimizerType { CONJGRAD, GRADIENT, EVOLUTION };
-  enum MaskType { AFFINE, COARSE_TO_FINE, FULL, PCA }; 
-  enum MatchType { VOLUME, BOUNDARY };
+protected:
   
   // The solver
-  MedialPDESolver *xSolver;
-
-  // The surface
-  FourierSurface *xSurface;
-
-  // Parameters for coarse-to-fine optimization
-  int xCoarseFineParams[4];
+  GenericMedialModel *xMedialModel;
 
   // Properties associated with different modes
   double xStepSize;
@@ -289,11 +226,6 @@ private:
   // A file where the mesh info is dumped
   std::string strDumpPath, strOptimizerDump;
   double xMeshDumpImprovementPercentage;
-
-  // Current modes
-  OptimizerType eOptimizer;
-  MaskType eMask;
-  MatchType eMatch;
 
   // An image containing grayscale intensities for this m-rep
   FloatImage imgIntensity;
@@ -314,6 +246,64 @@ private:
   // Number of coefficients used in the PCA matrix
   size_t ncuPCA, ncvPCA, nPCAModes;
 };
+
+/**
+ * This is a cm-rep on the Cartesian grid (basically unit box). It uses the
+ * Fourier basis (cosine basis) to define the skelton and the rho function.
+ */
+class CartesianMPDE : public MedialPDE
+{
+public:
+
+  /**
+   * Constructor. Takes the number of basis functions in u and v and the
+   * specification of the sampling grid
+   */
+  CartesianMPDE(
+    unsigned int nBasesU, unsigned int nBasesV, unsigned int xResU, unsigned int xResV, 
+    double xFineScale = 0.0, unsigned int xFineU = 0, unsigned int xFineV = 0);
+
+  /** Destructor */
+  virtual ~CartesianMPDE();
+
+  /** 
+   * Get a pointer to the surface used to interpolate the skeleton
+   */
+  FourierSurface *GetSurface() { return xSurface; }
+
+  /** Set the number of Fourier coefficients */
+  void SetNumberOfCoefficients(unsigned int m, unsigned int n);
+
+  /** 
+   * This method takes an image and an m-rep and samples the image using the 
+   * m-reps coordinate system, with linear interpolation. The result is stored in 
+   * a separate image. 
+   */
+  void SampleImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zSamples);
+
+  /**
+   * This method is the opposite of SampleImage. Given an image in the medial coordinate
+   * system (it must match the sampling rate of the cm-rep), this with map this image back
+   * into the ambient space 
+   */
+  void SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zSamples);
+
+  /** Initialize the surface using a discrete m-rep */
+  void LoadFromDiscreteMRep(const char *file, double xInitRho);
+
+  /** Some default initialization */
+  void GenerateSampleModel();
+
+private:
+
+  // The surface
+  FourierSurface *xSurface;
+
+  // The cartesian medial model
+  CartesianMedialModel *xCartesianMedialModel;
+};
+
+
 
 class MedialPCA
 {
@@ -343,8 +333,12 @@ public:
   void ExportShapeMatrix(const char *filename);
 
 private:
+  
+  typedef vnl_vector<double> Vec;
+  typedef vnl_matrix<double> Mat;
+
   std::vector< FloatImage* > xAppearance;
-  std::vector< FourierSurface* > xSurfaces;
+  std::vector< Vec > xModelCoefficients;
   vnl_vector<double> xPCALocation;  
   vnl_vector<double> xAppearancePCALocation;  
 

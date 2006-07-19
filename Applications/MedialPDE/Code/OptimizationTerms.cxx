@@ -1,6 +1,7 @@
 #include "OptimizationTerms.h"
-#include "ITKImageWrapper.h"
 #include "MedialAtomGrid.h"
+#include "MedialAtom.h"
+#include "ITKImageWrapper.h"
 #include <iostream>
 
 using namespace std;
@@ -100,14 +101,11 @@ SolutionDataBase::~SolutionDataBase()
 /*********************************************************************************
  * SOLUTION DATA                  
  ********************************************************************************/
-SolutionData::SolutionData(MedialPDESolver *xSolver)
-: SolutionDataBase()
+SolutionData::SolutionData( MedialIterationContext *xGrid, MedialAtom *xAtoms) :
+  SolutionDataBase()
 {
-  // Point to the atom grid
-  xAtomGrid = xSolver->GetAtomGrid();
-  
-  // Back up the atoms or point ot them
-  xAtoms = xSolver->GetAtomArray();
+  this->xAtomGrid = xGrid;
+  this->xAtoms = xAtoms;
 
   // Set the flags
   flagInternalWeights = false;
@@ -402,21 +400,18 @@ BoundaryImageMatchTerm::BeginGradientComputation(SolutionData *S)
   xImageVal = new double[S->xAtomGrid->GetNumberOfBoundaryPoints()];
   xImageMatch = 0.0;
 
-  MedialBoundaryPointIterator *itBnd = S->xAtomGrid->NewBoundaryPointIterator();
-  while(!itBnd->IsAtEnd())
+  // Loop over all boundary points
+  for(MedialBoundaryPointIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
     {
     // Compute the image gradient
-    SMLVec3d &X = GetBoundaryPoint(itBnd, S->xAtoms).X;
-    fImage.ComputeGradient(X, xGradI[itBnd->GetIndex()]);
+    SMLVec3d &X = GetBoundaryPoint(it, S->xAtoms).X;
+    fImage.ComputeGradient(X, xGradI[it.GetIndex()]);
 
     // Compute the image value
-    xImageVal[itBnd->GetIndex()] = fImage.Evaluate(X);
+    xImageVal[it.GetIndex()] = fImage.Evaluate(X);
 
     // Accumulate to get weighted match
-    xImageMatch += 
-      xImageVal[itBnd->GetIndex()] * S->xBoundaryWeights[itBnd->GetIndex()];
-    
-    ++(*itBnd);
+    xImageMatch += xImageVal[it.GetIndex()] * S->xBoundaryWeights[it.GetIndex()];
     }
   
   // We will need the area in many calculations
@@ -425,9 +420,6 @@ BoundaryImageMatchTerm::BeginGradientComputation(SolutionData *S)
   // Compute the final match
   xFinalMatch = xImageMatch / xBoundaryArea;
   
-  // Clean up
-  delete itBnd;
-
   // Return the solution
   return xFinalMatch;
 }
@@ -447,14 +439,14 @@ BoundaryImageMatchTerm
   DS->UpdateBoundaryWeights();
 
   // Compute the partial derivative for this coefficient
-  MedialBoundaryPointIterator *itBnd = S->xAtomGrid->NewBoundaryPointIterator();
-  for( ; !itBnd->IsAtEnd(); ++(*itBnd))
+  
+  for(MedialBoundaryPointIterator it(S->xAtomGrid) ; !it.IsAtEnd(); ++it)
     {
     // Get the index of this boundary point
-    size_t iPoint = itBnd->GetIndex();
+    size_t iPoint = it.GetIndex();
 
     // Get the change in the boundary point
-    SMLVec3d dX = GetBoundaryPoint(itBnd, DS->xAtoms).X;
+    SMLVec3d dX = GetBoundaryPoint(it, DS->xAtoms).X;
 
     // Get the area weights for this point
     double w = S->xBoundaryWeights[ iPoint ];
@@ -468,8 +460,6 @@ BoundaryImageMatchTerm
     dMatchdC += dw * I + w * dIdC;
     }
   
-  delete itBnd;
-
   // Compute the derivative
   double dFinaldC = 
     ( dMatchdC * S->xBoundaryArea - xImageMatch * DS->xBoundaryArea ) / 
@@ -506,26 +496,23 @@ double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
   xTotalPenalty = 0.0;
   xMaxJacobian = 1.0, xMinJacobian = 1.0, xAvgJacobian = 0.0;
 
-  // Reset the QuadEntry vector
-  if(xQuadEntries.size() != S->xAtomGrid->GetNumberOfQuads())
-    xQuadEntries.resize(S->xAtomGrid->GetNumberOfQuads());
+  // Reset the TriangleEntry vector
+  if(xTriangleEntries.size() != S->xAtomGrid->GetNumberOfTriangles())
+    xTriangleEntries.resize(S->xAtomGrid->GetNumberOfTriangles());
 
   // Keep track of the entry index
-  QuadVector::iterator eit = xQuadEntries.begin();
+  TriangleVector::iterator eit = xTriangleEntries.begin();
   
-  // Create a Quad-iterator through the atoms
-  MedialQuadIterator *itQuad = S->xAtomGrid->NewQuadIterator();
-  for(; !itQuad->IsAtEnd(); ++(*itQuad), ++eit)
+  // Create a Triangle-iterator through the atoms
+  for(MedialTriangleIterator itt(S->xAtomGrid); !itt.IsAtEnd(); ++itt, ++eit)
     {
     // Get the four atoms in this quad
-    MedialAtom &A00 = S->xAtoms[itQuad->GetAtomIndex(0, 0)];
-    MedialAtom &A01 = S->xAtoms[itQuad->GetAtomIndex(0, 1)];
-    MedialAtom &A10 = S->xAtoms[itQuad->GetAtomIndex(1, 0)];
-    MedialAtom &A11 = S->xAtoms[itQuad->GetAtomIndex(1, 1)];
+    MedialAtom &A0 = S->xAtoms[itt.GetAtomIndex(0)];
+    MedialAtom &A1 = S->xAtoms[itt.GetAtomIndex(1)];
+    MedialAtom &A2 = S->xAtoms[itt.GetAtomIndex(2)];
 
-    // Compute the average Xu and Xv vectors and the normal
-    eit->XU = 0.5 * ((A11.X - A01.X) + (A10.X - A00.X));
-    eit->XV = 0.5 * ((A11.X - A10.X) + (A01.X - A00.X));
+    // Compute the Xu and Xv vectors and the normal
+    eit->XU = A1.X - A0.X; eit->XV = A2.X - A0.X;
     eit->NX = vnl_cross_3d(eit->XU, eit->XV);
     eit->gX2 = dot_product(eit->NX, eit->NX);
 
@@ -533,10 +520,8 @@ double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
     for(size_t z = 0; z < 2; z++)
       {
       // Compute the same for the upper and lower boundaries
-      eit->YU[z] = 
-        0.5 * ((A11.xBnd[z].X - A01.xBnd[z].X) + (A10.xBnd[z].X - A00.xBnd[z].X));
-      eit->YV[z] = 
-        0.5 * ((A11.xBnd[z].X - A10.xBnd[z].X) + (A01.xBnd[z].X - A00.xBnd[z].X));
+      eit->YU[z] = A1.xBnd[z].X - A0.xBnd[z].X;
+      eit->YV[z] = A2.xBnd[z].X - A0.xBnd[z].X;
       eit->NY[z] = vnl_cross_3d(eit->YU[z], eit->YV[z]);
       
       // Compute the Jacobian
@@ -556,10 +541,9 @@ double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
       xTotalPenalty += eit->PenA[z] + eit->PenB[z];
       }
     }
-  delete itQuad;
 
   // Scale the average jacobian
-  xAvgJacobian /= S->xAtomGrid->GetNumberOfBoundaryQuads();
+  xAvgJacobian /= S->xAtomGrid->GetNumberOfBoundaryTriangles();
 
   // Return the total value
   return xTotalPenalty;
@@ -573,26 +557,23 @@ double BoundaryJacobianEnergyTerm
   double dTotalPenalty = 0.0;
 
   // Make sure that the quad entry array has been initialized
-  assert(xQuadEntries.size() == S->xAtomGrid->GetNumberOfQuads());
+  assert(xTriangleEntries.size() == S->xAtomGrid->GetNumberOfTriangles());
   
   // Keep track of the entry index
-  QuadVector::iterator eit = xQuadEntries.begin();
+  TriangleVector::iterator eit = xTriangleEntries.begin();
   
-  // Create a Quad-iterator through the atoms
-  MedialQuadIterator *itQuad = S->xAtomGrid->NewQuadIterator();
-  for(; !itQuad->IsAtEnd(); ++(*itQuad), ++eit)
+  // Create a Triangle-iterator through the atoms
+  
+  for(MedialTriangleIterator itt(S->xAtomGrid); !itt.IsAtEnd(); ++itt, ++eit)
     {
     // Get the derivative atoms too
-    MedialAtom &dA00 = dS->xAtoms[itQuad->GetAtomIndex(0, 0)];
-    MedialAtom &dA01 = dS->xAtoms[itQuad->GetAtomIndex(0, 1)];
-    MedialAtom &dA10 = dS->xAtoms[itQuad->GetAtomIndex(1, 0)];
-    MedialAtom &dA11 = dS->xAtoms[itQuad->GetAtomIndex(1, 1)];
-    
+    MedialAtom &dA0 = dS->xAtoms[itt.GetAtomIndex(0)];
+    MedialAtom &dA1 = dS->xAtoms[itt.GetAtomIndex(1)];
+    MedialAtom &dA2 = dS->xAtoms[itt.GetAtomIndex(2)];
+
     // Compute the average Xu and Xv vectors and derivatives
-    SMLVec3d dXU = 0.5 * ((dA11.X - dA01.X) + (dA10.X - dA00.X));
-    SMLVec3d dXV = 0.5 * ((dA11.X - dA10.X) + (dA01.X - dA00.X));
-    SMLVec3d dNX = 
-      vnl_cross_3d(dXU,  eit->XV) + vnl_cross_3d(eit->XU,  dXV);
+    SMLVec3d dXU = dA1.X - dA0.X; SMLVec3d dXV = dA2.X - dA0.X;
+    SMLVec3d dNX = vnl_cross_3d(dXU,  eit->XV) + vnl_cross_3d(eit->XU,  dXV);
 
     // Compute G and its derivative
     double dgX2 = 2.0 * dot_product(dNX, eit->NX);
@@ -601,12 +582,9 @@ double BoundaryJacobianEnergyTerm
     for(size_t z = 0; z < 2; z++)
       {
       // Compute boundary vector derivatives
-      SMLVec3d dYU = 
-        0.5 * ((dA11.xBnd[z].X - dA01.xBnd[z].X) + (dA10.xBnd[z].X - dA00.xBnd[z].X));
-      SMLVec3d dYV = 
-        0.5 * ((dA11.xBnd[z].X - dA10.xBnd[z].X) + (dA01.xBnd[z].X - dA00.xBnd[z].X));
-      SMLVec3d dNY = 
-        vnl_cross_3d(dYU, eit->YV[z]) + vnl_cross_3d(eit->YU[z], dYV);
+      SMLVec3d dYU = dA1.xBnd[z].X - dA0.xBnd[z].X;
+      SMLVec3d dYV = dA2.xBnd[z].X - dA0.xBnd[z].X;
+      SMLVec3d dNY = vnl_cross_3d(dYU, eit->YV[z]) + vnl_cross_3d(eit->YU[z], dYV);
 
       // Compute the Jacobian derivative
       double dJ = (
@@ -618,7 +596,6 @@ double BoundaryJacobianEnergyTerm
         (-10 * eit->PenA[z] + eit->PenB[z]) * dJ;
       }
     }
-  delete itQuad;
 
   // Return the total value
   return dTotalPenalty;
@@ -721,10 +698,10 @@ ProbabilisticEnergyTerm::ProbabilisticEnergyTerm(FloatImage *xImage, size_t nCut
   xImageIntegral = xImage->IntegratePositiveVoxels();
 }
 
-double ProbabilisticEnergyTerm::ComputeEnergy(SolutionDataBase *data)
+double ProbabilisticEnergyTerm::ComputeEnergy(SolutionDataBase *S)
 {
   // Make sure that the solution data has internal weights and points
-  data->UpdateInternalWeights(nCuts);
+  S->UpdateInternalWeights(nCuts);
 
   // Construct the 'match with the image' function. We simply use the raw
   // image intensity here
@@ -736,15 +713,13 @@ double ProbabilisticEnergyTerm::ComputeEnergy(SolutionDataBase *data)
   // double xVolume = 0.0;
 
   // Iterate over all the points inside the object and take the image value
-  MedialInternalPointIterator *it = data->xAtomGrid->NewInternalPointIterator(nCuts);
-  for(; !it->IsAtEnd(); ++(*it))
+  for(MedialInternalPointIterator it(S->xAtomGrid, nCuts); !it.IsAtEnd(); ++it)
     {
-    size_t i = it->GetIndex();
+    size_t i = it.GetIndex();
     xObjectIntegral += 
-      data->xInternalWeights[i] * fImage.Evaluate(data->xInternalPoints[i]);
-    // xVolume += data->xInternalWeights[i];
+      S->xInternalWeights[i] * fImage.Evaluate(S->xInternalPoints[i]);
+    // xVolume += S->xInternalWeights[i];
     }
-  delete it;
 
   // cout << "Bonehead Volume : " << xVolume << endl;
 
@@ -769,17 +744,15 @@ double ProbabilisticEnergyTerm::BeginGradientComputation(SolutionData *S)
   xImageVal = new double[S->xAtomGrid->GetNumberOfBoundaryPoints()];
 
   // Compute the boundary normal vectors
-  MedialBoundaryPointIterator *it = S->xAtomGrid->NewBoundaryPointIterator();
-  for(; !it->IsAtEnd(); ++(*it))
+  for(MedialBoundaryPointIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
     {
-    size_t i = it->GetIndex();
+    size_t i = it.GetIndex();
     BoundaryAtom &bat = GetBoundaryPoint(it, S->xAtoms);
     xImageVal[i] = fImage.Evaluate(bat.X);
     xBndNrm[i] = S->xBoundaryWeights[i] * bat.N;
 
     // xVolume += dot_product(bat.X, xBndNrm[i]);
     }
-  delete it;
 
   // cout << "Green's Theorem Volume: " << xVolume / 3.0 << endl;
 
@@ -794,14 +767,12 @@ double ProbabilisticEnergyTerm::ComputePartialDerivative(
   double dObjectIntegral = 0.0;
 
   // Iterate over boundary points, computing Green's Law derivative
-  MedialBoundaryPointIterator *it = S->xAtomGrid->NewBoundaryPointIterator();
-  for(; !it->IsAtEnd(); ++(*it))
+  for(MedialBoundaryPointIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
     {
-    size_t i = it->GetIndex();
+    size_t i = it.GetIndex();
     double NdX = dot_product(xBndNrm[i], GetBoundaryPoint(it, dS->xAtoms).X);
     dObjectIntegral += xImageVal[i] * NdX;
     }
-  delete it;
 
   // Take the derivative of the relative overlap measure
   return - dObjectIntegral / xImageIntegral;
@@ -825,7 +796,7 @@ void ProbabilisticEnergyTerm::PrintReport(ostream &sout)
 /*********************************************************************************
  * Crest Laplacian Penalty Term: Assure negative Rho on the crest
  ********************************************************************************/
-double CrestLaplacianEnergyTerm::ComputeEnergy(SolutionDataBase *data)
+double CrestLaplacianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
 {
   // Initialize the accumulators
   xMaxLaplacian = -1e10;
@@ -833,13 +804,12 @@ double CrestLaplacianEnergyTerm::ComputeEnergy(SolutionDataBase *data)
   nCrestAtoms = nBadSites = 0;
   
   // Iterate over all crest atoms
-  MedialAtomIterator *itAtom = data->xAtomGrid->NewAtomIterator();
-  for( ; !itAtom->IsAtEnd(); ++(*itAtom) )
+  for(MedialAtomIterator it(S->xAtomGrid) ; !it.IsAtEnd(); ++it)
     {
-    if(itAtom->IsEdgeAtom())
+    if(it.IsEdgeAtom())
       {
       // Get the laplacian at this point
-      double x = data->xAtoms[itAtom->GetIndex()].xLapR;
+      double x = S->xAtoms[it.GetIndex()].xLapR;
 
       // Update the minimum value
       if(x > xMaxLaplacian) xMaxLaplacian = x;
@@ -855,7 +825,6 @@ double CrestLaplacianEnergyTerm::ComputeEnergy(SolutionDataBase *data)
       xTotalPenalty += PenaltyFunction(x, 100, 0.0);
       }
     }
-  delete itAtom;
 
   // Finish up
   xAvgLaplacian /= nCrestAtoms;
@@ -877,7 +846,7 @@ void CrestLaplacianEnergyTerm::PrintReport(ostream &sout)
 /*********************************************************************************
  * Atom Badness Penalty term
  ********************************************************************************/
-double AtomBadnessTerm::ComputeEnergy(SolutionDataBase *data)
+double AtomBadnessTerm::ComputeEnergy(SolutionDataBase *S)
 {
   // Initialize the accumulators
   xMaxBadness = 0;
@@ -885,21 +854,19 @@ double AtomBadnessTerm::ComputeEnergy(SolutionDataBase *data)
   nBadAtoms = 0;
   
   // Iterate over all crest atoms
-  MedialAtomIterator *itAtom = data->xAtomGrid->NewAtomIterator();
-  for( ; !itAtom->IsAtEnd(); ++(*itAtom) )
+  for(MedialAtomIterator itAtom(S->xAtomGrid) ; !itAtom.IsAtEnd(); ++itAtom)
     {
     // We only care about invalid atoms
-    MedialAtom &A = data->xAtoms[itAtom->GetIndex()];
+    MedialAtom &A = S->xAtoms[itAtom.GetIndex()];
     if(!A.flagValid)
       {
       nBadAtoms++;
       xTotalPenalty += A.xGradRMagSqr - 1.0;
       }
     }
-  delete itAtom;
 
   // Finish up
-  nAtoms = data->xAtomGrid->GetNumberOfAtoms();
+  nAtoms = S->xAtomGrid->GetNumberOfAtoms();
   xAvgBadness = xTotalPenalty / nBadAtoms;
 
   // Return the total penalty
@@ -913,14 +880,12 @@ double AtomBadnessTerm::ComputePartialDerivative(
   double dTotalPenalty = 0.0;
   
   // Iterate over all crest atoms
-  MedialAtomIterator *itAtom = S->xAtomGrid->NewAtomIterator();
-  for( ; !itAtom->IsAtEnd(); ++(*itAtom) )
+  for(MedialAtomIterator itAtom(S->xAtomGrid) ; !itAtom.IsAtEnd(); ++itAtom)
     {
-    size_t i = itAtom->GetIndex();
+    size_t i = itAtom.GetIndex();
     if(!S->xAtoms[i].flagValid)
       dTotalPenalty += dS->xAtoms[i].xGradRMagSqr;
     }
-  delete itAtom;
 
   return dTotalPenalty;
 }
@@ -940,121 +905,103 @@ void AtomBadnessTerm::PrintReport(ostream &sout)
  ********************************************************************************/
 
 // Compute squared cosines of four angles in a quad
-double CosineSquareTuple(MedialAtom *A, MedialQuadIterator *it)
+double CosineSquareTuple(MedialAtom *A, MedialTriangleIterator &it)
 {
   // Get the four vectors
-  const SMLVec3d &X00 = A[it->GetAtomIndex(0, 0)].X;
-  const SMLVec3d &X01 = A[it->GetAtomIndex(0, 1)].X;
-  const SMLVec3d &X10 = A[it->GetAtomIndex(1, 0)].X;
-  const SMLVec3d &X11 = A[it->GetAtomIndex(1, 1)].X;
+  const SMLVec3d &X0 = A[it.GetAtomIndex(0)].X;
+  const SMLVec3d &X1 = A[it.GetAtomIndex(1)].X;
+  const SMLVec3d &X2 = A[it.GetAtomIndex(2)].X;
 
   // Compute the differences
-  SMLVec3d DX0 = X10 - X00;
-  SMLVec3d DX1 = X11 - X01;
-  SMLVec3d DY0 = X01 - X00;
-  SMLVec3d DY1 = X11 - X10;
+  SMLVec3d D10 = X1 - X0;
+  SMLVec3d D21 = X2 - X1;
+  SMLVec3d D02 = X0 - X2;
 
   // Compute the lengths squared
-  double LX0 = dot_product(DX0, DX0);
-  double LX1 = dot_product(DX1, DX1);
-  double LY0 = dot_product(DY0, DY0);
-  double LY1 = dot_product(DY1, DY1);
+  double L10 = dot_product(D10, D10);
+  double L21 = dot_product(D21, D21);
+  double L02 = dot_product(D02, D02);
 
   // Compute the cosines squared
-  double A00 = dot_product(DX0, DY0);
-  double A01 = dot_product(DX1, DY0);
-  double A10 = dot_product(DX0, DY1);
-  double A11 = dot_product(DX1, DY1);
+  double A0 = dot_product(D10, D02);
+  double A1 = dot_product(D21, D10);
+  double A2 = dot_product(D02, D21);
 
   // Compute the actual values
-  double C00 = (A00 * A00) / (LX0 * LY0);
-  double C01 = (A01 * A01) / (LX1 * LY0);
-  double C10 = (A10 * A10) / (LX0 * LY1);
-  double C11 = (A11 * A11) / (LX1 * LY1);
+  double C0 = (A0 * A0) / (L10 * L02);
+  double C1 = (A1 * A1) / (L21 * L10);
+  double C2 = (A2 * A2) / (L02 * L21);
 
   // Compute the weighted sum
-  return C00+C01+C10+C11;
+  return C0 + C1 + C2;
 }
 
 // Compute squared cosines of four angles in a quad
-double CosineSquareTupleDerivative(MedialAtom *A, MedialAtom *dA, MedialQuadIterator *it)
+double CosineSquareTupleDerivative(MedialAtom *A, MedialAtom *dA, MedialTriangleIterator &it)
 {
-  size_t i00 = it->GetAtomIndex(0, 0);
-  size_t i01 = it->GetAtomIndex(0, 1);
-  size_t i10 = it->GetAtomIndex(1, 0);
-  size_t i11 = it->GetAtomIndex(1, 1);
+  size_t i0 = it.GetAtomIndex(0);
+  size_t i1 = it.GetAtomIndex(1);
+  size_t i2 = it.GetAtomIndex(2);
 
   // Compute the differences and their derivatives
-  SMLVec3d DX0 = A[i10].X - A[i00].X;
-  SMLVec3d DX1 = A[i11].X - A[i01].X;
-  SMLVec3d DY0 = A[i01].X - A[i00].X;
-  SMLVec3d DY1 = A[i11].X - A[i10].X;
+  SMLVec3d D10 = A[i1].X - A[i0].X;
+  SMLVec3d D21 = A[i2].X - A[i1].X;
+  SMLVec3d D02 = A[i0].X - A[i2].X;
 
-  SMLVec3d dDX0 = dA[i10].X - dA[i00].X;
-  SMLVec3d dDX1 = dA[i11].X - dA[i01].X;
-  SMLVec3d dDY0 = dA[i01].X - dA[i00].X;
-  SMLVec3d dDY1 = dA[i11].X - dA[i10].X;
+  SMLVec3d dD10 = dA[i1].X - dA[i0].X;
+  SMLVec3d dD21 = dA[i2].X - dA[i1].X;
+  SMLVec3d dD02 = dA[i0].X - dA[i2].X;
 
   // Compute the lengths squared
-  double LX0 = dot_product(DX0, DX0);
-  double LX1 = dot_product(DX1, DX1);
-  double LY0 = dot_product(DY0, DY0);
-  double LY1 = dot_product(DY1, DY1);
+  double L10 = dot_product(D10, D10);
+  double L21 = dot_product(D21, D21);
+  double L02 = dot_product(D02, D02);
 
-  double dLX0 = 2.0 * dot_product(DX0, dDX0);
-  double dLX1 = 2.0 * dot_product(DX1, dDX1);
-  double dLY0 = 2.0 * dot_product(DY0, dDY0);
-  double dLY1 = 2.0 * dot_product(DY1, dDY1);
+  double dL10 = 2.0 * dot_product(D10, dD10);
+  double dL21 = 2.0 * dot_product(D21, dD21);
+  double dL02 = 2.0 * dot_product(D02, dD02);
 
-  // Compute the cosines squared and their derivatives
-  double A00 = dot_product(DX0, DY0);
-  double A01 = dot_product(DX1, DY0);
-  double A10 = dot_product(DX0, DY1);
-  double A11 = dot_product(DX1, DY1);
+  // Compute the cosines squared
+  double A0 = dot_product(D10, D02);
+  double A1 = dot_product(D21, D10);
+  double A2 = dot_product(D02, D21);
 
-  double dA00 = dot_product(dDX0, DY0) + dot_product(DX0, dDY0);
-  double dA01 = dot_product(dDX1, DY0) + dot_product(DX1, dDY0);
-  double dA10 = dot_product(dDX0, DY1) + dot_product(DX0, dDY1);
-  double dA11 = dot_product(dDX1, DY1) + dot_product(DX1, dDY1);
+  double dA0 = dot_product(D10, dD02) + dot_product(dD10, D02);
+  double dA1 = dot_product(D21, dD10) + dot_product(dD21, D10);
+  double dA2 = dot_product(D02, dD21) + dot_product(dD02, D21);
 
   // Compute the derivatives of the actual values
-  double dC00 = ( 2.0 * (A00 * dA00) * (LX0 * LY0) - (A00 * A00) * (LX0 * dLY0 + dLX0 * LY0) ) / ( (LX0 * LY0) * (LX0 * LY0) );
-  double dC01 = ( 2.0 * (A01 * dA01) * (LX1 * LY0) - (A01 * A01) * (LX1 * dLY0 + dLX1 * LY0) ) / ( (LX1 * LY0) * (LX1 * LY0) );
-  double dC10 = ( 2.0 * (A10 * dA10) * (LX0 * LY1) - (A10 * A10) * (LX0 * dLY1 + dLX0 * LY1) ) / ( (LX0 * LY1) * (LX0 * LY1) );
-  double dC11 = ( 2.0 * (A11 * dA11) * (LX1 * LY1) - (A11 * A11) * (LX1 * dLY1 + dLX1 * LY1) ) / ( (LX1 * LY1) * (LX1 * LY1) );
+  double C0 = (A0 * A0) / (L10 * L02);
+  double C1 = (A1 * A1) / (L21 * L10);
+  double C2 = (A2 * A2) / (L02 * L21);
+
+  // (a/b)' = (a'b - ab')/b^2 = (a' - (a/b)b')/b
+  double dC0 = (2.0 * A0 * dA0 - C0 * (L10 * dL02 + dL10 * L02)) / (L10 * L02);
+  double dC1 = (2.0 * A1 * dA1 - C1 * (L21 * dL10 + dL21 * L10)) / (L21 * L10);
+  double dC2 = (2.0 * A2 * dA2 - C2 * (L02 * dL21 + dL02 * L21)) / (L02 * L21);
 
   // Compute the weighted sum
-  return dC00 + dC01 + dC10 + dC11;
+  return dC0 + dC1 + dC2;
 }
 
-double MedialAnglesPenaltyTerm::ComputeEnergy(SolutionDataBase *data)
+double MedialAnglesPenaltyTerm::ComputeEnergy(SolutionDataBase *S)
 {
   xTotalPenalty = 0.0;
 
-  // Iterate over all the quads in the medial mesh
-  MedialQuadIterator *itQuad = data->xAtomGrid->NewQuadIterator();
-  for( ; !itQuad->IsAtEnd(); ++(*itQuad))
-    {
-    // Compute the cosine square of each angle
-    xTotalPenalty += CosineSquareTuple(data->xAtoms, itQuad);
-    }
-  delete itQuad;
+  // Sum the penalty over all triangles in the mesh
+  for(MedialTriangleIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
+    xTotalPenalty += CosineSquareTuple(S->xAtoms, it);
 
-  return 0.25 * xTotalPenalty / data->xAtomGrid->GetNumberOfAtoms();
+  return 0.25 * xTotalPenalty / S->xAtomGrid->GetNumberOfAtoms();
 }
 
 double MedialAnglesPenaltyTerm::ComputePartialDerivative(SolutionData *S, PartialDerivativeSolutionData *dS)
 {
   double dTotalPenalty = 0.0;
 
-  // Iterate over all the quads in the medial mesh
-  MedialQuadIterator *itQuad = S->xAtomGrid->NewQuadIterator();
-  for( ; !itQuad->IsAtEnd(); ++(*itQuad))
-    {
-    // Compute the cosine square of each angle
-    dTotalPenalty += CosineSquareTupleDerivative(S->xAtoms, dS->xAtoms, itQuad);
-    }
-  delete itQuad;
+  // Sum the penalty over all triangles in the mesh
+  for(MedialTriangleIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
+    dTotalPenalty += CosineSquareTupleDerivative(S->xAtoms, dS->xAtoms, it);
 
   return 0.25 * dTotalPenalty / S->xAtomGrid->GetNumberOfAtoms();
 }
@@ -1070,7 +1017,7 @@ void MedialAnglesPenaltyTerm::PrintReport(ostream &sout)
  * Regularity term (used to maintain correspondence)
  ********************************************************************************/
 MedialRegularityTerm::MedialRegularityTerm(
-  MedialAtomGrid *inAtomGrid, MedialAtom *inAtomArray)
+  MedialIterationContext *inAtomGrid, MedialAtom *inAtomArray)
 {
   // Generate an array of weights for irregular grids
   xDomainWeights.set_size(inAtomGrid->GetNumberOfAtoms());
@@ -1079,8 +1026,7 @@ MedialRegularityTerm::MedialRegularityTerm(
   cout << "Domain Area: " << xDomainArea << endl;
 }
 
-
-double MedialRegularityTerm::ComputeEnergy(SolutionDataBase *data)
+double MedialRegularityTerm::ComputeEnergy(SolutionDataBase *S)
 {
   // Integral of (G2(1,11) + G(2,12))^2 + (G(1,21) + G(2,22)) du dv 
   // (no area elt. scaling)
@@ -1088,11 +1034,10 @@ double MedialRegularityTerm::ComputeEnergy(SolutionDataBase *data)
   xGradMagMaximum = 0;
   
   // Integrate over all atoms
-  MedialAtomIterator *it = data->xAtomGrid->NewAtomIterator();
-  for(; !it->IsAtEnd(); ++(*it))
+  for(MedialAtomIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
     {
     // Get the medial atom
-    MedialAtom &a = data->xAtoms[it->GetIndex()];
+    MedialAtom &a = S->xAtoms[it.GetIndex()];
 
     // Only compute the penalty if the atom is internal
     if(a.flagCrest || !a.flagValid) 
@@ -1108,10 +1053,8 @@ double MedialRegularityTerm::ComputeEnergy(SolutionDataBase *data)
       xGradMagMaximum = reg;
 
     // Update the integral
-    xGradMagIntegral += xDomainWeights[it->GetIndex()] * reg;
+    xGradMagIntegral += xDomainWeights[it.GetIndex()] * reg;
     }
-
-  delete it;
 
   return xGradMagIntegral / xDomainArea;
 }
@@ -1122,12 +1065,11 @@ double MedialRegularityTerm
   double dIntegral = 0.0;
   
   // Integrate over all atoms
-  MedialAtomIterator *it = S->xAtomGrid->NewAtomIterator();
-  for(; !it->IsAtEnd(); ++(*it))
+  for(MedialAtomIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
     {
     // Get the four atoms at the corner of the quad
-    MedialAtom &a = S->xAtoms[it->GetIndex()];
-    MedialAtom &da = dS->xAtoms[it->GetIndex()];
+    MedialAtom &a = S->xAtoms[it.GetIndex()];
+    MedialAtom &da = dS->xAtoms[it.GetIndex()];
 
     // Only compute the penalty if the atom is internal
     if(a.flagCrest || !a.flagValid) 
@@ -1141,10 +1083,8 @@ double MedialRegularityTerm
     double dreg = 2.0 * (reg1 * dreg1 + reg2 * dreg2);
 
     // Update the integral
-    dIntegral += xDomainWeights[it->GetIndex()] * dreg;
+    dIntegral += xDomainWeights[it.GetIndex()] * dreg;
     }
-
-  delete it;
 
   // Return the error
   return dIntegral / xDomainArea; 
@@ -1227,22 +1167,37 @@ const double MedialOptimizationProblem::xEpsilon = 1.0e-6;
 
 MedialOptimizationProblem
 ::MedialOptimizationProblem(
-  MedialPDESolver *xSolver, IMedialCoefficientMask *xCoeff)
+  GenericMedialModel *xMedialModel, CoefficientMapping *xCoeff)
 {
   this->xCoeff = xCoeff;
-  this->xSolver = xSolver;
-  this->nCoeff = xCoeff->GetNumberOfCoefficients();
+  this->xMedialModel = xMedialModel;
+  this->nCoeff = xCoeff->GetNumberOfParameters();
 
   flagLastEvalAvailable = false;
   flagPhiGuessAvailable = false;
+
+  // Save the initial coefficients currently in the model
+  xInitialCoefficients = xMedialModel->GetCoefficientArray();
   
-  // Prepare medial atoms for gradient computation
+  // Prepare medial atoms for gradient computation (this can only be done for 
+  // linear coefficient mappings; for non-linear ones, the variation will change
+  // depending on where in parameter space we are).
   for(size_t i = 0; i < nCoeff; i++)
     {
-    MedialAtom *a = new MedialAtom[xSolver->GetAtomGrid()->GetNumberOfAtoms()];
-    IHyperSurface2D *xVariation = xCoeff->GetComponentSurface(i);
-    xSolver->PrepareAtomsForVariationalDerivative(xVariation, a);
-    xCoeff->ReleaseComponentSurface(xVariation);
+    // Create an array of atoms for this directional derivative
+    MedialAtom *a = new MedialAtom[xMedialModel->GetNumberOfAtoms()];
+
+    // Precompute the variation (direction) corresponding to i-th component
+    if(xCoeff->IsLinear()) 
+      {
+      Vec xVariation = xCoeff->GetVariationForParameter(
+        xInitialCoefficients, Vec(xCoeff->GetNumberOfParameters(), 0.0), i);
+
+      // Precompute the 'simple' terms in the variational derivative
+      xMedialModel->PrepareAtomsForVariationalDerivative(xVariation, a);
+      }
+    
+    // Save the atoms
     dAtomArray.push_back(a);
     }
 }
@@ -1269,9 +1224,6 @@ bool MedialOptimizationProblem::SolvePDE(double *xEvalPoint)
   // Make a vector from the eval point
   vnl_vector<double> X(xEvalPoint, nCoeff);
 
-  // This flag will tell us if the last evaluation failed
-  bool flagSolveOk;
-
   // Check if we are re-evaluating at a previously tried location
   if(flagLastEvalAvailable && X == xLastEvalPoint)
     return false;
@@ -1279,14 +1231,11 @@ bool MedialOptimizationProblem::SolvePDE(double *xEvalPoint)
   // Solve the equation
   xSolveTimer.Start();
 
-  // Update the surface with the new solution
-  xCoeff->SetCoefficientArray(xEvalPoint);
+  // Update the medial model with the new coefficients
+  xMedialModel->SetCoefficientArray(xCoeff->Apply(xInitialCoefficients, X));
 
   // Solve the PDE using the last phi field if we have it
-  // flagSolveOk = (flagPhiGuessAvailable)
-  //   ? xSolver->Solve(xLastPhiField, xPrecision)
-  //   : xSolver->Solve(xPrecision);
-  flagSolveOk = xSolver->Solve(xPrecision);
+  xMedialModel->ComputeAtoms();
 
   // Stop timing
   xSolveTimer.Stop();
@@ -1305,7 +1254,7 @@ double MedialOptimizationProblem::Evaluate(double *xEvalPoint)
   if( SolvePDE(xEvalPoint) )
     {
     // Create a solution data object representing current solution
-    SolutionData S0(xSolver);
+    SolutionData S0(xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
 
     // Compute the solution for each term
     xLastSolutionValue = 0.0;
@@ -1329,15 +1278,15 @@ double MedialOptimizationProblem
   SolvePDE(xEvalPoint);
 
   // Initialize the problem with the current solution
-  xSolver->SetSolutionAsInitialGuess();
+  xMedialModel->SetSolutionAsInitialGuess();
 
   // Create a solution data 
-  SolutionData S(xSolver);
+  SolutionData S(xMedialModel);
 
   // Compute the variation in the gradient direction and the var. deriv.
   IHyperSurface2D *xVariation = xCoeff->GetVariationSurface(xDirection);
   xSolveGradTimer.Start();
-  xSolver->ComputeVariationalDerivative(xVariation, dAtoms); 
+  xMedialModel->ComputeVariationalDerivative(xVariation, dAtoms); 
   xSolveGradTimer.Stop();
   PartialDerivativeSolutionData dS(&S, dAtoms);
 
@@ -1372,44 +1321,59 @@ void
 MedialOptimizationProblem
 ::ComputeCentralDifferenceGradientPhi(double *x)
 {
-  // Create the first problem
-  MedialPDESolver S1(xSolver->GetGridU(), xSolver->GetGridV());
-  S1.SetMedialSurface(xSolver->GetMedialSurface());
+  // Epsilon used for central differences
+  double eps = 0.0001;
+  size_t i, n = xMedialModel->GetNumberOfAtoms();
 
-  // Create the second problem
-  MedialPDESolver S2(xSolver->GetGridU(), xSolver->GetGridV());
-  S2.SetMedialSurface(xSolver->GetMedialSurface());
+  // Allocate medial atom arrays for central gradient computation
+  MedialAtom *a1 = new MedialAtom[n];
+  MedialAtom *a2 = new MedialAtom[n];
 
-  double t1 = S1.tSolver.Read();
-  double t2 = S2.tSolver.Read();
+  // Make a copy of the atoms at the central location
+  MedialAtom *a0 = new MedialAtom[n];
+  std::copy(xMedialModel->GetAtomArray(), xMedialModel->GetAtomArray()+n, a0);
+
+  // Create a timer for this procedure
+  CodeTimer tCDG;
+
+  // Compute the central difference gradient for each direction
   for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)
     {
-    // Compute central difference
-    double c = xCoeff->GetCoefficient(iCoeff);
-    double eps = 0.0001;
-    xCoeff->SetCoefficient(iCoeff, c + eps);
-    S1.Solve(xSolver->GetPhiField());
+    // Get the current value of the parameters
+    double c = xLastEvalPoint[iCoeff];
 
-    xCoeff->SetCoefficient(iCoeff, c - eps);
-    S2.Solve(xSolver->GetPhiField());
+    // Compute the forward differences
+    xLastEvalPoint[iCoeff] = c + eps;
+    xMedialModel->SetCoefficientArray(xCoeff->Apply(xInitialCoefficients, xLastEvalPoint));
+    xMedialModel->ComputeAtoms(a0);
+
+    // Save the atoms
+    std::copy(xMedialModel->GetAtomArray(), xMedialModel->GetAtomArray()+n, a1);
+
+    // Compute the backward differences
+    xLastEvalPoint[iCoeff] = c - eps;
+    xMedialModel->SetCoefficientArray(xCoeff->Apply(xInitialCoefficients, xLastEvalPoint));
+    xMedialModel->ComputeAtoms(a0);
+
+    // Save the atoms
+    std::copy(xMedialModel->GetAtomArray(), xMedialModel->GetAtomArray()+n, a2);
 
     // Reset the coefficient
-    xCoeff->SetCoefficient(iCoeff, c);
+    xLastEvalPoint[iCoeff] = c;
 
     // Compute the atom derivative arrays
-    MedialAtom *dat = dAtomArray[iCoeff];
-    MedialAtom *a1 = S1.GetAtomArray();
-    MedialAtom *a2 = S2.GetAtomArray();
-
-    for(size_t i = 0; i< xSolver->GetAtomGrid()->GetNumberOfAtoms(); i++)
-      {
-      MedialAtomCentralDifference(a1[i], a2[i], eps, dat[i]);
-      }
+    for(i = 0; i< n; i++)
+      MedialAtomCentralDifference(a1[i], a2[i], eps, dAtomArray[iCoeff][i]);
     }
-  t1 = S1.tSolver.Read() - t1;
-  t2 = S2.tSolver.Read() - t2;
-  cout << "[CDG: " << (t1+t2) << " ms] " << flush;
-  
+
+  // Print timing information
+  cout << "[CDG: " << tCDG.StopAndRead() << " ms] " << flush;
+
+  // Restore the atoms in the solution
+  std::copy(a0, a0 + n, xMedialModel->GetAtomArray());
+
+  // Clean up
+  delete[] a1; delete[] a2; delete[] a0;
 }
 
 double 
@@ -1425,17 +1389,32 @@ MedialOptimizationProblem
   SolvePDE(xEvalPoint);
   cout << " [SLV: " << (clock() - t0) / CLOCKS_PER_SEC << " ms] " << flush;
 
+
   // Compute the gradient
   xSolveGradTimer.Start();
-  xSolver->ComputeVariationalGradient(dAtomArray); 
-  // ComputeCentralDifferenceGradientPhi(xGradient);
+  
+  // If the coefficient mapping is non-linear, we must compute all the variations again
+  if(!xCoeff->IsLinear())
+    {
+    for(size_t i = 0; i < xCoeff->GetNumberOfParameters(); i++) 
+      {
+      Vec xVariation = xCoeff->GetVariationForParameter(
+        xInitialCoefficients, Vec(xCoeff->GetNumberOfParameters(), 0.0), i);
+
+      // Precompute the 'simple' terms in the variational derivative
+      xMedialModel->PrepareAtomsForVariationalDerivative(
+        xVariation, dAtomArray[i]);
+      }
+    }
+
+  // Now, compute the actual gradient
+  xMedialModel->ComputeAtomGradient(dAtomArray); 
+  
+  // Stop the timer
   xSolveGradTimer.Stop();
 
-  // Store this solution as the new initialization for the PDE solver
-  xSolver->SetSolutionAsInitialGuess();
-
   // Create a solution data object representing current solution
-  SolutionData S(xSolver);
+  SolutionData S(xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
 
   // Compute the value at the solution and init gradient computation
   t0 = clock();

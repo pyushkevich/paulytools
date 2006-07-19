@@ -1,5 +1,5 @@
 #include "ScriptInterface.h"
-#include "MedialPDESolver.h"
+#include "CartesianMedialModel.h"
 #include "BasisFunctions2D.h"
 #include "ITKImageWrapper.h"
 #include "MedialPDERenderer.h"
@@ -37,7 +37,8 @@ void TestGradientComputationPrintReport(
 }
 
 int TestGradientComputation(
-  MedialPDESolver *xSolver, IMedialCoefficientMask *xMask, int nRandVar)
+  GenericMedialModel *xSolver, CoefficientMapping *xMapping, 
+  vnl_vector<double> P0, int nRandVar)
 {
   size_t iVar;
 
@@ -46,6 +47,13 @@ int TestGradientComputation(
   
   // The epsilon for central difference tests
   double eps = 0.0001;
+
+  // The number of atoms in the solver
+  size_t nAtoms = xSolver->GetNumberOfAtoms();
+
+  // The number of parameters in the source coefficient space
+  size_t nParams = xMapping->GetNumberOfParameters();
+  size_t nCoeffs = xMapping->GetNumberOfCoefficients();
   
   // Max values for different classes of error
   double xGlobalMaxPhiDiff = 0.0, xGlobalMaxGradR = 0.0, xGlobalMaxGRMS = 0.0;
@@ -57,51 +65,37 @@ int TestGradientComputation(
   cout << "Comparing Numeric Derivatives to Analytic" << endl;
   cout << "*****************************************" << endl;
 
-  // Create the first problem
-  MedialPDESolver S1(xSolver->GetGridU(), xSolver->GetGridV());
-  S1.SetMedialSurface(xSolver->GetMedialSurface());
-
-  // Create the second problem
-  MedialPDESolver S2(xSolver->GetGridU(), xSolver->GetGridV());
-  S2.SetMedialSurface(xSolver->GetMedialSurface());
-
   // Create a list of variational surfaces: some components, some random
   // variations
-  vector<IHyperSurface2D *> xVariations;
   vector<string> xVariationNames;
-  vector< vnl_vector<double> > xVariationCoeffs;
+  vector< vnl_vector<double> > xVariations;
 
-  // Get the current coefficient vector
-  vnl_vector<double> x0(
-    xMask->GetCoefficientArray(), xMask->GetNumberOfCoefficients());
+  // The initial coefficient vector is C0
+  vnl_vector<double> C0 = xSolver->GetCoefficientArray();
 
   // Create the per-component variations
   size_t iComp;
-  for( iComp = 0; iComp < xMask->GetNumberOfCoefficients(); iComp++)
+  for( iComp = 0; iComp < nParams; iComp++)
     {
     ostringstream oss;
     oss << " Coefficient " << iComp;
     
-    vnl_vector<double> xCoeff(xMask->GetNumberOfCoefficients(), 0.0);
-    xCoeff[iComp] = 1.0;
+    vnl_vector<double> xParamVariation(nParams, 0.0); xParamVariation[iComp] = 1.0;
     
-    xVariations.push_back(xMask->GetComponentSurface(iComp));
     xVariationNames.push_back(oss.str());
-    xVariationCoeffs.push_back(xCoeff);
+    xVariations.push_back(xParamVariation);
     }
 
   // Create mixed variations
   for(size_t i = 0; i < nRandVar; i++)
     {    
-    vnl_vector<double> dx(xMask->GetNumberOfCoefficients());
-    for(size_t j=0; j<dx.size(); j++)
+    vnl_vector<double> dx(nParams);
+    for(size_t j = 0; j < nParams; j++)
       dx[j] = rand() * 2.0 / RAND_MAX - 1.0;
 
-    xVariations.push_back(xMask->GetVariationSurface(dx.data_block()));
     xVariationNames.push_back(" Random Variation ");
-    xVariationCoeffs.push_back(dx);
+    xVariations.push_back(dx);
    }
-  
 
   // For each variation, allocate a derivative array
   vector<MedialAtom *> dAtomArray;
@@ -109,73 +103,60 @@ int TestGradientComputation(
   // Repeat for all variations
   for(iVar = 0; iVar < xVariations.size(); iVar++)
     {
-    // Get an adapter corresponding to the i-th component of the surface
-    IHyperSurface2D *xEta = xVariations[iVar];
-
     // Create an array of atoms to hold the derivative data
-    MedialAtom *dAtoms = 
-      new MedialAtom[xSolver->GetAtomGrid()->GetNumberOfAtoms()];
-    xSolver->PrepareAtomsForVariationalDerivative(xEta, dAtoms);
+    MedialAtom *dAtoms = new MedialAtom[nAtoms];
+    xSolver->PrepareAtomsForVariationalDerivative(xVariations[iVar], dAtoms);
     dAtomArray.push_back(dAtoms);
     }
 
-  // Dis-initialize the solver for timing
-  vnl_matrix<double> phi = xSolver->GetPhiField();
-  phi.fill(0.0);
-
   // Solve the medial PDE for all these variations
   tInitialSolver.Start();
-  xSolver->Solve(phi);
+  xSolver->ComputeAtoms();
   tInitialSolver.Stop();
 
-  tAnalytic.Start();
-  xSolver->ComputeVariationalGradient(dAtomArray);
-  tAnalytic.Stop();
+  // Make three copies of the atom array
+  MedialAtom *A0 = new MedialAtom[nAtoms];
+  MedialAtom *A1 = new MedialAtom[nAtoms];
+  MedialAtom *A2 = new MedialAtom[nAtoms];
 
-  // Initialze S1 and S2 to the solution at the center
-  S1.Solve(xSolver->GetPhiField()); S1.SetSolutionAsInitialGuess();
-  S2.Solve(xSolver->GetPhiField()); S2.SetSolutionAsInitialGuess();
+  // Copy the current solution into the first array
+  std::copy(xSolver->GetAtomArray(), xSolver->GetAtomArray() + nAtoms, A0);
+
+  // Compute the analytical gradient of the atoms
+  tAnalytic.Start();
+  xSolver->ComputeAtomGradient(dAtomArray);
+  tAnalytic.Stop();
 
   // Compute all the other derivatives
   for(iVar = 0; iVar < xVariations.size(); iVar++) 
     {
-    // Get an adapter corresponding to the i-th component of the surface
-    IHyperSurface2D *xEta = xVariations[iVar];
-
     cout << "----------------------------------------" << endl;
     cout << xVariationNames[iVar] << endl;
     cout << "----------------------------------------" << endl;
     
-    // Solve both problems
-    tCentral.Start();
-    xMask->SetCoefficientArray( (x0 + eps * xVariationCoeffs[iVar]).data_block() );
-    S1.Solve();
+    // Solve for the forward difference
+    xSolver->SetCoefficientArray(xMapping->Apply(C0, P0 + eps * xVariations[iVar]));
+    tCentral.Start(); xSolver->ComputeAtoms(A0); tCentral.Stop();
+    std::copy(xSolver->GetAtomArray(), xSolver->GetAtomArray() + nAtoms, A1);
 
-    xMask->SetCoefficientArray( (x0 - eps * xVariationCoeffs[iVar]).data_block() );
-    S2.Solve();
-    tCentral.Stop();
-
-    // Restore the coefficient to its correct value
-    xMask->SetCoefficientArray( x0.data_block() );
-
-    // Get the atom arrays
-    MedialAtom *A1 = S1.GetAtomArray();
-    MedialAtom *A2 = S2.GetAtomArray();
+    // Solve for the backward difference
+    xSolver->SetCoefficientArray(xMapping->Apply(C0, P0 - eps * xVariations[iVar]));
+    tCentral.Start(); xSolver->ComputeAtoms(A0); tCentral.Stop();
+    std::copy(xSolver->GetAtomArray(), xSolver->GetAtomArray() + nAtoms, A2);
 
     // Compute the values of dPhi/dC between central difference and analytic
     // derivatives
-    unsigned int n = xSolver->GetAtomGrid()->GetNumberOfAtoms();
     double xMaxPhiDiff = 0.0;
     double xMaxBndDiff = 0.0;
     double xMaxBndNrmDiff = 0.0;
     double xMaxGRMS = 0.0;
     double xMaxGradRDiff = 0.0;
 
-    for(unsigned int i = 0; i < n; i++)
+    for(unsigned int i = 0; i < nAtoms; i++)
       {
       // Point to the atoms
-      MedialAtom &a1 = S1.GetAtomArray()[i];
-      MedialAtom &a2 = S2.GetAtomArray()[i];
+      MedialAtom &a1 = A1[i];
+      MedialAtom &a2 = A2[i];
       MedialAtom &a0 = dAtomArray[iVar][i];
 
       // Take the largest difference in Phi
@@ -209,7 +190,10 @@ int TestGradientComputation(
     cout << endl;
 
     // Now, test the effect on SolutionData objects
-    SolutionData sd0(xSolver), sd1(&S1), sd2(&S2);
+    MedialIterationContext *xGrid = xSolver->GetIterationContext();
+    SolutionData sd0(xGrid, A0);
+    SolutionData sd1(xGrid, A1);
+    SolutionData sd2(xGrid, A2);
     PartialDerivativeSolutionData pdsd(&sd0, dAtomArray[iVar]);
 
     // Compute the boundary weights derivatives
@@ -220,19 +204,14 @@ int TestGradientComputation(
 
     // Compute the area weight difference
     double xMaxBndAreaDiff = 0.0;
-    MedialBoundaryPointIterator *itBnd 
-      = xSolver->GetAtomGrid()->NewBoundaryPointIterator();
-    while(!itBnd->IsAtEnd())
+    for(MedialBoundaryPointIterator itBnd(xGrid); !itBnd.IsAtEnd(); ++itBnd)
       {
       double aNumeric = 0.5 * ( 
-        sd1.xBoundaryWeights[itBnd->GetIndex()] - 
-        sd2.xBoundaryWeights[itBnd->GetIndex()]) / eps;
-      double aAnalytic = pdsd.xBoundaryWeights[itBnd->GetIndex()];
+        sd1.xBoundaryWeights[itBnd.GetIndex()] - 
+        sd2.xBoundaryWeights[itBnd.GetIndex()]) / eps;
+      double aAnalytic = pdsd.xBoundaryWeights[itBnd.GetIndex()];
       UpdateMax(fabs(aAnalytic - aNumeric), xMaxBndAreaDiff);
-      ++(*itBnd); 
       }
-    delete itBnd;
-
 
     // Compute the difference in internal point volume weights
     size_t nInternal = 4;
@@ -243,19 +222,14 @@ int TestGradientComputation(
 
     // Compute the area weight difference
     double xMaxCellVolumeDiff = 0.0;
-    MedialInternalPointIterator *itPoint 
-      = xSolver->GetAtomGrid()->NewInternalPointIterator(nInternal);
-    while(!itPoint->IsAtEnd())
+    for(MedialInternalPointIterator itPoint(xGrid,nInternal); !itPoint.IsAtEnd(); ++itPoint)
       {
       double aNumeric = 0.5 * ( 
-        sd1.xInternalWeights[itPoint->GetIndex()] - 
-        sd2.xInternalWeights[itPoint->GetIndex()]) / eps;
-      double aAnalytic = pdsd.xInternalWeights[itPoint->GetIndex()];
+        sd1.xInternalWeights[itPoint.GetIndex()] - 
+        sd2.xInternalWeights[itPoint.GetIndex()]) / eps;
+      double aAnalytic = pdsd.xInternalWeights[itPoint.GetIndex()];
       UpdateMax(fabs(aAnalytic - aNumeric), xMaxCellVolumeDiff);
-
-      ++(*itPoint); 
       }
-    delete itPoint;
 
     // Compare total area and volume derivatives
     double xTotalVolumeDiff = 
@@ -288,12 +262,8 @@ int TestGradientComputation(
     delete dAtomArray[iVar];
     }
 
-  // Release unused variations
-  for(iComp = 0; iComp < xMask->GetNumberOfCoefficients(); iComp++)
-    xMask->ReleaseComponentSurface(xVariations[iComp]);
-  for(iComp = 0; iComp < 3; iComp++)
-    xMask->ReleaseVariationSurface(
-      xVariations[iComp + xMask->GetNumberOfCoefficients()]);
+  // Delete the atom arrays
+  delete A0; delete A1; delete A2;
 
     
   // Print the final report
@@ -333,45 +303,55 @@ int TestGradientComputation(
 
 int TestOptimizerGradientComputation(
   MedialOptimizationProblem &mop, 
-  IMedialCoefficientMask &xMask,
-  MedialPDESolver *xSolver)
+  CoefficientMapping &xMapping,
+  GenericMedialModel *xSolver)
 {
   // Set up timers
   CodeTimer tAnalytic, tNumeric;
 
+  // Get the number of parameters that are being optimized over
+  size_t nParams = xMapping.GetNumberOfParameters();
+
+  // Create the initial parameter vector and the vector to hold the gradient
+  vnl_vector<double> P(nParams, 0.0), xGradient(nParams, 0.0);
+
+  // We do not want to only perform the test at P = 0 because that may not
+  // detect problems for other P values. So instead, we can move along the
+  // gradient a certain direction.
+  mop.ComputeGradient(P.data_block(), xGradient.data_block());
+  P += 0.1 * xGradient;
+
+  // Now we are ready to perform the test.
+
   // Compute the analytic gradient
-  vnl_vector<double> xGradient(xMask.GetNumberOfCoefficients());
   tAnalytic.Start();
-  mop.ComputeGradient(xMask.GetCoefficientArray(), xGradient.data_block());
+  mop.ComputeGradient(P.data_block(), xGradient.data_block());
   tAnalytic.Stop();
   
-  // Speed up this computation
-  xSolver->SetSolutionAsInitialGuess();
-
   // Keep track of the maximum error value
   double xMaxError = 0.0;
   
   // Compute the numeric gradient of the objective function
   double eps = 0.01;
-  for(size_t i = 0; i < xMask.GetNumberOfCoefficients(); i++)
+  for(size_t i = 0; i < nParams; i++)
     {
     // Get the current value of the coefficient
-    double ci = xMask.GetCoefficient(i);
+    double ci = P[i];
 
     // Compute the objective function at point 1
-    xMask.SetCoefficient(i, ci + eps);
+    P[i] = ci + eps;
     tNumeric.Start();
-    double f1 = mop.Evaluate(xMask.GetCoefficientArray());
+    double f1 = mop.Evaluate(P.data_block());
     tNumeric.Stop();
 
     // Compute the objective at point 2
-    xMask.SetCoefficient(i, ci - eps);
+    P[i] = ci - eps;
     tNumeric.Start();
-    double f2 = mop.Evaluate(xMask.GetCoefficientArray());
+    double f2 = mop.Evaluate(P.data_block());
     tNumeric.Stop();
 
     // Restore the coefficient
-    xMask.SetCoefficient(i, ci);
+    P[i] = ci;
     
     // Print the derivative
     double dNumeric = 0.5 * (f1 - f2) / eps;

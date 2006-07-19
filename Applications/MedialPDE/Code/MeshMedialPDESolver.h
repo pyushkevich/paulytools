@@ -5,7 +5,6 @@
 #include "SparseMatrix.h"
 #include "SubdivisionSurface.h"
 #include "GenericMedialModel.h"
-#include "SubdivisionSurfaceMedialIterationContext.h"
 #include <smlmath.h>
 #include <vnl/vnl_matrix.h>
 #include <vnl/vnl_vector.h>
@@ -26,7 +25,7 @@
  * where each vertex represents a row, and has non-zero values in the
  * columns that correspond to the adjacent vertices
  */
-class MeshMedialModel : public GenericMedialModel
+class MeshMedialPDESolver 
 {
 public:
   // Matrix typedefs
@@ -36,10 +35,10 @@ public:
   typedef vnl_vector<double> Vec;
 
   // Constructor
-  MeshMedialModel();
+  MeshMedialPDESolver();
 
   // Destructor
-  ~MeshMedialModel();
+  ~MeshMedialPDESolver();
 
   // Set the topology of the mesh. This determines the connectivity of the
   // vertices which, in turn, determines the structure of the sparse matrix
@@ -54,7 +53,7 @@ public:
 
   // Our first attempt at a solver method. The flag specifies whether the
   // terms involved in gradient computation should also be computed
-  void SolveEquation(bool flagGradient = false);
+  void SolveEquation(double *xInitSoln = NULL, bool flagGradient = false);
 
   // Compute the gradient of the solution with respect to some basis. 
   void ComputeGradient(vector<MedialAtom *> dAtoms);
@@ -62,6 +61,10 @@ public:
   // Test the accuracy of partial derivative computations in the gradient code
   // this method should be called after calling solve with some data
   void TestPartialDerivatives();
+
+  // Get the array of atoms
+  MedialAtom *GetAtomArray() const
+    { return xAtoms; }
 
 private:
 
@@ -143,6 +146,10 @@ private:
 
   // Pardiso-compatible 1-based index into the matrix A (redundant, really)
   int *xPardisoRowIndex, *xPardisoColIndex;
+
+  // Array of medial atoms managed by this solver (should it be managed
+  // elsewhere?)
+  MedialAtom *xAtoms;
 };
 
 

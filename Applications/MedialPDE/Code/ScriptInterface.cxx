@@ -1,5 +1,5 @@
 #include "ScriptInterface.h"
-#include "MedialPDESolver.h"
+#include "CartesianMedialModel.h"
 #include "BasisFunctions2D.h"
 #include "ITKImageWrapper.h"
 #include "MedialPDERenderer.h"
@@ -7,6 +7,7 @@
 #include "Procrustes.h"
 #include "PrincipalComponents.h"
 #include "Registry.h"
+#include "MedialAtomGrid.h"
 
 #include "itkImageRegionConstIteratorWithIndex.h"
 #include "itkNearestNeighborInterpolateImageFunction.h"
@@ -32,15 +33,13 @@
 
 // VTK Export Methods
 vtkUnstructuredGrid * ExportVolumeMeshToVTK(
-  MedialAtomGrid *xGrid, MedialAtom *xAtoms, size_t nSamples);
+  GenericMedialModel *xModel, size_t nSamples);
 
 void ExportMedialMeshToVTK(
-  MedialAtomGrid *xGrid, MedialAtom *xAtoms, 
-  ITKImageWrapper<float> *xImage, const char *file);
+  GenericMedialModel *xModel, ITKImageWrapper<float> *xImage, const char *file);
 
 void ExportBoundaryMeshToVTK(
-  MedialAtomGrid *xGrid, MedialAtom *xAtoms, 
-  ITKImageWrapper<float> *xImage, const char *file);
+  GenericMedialModel *xModel, ITKImageWrapper<float> *xImage, const char *file);
 
 using namespace std;
 
@@ -57,24 +56,6 @@ void WriteMatrixFile(const vnl_matrix<double> &mat, const char *file)
   ofs.close();
 }
 
-bool ReadMatrixFile(vnl_matrix<double> &mat, const char *file)
-{
-  FILE *fin = fopen(file,"rt");
-  if(fin == NULL) return false;
-
-  size_t r = 0, c = 0;
-  fscanf(fin, "# MATRIX %d %d\n", &r, &c);
-  if(r == 0 || c == 0)
-    { fclose(fin); return false; }
-
-  mat.set_size(r, c);
-  for(size_t i = 0; i < r; i++)
-    for(size_t j = 0; j < c; j++)
-      fscanf(fin, "%lg", &mat[i][j]);
-
-  fclose(fin);
-}
-
 namespace medialpde {
 
 struct DiscreteAtom 
@@ -88,98 +69,12 @@ struct DiscreteAtom
  * ----------------
  *  This is the main application code
  **************************************************************************/
-MedialPDE::MedialPDE(unsigned int nBasesU, unsigned int nBasesV, 
-  unsigned int xResU, unsigned int xResV, double xFineScale,
-  unsigned int xFineU, unsigned int xFineV)
+MedialPDE::MedialPDE()
 {
-  xSurface = new FourierSurface(nBasesU, nBasesV);
-  xSolver = new MedialPDESolver(xResU, xResV, xFineScale, xFineU, xFineV);
-  xSolver->SetMedialSurface(xSurface);
-
-  eMask = FULL; 
-  eOptimizer = GRADIENT;
-  eMatch = VOLUME;
-  
+  // Set default values of attributes
   xStepSize = 0.1;
   xMeshDumpImprovementPercentage = 0.0;
-
   flagIntensityPresent = false;
-}
-
-MedialPDE::~MedialPDE()
-{
-  delete xSolver;
-  delete xSurface;
-}
-
-void MedialPDE::LoadFromDiscreteMRep(const char *file, double xRhoInit)
-{
-  ifstream fin(file, ios_base::in);
-  int iu, iv, iend;
-  double x, y, z, d;
-
-  // Vector to store atoms
-  typedef vector<DiscreteAtom> AList;
-  AList xAtoms;
-
-  // Get the max u and v values
-  unsigned int uMax = 0, vMax = 0;
-
-  // Read atoms
-  bool done = false;
-  while(!done)
-    {
-    DiscreteAtom atom;
-
-    // Read the atom
-    fin >> atom.iu; fin >> atom.iv; fin >> iend; 
-    fin >> atom.x; fin >> atom.y; fin >> atom.z; 
-    fin >> d; fin >> d; fin >> d; fin >> d; 
-    fin >> d; fin >> d; fin >> d;
-
-    if(uMax < atom.iu) uMax = atom.iu;
-    if(vMax < atom.iv) vMax = atom.iv;
-
-    if(!fin.good())
-      { done = true; }
-    else
-      {
-      xAtoms.push_back(atom);
-      }
-    }
-
-  // Scale by u and v to unit square
-  for(AList::iterator it = xAtoms.begin(); it!=xAtoms.end(); ++it)
-    { it->u = it->iu * 1.0 / uMax; it->v = it->iv * 1.0 / vMax; }
-
-  // Create double arrays
-  double *xx = new double[xAtoms.size()];
-  double *yy = new double[xAtoms.size()];
-  double *zz = new double[xAtoms.size()];
-  double *uu = new double[xAtoms.size()];
-  double *vv = new double[xAtoms.size()];
-  double *rr = new double[xAtoms.size()];
-
-  for(unsigned int i = 0; i < xAtoms.size(); i++)
-    {
-    xx[i] = xAtoms[i].x;
-    yy[i] = xAtoms[i].y;
-    zz[i] = xAtoms[i].z;
-    uu[i] = xAtoms[i].u;
-    vv[i] = xAtoms[i].v;
-    rr[i] = xRhoInit;
-    }
-
-  // Perform the fitting on x, y and z
-  xSurface->FitToData(xAtoms.size(), 0, uu, vv, xx);
-  xSurface->FitToData(xAtoms.size(), 1, uu, vv, yy);
-  xSurface->FitToData(xAtoms.size(), 2, uu, vv, zz);
-
-  // Fit the rho function to a constant
-  xSurface->FitToData(xAtoms.size(), 3, uu, vv, rr);
-
-  // Clean up
-  delete xx; delete yy; delete zz; delete uu; delete vv; delete rr;
 }
 
 void MedialPDE::SaveToParameterFile(const char *file)
@@ -187,19 +82,8 @@ void MedialPDE::SaveToParameterFile(const char *file)
   // Use the registry to save the data
   Registry R;
 
-  // Store the type of the m-rep specification
-  R["Grid.Type"] << "Cartesian";
-  R["Grid.Size.U"] << xSolver->GetNumberOfUPoints();
-  R["Grid.Size.V"] << xSolver->GetNumberOfVPoints();
-
-  // Store the phi values computed for this mpde
-  R["Grid.PhiAvailable"] << true;
-  R.Folder("Grid.Phi").PutArray(
-    xSolver->GetPhiField().size(), xSolver->GetPhiField().data_block());
-
-  // Store the fourier coefficient information
-  R["SurfaceModel"] << "Fourier";
-  xSurface->SaveToRegistry(R.Folder("Fourier"));
+  // Write the model to the registry
+  xMedialModel->WriteToRegistry(R);
 
   // Save the registry
   R.WriteToFile(file);
@@ -207,116 +91,40 @@ void MedialPDE::SaveToParameterFile(const char *file)
 
 bool MedialPDE::LoadFromParameterFile(const char *file)
 {
-  // Use the registry to save the data
+  // Use the registry to load the data
   Registry R(file);
 
-  // Store the type of the m-rep specification
-  if(R["Grid.Type"][""] == Registry::StringType("Cartesian"))
+  // Read a cartesian model (for now)
+  try 
     {
-    unsigned int m = R["Grid.Size.U"][64];
-    unsigned int n = R["Grid.Size.V"][64];
-
-    // Store the fourier coefficient information
-    if(R["SurfaceModel"][""] == Registry::StringType("Fourier"))
-      {
-      // Read the surface from the parameters
-      xSurface->ReadFromRegistry(R.Folder("Fourier"));
-      xSolver->SetMedialSurface(xSurface);
-      }
-    else
-      { 
-      cerr << "Invalid surface model in file" << endl; 
-      return false;
-      }
-
-    // Read the phi matrix is it's available
-    if(R["Grid.PhiAvailable"][false])
-      {
-      unsigned int nSites = xSolver->GetNumberOfAtoms();
-      if(nSites != R.Folder("Grid.Phi").GetArraySize())
-        {
-        cerr << "Phi matrix dimensions do not match grid size" << endl;
-        return xSolver->Solve();
-        }
-
-      // Read the phi array
-      vnl_matrix<double> xPhi(m, n);
-      R.Folder("Grid.Phi").GetArray(xPhi.data_block(), 0.0);
-
-      // Pass the phi array to the solver
-      if( xSolver->Solve(xPhi) )
-        {
-        xSolver->SetSolutionAsInitialGuess();
-        return true;
-        }
-      else return false;
-      }
-    else return xSolver->Solve();
+    xMedialModel->ReadFromRegistry(R);
+    return true;
     } 
-  else
-    { 
-    cerr << "Invalid grid type in file" << endl; 
+  catch(...)
+    {
+    cerr << "Error reading the model" << endl;
     return false;
     }
 }
 
-bool MedialPDE::Solve()
+void MedialPDE::Solve()
 {
-  return xSolver->Solve();
-}
-
-void MedialPDE::SetNumberOfCoefficients(unsigned int m, unsigned int n)
-{
-  xSurface->SetNumberOfCoefficients(m, n);
-  xSolver->SetMedialSurface(xSurface);
-}
-
-void MedialPDE::GenerateSampleModel()
-{
-  // Decide how many points to interpolate
-  unsigned int nSide = 21, nPoints = nSide * nSide;
-  double uStep = 1.0 / (nSide - 1);
-
-  // Allocate arrays of points and coordinates
-  double xPoints[nPoints], yPoints[nPoints], zPoints[nPoints], rhoPoints[nPoints];
-  double uPoints[nPoints], vPoints[nPoints];
-
-  // Create an array of points
-  unsigned int i = 0;
-  for(unsigned int u = 0; u < nSide; u++)
-    for(unsigned int v = 0; v < nSide; v++)
-      {
-      double uu = u * uStep, vv = v * uStep;
-
-      uPoints[i] = uu;
-      vPoints[i] = vv;
-      xPoints[i] = 0.5 * uu + 0.25;
-      yPoints[i] = vv;
-      zPoints[i] = ((uu - 0.5) * (uu - 0.5) + (vv - 0.5) * (vv - 0.5)) * 0.25;
-      rhoPoints[i] = -0.35;
-      ++i;
-      }
-
-  // Peform the fit
-  xSurface->FitToData(nPoints, 0, uPoints, vPoints, xPoints);
-  xSurface->FitToData(nPoints, 1, uPoints, vPoints, yPoints);
-  xSurface->FitToData(nPoints, 2, uPoints, vPoints, zPoints);
-  xSurface->FitToData(nPoints, 3, uPoints, vPoints, rhoPoints);
+  xMedialModel->ComputeAtoms();
 }
 
 /*
 double ComputeImageMatchGradient(
-  MedialPDESolver *xSolver, PDEFourierWrapper *xModel, FourierSurface *xSurface,
+  CartesianMedialModel *xMedialModel, PDEFourierWrapper *xModel, FourierSurface *xSurface,
   FloatImage *image, vnl_vector<double> &xGrad)
 {
   unsigned int i, j, k;
 
   // Get the atom grid
-  MedialAtomGrid *xAtomGrid = xSolver->GetAtomGrid();
-  MedialAtom *xAtoms = xSolver->GetAtomArray();
+  MedialAtomGrid *xAtomGrid = xMedialModel->GetAtomGrid();
+  MedialAtom *xAtoms = xMedialModel->GetAtomArray();
 
   // Create a solution data object representing current solution
-  SolutionData *S0 = new SolutionData(xSolver, true);
+  SolutionData *S0 = new SolutionData(xMedialModel, true);
 
   // Solve the medial PDE for a set of finite difference offsets
   size_t nCoeff = xSurface->GetNumberOfRawCoefficients();
@@ -326,7 +134,7 @@ double ComputeImageMatchGradient(
   SolutionData **SGrad = new SolutionData *[nCoeff];
 
   // Use current solution as the guess
-  xSolver->SetSolutionAsInitialGuess();
+  xMedialModel->SetSolutionAsInitialGuess();
 
   // Compute the time it takes to compute the derivative m-reps
   double tStart = clock();
@@ -340,14 +148,14 @@ double ComputeImageMatchGradient(
     xCoeff[iCoeff] = xOldValue + xEpsilon;
 
     // Solve the PDE for the new value
-    xSolver->Solve(xModel, 1.0e-13); cout << "." << flush;
+    xMedialModel->Solve(xModel, 1.0e-13); cout << "." << flush;
 
     // Compute the solution data
-    SGrad[iCoeff] = new SolutionData(xSolver, true);
+    SGrad[iCoeff] = new SolutionData(xMedialModel, true);
     }
 
   // Restore the solution (should be immediate)
-  xSolver->Solve(xModel); cout << endl;
+  xMedialModel->Solve(xModel); cout << endl;
 
   // See how much time elapsed for the medial computation
   double tMedial = clock() - tStart;
@@ -385,7 +193,7 @@ double ComputeImageMatchGradient(
 double MedialPDE::ComputeImageMatch(FloatImage *image)
 {
   // Create a solution object (reference atoms in the solver)
-  SolutionData S(xSolver);
+  SolutionData S(xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
 
   // Create an image match term
   BoundaryImageMatchTerm termImage(image);
@@ -403,7 +211,7 @@ double MedialPDE::ComputeImageMatch(FloatImage *image)
 double MedialPDE::ComputeBoundaryJacobianPenalty(bool verbose)
 {
   // Create a solution object
-  SolutionData S(xSolver);
+  SolutionData S(xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
 
   // Compute the penalty term
   BoundaryJacobianEnergyTerm bjet;
@@ -462,20 +270,14 @@ void MedialPDE::ExportIterationToVTK(unsigned int iter)
   string fMedial = oss.str() + ".med.vtk";
   string fBoundary = oss.str() + ".bnd.vtk";
 
-  ExportMedialMeshToVTK(
-    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), NULL, fMedial.c_str());
-  ExportBoundaryMeshToVTK(
-    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), NULL, fBoundary.c_str());
+  ExportMedialMeshToVTK(xMedialModel, NULL, fMedial.c_str());
+  ExportBoundaryMeshToVTK(xMedialModel, NULL, fBoundary.c_str());
 }
 
 void MedialPDE::SaveVTKMesh(const char *fMedial, const char *fBnd)
 {
-  ExportMedialMeshToVTK(
-    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), 
-    imgIntensity.xImage, fMedial);
-  ExportBoundaryMeshToVTK(
-    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), 
-    imgIntensity.xImage, fBnd);
+  ExportMedialMeshToVTK(xMedialModel, imgIntensity.xImage, fMedial);
+  ExportBoundaryMeshToVTK(xMedialModel, imgIntensity.xImage, fBnd);
 }
 
 template<class TProblem>
@@ -732,88 +534,130 @@ void EvolutionaryOptimization(
 }
 
 void MedialPDE
-::RunOptimization(FloatImage *image, unsigned int nSteps)
+::RunOptimization(
+  FloatImage *image, size_t nSteps, const char *paramfile, const char *folderName)
 {
-  // Create a coefficient mask
-  IMedialCoefficientMask *xMask;
-  if(eMask == AFFINE) 
-    {
-    xMask = new AffineTransform3DCoefficientMask(xSurface);
-    }
-  else if(eMask == FULL) 
-    {
-    xMask = new PassThroughCoefficientMask(xSurface);
-    }
-  else if(eMask == PCA)
-    {
-    xMask = CreatePCACoefficientMask(nPCAModes);
-    }
-  else if(eMask == COARSE_TO_FINE)
-    {
-    // Get the list of selected coefficients
-    vector<size_t> iSelect = xSurface->GetCoefficientSubset(
-      xCoarseFineParams[0], xCoarseFineParams[1], 
-      xCoarseFineParams[2], xCoarseFineParams[3]);
+  // Load the registry from the parameter file
+  Registry registry(paramfile);
+  Registry &folder = (folderName == NULL) ? registry : registry.Folder(folderName);
 
-    // Construct a mask from the coefficients
-    xMask = new SelectionMedialCoefficientMask(xSurface, iSelect);
+  // Read the optimization parameters from the file
+  OptimizationParameters p; p.ReadFromRegistry(folder);
+
+  // Create the coefficient mapping
+  CoefficientMapping *xMapping = NULL;
+  
+  // We might need a PCA as well
+  PrincipalComponents *pca = NULL;
+
+  // Create an appropriate optimization mapping
+  if(p.xMapping == OptimizationParameters::AFFINE) 
+    {
+    xMapping = new AffineTransformCoefficientMapping(xMedialModel);
+    }
+  else if(p.xMapping == OptimizationParameters::IDENTITY) 
+    {
+    xMapping = new IdentityCoefficientMapping(xMedialModel->GetNumberOfCoefficients());
+    }
+  else if(p.xMapping == OptimizationParameters::PCA)
+    {
+    try 
+      {
+      // Read principal components from the file
+      vnl_matrix<double> pcaMatrix;
+      ReadMatrixFile(pcaMatrix, p.xPCAFileName.c_str());
+      pca = new PrincipalComponents(pcaMatrix);
+
+      // Create the PCA/Affine optimizer
+      xMapping = new PCAPlusAffineCoefficientMapping(xMedialModel, pca, p.nPCAModes);
+      } 
+    catch(...) 
+      {  
+      throw ModelIOException("Unable to read PCA matrix file in optimization parameters");
+      }
+    }
+  else if(p.xMapping == OptimizationParameters::COARSE_TO_FINE)
+    {
+    // Try to use the coarse-to-fine settings. If unavailable, use whole model
+    if(p.xCTFSettings == NULL)
+      throw ModelIOException("No coarse-to-fine settings specified!");
+
+    // Create the coarse to fine mask and mapping
+    const CoarseToFineMappingDescriptor *ctfDesc 
+      = xMedialModel->GetCoarseToFineMappingDescriptor();
+    xMapping = new SubsetCoefficientMapping(ctfDesc->GetMask(p.xCTFSettings));
     }
 
+  // Create the initial solution (all zeros)
+  vnl_vector<double> xSolution(xMapping->GetNumberOfParameters(), 0.0);
+
+  // Save the initial values of the coefficients
+  vnl_vector<double> xInitialCoeff = xMedialModel->GetCoefficientArray();
+  
   // Create the optimization problem
-  MedialOptimizationProblem xProblem(xSolver, xMask);
+  MedialOptimizationProblem xProblem(xMedialModel, xMapping);
 
   // Create an image match term and a jacobian term
-  EnergyTerm *xTermImage;
-  if(eMatch == VOLUME)
+  EnergyTerm *xTermImage = NULL;
+  if(p.xImageMatch == OptimizationParameters::VOLUME)
     xTermImage = new ProbabilisticEnergyTerm(image, 24);
   else
     xTermImage = new BoundaryImageMatchTerm(image);
   
-  // Create the other terms
+  // Create the penalty terms
   BoundaryJacobianEnergyTerm xTermJacobian;
-  // CrestLaplacianEnergyTerm xTermCrest;
   AtomBadnessTerm xTermBadness;
-  MedialRegularityTerm 
-    xTermRegularize(xSolver->GetAtomGrid(), xSolver->GetAtomArray());
+  MedialRegularityTerm xTermRegularize(
+    xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
   RadiusPenaltyTerm xTermRadius(0.025);
 
   // Add the terms to the problem
   xProblem.AddEnergyTerm(xTermImage, 1.0);
   
   // Add prior terms only for deformable registration
-  if(eMask != AFFINE && eMask != PCA)
+  if(p.xMapping != OptimizationParameters::AFFINE && p.xMapping != OptimizationParameters::PCA)
     {
-    xProblem.AddEnergyTerm(&xTermJacobian, 0.5);
-    xProblem.AddEnergyTerm(&xTermBadness, 1.0);
-    xProblem.AddEnergyTerm(&xTermRegularize, 0.01);
-    xProblem.AddEnergyTerm(&xTermRadius, 0.1);
+    // Add the boundary Jacobian term
+    xProblem.AddEnergyTerm(
+      &xTermJacobian, p.xTermWeights[OptimizationParameters::BOUNDARY_JACOBIAN]);
+
+    // Add the atom badness term
+    xProblem.AddEnergyTerm(
+      &xTermBadness, p.xTermWeights[OptimizationParameters::ATOM_BADNESS]);
+
+    // Add the regularization term
+    xProblem.AddEnergyTerm(
+      &xTermRegularize, p.xTermWeights[OptimizationParameters::MEDIAL_REGULARITY]);
+
+    // Add the radius penalty term
+    xProblem.AddEnergyTerm(
+      &xTermRadius, p.xTermWeights[OptimizationParameters::RADIUS]);
     }
 
-  // Create the initial solution
-  size_t nCoeff = xMask->GetNumberOfCoefficients();
-  vnl_vector<double> xSolution(xMask->GetCoefficientArray(), nCoeff);
-  
   // Initial solution report
   cout << "INITIAL SOLUTION REPORT: " << endl;
   xProblem.Evaluate(xSolution.data_block());
   xProblem.PrintReport(cout);
 
   // At this point, split depending on the method
-  if(eOptimizer == CONJGRAD)
+  if(p.xOptimizer == OptimizationParameters::CONJGRAD)
     ConjugateGradientOptimization(&xProblem, xSolution, nSteps, xStepSize);
-  else if(eOptimizer == GRADIENT)
+  else if(p.xOptimizer == OptimizationParameters::GRADIENT)
     GradientDescentOptimization(&xProblem, xSolution, nSteps, xStepSize);
-  else
+  else if(p.xOptimizer == OptimizationParameters::EVOLUTION)
     EvolutionaryOptimization(&xProblem, xSolution, nSteps);
+  else throw ModelIOException("Unknown optimization technique");
 
-  // Store the best result
-  xMask->SetCoefficientArray(xSolution.data_block());
-  xSolver->Solve();
+  // After optimization, apply the best result
+  xMedialModel->SetCoefficientArray(xMapping->Apply(xInitialCoeff, xSolution));
+  xMedialModel->ComputeAtoms();
 
-  // Delete the mask
-  delete xMask;
+  // Delete the mapping
+  delete xMapping;
   delete xTermImage;
+  if(pca) delete pca; 
 }
+
 class FirstMomentComputer : public EuclideanFunction
 {
 public:
@@ -907,7 +751,7 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
   Mat yCov(0.0); Vec yMean(0.0); double yVolume = 0.0;
 
   // Create a solution data object to speed up computations
-  SolutionData S0(xSolver);
+  SolutionData S0(xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
   S0.UpdateInternalWeights(nCuts);
   
   for(i = 0; i < 3; i++)
@@ -949,9 +793,11 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
   size_t iBestSurface; double xBestMatch;
 
   // Get the numbers of coefficients
-  size_t nCoeff = xSurface->GetNumberOfCoefficients();
-  vnl_vector<double> xRotatedCoeff[8], 
-    xInitCoeff(xSurface->GetCoefficientArray(), nCoeff);
+  size_t nCoeff = xMedialModel->GetNumberOfCoefficients();
+  vnl_vector<double> xRotatedCoeff[8], xInitCoeff = xMedialModel->GetCoefficientArray();
+
+  // Create an affine transform for the coefficients
+  const AffineTransformDescriptor *affDesc = xMedialModel->GetAffineTransformDescriptor();
 
   // Create a volume match object
   ProbabilisticEnergyTerm tVolumeMatch(image, nCuts);
@@ -970,15 +816,15 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
     vnl_matrix<double> R = Vx * F * Vy.transpose();
 
     // Rotate the surface by matrix R and shift to yMean
-    xSurface->SetCoefficientArray(xInitCoeff.data_block());
-    xSurface->ApplyAffineTransform(R, xMean - yMean, yMean);
-    xRotatedCoeff[f] = vnl_vector<double>(xSurface->GetCoefficientArray(), nCoeff);
+    xRotatedCoeff[f] = 
+      affDesc->ApplyAffineTransform( xInitCoeff, R, xMean - yMean, yMean);
+    xMedialModel->SetCoefficientArray(xRotatedCoeff[f]);
 
     // Compute the boundary
-    xSolver->Solve();
+    xMedialModel->ComputeAtoms();
 
     // Create a solution object and a volume match term
-    SolutionData SRot(xSolver);
+    SolutionData SRot(xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
     double xMatch = tVolumeMatch.ComputeEnergy(&SRot);
     
     // Record the best match ever
@@ -991,11 +837,11 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
     }
 
   // Use the best surface as the new surface
-  xSurface->SetCoefficientArray(xRotatedCoeff[iBestSurface].data_block());
-  xSolver->Solve();
+  xMedialModel->SetCoefficientArray(xRotatedCoeff[iBestSurface]);
+  xMedialModel->ComputeAtoms();
 
   // Test the results
-  SolutionData S1(xSolver);
+  SolutionData S1(xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
   S1.UpdateInternalWeights( nCuts );
   for(i = 0; i < 3; i++)
     {
@@ -1029,12 +875,12 @@ void MedialPDE::SaveBYUMesh(const char *file)
   fstream fout(file, ios_base::out);
 
   // Get the atom grid
-  MedialAtomGrid *grid = xSolver->GetAtomGrid();
-  MedialAtom *atoms = xSolver->GetAtomArray();
+  MedialIterationContext *grid = xMedialModel->GetIterationContext();
+  MedialAtom *atoms = xMedialModel->GetAtomArray();
 
   // Write the number of vertices, edges, parts
   unsigned int nVertices = grid->GetNumberOfBoundaryPoints();
-  unsigned int nFaces = grid->GetNumberOfBoundaryQuads();
+  unsigned int nFaces = grid->GetNumberOfBoundaryTriangles();
   unsigned int nEdges = 2 * (nFaces + nVertices - 2);
   fout << 1 << "\t" << nVertices << "\t" << nFaces << "\t" << nEdges << "\t" << endl;
 
@@ -1042,28 +888,18 @@ void MedialPDE::SaveBYUMesh(const char *file)
   fout << 1 << "\t" << nFaces << endl;
 
   // Write all the vertices
-  MedialBoundaryPointIterator *itVertex = grid->NewBoundaryPointIterator();
-  while(!itVertex->IsAtEnd())
-    {
-    fout << GetBoundaryPoint(itVertex, atoms).X << endl;
-    ++(*itVertex);
-    }
-  delete itVertex;
+  for(MedialBoundaryPointIterator itv(grid); !itv.IsAtEnd(); ++itv)
+    fout << GetBoundaryPoint(itv, atoms).X << endl;
 
   // Write all the faces
-  MedialBoundaryQuadIterator *itQuad = grid->NewBoundaryQuadIterator();
-  while(!itQuad->IsAtEnd())
+  for(MedialBoundaryTriangleIterator itt(grid); !itt.IsAtEnd(); ++itt)
     {
-    int i00 = 1 + itQuad->GetBoundaryIndex(0, 0);
-    int i01 = 1 + itQuad->GetBoundaryIndex(0, 1);
-    int i11 = 1 + itQuad->GetBoundaryIndex(1, 1);
-    int i10 = - (1 + itQuad->GetBoundaryIndex(1, 0));
+    int i0 = 1 + itt.GetBoundaryIndex(0);
+    int i1 = 1 + itt.GetBoundaryIndex(1);
+    int i2 = 1 + itt.GetBoundaryIndex(2);
 
-    fout << i00 << "\t" << i01 << "\t" << i11 << "\t" << i10 << endl;
-
-    ++(*itQuad);
+    fout << i0 << "\t" << i1 << "\t" << -i2 << endl;
     }
-  delete itQuad;
 
   // Close the file
   fout.close();
@@ -1172,8 +1008,229 @@ void UpdateRegion(itk::ImageRegion<3> &R, const itk::Index<3> &idx, bool first)
 
 
 
+void MedialPDE::SetIntensityImage(FloatImage *imgSource)
+{
+  // Copy the internal image
+  imgIntensity.xImage->SetInternalImage(imgSource->xImage->GetInternalImage());
+
+  // Set the flag
+  flagIntensityPresent = true;
+}
+
+void MedialPDE::GetIntensityImage(FloatImage *imgTarget)
+{
+  imgTarget->xImage->SetInternalImage(imgIntensity.xImage->GetInternalImage());
+}
+
+void MedialPDE::SetPCAMatrix(size_t ncu, size_t ncv, const char *fname)
+{
+  // Store the dimensions
+  ncuPCA = ncu;
+  ncvPCA = ncv;
+  
+  // Read the matrix
+  ReadMatrixFile(mPCAMatrix, fname);
+  cout << "READ PCA MATRIX " << mPCAMatrix.rows() 
+    << " x " << mPCAMatrix.columns() << endl;
+}
+
+/*
+IMedialCoefficientMask *MedialPDE::CreatePCACoefficientMask(size_t nModes)
+{
+  size_t ncu, ncv; 
+
+  // Create a PCA mask
+  IMedialCoefficientMask *xMask = NULL;
+  
+  // See if the numbers of coefficients match between current surface and matrix
+  xSurface->GetNumberOfCoefficientsUV(ncu, ncv);
+  if(ncu == ncuPCA && ncv == ncvPCA)
+    {
+    // Simple, use the matrix that was passed in
+    xMask = new AffineAndPCACoefficientMask(mPCAMatrix, xSurface, nModes);
+    }
+  else
+    {
+    // We need to extract the coefficients from the source matrix to match the
+    // current coefficients
+    FourierSurface xSource(ncuPCA, ncvPCA), xTarget(ncu, ncv);
+    vnl_matrix<double> mPCAChunk(
+      mPCAMatrix.rows(), xSurface->GetNumberOfCoefficients());
+
+    // For each subject in the matrix, remap using current coefficients
+    for(size_t i = 0; i < mPCAMatrix.rows(); i++)
+      {
+      xSource.SetCoefficientArray(mPCAMatrix.get_row(i).data_block());
+      for(size_t icu = 0; icu < ncu; icu++) for(size_t icv = 0; icv < ncv; icv++) 
+        for(size_t iComp = 0; iComp < xSurface->GetNumberOfDimensions(); iComp++) 
+          {
+          double xVal = (icu >= ncuPCA || icv >= ncvPCA) ? 0.0 : 
+            xSource.GetCoefficient(icu, icv, iComp);
+          xTarget.SetCoefficient(icu, icv, iComp, xVal);
+          }
+      mPCAChunk.set_row(i, xTarget.GetCoefficientArray());
+      }
+
+    // Pass this matrix to the PCA
+    xMask = new Affine3DAndPCACoefficientMask(mPCAChunk, xSurface, nModes);
+    }
+
+  return xMask;
+}
+*/
+
+/**
+void MedialPDE::ReleasePCACoefficientMask(IMedialCoefficientMask *xMask)
+{
+  delete xMask;
+}
+*/
+
+
+/***************************************************************************
+ * CartesianMPDE Code
+ * ----------------
+ * This is the code for the rectangular grid-based cm-rep
+ **************************************************************************/
+CartesianMPDE::CartesianMPDE(unsigned int nBasesU, unsigned int nBasesV, 
+  unsigned int xResU, unsigned int xResV, double xFineScale,
+  unsigned int xFineU, unsigned int xFineV)
+{
+  // Create a new Cartesian medial model (for now)
+  this->xCartesianMedialModel = 
+    new CartesianMedialModel(xResU, xResV, xFineScale, xFineU, xFineV);
+
+  // Associate the model with a Fourier surface
+  xSurface = new FourierSurface(nBasesU, nBasesV);
+  xCartesianMedialModel->SetMedialSurface(xSurface);
+
+  // Set the internal surface representation
+  this->xMedialModel = xCartesianMedialModel;
+}
+
+
+CartesianMPDE::~CartesianMPDE()
+{
+  delete xSurface;
+  delete xCartesianMedialModel;
+}
+
+
+void CartesianMPDE::SetNumberOfCoefficients(unsigned int m, unsigned int n)
+{
+  xSurface->SetNumberOfCoefficients(m, n);
+  xCartesianMedialModel->SetMedialSurface(xSurface);
+  xCartesianMedialModel->ComputeAtoms();
+}
+
+
+void CartesianMPDE::LoadFromDiscreteMRep(const char *file, double xRhoInit)
+{
+  ifstream fin(file, ios_base::in);
+  int iu, iv, iend;
+  double x, y, z, d;
+
+  // Vector to store atoms
+  typedef vector<DiscreteAtom> AList;
+  AList xAtoms;
+
+  // Get the max u and v values
+  unsigned int uMax = 0, vMax = 0;
+
+  // Read atoms
+  bool done = false;
+  while(!done)
+    {
+    DiscreteAtom atom;
+
+    // Read the atom
+    fin >> atom.iu; fin >> atom.iv; fin >> iend; 
+    fin >> atom.x; fin >> atom.y; fin >> atom.z; 
+    fin >> d; fin >> d; fin >> d; fin >> d; 
+    fin >> d; fin >> d; fin >> d;
+
+    if(uMax < atom.iu) uMax = atom.iu;
+    if(vMax < atom.iv) vMax = atom.iv;
+
+    if(!fin.good())
+      { done = true; }
+    else
+      {
+      xAtoms.push_back(atom);
+      }
+    }
+
+  // Scale by u and v to unit square
+  for(AList::iterator it = xAtoms.begin(); it!=xAtoms.end(); ++it)
+    { it->u = it->iu * 1.0 / uMax; it->v = it->iv * 1.0 / vMax; }
+
+  // Create double arrays
+  double *xx = new double[xAtoms.size()];
+  double *yy = new double[xAtoms.size()];
+  double *zz = new double[xAtoms.size()];
+  double *uu = new double[xAtoms.size()];
+  double *vv = new double[xAtoms.size()];
+  double *rr = new double[xAtoms.size()];
+
+  for(unsigned int i = 0; i < xAtoms.size(); i++)
+    {
+    xx[i] = xAtoms[i].x;
+    yy[i] = xAtoms[i].y;
+    zz[i] = xAtoms[i].z;
+    uu[i] = xAtoms[i].u;
+    vv[i] = xAtoms[i].v;
+    rr[i] = xRhoInit;
+    }
+
+  // Perform the fitting on x, y and z
+  xSurface->FitToData(xAtoms.size(), 0, uu, vv, xx);
+  xSurface->FitToData(xAtoms.size(), 1, uu, vv, yy);
+  xSurface->FitToData(xAtoms.size(), 2, uu, vv, zz);
+
+  // Fit the rho function to a constant
+  xSurface->FitToData(xAtoms.size(), 3, uu, vv, rr);
+
+  // Clean up
+  delete xx; delete yy; delete zz; delete uu; delete vv; delete rr;
+}
+
+
+void CartesianMPDE::GenerateSampleModel()
+{
+  // Decide how many points to interpolate
+  unsigned int nSide = 21, nPoints = nSide * nSide;
+  double uStep = 1.0 / (nSide - 1);
+
+  // Allocate arrays of points and coordinates
+  double xPoints[nPoints], yPoints[nPoints], zPoints[nPoints], rhoPoints[nPoints];
+  double uPoints[nPoints], vPoints[nPoints];
+
+  // Create an array of points
+  unsigned int i = 0;
+  for(unsigned int u = 0; u < nSide; u++)
+    for(unsigned int v = 0; v < nSide; v++)
+      {
+      double uu = u * uStep, vv = v * uStep;
+
+      uPoints[i] = uu;
+      vPoints[i] = vv;
+      xPoints[i] = 0.5 * uu + 0.25;
+      yPoints[i] = vv;
+      zPoints[i] = ((uu - 0.5) * (uu - 0.5) + (vv - 0.5) * (vv - 0.5)) * 0.25;
+      rhoPoints[i] = -0.35;
+      ++i;
+      }
+
+  // Peform the fit
+  xSurface->FitToData(nPoints, 0, uPoints, vPoints, xPoints);
+  xSurface->FitToData(nPoints, 1, uPoints, vPoints, yPoints);
+  xSurface->FitToData(nPoints, 2, uPoints, vPoints, zPoints);
+  xSurface->FitToData(nPoints, 3, uPoints, vPoints, rhoPoints);
+}
+
+
 // This is just one approach to doing this. Let's hope that it works
-void MedialPDE::
+void CartesianMPDE::
 SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zSamples)
 {
   // Get the internal images
@@ -1182,8 +1239,8 @@ SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zS
   ImageType::Pointer iOutput = imgOutput->xImage->GetInternalImage();
 
   // Get the image dimensions
-  size_t m = xSolver->GetNumberOfUPoints();
-  size_t n = xSolver->GetNumberOfVPoints();
+  size_t m = xCartesianMedialModel->GetNumberOfUPoints();
+  size_t n = xCartesianMedialModel->GetNumberOfVPoints();
     
   // The image dimensions must match the grid size
   itk::Size<3> szInput = iInput->GetBufferedRegion().GetSize();
@@ -1194,27 +1251,22 @@ SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zS
     }
 
   // Create a flat image matched up with the internal iterator
-  size_t npix = xSolver->GetAtomGrid()->GetNumberOfInternalPoints(zSamples);
+  size_t npix = xMedialModel->GetNumberOfInternalPoints(zSamples);
   vnl_vector<float> xpix(npix, 0.0f);
 
-  MedialInternalPointIterator *it = 
-    xSolver->GetAtomGrid()->NewInternalPointIterator(zSamples);
-  for( ; !it->IsAtEnd(); ++(*it))
+  MedialInternalPointIterator it(xMedialModel->GetIterationContext(), zSamples);
+  for( ; !it.IsAtEnd(); ++it)
     {
-    MedialAtom &xAtom = xSolver->GetAtomArray()[it->GetAtomIndex()];
+    MedialAtom &xAtom = xMedialModel->GetAtomArray()[it.GetAtomIndex()];
     itk::Index<3> idx;
     idx[0] = xAtom.uIndex;
     idx[1] = xAtom.vIndex;
-    idx[2] = it->GetBoundarySide() ?  
-      zSamples - it->GetDepth() : zSamples + it->GetDepth();
-    xpix[it->GetIndex()] = iInput->GetPixel(idx);
-    // cout << "xpix [ " << it->GetAtomIndex() << "] = iInput [ " << idx << "] = " << xpix[it->GetAtomIndex()] << endl;
+    idx[2] = it.GetBoundarySide() ? zSamples - it.GetDepth() : zSamples + it.GetDepth();
+    xpix[it.GetIndex()] = iInput->GetPixel(idx);
     }
-  delete it;
 
   // Generate a VTK cell grid
-  vtkUnstructuredGrid *cells = ExportVolumeMeshToVTK(
-    xSolver->GetAtomGrid(), xSolver->GetAtomArray(), zSamples);
+  vtkUnstructuredGrid *cells = ExportVolumeMeshToVTK(xMedialModel, zSamples);
 
   // Create a VTk locator for these cells
   vtkPointLocator *loc = vtkPointLocator::New();
@@ -1244,17 +1296,15 @@ SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zS
 
       // Find all samples inside that pixel
       double xMax = 0.0;
-      MedialInternalPointIterator *it =
-        xSolver->GetAtomGrid()->NewInternalPointIterator(zSamples);
-      for( ; !it->IsAtEnd(); ++(*it))
+      MedialInternalPointIterator it(xMedialModel->GetIterationContext(), zSamples);
+      for( ; !it.IsAtEnd(); ++it)
         {
-        SMLVec3d x = GetInternalPoint(it, xSolver->GetAtomArray());
+        SMLVec3d x = GetInternalPoint(it, xMedialModel->GetAtomArray());
         if(x[0] <= x1 && x[0] > x0 && x[1] <= y1 && x[1] > y0 && x[2] <= z1 && x[2] > z0)
           {
-          xMax = xMax < xpix[it->GetIndex()] ? xpix[it->GetIndex()] : xMax;
+          xMax = xMax < xpix[it.GetIndex()] ? xpix[it.GetIndex()] : xMax;
           }
         }
-      delete it;
 
       // Locate the cell that includes this point
       vnl_vector<double> vox = pVoxel.GetVnlVector();
@@ -1280,18 +1330,18 @@ SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zS
 
   // Define the lanmark arrays
   size_t nLMCuts = 2;
-  size_t nLandmarks = xSolver->GetAtomGrid()->GetNumberOfInternalPoints(nLMCuts);
+  size_t nLandmarks = xMedialModel->GetAtomGrid()->GetNumberOfInternalPoints(nLMCuts);
 
   SMLVec3d *lSource = new SMLVec3d[nLandmarks];
   SMLVec3d *lTarget = new SMLVec3d[nLandmarks];
   
   // Define the landmarks
   MedialInternalPointIterator *it = 
-    xSolver->GetAtomGrid()->NewInternalPointIterator(nLMCuts);
+    xMedialModel->GetAtomGrid()->NewInternalPointIterator(nLMCuts);
   for( size_t i=0 ; !it->IsAtEnd(); ++(*it), ++i)
     {
     // The source are the positions in patient space
-    lSource[i] = GetInternalPoint(it, xSolver->GetAtomArray());
+    lSource[i] = GetInternalPoint(it, xMedialModel->GetAtomArray());
 
     // Convert the source point to an image index
     ImageType::PointType pt; ImageType::IndexType idx;
@@ -1300,7 +1350,7 @@ SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zS
     UpdateRegion(xMaskRegion, idx, i==0);
     
     // The target are the positions in cm-rep coordinate system
-    MedialAtom &xAtom = xSolver->GetAtomArray()[it->GetAtomIndex()];
+    MedialAtom &xAtom = xMedialModel->GetAtomArray()[it->GetAtomIndex()];
     lTarget[i][0] = round(xAtom.u * (m - 1));
     lTarget[i][1] = round(xAtom.v * (n - 1));
     lTarget[i][2] = it->GetBoundarySide() ?  
@@ -1349,7 +1399,7 @@ SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zS
 */
 }
 
-void MedialPDE::
+void CartesianMPDE::
 SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamples)
 {
   // Allocate the flattened intensity output image
@@ -1358,8 +1408,8 @@ SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamples)
   ImageType::RegionType regOutput;
 
   // Get the image dimensions
-  size_t m = xSolver->GetNumberOfUPoints();
-  size_t n = xSolver->GetNumberOfVPoints();
+  size_t m = xCartesianMedialModel->GetNumberOfUPoints();
+  size_t n = xCartesianMedialModel->GetNumberOfVPoints();
     
   // Initialize the output region size
   regOutput.SetSize(0, m);
@@ -1397,22 +1447,21 @@ SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamples)
   fInterp->SetInputImage(imgInput);
 
   // Get an internal point iterator
-  MedialInternalPointIterator *itPoint = 
-    xSolver->GetAtomGrid()->NewInternalPointIterator(zSamples - 1);
-  for(; !itPoint->IsAtEnd(); ++(*itPoint))
+  MedialInternalPointIterator itPoint(xMedialModel->GetIterationContext(), zSamples-1);
+  for(; !itPoint.IsAtEnd(); ++itPoint)
     {
     // Interpolate the position in 3-space
-    SMLVec3d xPoint = GetInternalPoint(itPoint, xSolver->GetAtomArray());
+    SMLVec3d xPoint = GetInternalPoint(itPoint, xMedialModel->GetAtomArray());
 
     // Get the corresponding medial atom
-    MedialAtom &xAtom = xSolver->GetAtomArray()[itPoint->GetAtomIndex()];
+    MedialAtom &xAtom = xMedialModel->GetAtomArray()[itPoint.GetAtomIndex()];
 
     // Get the i and j coordinates of the atom (using cartesian logic)
     size_t i = xAtom.uIndex;
     size_t j = xAtom.vIndex;
-    size_t k = itPoint->GetBoundarySide() ? 
-      zSamples - itPoint->GetDepth() :
-       zSamples + itPoint->GetDepth();
+    size_t k = itPoint.GetBoundarySide() ? 
+      zSamples - itPoint.GetDepth() :
+       zSamples + itPoint.GetDepth();
 
     // Create an index into the output image
     ImageType::IndexType idxTarget;
@@ -1421,9 +1470,9 @@ SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamples)
     idxTarget.SetElement(2, k); 
 
     // Get the point at which to sample the image
-    double tau = itPoint->GetDepth() * 1.0 / itPoint->GetMaxDepth();
+    double tau = itPoint.GetDepth() * 1.0 / itPoint.GetMaxDepth();
     SMLVec3d Z = 
-      xAtom.X + tau * xAtom.R * xAtom.xBnd[itPoint->GetBoundarySide()].N;
+      xAtom.X + tau * xAtom.R * xAtom.xBnd[itPoint.GetBoundarySide()].N;
     
     // Create a point and a continuous index
     itk::Point<double, 3> ptZ(Z.data_block());
@@ -1452,7 +1501,7 @@ SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamples)
     imgCoord[0]->TransformPhysicalPointToIndex(ptZ1, idxCoord);
     imgCoord[0]->SetPixel(idxCoord, xAtom.u);
     imgCoord[1]->SetPixel(idxCoord, xAtom.v);
-    imgCoord[2]->SetPixel(idxCoord, itPoint->GetBoundarySide() ? tau : -tau);
+    imgCoord[2]->SetPixel(idxCoord, itPoint.GetBoundarySide() ? tau : -tau);
 
     //if(rand() % 80 == 0)
     //  {
@@ -1460,14 +1509,12 @@ SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamples)
     //  }
 
     // If the index is at the edge, there are two output pixels
-    if(itPoint->IsEdgeAtom())
+    if(itPoint.IsEdgeAtom())
       {
       idxTarget.SetElement(2, zSamples * 2 - k);
       imgOutSmall->SetPixel(idxTarget, f);
       }
     }
-
-  delete itPoint;
 
   // Store the output image
   fiOut->xImage->SetInternalImage(imgOutSmall);
@@ -1476,86 +1523,6 @@ SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamples)
   fiOut->xGradient[2]->SetInternalImage(imgCoord[2]);
 }
 
-void MedialPDE::SetIntensityImage(FloatImage *imgSource)
-{
-  // Copy the internal image
-  imgIntensity.xImage->SetInternalImage(imgSource->xImage->GetInternalImage());
-
-  // Set the flag
-  flagIntensityPresent = true;
-}
-
-void MedialPDE::GetIntensityImage(FloatImage *imgTarget)
-{
-  imgTarget->xImage->SetInternalImage(imgIntensity.xImage->GetInternalImage());
-}
-
-void MedialPDE::SetPCAMatrix(size_t ncu, size_t ncv, const char *fname)
-{
-  // Store the dimensions
-  ncuPCA = ncu;
-  ncvPCA = ncv;
-  
-  // Read the matrix
-  ReadMatrixFile(mPCAMatrix, fname);
-  cout << "READ PCA MATRIX " << mPCAMatrix.rows() 
-    << " x " << mPCAMatrix.columns() << endl;
-}
-
-IMedialCoefficientMask *MedialPDE::CreatePCACoefficientMask(size_t nModes)
-{
-  size_t ncu, ncv; 
-
-  // Create a PCA mask
-  IMedialCoefficientMask *xMask = NULL;
-  
-  // See if the numbers of coefficients match between current surface and matrix
-  xSurface->GetNumberOfCoefficientsUV(ncu, ncv);
-  if(ncu == ncuPCA && ncv == ncvPCA)
-    {
-    // Simple, use the matrix that was passed in
-    xMask = new AffineAndPCACoefficientMask(mPCAMatrix, xSurface, nModes);
-    }
-  else
-    {
-    // We need to extract the coefficients from the source matrix to match the
-    // current coefficients
-    FourierSurface xSource(ncuPCA, ncvPCA), xTarget(ncu, ncv);
-    vnl_matrix<double> mPCAChunk(
-      mPCAMatrix.rows(), xSurface->GetNumberOfCoefficients());
-
-    // For each subject in the matrix, remap using current coefficients
-    for(size_t i = 0; i < mPCAMatrix.rows(); i++)
-      {
-      xSource.SetCoefficientArray(mPCAMatrix.get_row(i).data_block());
-      for(size_t icu = 0; icu < ncu; icu++) for(size_t icv = 0; icv < ncv; icv++) 
-        for(size_t iComp = 0; iComp < xSurface->GetNumberOfDimensions(); iComp++) 
-          {
-          double xVal = (icu >= ncuPCA || icv >= ncvPCA) ? 0.0 : 
-            xSource.GetCoefficient(icu, icv, iComp);
-          xTarget.SetCoefficient(icu, icv, iComp, xVal);
-          }
-      mPCAChunk.set_row(i, xTarget.GetCoefficientArray());
-      }
-
-    // Pass this matrix to the PCA
-    xMask = new Affine3DAndPCACoefficientMask(mPCAChunk, xSurface, nModes);
-    }
-
-  return xMask;
-}
-
-void MedialPDE::ReleasePCACoefficientMask(IMedialCoefficientMask *xMask)
-{
-  delete xMask;
-}
-
-
-
-
-
-
-
 
 /**
  * MEDIAL PCA CODE
@@ -1563,14 +1530,12 @@ void MedialPDE::ReleasePCACoefficientMask(IMedialCoefficientMask *xMask)
 void MedialPCA::AddSample(MedialPDE *pde)
 {
   // Make sure that the number of coefficients matches
-  if(xSurfaces.size())
-    assert(xSurfaces.front()->GetNumberOfCoefficients()
-      == pde->xSurface->GetNumberOfCoefficients());
+  if(xModelCoefficients.size()) 
+    assert(xModelCoefficients.back().size() == pde->xMedialModel->GetNumberOfCoefficients());
 
   // Get the coefficients from this medial PDE
-  FourierSurface *xNew = new FourierSurface(*(pde->xSurface));
-  xSurfaces.push_back(xNew);
-  
+  xModelCoefficients.push_back(pde->xMedialModel->GetCoefficientArray());
+
   // Make a copy of the intensity values associated with this PDE
   if(pde->flagIntensityPresent)
     {
@@ -1599,62 +1564,47 @@ void MedialPCA::ComputePCA()
   // The non-shape information must be cleaned from the data using
   // something like the generalized Procrustes method. We begin by
   // interpolating each mpde
-  typedef vnl_matrix<double> Mat;
-  typedef vnl_vector<double> Vec;
+  size_t nSamples = xModelCoefficients.size();
 
   // These are the parameters to the GPA method
-  Mat *A = new Mat[xSurfaces.size()];
-  Mat *R = new Mat[xSurfaces.size()];
-  Vec *t = new Vec[xSurfaces.size()];
-  double *s = new double[xSurfaces.size()];
+  Mat *A = new Mat[nSamples];
+  Mat *R = new Mat[nSamples];
+  Vec *t = new Vec[nSamples];
+  double *s = new double[nSamples];
   size_t i, j;
   
   // Generate same parameters for the boundary-based alignment and PCA
-  Mat *Abnd = new Mat[xSurfaces.size()];
-  Mat *Rbnd = new Mat[xSurfaces.size()];
-  Vec *tbnd = new Vec[xSurfaces.size()];
-  double *sbnd = new double[xSurfaces.size()];
+  Mat *Abnd = new Mat[nSamples];
+  Mat *Rbnd = new Mat[nSamples];
+  Vec *tbnd = new Vec[nSamples];
+  double *sbnd = new double[nSamples];
   
   // Populate the input matrices
-  MedialPDESolver xSolver(32, 80);
-  for(i = 0; i < xSurfaces.size(); i++)
+  CartesianMedialModel xMedialModel(32, 80);
+  MedialIterationContext *xGrid = xMedialModel.GetIterationContext();
+
+  for(i = 0; i < nSamples; i++)
     {
-    // Solve for this surface
-    xSolver.SetMedialSurface(xSurfaces[i]);
-    xSolver.Solve();
+    // Solve for this surface using these coefficients
+    xMedialModel.SetCoefficientArray(xModelCoefficients[i]);
+    xMedialModel.Solve();
 
     // Initialize the A matrix
-    A[i].set_size(xSolver.GetAtomGrid()->GetNumberOfAtoms(), 3);
+    A[i].set_size(xMedialModel.GetNumberOfAtoms(), 3);
     R[i].set_size(3,3);
     t[i].set_size(3);
 
     // Parse over all the boundary sites
-    MedialAtomIterator *it = 
-      xSolver.GetAtomGrid()->NewAtomIterator();
-    size_t j = 0;
-    while(!it->IsAtEnd())
-      {
-      MedialAtom &atom = xSolver.GetAtomArray()[it->GetIndex()];
-      A[i][j][0] = atom.X[0];
-      A[i][j][1] = atom.X[1];
-      A[i][j][2] = atom.X[2];
-      ++(*it); ++j;
-      }
-    delete it;
+    for(MedialAtomIterator it(xGrid); !it.IsAtEnd(); ++it)
+      A[i].set_row(it.GetIndex(), xMedialModel.GetAtomArray()[it.GetIndex()].X);
 
     // Same for boundary atoms
-    Abnd[i].set_size(xSolver.GetAtomGrid()->GetNumberOfBoundaryPoints(), 3);
+    Abnd[i].set_size(xMedialModel.GetNumberOfBoundaryPoints(), 3);
     Rbnd[i].set_size(3,3);
     tbnd[i].set_size(3);
 
-    MedialBoundaryPointIterator *bit = xSolver.GetAtomGrid()->NewBoundaryPointIterator();
-    for(j = 0; !bit->IsAtEnd(); ++(*bit), ++j)
-      {
-      Vec p = GetBoundaryPoint(bit, xSolver.GetAtomArray()).X;
-      Abnd[i][j][0] = p[0];
-      Abnd[i][j][1] = p[1];
-      Abnd[i][j][2] = p[2];
-      }
+    for(MedialBoundaryPointIterator bit(xGrid); !bit.IsAtEnd(); ++bit)
+      Abnd[i].set_row(bit.GetIndex(), GetBoundaryPoint(bit, xMedialModel.GetAtomArray()).X);
     }
 
   // cout << "Testing Procrustes" << endl;
@@ -1662,21 +1612,21 @@ void MedialPCA::ComputePCA()
   
   // Run the procrustes method
   cout << "Procrustenating..." << endl;
-  
-  GeneralizedProcrustesAnalysis(xSurfaces.size(), A, R, t, s);
+  GeneralizedProcrustesAnalysis(nSamples, A, R, t, s);
 
-  // A medial PCA to play with
-  MedialPDE xJunk(8,12,32,80);
-    
+  // Create an affine mapper
+  const AffineTransformDescriptor *affDesc = xMedialModel.GetAffineTransformDescriptor();
+
   // Rotate each of the models into the common coordinate frame
-  for(i = 0; i < xSurfaces.size(); i++)
+  for(i = 0; i < nSamples; i++)
     {
-    xSurfaces[i]->ApplyAffineTransform(s[i] * R[i].transpose(), t[i], Vec(3, 0.0));
+    // Transform the coefficients under the affine transform
+    Vec xAlignCoeff = affDesc->ApplyAffineTransform(
+      xModelCoefficients[i], s[i] * R[i].transpose(), t[i], Vec(3, 0.0));
     
-    MedialPDE xJunk(8,12,32,80);
-    xJunk.xSurface = new FourierSurface(*xSurfaces[i]);
-    xJunk.xSolver->SetMedialSurface(xJunk.xSurface);
-    xJunk.xSurface->SetCoefficientArray(xSurfaces[i]->GetCoefficientArray());
+    // Create a new MedialPDE (?)
+    CartesianMPDE xJunk(8,12,32,80);
+    xJunk.xMedialModel->SetCoefficientArray(xAlignCoeff);
     xJunk.Solve();
     }
 
@@ -1685,13 +1635,13 @@ void MedialPCA::ComputePCA()
   // Compute the mean shape and the covariance matrix on the fourier
   // parameters. Since the Fourier basis is orthonormal, doing PCA on the
   // surface and on the Fourier components is identical
-  size_t m = xSurfaces[0]->GetNumberOfCoefficients();
-  size_t n = xSurfaces.size();
+  size_t m = xModelCoefficients[0].size();
+  size_t n = nSamples;
 
   // Populate the data matrix 
   xDataShape.set_size(n, m);
   for(i = 0; i < n; i++) for(j = 0; j < m; j++)
-    xDataShape[i][j] = xSurfaces[i]->GetCoefficient(j);
+    xDataShape[i][j] = xModelCoefficients[i][j];
 
   // Compute the principal components of xDataShape
   if(xPCA) delete xPCA;
@@ -1775,24 +1725,33 @@ void MedialPCA::ComputePCA()
     double x0 = 0, x1 = 0;
 
     // Create the shape
-    MedialPDE xJunk(8,12,32,80);
-    xJunk.xSurface = new FourierSurface(*xSurfaces[0]);
-    xJunk.xSolver->SetMedialSurface(xJunk.xSurface);
-    xJunk.xSurface->SetCoefficientArray(x.data_block());
-    if(!xJunk.Solve())
-      x0 = 0;
-    else
+    CartesianMPDE xJunk(8,12,32,80);
+    xJunk.xMedialModel->SetCoefficientArray(x);
+    
+    // Try to solve
+    try 
       {
-      x0 = 1;
+      // Solve the equation
+      xJunk.Solve();
 
       // Create a solution object
-      SolutionData S(xJunk.xSolver);
+      SolutionData S(xJunk.xMedialModel->GetIterationContext(), 
+        xJunk.xMedialModel->GetAtomArray());
 
       // Compute the penalty term
       BoundaryJacobianEnergyTerm bjet;
       bjet.ComputeEnergy(&S);
+
+      // Set the flags
+      x0 = 1;
       x1 = bjet.GetMinJacobian();
       }
+    catch(MedialModelException &exc)
+      {
+      x0 = 0;
+      }
+
+    // Print results
     cout << "MCARLO: " << d << " " << x0 << " " << x1 << " " << y[0] << " " << y[1] << endl;
     }
   
@@ -1812,7 +1771,7 @@ void MedialPCA::ComputePCA()
 
       MedialPDE xJunk(8,12,32,80);
       xJunk.xSurface = new FourierSurface(*xSurfaces[0]);
-      xJunk.xSolver->SetMedialSurface(xJunk.xSurface);
+      xJunk.xMedialModel->SetMedialSurface(xJunk.xSurface);
       xJunk.xSurface->SetRawCoefficientArray(z.data_block());
       xJunk.Solve();
 
@@ -1858,13 +1817,11 @@ void MedialPCA::GetShapeAtFSLocation(MedialPDE *target)
   Vec z = xPCA->MapToFeatureSpace(xPCALocation);
 
   // Compute the shape
-  target->xSurface = new FourierSurface(*xSurfaces[0]);
-  target->xSolver->SetMedialSurface(target->xSurface);
-  target->xSurface->SetCoefficientArray(z.data_block());
+  target->xMedialModel->SetCoefficientArray(z);
   target->Solve();
 
   // Compute the feature image
-  if(xAppearance.size() == xSurfaces.size())
+  if(xAppearance.size() == xModelCoefficients.size())
     {
     FloatImage *imgJunk = new FloatImage();
     FloatImage::WrapperType::ImageType *img = imgJunk->xImage->GetInternalImage();
@@ -1884,7 +1841,7 @@ void MedialPCA::GetShapeAtFSLocation(MedialPDE *target)
 void RenderMedialPDE(MedialPDE *model)
 {
   // Create a renderer
-  PDESplineRenderer *rndPDESpline = new PDESplineRenderer(model->xSolver);
+  PDESplineRenderer *rndPDESpline = new PDESplineRenderer(model->xMedialModel);
 
   // Initialize the GL environment
   char *argv[] = {"test",NULL};
@@ -1897,10 +1854,13 @@ void RenderMedialPDE(MedialPDE *model)
   // Add our spline renderer
   GLDisplayDriver::addRenderer(rndPDESpline);
 
+  // Get the affine descriptor to compute the center of rotation
+  SMLVec3d xCenter = model->GetMedialModel()->GetCenterOfRotation();
+
   // Put the display into Talairach coordinates
-  GLDisplayDriver::center[0] = model->GetSurface()->GetCenterOfRotation()[0];
-  GLDisplayDriver::center[1] = model->GetSurface()->GetCenterOfRotation()[1];
-  GLDisplayDriver::center[2] = model->GetSurface()->GetCenterOfRotation()[2];
+  GLDisplayDriver::center[0] = xCenter[0];
+  GLDisplayDriver::center[1] = xCenter[1];
+  GLDisplayDriver::center[2] = xCenter[2];
   GLDisplayDriver::scale = 20;
 
   // Start GLUT

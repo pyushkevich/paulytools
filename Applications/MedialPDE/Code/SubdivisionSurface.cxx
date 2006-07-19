@@ -19,7 +19,7 @@ SubdivisionSurface::Triangle::Triangle()
     {
     vertices[i] = NOID;
     neighbors[i] = NOID;
-    nedges[i] = NOID;
+    nedges[i] = -1;
     }
 }
 

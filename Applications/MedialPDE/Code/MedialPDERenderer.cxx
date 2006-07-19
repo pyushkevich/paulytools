@@ -1,6 +1,8 @@
-#include "MedialPDESolver.h"
+#include "GenericMedialModel.h"
 #include "MedialPDERenderer.h"
 #include "OptimizationTerms.h"
+#include <set>
+#include <map>
 
 void glDrawQuadStripElements(unsigned short width,unsigned short height) 
 {
@@ -24,6 +26,7 @@ void glDrawQuadStripElements(unsigned short width,unsigned short height)
   delete index;
 }
 
+/*
 void glDrawQuadElements(MedialAtomGrid *grid)
 {
   // Begin drawing quads
@@ -44,36 +47,62 @@ void glDrawQuadElements(MedialAtomGrid *grid)
   // End quads
   glEnd();
 }
+*/
 
-void glDrawWireframeElements(unsigned short width, unsigned short height)
+void glDrawTriangleElements(MedialIterationContext *grid)
 {
-  // Horizontal elements as lines
-  unsigned int size = height + width;
-  unsigned short *index = new unsigned short[size];
-
-  // Draw the vertical lines
-  unsigned short iStart = 0;
-  for(int j = 0; j < height; j++)
+  // Begin drawing quads
+  glBegin(GL_TRIANGLES);
+  
+  // Iterate over the quads
+  MedialTriangleIterator it(grid);
+  for(; !it.IsAtEnd(); ++it)
     {
-    int iIndex = 0;
-    for(int i = 0; i < width; i++)
-      { index[iIndex++] = iStart++; }
-    glDrawElements(GL_LINE_STRIP, width, GL_UNSIGNED_SHORT, index);
+    glArrayElement(it.GetAtomIndex(0));
+    glArrayElement(it.GetAtomIndex(1));
+    glArrayElement(it.GetAtomIndex(2));
     }
 
-  // Draw the horizontal lines
-  for(int i = 0; i < width; i++)
+  // End quads
+  glEnd();
+}
+
+void glDrawWireframeElements(MedialIterationContext *grid)
+{
+  // Create an edge accumulator
+  typedef std::pair<unsigned int, unsigned int> Edge;
+  typedef std::set<Edge> EdgeSet;
+  EdgeSet xEdgeSet;
+
+  // For each triangle, add the edges to the accumulator
+  for(MedialBoundaryTriangleIterator it(grid); !it.IsAtEnd(); ++it)
     {
-    iStart = i;
-    int iIndex = 0;
-    for(int j = 0; j < height; j++)
-      { index[iIndex++] = iStart; iStart+=width; }
-    glDrawElements(GL_LINE_STRIP, height, GL_UNSIGNED_SHORT, index);
+    unsigned int i0 = it.GetBoundaryIndex(0);
+    unsigned int i1 = it.GetBoundaryIndex(1);
+    unsigned int i2 = it.GetBoundaryIndex(2);
+
+    xEdgeSet.insert( Edge(min(i0,i1), max(i0,i1)) );
+    xEdgeSet.insert( Edge(min(i1,i2), max(i1,i2)) );
+    xEdgeSet.insert( Edge(min(i2,i0), max(i2,i0)) );
     }
+
+  // Pass these elements to the GL
+  unsigned int *index = new unsigned int[xEdgeSet.size() * 2];
+  unsigned int *iptr = index;
+  for(EdgeSet::iterator ite = xEdgeSet.begin(); ite != xEdgeSet.end(); ++ite)
+    {
+    *iptr++ = ite->first;
+    *iptr++ = ite->second;
+    } 
+    
+  glDrawElements(GL_LINES, iptr - index, GL_UNSIGNED_INT, index);
+
+  // Clean up
+  delete index;
 }
 
 PDESplineRenderer
-::PDESplineRenderer(MedialPDESolver *solver)
+::PDESplineRenderer(GenericMedialModel *solver)
 {
   this->solver = solver;
   // matMedial = new GLMaterial(GL_FRONT_AND_BACK, 
@@ -88,7 +117,7 @@ PDESplineRenderer
 void PDESplineRenderer::DrawInternalPoints( size_t nCuts )
 {
   // Generate the internal points using solutiondata
-  SolutionData S(solver);
+  SolutionData S(solver->GetIterationContext(), solver->GetAtomArray());
   S.UpdateInternalWeights( nCuts );
 
   // Pass the points as vertex pointers
@@ -101,31 +130,25 @@ void PDESplineRenderer::DrawInternalPoints( size_t nCuts )
   glBegin(GL_POINTS);
 
   // Draw all the points
-  MedialInternalPointIterator *it = 
-    S.xAtomGrid->NewInternalPointIterator( nCuts );
-  
-  for( ; !it->IsAtEnd(); ++(*it))
+  MedialInternalPointIterator it(S.xAtomGrid, nCuts);
+  for( ; !it.IsAtEnd(); ++it)
     {
-    double d = it->GetRelativeDistanceToMedialAxis();
+    double d = it.GetRelativeDistanceToMedialAxis();
     glColor3d(0.8, 0.2, 1 - d);
-    glVertex3dv( S.xInternalPoints[it->GetIndex()].data_block() );
+    glVertex3dv( S.xInternalPoints[it.GetIndex()].data_block() );
     }
     //glArrayElement(it->GetIndex());
-
-  delete it;
-  
   glEnd();
 
   glBegin(GL_LINES);
-  MedialProfileIntervalIterator *itp = S.xAtomGrid->NewProfileIntervalIterator(nCuts);
-  for(; !itp->IsAtEnd(); ++(*itp))
+  MedialProfileIntervalIterator itp(S.xAtomGrid, nCuts);
+  for(; !itp.IsAtEnd(); ++itp)
     {
     glColor3d(1,1,1);
-    glVertex3dv(S.xInternalPoints[itp->GetInnerPointIndex()].data_block());
+    glVertex3dv(S.xInternalPoints[itp.GetInnerPointIndex()].data_block());
     glColor3d(0,1,0);
-    glVertex3dv(S.xInternalPoints[itp->GetOuterPointIndex()].data_block());
+    glVertex3dv(S.xInternalPoints[itp.GetOuterPointIndex()].data_block());
     }
-  delete itp;
   glEnd();
 
 
@@ -151,10 +174,6 @@ PDESplineRenderer
   glEnableClientState(GL_VERTEX_ARRAY);
   glEnableClientState(GL_NORMAL_ARRAY);
 
-  // Get the numtber of points
-  unsigned int m = solver->GetNumberOfUPoints();
-  unsigned int n = solver->GetNumberOfVPoints();
-
   // Initialize the medial colors
   matMedial->apply();
 
@@ -179,20 +198,20 @@ PDESplineRenderer
 
   // Draw the wireframe
   // glDrawQuadElements(solver->GetAtomGrid());
-  glDrawWireframeElements(m, n);
+  glDrawWireframeElements(solver->GetIterationContext());
 
   // Supply the second boundary array
   glVertexPointer(3, GL_DOUBLE, sizeof(MedialAtom), mp->xBnd[1].X.data_block());
   glNormalPointer(GL_DOUBLE, sizeof(MedialAtom), mp->xBnd[1].N.data_block());
 
   // Draw the wireframe
-  glDrawWireframeElements(m, n);
+  glDrawWireframeElements(solver->GetIterationContext());
 
   // Junk
    
   glDisable(GL_LIGHTING);
   glBegin(GL_POINTS);
-  for(size_t i = 0; i < solver->GetAtomGrid()->GetNumberOfAtoms(); i++)
+  for(size_t i = 0; i < solver->GetNumberOfAtoms(); i++)
     {
     glColor3d(1,0,0);
     glVertex3d(20 * mp[i].u - 10, 20 * mp[i].v - 10, mp[i].F);
@@ -200,7 +219,7 @@ PDESplineRenderer
   glEnd();
   
   glBegin(GL_POINTS);
-  for(size_t i = 0; i < solver->GetAtomGrid()->GetNumberOfAtoms(); i++)
+  for(size_t i = 0; i < solver->GetNumberOfAtoms(); i++)
     {
     if(mp[i].flagValid)
         glColor3d(1,1,0);

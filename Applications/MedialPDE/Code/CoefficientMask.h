@@ -10,9 +10,34 @@ class PrincipalComponents;
 
 using namespace std;
 
+
+/**
+ * A medial coefficient mask is a mapping from one set of coefficients to
+ * another set of coefficients. The second set of coefficients is what defines
+ * a medial model, while the first set is what we optimize over. An example is
+ * optimization over the affine transforms. The input set of coefficients
+ * are the parameters of the affine transform and the output set of
+ * coefficients are the parameters of the medial model.
+ */
 class IMedialCoefficientMask : public ICoefficientSettable
 {
 public:
+  typedef vnl_vector<double> Vec;
+  
+  /**
+   * This method returns a variation (direction in output coefficient space)
+   * that corresponds to a single component in the input coefficient space.
+   */
+  virtual Vec GetVariationPerComponent(size_t iComponent) 
+    { throw std::bad_exception; }
+  
+  /**
+   * This method returns a variation (direction in output coefficient space)
+   * that corresponds to a variation in the input coefficient space.
+   */
+  virtual Vec GetVariationPerVariation(const double *xVar) 
+    { throw std::bad_exception; }
+
 };
 
 class SelectionMedialCoefficientMask : public IMedialCoefficientMask
@@ -31,13 +56,17 @@ public:
   double GetCoefficient(size_t i) const; 
   void SetCoefficient(size_t i, double x);
 
-  // Get a surface corresponding to a single component
-  IHyperSurface2D *GetComponentSurface(size_t iCoefficient);
-  void ReleaseComponentSurface(IHyperSurface2D *xSurface);
 
-  // Get a surface corresponding to some variation
-  IHyperSurface2D *GetVariationSurface(const double *xData);
-  void ReleaseVariationSurface(IHyperSurface2D *xSurface);
+  // The methods for returning a variation
+  typedef IMedialCoefficientMask::Vec Vec;
+  virtual Vec GetVariationPerComponent(size_t iComponent) = 0;
+  virtual Vec GetVariationPerVariation(const double *xVar) = 0;
+
+  // IHyperSurface2D *GetComponentSurface(size_t iCoefficient);
+  // void ReleaseComponentSurface(IHyperSurface2D *xSurface);
+
+  // IHyperSurface2D *GetVariationSurface(const double *xData);
+  // void ReleaseVariationSurface(IHyperSurface2D *xSurface);
 
 private:
   ICoefficientSettable *xSource;

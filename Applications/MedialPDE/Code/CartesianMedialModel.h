@@ -1,5 +1,5 @@
-#ifndef _MedialPDESolver_h_
-#define _MedialPDESolver_h_
+#ifndef _CartesianMedialModel_h_
+#define _CartesianMedialModel_h_
 
 #include <iostream>
 #include <smlmath.h>
@@ -7,13 +7,14 @@
 #include "MedialPDEMasks.h"
 #include "MedialPDESites.h"
 #include "MedialAtom.h"
-#include "CartesianMedialAtomGrid.h"
+#include "GenericMedialModel.h"
+#include "CartesianGridMedialIterationContext.h"
 #include "BasisFunctions2D.h"
 #include "PardisoInterface.h"
 
 using namespace std;
 
-class MedialPDESolver
+class CartesianMedialModel : public GenericMedialModel
 {
 public:
   // Vector and matrix typedefs
@@ -21,7 +22,7 @@ public:
   typedef vnl_matrix<double> Mat;
   
   /** Use the parameter grid to initialize the medial PDE solver. */
-  MedialPDESolver(const Vec &uGrid, const Vec &vGrid);
+  CartesianMedialModel(const Vec &uGrid, const Vec &vGrid);
 
   /**
    * This helper constructor generates a medial PDE grid with given numbers
@@ -31,42 +32,68 @@ public:
    * the boundary and are used to make sure that the m-rep boundary is sampled
    * densely near the endcaps. The exponent is currenly 2, but that may change
    */
-  MedialPDESolver(size_t nu, size_t nv, 
+  CartesianMedialModel(size_t nu, size_t nv, 
     double xScale = 0.0, size_t pu = 0, size_t pv = 0);
 
-  /**
-   * Deconstructor
-   */
-  ~MedialPDESolver();
+  /** Destructor */
+  ~CartesianMedialModel();
+
+  /** Get the number of optimizable coefficients that define this model */
+  size_t GetNumberOfCoefficients() const
+    { return xSurface->GetNumberOfCoefficients(); }
+
+  /** Get the array of (optimizable) coefficients that define this model */
+  const Vec GetCoefficientArray() const 
+    { return Vec(xSurface->GetCoefficientArray(), xSurface->GetNumberOfCoefficients()); }
+
+  /** Get one of the coefficients defining this model */
+  double GetCoefficient(size_t i) const
+    { return xSurface->GetCoefficient(i); }
+
+  /** Set one of the coefficients defining this model */
+  void SetCoefficient(size_t i, double x) 
+    { xSurface->SetCoefficient(i, x); }
+
+  /** Set the array of coefficients defining this model */
+  void SetCoefficientArray(const Vec &xData)
+    { xSurface->SetCoefficientArray(xData.data_block()); }
+
+  /** Compute the PDE solution and the atoms */
+  void ComputeAtoms(MedialAtom *xInitialSolution = NULL)
+    { this->Solve(xInitialSolution); }
+
+  /** Compute the gradient of the solution */
+  void ComputeAtomGradient(std::vector<MedialAtom *> &dAtoms)
+    { this->ComputeVariationalGradient(dAtoms); }
 
   /** 
    * Store the current solution vector as the initialization vector
    */
   void SetSolutionAsInitialGuess();
-
+    
   /** 
    * Generate the default initial guess
    */
   void SetDefaultInitialGuess(double xMagnitude = 0.01);
 
   /** Specify the surface for which the problem should be solved */
-  void SetMedialSurface(IMutableHyperSurface2D *xSurface);
+  void SetMedialSurface(IBasisRepresentation2D *xSurface);
 
   /** Get the pointer to the internal surface */
-  IMutableHyperSurface2D *GetMedialSurface() 
+  IBasisRepresentation2D *GetMedialSurface() 
     { return xSurface; }
 
   /**
    * Solve the PDE for a given surface and a given rho function up to the required 
    * level of accuracy.
    */
-  bool Solve(const Mat& xGuessPhi, double delta = 1e-12);
+  void Solve(const MedialAtom * xGuess, double delta = 1e-12);
 
   /** 
    * Solve, using the default initial guess
    */
-  bool Solve(double delta = 1e-12)
-    { return Solve(xInitSoln); }
+  void Solve(double delta = 1e-12)
+    { return Solve(xAtoms); }
 
   /**
    * This is a prelimiary step for computing the gradient of the phi-function
@@ -75,26 +102,14 @@ public:
    * gradient computations
    */
   void PrepareAtomsForVariationalDerivative(
-    IHyperSurface2D *xVariation, MedialAtom *dAtoms);
+    const Vec &xVariation, MedialAtom *dAtoms) const;
 
   /**
    * Compute the gradient of the equation with respect to the basis functions
    * that constitute the medial surface. This means solving the PDEs that define
    * the gradient of the phi function with respect to the basis functions, as 
-   * well as computing the other partial derivatives */
+   * well as computing the other partial */
   void ComputeVariationalGradient(vector<MedialAtom *> &dAtomArray);
-
-  /** Get the array of atoms */
-  MedialAtom *GetAtomArray()
-    { return xAtoms; }
-
-  /** Get the atom grid on which the medial atoms are computed */
-  MedialAtomGrid *GetAtomGrid()
-    { return xGrid; }
-
-  /** Get the number of atoms */
-  unsigned int GetNumberOfAtoms()
-    { return nSites; }
 
   /** Get the number of atoms in u dimension */
   unsigned int GetNumberOfUPoints()
@@ -114,6 +129,34 @@ public:
   const Vec &GetGridU() const { return uGrid; }
   const Vec &GetGridV() const { return vGrid; }
 
+  /** 
+   * Get the index of the atom at position iu, iv in array returned by
+   * GetAtomArray() 
+   */
+  size_t GetGridAtomIndex(size_t iu, size_t iv) const
+    { 
+    return static_cast<CartesianGridMedialIterationContext *>(this->xIterationContext)
+      ->GetAtomIndex(iu,iv);
+    }
+
+  /**
+   * Load a medial model from the Registry.
+   */
+  void ReadFromRegistry(Registry &folder);
+
+  /**
+   * Save the model to registry folder
+   */
+  void WriteToRegistry(Registry &folder);
+
+  /** Get the affine transform descriptor for this model */
+  const AffineTransformDescriptor *GetAffineTransformDescriptor() const
+    { return xSurface->GetAffineTransformDescriptor(); }
+
+  /** Get the C2F descriptor */
+  const CoarseToFineMappingDescriptor * GetCoarseToFineMappingDescriptor() const
+    { return xSurface->GetCoarseToFineMappingDescriptor(); }
+
   void TestFiniteDifferenceConvergence();
 
   CodeTimer tSolver;
@@ -129,7 +172,7 @@ private:
   unsigned int nSites;
 
   /** The hypersurface on which the PDE is solved */
-  IMutableHyperSurface2D *xSurface;
+  IBasisRepresentation2D *xSurface;
 
   // Array of mask pointers
   std::vector<FiniteDifferenceMask *> xMasks;
@@ -144,15 +187,8 @@ private:
   double *xSparseValues;
   int *xRowIndex, *xColIndex, nSparseEntries;
 
-  /** A grid representing the structure of the atoms */
-  CartesianMedialAtomGrid *xGrid;
-  
-  /** Array of medial atoms, final solution */
-  MedialAtom *xAtoms;
-
   /** Three vectors used in the iteration */
   Mat eps, b, y, zTest, xInitSoln, xDefaultInitSoln, dy;
-  // vnl_vector<double> eps, b, y, zTest;
 
   // Sparse linear matrix solver
   UnsymmetricRealPARDISO xPardiso;
@@ -162,9 +198,9 @@ private:
 
   /** Routine to compute medial atoms */
   void TestJacobi();
-  bool ReconstructAtoms(const Mat &ySolution);
+  void ReconstructAtoms(const Mat &ySolution);
   void InitializeSiteGeometry();
-  bool SolveOnce(const Mat &xGuess, double delta);
+  void SolveOnce(const MedialAtom *xGuess, double delta);
   double EstimateLBOperator(const Mat &F, size_t i, size_t j);
   double ComputeNewtonRHS(const Mat& x, Mat &b);
 
@@ -175,4 +211,4 @@ private:
 /* *********************** Template Code ************************** */
 
 
-#endif // _MedialPDESolver_h_
+#endif // _CartesianMedialModel_h_

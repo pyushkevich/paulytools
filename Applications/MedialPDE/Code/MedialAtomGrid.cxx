@@ -136,78 +136,56 @@ double CellVolumePartialDerivative(
   return - 0.015625 * ScalarTripleProductDerivative(U, V, W, dU, dV, dW);
 }
 
-/* 
-double CellVolumePartialDerivative(
-  const SMLVec3d &X000, const SMLVec3d &X001, 
-  const SMLVec3d &X010, const SMLVec3d &X011, 
-  const SMLVec3d &X100, const SMLVec3d &X101, 
-  const SMLVec3d &X110, const SMLVec3d &X111,
-  const SMLVec3d &D000, const SMLVec3d &D001, 
-  const SMLVec3d &D010, const SMLVec3d &D011, 
-  const SMLVec3d &D100, const SMLVec3d &D101, 
-  const SMLVec3d &D110, const SMLVec3d &D111)
+/**
+ * Here is a similar formula for a wedge volume. The wedge here is treated as
+ * a half of a parallellepiped. The vectors forming its edges are computed by 
+ * averaging the contributing points
+ */
+double WedgeVolume(
+  const SMLVec3d &A0, const SMLVec3d &B0, const SMLVec3d &C0,
+  const SMLVec3d &A1, const SMLVec3d &B1, const SMLVec3d &C1)
 {
-  // Compute the centerpoint inside the cell
-  SMLVec3d C = (X000 + X001 + X010 + X011 + X100 + X101 + X110 + X111) * 0.125;
-  SMLVec3d DC = (D000 + D001 + D010 + D011 + D100 + D101 + D110 + D111) * 0.125;
-
-  // Compute each of the twelve tetrahedra inside the cuboid (group by the
-  // face of the cell)
-  double v00 = TetrahedronVolumePartialDerivative(
-    X000, X001, X100, C, D000, D001, D100, DC);
-  double v01 = TetrahedronVolumePartialDerivative(
-    X101, X100, X001, C, D101, D100, D001, DC);
-
-  double v10 = TetrahedronVolumePartialDerivative(
-    X100, X101, X110, C, D100, D101, D110, DC);
-  double v11 = - TetrahedronVolumePartialDerivative(
-    X111, X110, X101, C, D111, D110, D101, DC);
-  
-  double v20 = - TetrahedronVolumePartialDerivative(
-    X110, X111, X010, C, D110, D111, D010, DC);
-  double v21 = TetrahedronVolumePartialDerivative(
-    X011, X010, X111, C, D011, D010, D111, DC);
-  
-  double v30 = TetrahedronVolumePartialDerivative(
-    X010, X011, X000, C, D010, D011, D000, DC);
-  double v31 = TetrahedronVolumePartialDerivative(
-    X001, X000, X011, C, D001, D000, D011, DC);
-  
-  double v40 = TetrahedronVolumePartialDerivative(
-    X011, X111, X001, C, D011, D111, D001, DC);
-  double v41 = - TetrahedronVolumePartialDerivative(
-    X101, X001, X111, C, D101, D001, D111, DC);
-  
-  double v50 = - TetrahedronVolumePartialDerivative(
-    X010, X000, X110, C, D010, D000, D110, DC);
-  double v51 = TetrahedronVolumePartialDerivative(
-    X100, X110, X000, C, D100, D110, D000, DC);
-
-  // Return a sixth of these sums
-  static const double SIXTH = 1.0 / 6.0;
-  return - SIXTH *
-    (v00 + v01 + v10 + v11 + v20 + v21 + v30 + v31 + v40 + v41 + v50 + v51);
+  const static double FACTOR = 1.0 / 24.0;
+  SMLVec3d U = (B1 + B0) - (A1 + A0);
+  SMLVec3d V = (C1 + C0) - (A1 + A0);
+  SMLVec3d W = (A1 + B1 + C1) - (A0 + B0 + C0);
+  return FACTOR * ScalarTripleProduct(U, V, W);
 }
-*/
+
+double WedgeVolumePartialDerivative(
+  const SMLVec3d &A0, const SMLVec3d &B0, const SMLVec3d &C0,
+  const SMLVec3d &A1, const SMLVec3d &B1, const SMLVec3d &C1,
+  const SMLVec3d &dA0, const SMLVec3d &dB0, const SMLVec3d &dC0,
+  const SMLVec3d &dA1, const SMLVec3d &dB1, const SMLVec3d &dC1)
+{
+  const static double FACTOR = 1.0 / 24.0;
+  SMLVec3d U = (B1 + B0) - (A1 + A0);
+  SMLVec3d V = (C1 + C0) - (A1 + A0);
+  SMLVec3d W = (A1 + B1 + C1) - (A0 + B0 + C0);
+  SMLVec3d dU = (dB1 + dB0) - (dA1 + dA0);
+  SMLVec3d dV = (dC1 + dC0) - (dA1 + dA0);
+  SMLVec3d dW = (dA1 + dB1 + dC1) - (dA0 + dB0 + dC0);
+  return FACTOR * ScalarTripleProductDerivative(U, V, W, dU, dV, dW);
+}
 
 /** Helper function to compute the coordinate of an internal medial point
  * that is referenced by an iterator */
-SMLVec3d GetInternalPoint(MedialInternalPointIterator *it, MedialAtom *xAtoms)
+SMLVec3d GetInternalPoint(MedialInternalPointIterator &it, MedialAtom *xAtoms)
 {
   // If a medial atom, return the atom
-  size_t iAtom = it->GetAtomIndex();
-  size_t iDepth = it->GetDepth();
+  size_t iAtom = it.GetAtomIndex();
+  size_t iDepth = it.GetDepth();
 
   // If depth is zero (we are on the medial axis) return the medial point
   if(iDepth == 0) return xAtoms[iAtom].X;
 
   // If depth is equal to max-depth, we can return the boundary site instead
-  SMLVec3d Y = xAtoms[iAtom].xBnd[it->GetBoundarySide()].X;
-  if(iDepth == it->GetMaxDepth()) return Y;
+  SMLVec3d Y = xAtoms[iAtom].xBnd[it.GetBoundarySide()].X;
+  if(iDepth == it.GetMaxDepth()) return Y;
 
   // In the remaining case, the point is internal and should be interpolated
   SMLVec3d X = xAtoms[iAtom].X;
-  return X + (Y - X) * it->GetRelativeDistanceToMedialAxis();
+  return X + (Y - X) * it.GetRelativeDistanceToMedialAxis();
 }
 
 
@@ -270,8 +248,8 @@ double ComputeMedialBoundaryAreaWeights( MedialAtomGrid *xGrid,
 // This method computes the weights for integration over the domain of the medial
 // surface. Because the domain may be non-uniform, we must scale all integrals in
 // du dv by these weights
-double ComputeMedialDomainAreaWeights( MedialAtomGrid *xGrid, 
-  MedialAtom *xAtoms, double *xWeights)
+double ComputeMedialDomainAreaWeights(
+  MedialIterationContext *xGrid, MedialAtom *xAtoms, double *xWeights)
 {
   // A constant to hold 1/3
   const static double THIRD = 1.0f / 3.0f;
@@ -280,52 +258,37 @@ double ComputeMedialDomainAreaWeights( MedialAtomGrid *xGrid,
   // Clear the content of the weights
   memset(xWeights, 0, sizeof(double) * xGrid->GetNumberOfAtoms());
   
-  // Create a quad-based iterator
-  MedialQuadIterator *itQuad = xGrid->NewQuadIterator();
-
-  // For each quad, compute the area associated with it
-  size_t iQuad = 0;
-  while(!itQuad->IsAtEnd())
+  // Iterate over the triangles
+  for(MedialTriangleIterator itt(xGrid); !itt.IsAtEnd() ; ++itt)
     {
     // Access the four medial atoms
-    size_t i00 = itQuad->GetAtomIndex(0, 0);
-    size_t i01 = itQuad->GetAtomIndex(0, 1);
-    size_t i10 = itQuad->GetAtomIndex(1, 0);
-    size_t i11 = itQuad->GetAtomIndex(1, 1);
+    size_t i0 = itt.GetAtomIndex(0);
+    size_t i1 = itt.GetAtomIndex(1);
+    size_t i2 = itt.GetAtomIndex(2);
 
     // Get the size of the quad. 
-    SMLVec3d X00(xAtoms[i00].u, xAtoms[i00].v, 0.0);
-    SMLVec3d X01(xAtoms[i01].u, xAtoms[i01].v, 0.0);
-    SMLVec3d X10(xAtoms[i10].u, xAtoms[i10].v, 0.0);
-    SMLVec3d X11(xAtoms[i11].u, xAtoms[i11].v, 0.0);
+    SMLVec3d X0(xAtoms[i0].u, xAtoms[i0].v, 0.0);
+    SMLVec3d X1(xAtoms[i1].u, xAtoms[i1].v, 0.0);
+    SMLVec3d X2(xAtoms[i2].u, xAtoms[i2].v, 0.0);
 
-    // Compute the areas of the two triangles involved
-    double A1 = THIRD * TriangleArea( X00, X01, X11 );
-    double A2 = THIRD * TriangleArea( X00, X11, X10 );
-    xTotalArea += (A1 + A2);
+    // Compute the area of the triangle, divided by three
+    double A = THIRD * TriangleArea( X0, X1, X2 );
+
+    // Add to the total area
+    xTotalArea += A;
 
     // Assign a third of each weight to each corner
-    xWeights[i00] += A1 + A2;
-    xWeights[i11] += A1 + A2;
-    xWeights[i01] += A1;
-    xWeights[i10] += A2;
-
-    // Go to the next boundary quad
-    ++(*itQuad);
+    xWeights[i0] += A; xWeights[i1] += A; xWeights[i2] += A;
     }
-
-  // Delete the iterator object
-  delete itQuad;
 
   // Return the total area
   return 3.0f * xTotalArea;
 }
 
 
-
 // Old Method: always returns positive areas - dangerous!
-double ComputeMedialBoundaryAreaWeights( MedialAtomGrid *xGrid, 
-  MedialAtom *xAtoms, double *xWeights)
+double ComputeMedialBoundaryAreaWeights(
+  MedialIterationContext *xGrid, MedialAtom *xAtoms, double *xWeights)
 {
   // A constant to hold 1/3
   const static double THIRD = 1.0f / 3.0f;
@@ -334,104 +297,35 @@ double ComputeMedialBoundaryAreaWeights( MedialAtomGrid *xGrid,
   // Clear the content of the weights
   memset(xWeights, 0, sizeof(double) * xGrid->GetNumberOfBoundaryPoints());
   
-  // Create a quad-based iterator
-  MedialBoundaryQuadIterator *itQuad = xGrid->NewBoundaryQuadIterator();
-
-  // For each quad, compute the area associated with it
-  size_t iQuad = 0;
-  while(!itQuad->IsAtEnd())
+  // Iterate over the triangles
+  for(MedialBoundaryTriangleIterator itt(xGrid); !itt.IsAtEnd() ; ++itt)
     {
-    // Access the four medial points
-    SMLVec3d X00 = GetBoundaryPoint(itQuad, xAtoms, 0, 0).X;
-    SMLVec3d X01 = GetBoundaryPoint(itQuad, xAtoms, 0, 1).X;
-    SMLVec3d X11 = GetBoundaryPoint(itQuad, xAtoms, 1, 1).X;
-    SMLVec3d X10 = GetBoundaryPoint(itQuad, xAtoms, 1, 0).X;
+    // Access the four medial atoms
+    size_t i0 = itt.GetBoundaryIndex(0);
+    size_t i1 = itt.GetBoundaryIndex(1);
+    size_t i2 = itt.GetBoundaryIndex(2);
 
-    // Compute the areas of the two triangles involved
-    double A1 = THIRD * TriangleArea( X00, X01, X11 );
-    double A2 = THIRD * TriangleArea( X00, X11, X10 );
-    xTotalArea += (A1 + A2);
+    // Access the four medial points
+    SMLVec3d X0 = GetBoundaryPoint(itt, xAtoms, 0).X;
+    SMLVec3d X1 = GetBoundaryPoint(itt, xAtoms, 1).X;
+    SMLVec3d X2 = GetBoundaryPoint(itt, xAtoms, 2).X;
+
+    // Compute the area of triangle
+    double A = THIRD * TriangleArea( X0, X1, X2 );
+    
+    // Add to the total area
+    xTotalArea += A;
 
     // Assign a third of each weight to each corner
-    xWeights[itQuad->GetBoundaryIndex(0, 0)] += A1 + A2;
-    xWeights[itQuad->GetBoundaryIndex(1, 1)] += A1 + A2;
-    xWeights[itQuad->GetBoundaryIndex(0, 1)] += A1;
-    xWeights[itQuad->GetBoundaryIndex(1, 0)] += A2;
-
-    // Go to the next boundary quad
-    ++(*itQuad);
+    xWeights[i0] += A; xWeights[i1] += A; xWeights[i2] += A;
     }
-
-  // Delete the iterator object
-  delete itQuad;
 
   // Return the total area
   return 3.0f * xTotalArea;
 }
 
-/**
- * Compute the derivative of the boundary area elements given the derivative
- * of the atoms themselves with respect to some parameter 
- */
-/*
 double ComputeMedialBoundaryAreaPartialDerivative(
-  MedialAtomGrid *xGrid, MedialAtom *xAtoms, MedialAtom *dAtoms, 
-  double *xWeights, double *dWeights)
-{
-  // Clear the content of the weights
-  memset(dWeights, 0, sizeof(double) * xGrid->GetNumberOfBoundaryPoints());
-  double dTotalArea = 0.0f;
-  
-  // Create a quad-based iterator
-  MedialBoundaryQuadIterator *itQuad = xGrid->NewBoundaryQuadIterator();
-
-  // For each quad, compute the area associated with it
-  for(; !itQuad->IsAtEnd(); ++(*itQuad))
-    {
-    // Access the four medial points
-    const BoundaryAtom& A00 = GetBoundaryPoint(itQuad, xAtoms, 0, 0);
-    const BoundaryAtom& A01 = GetBoundaryPoint(itQuad, xAtoms, 0, 1);
-    const BoundaryAtom& A11 = GetBoundaryPoint(itQuad, xAtoms, 1, 1);
-    const BoundaryAtom& A10 = GetBoundaryPoint(itQuad, xAtoms, 1, 0);
-
-    // Also access their derivatives
-    const BoundaryAtom& DA00 = GetBoundaryPoint(itQuad, dAtoms, 0, 0);
-    const BoundaryAtom& DA01 = GetBoundaryPoint(itQuad, dAtoms, 0, 1);
-    const BoundaryAtom& DA11 = GetBoundaryPoint(itQuad, dAtoms, 1, 1);
-    const BoundaryAtom& DA10 = GetBoundaryPoint(itQuad, dAtoms, 1, 0);
-
-    // Compute the four vectors along the edges of this rectangle
-    SMLVec3d U0 = A10.X - A00.X; SMLVec3d V0 = A01.X - A00.X;
-    SMLVec3d U1 = A11.X - A01.X; SMLVec3d V1 = A11.X - A10.X;
-    SMLVec3d DU0 = DA10.X - DA00.X; SMLVec3d DV0 = DA01.X - DA00.X;
-    SMLVec3d DU1 = DA11.X - DA01.X; SMLVec3d DV1 = DA11.X - DA10.X;
-
-    // Compute the contribution wo the weight elements of each node
-    double DW00 = -0.25 * ScalarTripleProductDerivative(U0, V0, A00.N, DU0, DV0, DA00.N);
-    double DW10 = -0.25 * ScalarTripleProductDerivative(U0, V1, A10.N, DU0, DV1, DA10.N);
-    double DW01 = -0.25 * ScalarTripleProductDerivative(U1, V0, A01.N, DU1, DV0, DA01.N);
-    double DW11 = -0.25 * ScalarTripleProductDerivative(U1, V1, A11.N, DU1, DV1, DA11.N);
-
-    // Update the total area
-    dTotalArea += DW00 + DW10 + DW01 + DW11;
-    
-    // Assign a third of each weight to each corner
-    dWeights[itQuad->GetBoundaryIndex(0, 0)] += DW00;
-    dWeights[itQuad->GetBoundaryIndex(1, 1)] += DW11;
-    dWeights[itQuad->GetBoundaryIndex(0, 1)] += DW01;
-    dWeights[itQuad->GetBoundaryIndex(1, 0)] += DW10;
-    }
-
-  // Delete the iterator object
-  delete itQuad;
-
-  // Return the total area
-  return dTotalArea;
-}
-*/
-
-double ComputeMedialBoundaryAreaPartialDerivative(
-  MedialAtomGrid *xGrid, MedialAtom *xAtoms, MedialAtom *dAtoms, 
+  MedialIterationContext *xGrid, MedialAtom *xAtoms, MedialAtom *dAtoms, 
   double *xWeights, double *dWeights)
 {
   // A constant to hold 1/3
@@ -441,53 +335,31 @@ double ComputeMedialBoundaryAreaPartialDerivative(
   // Clear the content of the weights
   memset(dWeights, 0, sizeof(double) * xGrid->GetNumberOfBoundaryPoints());
   
-  // Create a quad-based iterator
-  MedialBoundaryQuadIterator *itQuad = xGrid->NewBoundaryQuadIterator();
-
   // For each quad, compute the area associated with it
-  size_t iQuad = 0;
-  while(!itQuad->IsAtEnd())
+  for(MedialBoundaryTriangleIterator it(xGrid); !it.IsAtEnd(); ++it)
     {
     // Access the four medial points
-    SMLVec3d X00 = GetBoundaryPoint(itQuad, xAtoms, 0, 0).X;
-    SMLVec3d X01 = GetBoundaryPoint(itQuad, xAtoms, 0, 1).X;
-    SMLVec3d X11 = GetBoundaryPoint(itQuad, xAtoms, 1, 1).X;
-    SMLVec3d X10 = GetBoundaryPoint(itQuad, xAtoms, 1, 0).X;
+    SMLVec3d X0 = GetBoundaryPoint(it, xAtoms, 0).X;
+    SMLVec3d X1 = GetBoundaryPoint(it, xAtoms, 1).X;
+    SMLVec3d X2 = GetBoundaryPoint(it, xAtoms, 2).X;
 
     // Access the derivatives of the points
-    SMLVec3d D00 = GetBoundaryPoint(itQuad, dAtoms, 0, 0).X;
-    SMLVec3d D01 = GetBoundaryPoint(itQuad, dAtoms, 0, 1).X;
-    SMLVec3d D11 = GetBoundaryPoint(itQuad, dAtoms, 1, 1).X;
-    SMLVec3d D10 = GetBoundaryPoint(itQuad, dAtoms, 1, 0).X;
+    SMLVec3d D0 = GetBoundaryPoint(it, dAtoms, 0).X;
+    SMLVec3d D1 = GetBoundaryPoint(it, dAtoms, 1).X;
+    SMLVec3d D2 = GetBoundaryPoint(it, dAtoms, 2).X;
 
-    // Get the areas of the two triangles
-    double A1 = xWeights[itQuad->GetBoundaryIndex(0, 1)];
-    double A2 = xWeights[itQuad->GetBoundaryIndex(1, 0)];
-
-    // Compute the areas of the two triangles involved
-    double dA1 = THIRD * 
-      TriangleAreaPartialDerivative( X00, X01, X11, D00, D01, D11, 
-        TriangleArea(X00,X01,X11));
+    // Compute the derivative of the triangle area
+    double dA = THIRD * 
+      TriangleAreaPartialDerivative(X0, X1, X2, D0, D1, D2, TriangleArea(X0, X1, X2));
     
-    double dA2 = THIRD * 
-      TriangleAreaPartialDerivative( X00, X11, X10, D00, D11, D10, 
-        TriangleArea(X00, X11, X10));
-
     // Update the total area
-    dTotalArea += dA1 + dA2;
+    dTotalArea += dA;
 
     // Assign a third of each weight to each corner
-    dWeights[itQuad->GetBoundaryIndex(0, 0)] += dA1 + dA2;
-    dWeights[itQuad->GetBoundaryIndex(1, 1)] += dA1 + dA2;
-    dWeights[itQuad->GetBoundaryIndex(0, 1)] += dA1;
-    dWeights[itQuad->GetBoundaryIndex(1, 0)] += dA2;
-
-    // Go to the next boundary quad
-    ++(*itQuad);
+    dWeights[it.GetBoundaryIndex(0)] += dA;
+    dWeights[it.GetBoundaryIndex(1)] += dA;
+    dWeights[it.GetBoundaryIndex(2)] += dA;
     }
-
-  // Delete the iterator object
-  delete itQuad;
 
   // Return the total area
   return 3.0f * dTotalArea;
@@ -497,17 +369,11 @@ double ComputeMedialBoundaryAreaPartialDerivative(
  * Interpolate a list of internal medial points from the m-rep.
  */
 void ComputeMedialInternalPoints(
-  MedialAtomGrid *xGrid, MedialAtom *xAtoms, size_t nCuts, SMLVec3d *xPoints)
+  MedialIterationContext *xGrid, MedialAtom *xAtoms, size_t nCuts, SMLVec3d *xPoints)
 {
   // Create an internal point iterator
-  MedialInternalPointIterator *it = xGrid->NewInternalPointIterator(nCuts);
-  while(!it->IsAtEnd())
-    {
-    // Compute the internal point
-    xPoints[it->GetIndex()] = GetInternalPoint(it, xAtoms);
-    ++(*it);
-    }
-  delete it;
+  for(MedialInternalPointIterator it(xGrid, nCuts); !it.IsAtEnd(); ++it)
+    xPoints[it.GetIndex()] = GetInternalPoint(it, xAtoms);
 }
 
 class CellVolumeWeightComputer {
@@ -550,76 +416,99 @@ private:
   SMLVec3d *xPoints, *dPoints;
 };
 
+class WedgeVolumeWeightComputer {
+public:
+  
+  WedgeVolumeWeightComputer(SMLVec3d *xPoints)
+    { this->xPoints = xPoints; }
+  
+  double ComputeWeight(
+    size_t i00, size_t i01, size_t i02,
+    size_t i10, size_t i11, size_t i12)
+    {
+    return WedgeVolume(
+      xPoints[i00], xPoints[i01], xPoints[i02], 
+      xPoints[i10], xPoints[i11], xPoints[i12]);
+    }
+
+private:
+  SMLVec3d *xPoints;
+};
+
+class WedgeVolumePartialDerivativeWeightComputer {
+public:
+  
+  WedgeVolumePartialDerivativeWeightComputer(SMLVec3d *xPoints, SMLVec3d *dPoints)
+    { this->xPoints = xPoints; this->dPoints = dPoints; }
+  
+  double ComputeWeight (
+    size_t i00, size_t i01, size_t i02,
+    size_t i10, size_t i11, size_t i12)
+    {
+    return WedgeVolumePartialDerivative (
+      xPoints[i00], xPoints[i01], xPoints[i02], 
+      xPoints[i10], xPoints[i11], xPoints[i12],
+      dPoints[i00], dPoints[i01], dPoints[i02], 
+      dPoints[i10], dPoints[i11], dPoints[i12]);
+    }
+
+private:
+  SMLVec3d *xPoints, *dPoints;
+};
+
 /**
  * This generic function reuses code to compute both the cell volume-based
  * weights and their derivatives.
  */
 template<class TWeightComputer>
 double ComputeMedialInteralWeights(
-  MedialAtomGrid *xGrid, TWeightComputer *xComputer, size_t nCuts, 
+  MedialIterationContext *xGrid, TWeightComputer *xComputer, size_t nCuts, 
   double *xWeights, double *xInternalProfileWeights)
 {
+  const static double SIXTH = 1.0 / 6.0;
+
   // Set all the weights to zero to begin with
+  double xTotalVolume = 0.0;
   size_t nPoints = xGrid->GetNumberOfInternalPoints(nCuts);
   memset(xWeights, 0, sizeof(double) * nPoints);
   memset(xInternalProfileWeights, 0, sizeof(double) 
     * xGrid->GetNumberOfProfileIntervals(nCuts));
   
-  // Create an internal cell iterator
-  MedialInternalCellIterator *itCell = xGrid->NewInternalCellIterator(nCuts);
-
-  // For each cell, compute the internal volume
-  double xTotalVolume = 0.0;
-  while(!itCell->IsAtEnd())
+  // Iterate over all the wedges
+  for(MedialInternalCellIterator it(xGrid, nCuts); !it.IsAtEnd(); ++it)
     {
-    // Get the indices of the cell corners
-    size_t i000 = itCell->GetInternalPointIndex(0, 0, 0);
-    size_t i001 = itCell->GetInternalPointIndex(0, 0, 1);
-    size_t i010 = itCell->GetInternalPointIndex(0, 1, 0);
-    size_t i100 = itCell->GetInternalPointIndex(1, 0, 0);
-    size_t i011 = itCell->GetInternalPointIndex(0, 1, 1);
-    size_t i101 = itCell->GetInternalPointIndex(1, 0, 1);
-    size_t i110 = itCell->GetInternalPointIndex(1, 1, 0);
-    size_t i111 = itCell->GetInternalPointIndex(1, 1, 1);
-
-    // Compute the cell's volume
-    // cout.width(16);
-    // cout << "Cell : " << itCell->GetAtomIndex(0,0) << " ";
-    double V =  
-      xComputer->ComputeWeight( i000, i001, i010, i011, i100, i101, i110, i111); 
+    // Get the indices of the six points
+    size_t i00 = it.GetInternalPointIndex(0, 0);
+    size_t i01 = it.GetInternalPointIndex(1, 0);
+    size_t i02 = it.GetInternalPointIndex(2, 0);
+    size_t i10 = it.GetInternalPointIndex(0, 1);
+    size_t i11 = it.GetInternalPointIndex(1, 1);
+    size_t i12 = it.GetInternalPointIndex(2, 1);
 
     // Add to total volume of the structure
+    double V = xComputer->ComputeWeight(i00, i01, i02, i10, i11, i12); 
     xTotalVolume += V;
 
-    // Scale by an eigth (since each cube has eight corners)
-    V *= 0.125;
+    // Scale by a sixth (since each wedge has six corners)
+    V *= SIXTH;
 
     // Assign the fractions of the volume to the corresponding internal points
-    xWeights[i000] += V; xWeights[i110] += V;
-    xWeights[i010] += V; xWeights[i100] += V;
-    xWeights[i001] += V; xWeights[i111] += V;
-    xWeights[i011] += V; xWeights[i101] += V;
+    xWeights[i00] += V; xWeights[i10] += V;
+    xWeights[i01] += V; xWeights[i11] += V;
+    xWeights[i02] += V; xWeights[i12] += V;
 
     // Also assign fractions of the weights to the profile intervals
     if(xInternalProfileWeights)
       {
-      size_t j00 = itCell->GetProfileIntervalIndex(0, 0);
-      size_t j01 = itCell->GetProfileIntervalIndex(0, 1);
-      size_t j10 = itCell->GetProfileIntervalIndex(1, 0);
-      size_t j11 = itCell->GetProfileIntervalIndex(1, 1);
-      V *= 2.0;
-      xInternalProfileWeights[j00] += V;
-      xInternalProfileWeights[j01] += V;
-      xInternalProfileWeights[j10] += V;
-      xInternalProfileWeights[j11] += V;
+      size_t j0 = it.GetProfileIntervalIndex(0);
+      size_t j1 = it.GetProfileIntervalIndex(1);
+      size_t j2 = it.GetProfileIntervalIndex(2);
+      V = V + V;
+      xInternalProfileWeights[j0] += V;
+      xInternalProfileWeights[j1] += V;
+      xInternalProfileWeights[j2] += V;
       }
-
-    // Go to the next boundary quad
-    ++(*itCell);
     }
-
-  // Delete the iterator object
-  delete itCell;
 
   // Return the total area
   return xTotalVolume; 
@@ -633,11 +522,11 @@ double ComputeMedialInteralWeights(
  * is equal to the volume of the m-rep
  */
 double ComputeMedialInternalVolumeWeights(
-  MedialAtomGrid *xGrid, SMLVec3d *xPoints, size_t nCuts, 
+  MedialIterationContext *xGrid, SMLVec3d *xPoints, size_t nCuts, 
   double *xWeights, double *xInternalProfileWeights)
 {
   // Create a specialization object
-  CellVolumeWeightComputer xComputer(xPoints);
+  WedgeVolumeWeightComputer xComputer(xPoints);
 
   // Compute the weights
   return ComputeMedialInteralWeights(xGrid, &xComputer, nCuts, 
@@ -645,11 +534,11 @@ double ComputeMedialInternalVolumeWeights(
 }
 
 double ComputeMedialInternalVolumePartialDerivativeWeights(
-  MedialAtomGrid *xGrid, SMLVec3d *xPoints, SMLVec3d *dPoints, size_t nCuts, 
+  MedialIterationContext *xGrid, SMLVec3d *xPoints, SMLVec3d *dPoints, size_t nCuts, 
   double *dWeights, double *dInternalProfileWeights)
 {
   // Create a specialization object
-  CellVolumePartialDerivativeWeightComputer xComputer(xPoints, dPoints);
+  WedgeVolumePartialDerivativeWeightComputer xComputer(xPoints, dPoints);
 
   // Compute the weights
   return ComputeMedialInteralWeights(xGrid, &xComputer, nCuts, 
@@ -658,26 +547,19 @@ double ComputeMedialInternalVolumePartialDerivativeWeights(
 
 /** This method integrates any given function over the interior of mrep */
 double IntegrateFunctionOverInterior (
-  MedialAtomGrid *xGrid, SMLVec3d *xPoints, 
+  MedialIterationContext *xGrid, SMLVec3d *xPoints, 
   double *xWeights, size_t nCuts, EuclideanFunction *fMatch) 
 {
   // Match accumulator
   double xMatch = 0.0;
   
   // Create an internal point iterator
-  MedialInternalPointIterator *it = xGrid->NewInternalPointIterator(nCuts);
-  while(!it->IsAtEnd())
+  for(MedialInternalPointIterator it(xGrid, nCuts); !it.IsAtEnd(); ++it)
     {
     // Evaluate the image at this location
-    size_t iPoint = it->GetIndex();
+    size_t iPoint = it.GetIndex();
     xMatch += xWeights[iPoint] * fMatch->Evaluate( xPoints[iPoint] );
-
-    // On to the next point
-    ++(*it); 
     }
-
-  // Clean up
-  delete it;
 
   // Return match scaled by total weight
   return xMatch;
@@ -685,24 +567,26 @@ double IntegrateFunctionOverInterior (
 
 /** Integrate any function over the interior of a medial atom */
 double IntegrateFunctionOverBoundary (
-  MedialAtomGrid *xGrid, MedialAtom *xAtoms, 
+  MedialIterationContext *xGrid, MedialAtom *xAtoms, 
   double *xWeights, EuclideanFunction *fMatch)
 {
   // Match accumulator
   double xMatch = 0.0;
 
   // Iterate through all boundary points
-  MedialBoundaryPointIterator *itBoundary = xGrid->NewBoundaryPointIterator();
-  while(!itBoundary->IsAtEnd())
+  for(MedialBoundaryPointIterator it(xGrid); !it.IsAtEnd(); ++it)
     {
-    double xLocal = fMatch->Evaluate(GetBoundaryPoint(itBoundary, xAtoms).X);
-    xMatch += xLocal * xWeights[itBoundary->GetIndex()];
-    ++(*itBoundary);
+    double xLocal = fMatch->Evaluate(GetBoundaryPoint(it, xAtoms).X);
+    xMatch += xLocal * xWeights[it.GetIndex()];
     }
   
-  delete itBoundary;
   return xMatch;
 }
+
+
+/********************************************************************************
+ * DEPRECATED CODE
+ * ******************************************************************************
 
 double RecursiveGetTriangleMatch(
   SMLVec3d &A, SMLVec3d &B, SMLVec3d &C, 
@@ -733,10 +617,10 @@ double RecursiveGetTriangleMatch(
 }
 
 
-/** 
+/ ** 
  * Integrate a function over the boundary, making sure that irregular quads are 
  * super-sampled. This results in better quality integration 
- */
+ * /
 double AdaptivelyIntegrateFunctionOverBoundary(
   MedialAtomGrid *xGrid, MedialAtom *xAtoms, 
   double xMinQuadArea, EuclideanFunction *fMatch)
@@ -769,29 +653,24 @@ double AdaptivelyIntegrateFunctionOverBoundary(
   // Scale the match by the area
   return xMatch;
 }
+*/
 
 /** Compute gradient of a function over the boundary */
 double ComputeFunctionJetOverBoundary(
-  MedialAtomGrid *xGrid, MedialAtom *xAtoms, 
+  MedialIterationContext *xGrid, MedialAtom *xAtoms, 
   double *xWeights, EuclideanFunction *fMatch, SMLVec3d *xOutGradient) 
 {
   // Compute the image match
   double xMatch = IntegrateFunctionOverBoundary(xGrid, xAtoms, xWeights, fMatch);
   
   // Create a boundary point iterator and iterate over all points
-  MedialBoundaryPointIterator *itBoundary = xGrid->NewBoundaryPointIterator();
-
-  // Iterate through all boundary points
-  while(!itBoundary->IsAtEnd())
+  for(MedialBoundaryPointIterator it(xGrid); !it.IsAtEnd(); ++it)
     {
     // Evaluate the image gradient at this point
-    unsigned int iBnd = itBoundary->GetIndex();
-    SMLVec3d X = GetBoundaryPoint(itBoundary, xAtoms).X;
+    size_t iBnd = it.GetIndex();
+    SMLVec3d X = GetBoundaryPoint(it, xAtoms).X;
     fMatch->ComputeGradient(X, xOutGradient[iBnd]);
     xOutGradient[iBnd] *= xWeights[iBnd];
-
-    // On to the next point
-    ++(*itBoundary);
     }
 
   // Return match scaled by total weight

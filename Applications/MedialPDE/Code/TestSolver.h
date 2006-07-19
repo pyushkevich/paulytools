@@ -1,15 +1,31 @@
 #ifndef __TestSolver_h_
 #define __TestSolver_h_
 
-class MedialPDESolver;
-class IMedialCoefficientMask;
+#include "GenericMedialModel.h"
+#include "CoefficientMapping.h"
+
+class MedialOptimizationProblem;
+
+// This method tests gradient computation. The third argument is the starting
+// point in parameter space. By default it's at the origin.
+int TestGradientComputation(
+  GenericMedialModel *xSolver, 
+  CoefficientMapping *xMask, 
+  vnl_vector<double> P0,
+  int nRandVariations = 0);
 
 int TestGradientComputation(
-  MedialPDESolver *xSolver, IMedialCoefficientMask *xMask, int nRandVariations = 0);
+  GenericMedialModel *xSolver, 
+  CoefficientMapping *xMask, 
+  int nRandVariations = 0)
+{
+  return TestGradientComputation(xSolver, xMask, 
+    vnl_vector<double>(xMask->GetNumberOfParameters(),0.0), nRandVariations);
+}
 
 int TestOptimizerGradientComputation(
   MedialOptimizationProblem &mop, 
-  IMedialCoefficientMask &xMask,
-  MedialPDESolver *xSolver);
+  CoefficientMapping &xMask,
+  GenericMedialModel *xSolver);
 
 #endif

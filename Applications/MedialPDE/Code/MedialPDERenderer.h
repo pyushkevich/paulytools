@@ -3,7 +3,7 @@
 
 #include "glengine.h"
 
-class MedialPDESolver;
+class GenericMedialModel;
 
 void glDrawWireframeElements(unsigned short width, unsigned short height);
 void glDrawQuadStripElements(unsigned short width,unsigned short height);
@@ -12,7 +12,7 @@ class PDESplineRenderer : public GLDisplayListRenderer
 {
 public:
   // Constructor
-  PDESplineRenderer(MedialPDESolver *solver);
+  PDESplineRenderer(GenericMedialModel *solver);
 
   // Build the display list
   virtual void build();
@@ -21,7 +21,7 @@ private:
   // INternal methods
   void DrawInternalPoints( size_t nCuts );
 
-  MedialPDESolver *solver;
+  GenericMedialModel *solver;
   GLMaterial *matMedial, *matBoundary;
 };
 

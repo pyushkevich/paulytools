@@ -5,6 +5,7 @@
 #include "vtkPolyData.h"
 #include "SubdivisionSurface.h"
 #include "MeshMedialPDESolver.h"
+#include "SubdivisionSurfaceMedialIterationContext.h"
 
 #include <string>
 #include <iostream>
@@ -26,9 +27,8 @@ int TestSubdivisionSurface(const char *objMesh)
   vtkPolyData *poly = reader->GetOutput();
 
   // Create a subdivision surface
-  SubdivisionSurface ss;
   SubdivisionSurface::MeshLevel mesh;
-  ss.ImportLevelFromVTK(poly, mesh);
+  SubdivisionSurface::ImportLevelFromVTK(poly, mesh);
 
   // Describe the mesh
   cout << "Input mesh has " << mesh.triangles.size() << " triangles";
@@ -41,23 +41,23 @@ int TestSubdivisionSurface(const char *objMesh)
   writer->Update();
 
   // Check the mesh after loading
-  if(!ss.CheckMeshLevel(mesh))
+  if(!SubdivisionSurface::CheckMeshLevel(mesh))
     return 1;
 
   // Subdivide the mesh once
   SubdivisionSurface::MeshLevel meshsub;
-  ss.Subdivide(&mesh, &meshsub);
+  SubdivisionSurface::Subdivide(&mesh, &meshsub);
 
   cout << "Subdivided mesh has " << meshsub.triangles.size() << " triangles";
   cout << " and " << meshsub.nVertices << " vertices" << endl;
 
   // Check the subdivided mesh
-  if(!ss.CheckMeshLevel(meshsub))
+  if(!SubdivisionSurface::CheckMeshLevel(meshsub))
     return 1;
 
   // Compute the subdivision surface
   vtkPolyData *polysub = vtkPolyData::New();
-  ss.ApplySubdivision(poly, polysub, meshsub);
+  SubdivisionSurface::ApplySubdivision(poly, polysub, meshsub);
 
   // Save the subdivision surface
   writer->SetInput(polysub);
@@ -66,17 +66,17 @@ int TestSubdivisionSurface(const char *objMesh)
 
   // Subdivide the mesh one more time
   SubdivisionSurface::MeshLevel meshresub;
-  ss.Subdivide(&meshsub, &meshresub);
+  SubdivisionSurface::Subdivide(&meshsub, &meshresub);
 
   cout << "Subdivided mesh has " << meshresub.triangles.size() << " triangles";
   cout << " and " << meshresub.nVertices << " vertices" << endl;
 
   // Check the subdivided mesh
-  if(!ss.CheckMeshLevel(meshresub))
+  if(!SubdivisionSurface::CheckMeshLevel(meshresub))
     return 1;
 
   // Save the subdivision surface
-  ss.ApplySubdivision(poly, polysub, meshresub);
+  SubdivisionSurface::ApplySubdivision(poly, polysub, meshresub);
   writer->SetInput(polysub);
   writer->SetGeometryFileName("byu_resubdivide.byu");
   writer->Update();
@@ -138,9 +138,8 @@ int TestSubdivisionPDE(const char *objMesh)
   vtkPolyData *poly = reader->GetOutput();
 
   // Create a subdivision surface
-  SubdivisionSurface ss;
   SubdivisionSurface::MeshLevel mesh;
-  ss.ImportLevelFromVTK(poly, mesh);
+  SubdivisionSurface::ImportLevelFromVTK(poly, mesh);
 
   // Get the polygon data
   SMLVec3d *xCtl = new SMLVec3d[mesh.nVertices];
@@ -154,14 +153,15 @@ int TestSubdivisionPDE(const char *objMesh)
     }
 
   // Subdivide the mesh once
-  SubdivisionSurface::MeshLevel meshint, meshsub;
-  ss.Subdivide(&mesh, &meshint);
-  ss.Subdivide(&meshint, &meshsub);
+  SubdivisionSurface::MeshLevel meshint, meshint2, meshsub;
+  SubdivisionSurface::Subdivide(&mesh, &meshint);
+  SubdivisionSurface::Subdivide(&meshint, &meshint2);
+  SubdivisionSurface::Subdivide(&meshint2, &meshsub);
 
   // Compute the subdivision surface
   SMLVec3d *xData = new SMLVec3d[meshsub.nVertices];
   double *rhoData = new double[meshsub.nVertices];
-  ss.ApplySubdivision(xCtl, rhoCtl, xData, rhoData, meshsub);
+  SubdivisionSurface::ApplySubdivision(xCtl, rhoCtl, xData, rhoData, meshsub);
 
   for(size_t j = 0; j < meshsub.nVertices; j++)
     cout << "Vertex " << j << " is " << xData[j] << endl;
@@ -172,7 +172,7 @@ int TestSubdivisionPDE(const char *objMesh)
   fill_n(phi, meshsub.nVertices, 0.0);
 
   // Create a mesh-based PDE solver
-  MeshMedialModel solver;
+  MeshMedialPDESolver solver;
   solver.SetMeshTopology(&meshsub);
   solver.SetInputData(xData, rhoData, phi);
   solver.SolveEquation();
@@ -181,8 +181,9 @@ int TestSubdivisionPDE(const char *objMesh)
   solver.TestPartialDerivatives();
 
   // Save the result
-  ExportMedialMeshToVTK(&solver, "mesh_medial.vtk");
-  ExportBoundaryMeshToVTK(&solver, "mesh_boundary.vtk");
+  SubdivisionSurfaceMedialIterationContext ctx(&meshsub);
+  // ExportMedialMeshToVTK(&ctx, solver.GetAtomArray(), "mesh_medial.vtk");
+  // ExportBoundaryMeshToVTK(&ctx, solver.GetAtomArray(), "mesh_boundary.vtk");
 
   return 0;
 }

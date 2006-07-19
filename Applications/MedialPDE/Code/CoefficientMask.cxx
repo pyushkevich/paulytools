@@ -54,19 +54,13 @@ void SelectionMedialCoefficientMask::SetCoefficient(size_t i, double x)
   xSource->SetCoefficient( xMask[i], x ); 
 }
 
-IHyperSurface2D *
+SelectionMedialCoefficientMask::Vec
 SelectionMedialCoefficientMask
-::GetComponentSurface(size_t iCoefficient)
+::GetVariationPerComponent(size_t iComponent)
 {
-  return xSource->GetComponentSurface( xMask[iCoefficient] );
+  return xSource->GetVariationPerComponent(xMask[iComponent]);
 }
 
-void
-SelectionMedialCoefficientMask
-::ReleaseComponentSurface(IHyperSurface2D *xSurface)
-{
-  xSource->ReleaseComponentSurface(xSurface);
-}
 
 IHyperSurface2D *
 SelectionMedialCoefficientMask
@@ -78,14 +72,7 @@ SelectionMedialCoefficientMask
     xFullData[ xMask[i] ] = xData[i];
   
   // Call the source's method
-  return xSource->GetVariationSurface(xFullData.data_block());
-}
-
-void
-SelectionMedialCoefficientMask
-::ReleaseVariationSurface(IHyperSurface2D *xSurface)
-{
-  xSource->ReleaseVariationSurface(xSurface);
+  return xSource->GetVariationPerVariation(xFullData.data_block());
 }
 
 /******************************************************************************
@@ -123,32 +110,18 @@ void PassThroughCoefficientMask::SetCoefficient(size_t i, double x)
   xSource->SetCoefficient(i, x); 
 }
 
-IHyperSurface2D *
+PassThroughCoefficientMask::Vec
 PassThroughCoefficientMask
-::GetComponentSurface(size_t iCoefficient)
+::GetVariationPerComponent(size_t iComponent)
 {
-  return xSource->GetComponentSurface(iCoefficient);
+  return xSource->GetVariationPerComponent(iComponent);
 }
 
-void
+PassThroughCoefficientMask::Vec
 PassThroughCoefficientMask
-::ReleaseComponentSurface(IHyperSurface2D *xSurface)
+::GetVariationPerVariation(const double *xVariation)
 {
-  xSource->ReleaseComponentSurface(xSurface);
-}
-
-IHyperSurface2D *
-PassThroughCoefficientMask
-::GetVariationSurface(const double *xData)
-{
-  return xSource->GetVariationSurface(xData);
-}
-
-void
-PassThroughCoefficientMask
-::ReleaseVariationSurface(IHyperSurface2D *xSurface)
-{
-  xSource->ReleaseVariationSurface(xSurface);
+  return xSource->GetVariationPerVariation(xVariation);
 }
 
 /******************************************************************************
@@ -357,6 +330,20 @@ void AffineTransformCoefficientMask::SetCoefficientArray(const double *inData)
 IHyperSurface2D *
 AffineTransformCoefficientMask
 ::GetComponentSurface(size_t iCoefficient)
+{
+  // Create the derivative coefficient vector
+  VectorType xIndex(nCoeff, 0.0);
+  xIndex[iCoefficient] = 1.0;
+  
+  // Create the special surface
+  IHyperSurface2D *xSurfaceRaw 
+    = xSurface->GetVariationSurface(GetCoefficientsBeforeTransform());
+  return CreateAffineVariation(xSurfaceRaw, xIndex.data_block());
+}
+
+AffineTransformCoefficientMask::Vec
+AffineTransformCoefficientMask
+::GetVariationPerComponent(size_t iComponent)
 {
   // Create the derivative coefficient vector
   VectorType xIndex(nCoeff, 0.0);

@@ -1,6 +1,24 @@
 #include "PrincipalComponents.h"
 #include "vnl/algo/vnl_symmetric_eigensystem.h"
 
+bool ReadMatrixFile(vnl_matrix<double> &mat, const char *file)
+{
+  FILE *fin = fopen(file,"rt");
+  if(fin == NULL) return false;
+
+  size_t r = 0, c = 0;
+  fscanf(fin, "# MATRIX %d %d\n", &r, &c);
+  if(r == 0 || c == 0)
+    { fclose(fin); return false; }
+
+  mat.set_size(r, c);
+  for(size_t i = 0; i < r; i++)
+    for(size_t j = 0; j < c; j++)
+      fscanf(fin, "%lg", &mat[i][j]);
+
+  fclose(fin);
+}
+
 PrincipalComponents::PrincipalComponents(const Mat &A)
 {
   size_t i, j;

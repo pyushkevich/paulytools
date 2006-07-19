@@ -8,16 +8,17 @@ INCLUDE_DIRECTORIES(
 # Sources for the PDE executable
 SET(COMMON_SRCS 
   Code/BasisFunctions2D.cxx
-  Code/CartesianMedialAtomGrid.cxx
-  Code/CoefficientMask.cxx
+  Code/CoefficientMapping.cxx
+  Code/CartesianMedialModel.cxx
   Code/GeometryDescriptor.cxx
   Code/ITKImageWrapper.cxx
   Code/MedialAtom.cxx
   Code/MedialAtomGrid.cxx
   Code/MedialPDEMasks.cxx 
   Code/MedialPDESites.cxx 
-  Code/MedialPDESolver.cxx 
+  Code/MedialPDERenderer.cxx
   Code/OptimizationTerms.cxx
+  Code/OptimizationParameters.cxx
   Code/PardisoInterface.cxx
   Code/PrincipalComponents.cxx
   Code/Procrustes.cxx
@@ -27,8 +28,7 @@ SET(COMMON_SRCS
   Code/TestSolver.cxx
   Code/VTKMedialMesh.cxx
   ${PAULY_SOURCE_DIR}/Applications/CMRepTool3d/Code/fracviewer.cpp
-  ${PAULY_SOURCE_DIR}/Applications/CMRepTool3d/Code/glengine.cpp
-  Code/MedialPDERenderer.cxx)
+  ${PAULY_SOURCE_DIR}/Applications/CMRepTool3d/Code/glengine.cpp)
 
 SET(SUBSURF_SRCS
   Code/GeometryDescriptor.cxx

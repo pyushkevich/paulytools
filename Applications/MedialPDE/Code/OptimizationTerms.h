@@ -2,10 +2,11 @@
 #define __OptimizationTerms_h_
 
 #include <smlmath.h>
-#include "MedialPDESolver.h"
+#include "CodeTimer.h"
+#include "GenericMedialModel.h"
 #include "BasisFunctions2D.h"
 #include "ScriptInterface.h"
-#include "CoefficientMask.h"
+#include "CoefficientMapping.h"
 #include <optima.h>
 
 using medialpde::FloatImage;
@@ -20,10 +21,11 @@ public:
   SolutionDataBase();
   virtual ~SolutionDataBase();
   
-  // The grid on which atoms are sampled
-  MedialAtomGrid *xAtomGrid;
+  // The medial model that specifies the grid/mesh on which atoms live
+  MedialIterationContext *xAtomGrid;
 
-  // The array of atoms
+  // The array of atoms in this solution. This array can either point to the xMedialModel's
+  // array or it can be pointing to another set of atoms
   MedialAtom *xAtoms;
 
   // Internal points of the m-rep
@@ -63,7 +65,9 @@ public:
 
   // Initialize the solution data using a grid and an array of derivative
   // atoms
-  SolutionData(MedialPDESolver *xSolver);
+  SolutionData(MedialIterationContext *xGrid, MedialAtom *xAtoms);
+
+  // Destructor
   virtual ~SolutionData() {}
 
   /** This method makes sure that the boundary area information is computed.
@@ -279,13 +283,13 @@ private:
   // In addition to the total values, we keep track of per-quad values
   // computed in the course of calculating the penalty. This allows us
   // to compute derivatives more quickly
-  struct QuadEntry {
+  struct TriangleEntry {
     SMLVec3d XU, XV, YU[2], YV[2], NX, NY[2];
     double gX2, J[2], PenA[2], PenB[2];
   };
   
-  typedef vector<QuadEntry> QuadVector;
-  QuadVector xQuadEntries;
+  typedef vector<TriangleEntry> TriangleVector;
+  TriangleVector xTriangleEntries;
 
   /** Penalty function applied to the squared jacobian */
   double PenaltyFunction(double x, double a, double b)
@@ -369,7 +373,7 @@ class MedialRegularityTerm : public NumericalGradientEnergyTerm
 {
 public:
   /** Initialize with a sample solution */
-  MedialRegularityTerm(MedialAtomGrid *xGrid, MedialAtom *xAtoms);
+  MedialRegularityTerm(MedialIterationContext *xGrid, MedialAtom *xAtoms);
   
   /** Initialize the term with the template info */
   double ComputeEnergy(SolutionDataBase *data);
@@ -389,7 +393,7 @@ class MedialOptimizationProblem : public DifferentiableFunction
 public:
   /** Initialize the problem */
   MedialOptimizationProblem(
-    MedialPDESolver *xSolver, IMedialCoefficientMask *xCoeff);
+    GenericMedialModel *xMedialModel, CoefficientMapping *xCoeff);
 
   ~MedialOptimizationProblem();
 
@@ -417,6 +421,8 @@ public:
   void PrintReport(ostream &sout);
 
 private:
+  typedef CoefficientMapping::Vec Vec;
+
   // Precision at which the problem is solved
   static const double xPrecision;
 
@@ -429,10 +435,23 @@ private:
   // Value of the last match
   double xLastSolutionValue;
 
-  MedialPDESolver *xSolver;
-  IMedialCoefficientMask *xCoeff;
+  // The value of the coefficients before optimization began
+  Vec xInitialCoefficients;
+
+  // The medial model being optimized 
+  GenericMedialModel *xMedialModel;
+
+  // The mapping from free parameters to the model's coefficients (e.g.,
+  // affine transform)
+  CoefficientMapping *xCoeff;
+
+  // The weights of the different energy terms in the optimization
   vector<double> xWeights;
+
+  // The pointers to the different energy terms
   vector<EnergyTerm *> xTerms;
+
+  // Timers used to report code speeds
   vector<CodeTimer> xTimers, xGradTimers;
   CodeTimer xSolveTimer, xSolveGradTimer, xWeightsTimer, xWeightsGradTimer;
 

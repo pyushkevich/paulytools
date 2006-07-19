@@ -67,6 +67,10 @@ public:
     m_EnumToStringMap[value] = std::string(description);
     m_StringToEnumMap[description] = value;
   }
+  
+  const StringType operator() (TEnum eval) 
+    { return m_EnumToStringMap[eval]; }
+
 private:
   std::map<TEnum, StringType> m_EnumToStringMap;
   std::map<StringType, TEnum> m_StringToEnumMap;

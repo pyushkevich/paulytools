@@ -127,44 +127,44 @@ public:
   };
 
   /** Subdivide a mesh level once */
-  void Subdivide(MeshLevel *src, MeshLevel *dst);
+  static void Subdivide(MeshLevel *src, MeshLevel *dst);
 
   /** Import a mesh from a VTK mesh that's been wrapped in a half-edge structure */
-  void ImportLevelFromVTK(vtkPolyData *, MeshLevel &dest);
+  static void ImportLevelFromVTK(vtkPolyData *, MeshLevel &dest);
 
   /** Apply a subdivision to a vtk mesh */
-  void ApplySubdivision(
+  static void ApplySubdivision(
     vtkPolyData *src, vtkPolyData *target, MeshLevel &m);
 
   /** Apply subdivision to raw data */
-  void ApplySubdivision(
+  static void ApplySubdivision(
     SMLVec3d *xSrc, double *rhoSrc, 
     SMLVec3d *xTrg, double *rhoTrg, MeshLevel &m);
 
   /** Load a mesh level from a registry */
-  void LoadMeshLevel(Registry &registry);
+  static void LoadMeshLevel(Registry &registry);
 
   /** Test the correctness of a mesh level */
-  bool CheckMeshLevel(MeshLevel &mesh);
+  static bool CheckMeshLevel(MeshLevel &mesh);
 
 private:
   // Mutable sparse matrix
   typedef vnl_sparse_matrix<double> MutableSparseMatrix;
 
   // Vertex assignment function (visit vertices to assign labels)
-  void RecursiveAssignVertexLabel(MeshLevel *mesh, size_t t, size_t v, size_t id);
+  static void RecursiveAssignVertexLabel(MeshLevel *mesh, size_t t, size_t v, size_t id);
 
   // Set the weights for an even vertex
-  void SetEvenVertexWeights(MutableSparseMatrix &W,
+  static void SetEvenVertexWeights(MutableSparseMatrix &W,
     MeshLevel *parent, MeshLevel *child, size_t t, size_t v);
 
   // Set the weights for an odd vertex
-  void SetOddVertexWeights(MutableSparseMatrix &W,
+  static void SetOddVertexWeights(MutableSparseMatrix &W,
     MeshLevel *parent, MeshLevel *child, size_t t, size_t v);
 
   // Compute the walks in a mesh level. This associates each vertex with a
   // triangle, which makes subsequent processing a lot easier
-  void ComputeWalks(MeshLevel *mesh);
+  static void ComputeWalks(MeshLevel *mesh);
 
 };
 

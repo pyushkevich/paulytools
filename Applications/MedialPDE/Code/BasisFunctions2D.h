@@ -4,10 +4,33 @@
 #include <valarray>
 #include <smlmath.h>
 #include "Registry.h"
+#include "AffineTransformDescriptor.h"
+#include "CoarseToFineMappingDescriptor.h"
 
 using namespace std;
 
 class IMedialCoefficientMask;
+
+/*
+ * We need to design a basic interface that can encapsulate all types of inputs
+ * to medial PDE solvers. These inputs can be subdivision surfaces, Fourier
+ * surfaces or they eventually could be stratified sets. So we need to design a
+ * minimal set of functionality that all of these inputs support.
+ *
+ * Each input maps a number of coefficients (C1...CN) to an array of points in
+ * space (X1...XM). It is safe to assume that the neighborhood relationship
+ * between these points will stay fixed regardless of the coefficient values.
+ *
+ * This abstract class should not encapsulate what its output should be. It can
+ * be a grid of points with a local frame, or it can be a mesh of points without
+ * any geometrical information. It can be rho-values or R-values. The design
+ * should be as flexible as possible.
+ *
+ * What the class does need to support is the ability to apply affine
+ * transformations. Basically, there needs to be some logic as to how the
+ * coefficients C1...CN must change in order to apply an affine transformation
+ * to the output.
+ */
 
 class IHyperSurface2D
 {
@@ -46,12 +69,12 @@ public:
    * evaluated repeatedly. */
   virtual void SetEvaluationGrid(const VectorType &uu, const VectorType &vv) = 0;
 
-  /** Apply affine transform to the hypersurface */
-  virtual void ApplyAffineTransform(
-    const MatrixType &A, const VectorType &b, const VectorType &c) = 0;
+  /** Get the affine transform descriptor for this surface */
+  virtual const AffineTransformDescriptor *GetAffineTransformDescriptor() const = 0;
 
-  /** Find the center of the surface (for rotations) */
-  virtual VectorType GetCenterOfRotation() = 0;
+  /** Get the coarse to fine descriptor for this type of surface */
+  virtual const CoarseToFineMappingDescriptor * 
+    GetCoarseToFineMappingDescriptor() const = 0;
 };
 
 /**
@@ -74,6 +97,8 @@ public:
   // Get a variation surface corresponding to a given change in coeffs
   virtual IHyperSurface2D *GetVariationSurface(const double *xCoeff) = 0;
   virtual void ReleaseVariationSurface(IHyperSurface2D *xSurface) = 0;
+
+  typedef vnl_vector<double> Vec;
 };
 
 /** This is an interface that should be implemented by any 2D basis function
@@ -305,21 +330,22 @@ class FourierSurface : public FourierSurfaceBase
 {
 public:
   // Constructor
-  FourierSurface(size_t ncu, size_t ncv) : FourierSurfaceBase(ncu, ncv) {}
+  FourierSurface(size_t ncu, size_t ncv);
 
   // Copy constructor
   FourierSurface(const FourierSurface &source); 
 
-  /** Find the center of the surface (for rotations) */
-  vnl_vector<double> GetCenterOfRotation();
-
-  // Special way to apply the affine transform
-  void ApplyAffineTransform( const vnl_matrix<double> &A, 
-    const vnl_vector<double> &b, const vnl_vector<double> &c);
-  
   /** Get a surface corresponding to a variation from this surface */
   IHyperSurface2D *GetVariationSurface(const double *xCoeff);
   void ReleaseVariationSurface(IHyperSurface2D *xSurface);
+
+  /** Get the affine surface descriptor pointer */
+  const AffineTransformDescriptor *GetAffineTransformDescriptor() const
+    { return &xAffineDescriptor; }
+
+  /** Get the C2F surface descriptor */
+  const CoarseToFineMappingDescriptor *GetCoarseToFineMappingDescriptor() const
+    { return &xC2FDescriptor; }
 
   /**
    * Get the list of raw coefficient indices that correspond to the first 
@@ -327,6 +353,13 @@ public:
    */
   vector<size_t> GetCoefficientSubset(
     size_t ncuX, size_t ncvX, size_t ncuRho, size_t ncvRho);
+
+private:
+  // The affine transform descriptor
+  FourierAffineTransformDescriptor xAffineDescriptor;
+
+  // The coarse-to-fine mapping descriptor
+  FourierCoarseToFineMappingDescriptor xC2FDescriptor;
 };
 
 #endif

@@ -1,10 +1,11 @@
 #include "ScriptInterface.h"
 #include "BasisFunctions2D.h"
 #include "MedialAtom.h"
-#include "MedialPDESolver.h"
-#include "CartesianMedialAtomGrid.h"
+#include "CartesianMedialModel.h"
 #include "OptimizationTerms.h"
-#include "CoefficientMask.h"
+#include "CoefficientMapping.h"
+#include "MedialAtomGrid.h"
+#include "PrincipalComponents.h"
 #include "TestSolver.h"
 #include "vnl/vnl_erf.h"
 #include "vnl/vnl_random.h"
@@ -89,12 +90,12 @@ public:
 };
 
 // Test volume computations
-void TestAreaAndVolume(MedialPDESolver *xSolver)
+void TestAreaAndVolume(GenericMedialModel *xSolver)
 {
   unsigned int nCuts = 6;
 
   // Compute the area 
-  MedialAtomGrid *xGrid = xSolver->GetAtomGrid();
+  MedialIterationContext *xGrid = xSolver->GetIterationContext();
   double xArea, *xAreaWeights = new double[xGrid->GetNumberOfBoundaryPoints()];
   xArea = ComputeMedialBoundaryAreaWeights(xGrid, xSolver->GetAtomArray(), xAreaWeights);
 
@@ -124,15 +125,11 @@ void TestAreaAndVolume(MedialPDESolver *xSolver)
   xVol = 0.0;
   
   // Create an internal point iterator
-  MedialBoundaryPointIterator *it = xGrid->NewBoundaryPointIterator();
-  while(!it->IsAtEnd())
+  for(MedialBoundaryPointIterator it(xGrid); !it.IsAtEnd(); ++it) 
     {
     // Evaluate the image at this location
     BoundaryAtom &B = GetBoundaryPoint(it, xSolver->GetAtomArray()); 
-    xVol += dot_product(B.X , B.N) * xAreaWeights[it->GetIndex()] / 3.0; 
-
-    // On to the next point
-    ++(*it); 
+    xVol += dot_product(B.X , B.N) * xAreaWeights[it.GetIndex()] / 3.0; 
     }
 
   // Return match scaled by total weight
@@ -140,16 +137,12 @@ void TestAreaAndVolume(MedialPDESolver *xSolver)
 
   // One more test
   xVol = 0.0;
-  MedialProfileIntervalIterator *itProf = xGrid->NewProfileIntervalIterator(nCuts);
-  for(; !itProf->IsAtEnd(); ++(*itProf))
-    xVol += xProfileWeights[itProf->GetIndex()];
+  for(MedialProfileIntervalIterator itProf(xGrid,nCuts); !itProf.IsAtEnd(); ++itProf)
+    xVol += xProfileWeights[itProf.GetIndex()];
   cout << "Profiles add up to " << xVol << endl;
 
-  // Clean up
-  delete it;
-  
   // Check the Jacobian
-  SolutionData S(xSolver);
+  SolutionData S(xGrid, xSolver->GetAtomArray());
   BoundaryJacobianEnergyTerm termJac;
   termJac.ComputeEnergy(&S);
   termJac.PrintReport(cout);
@@ -157,7 +150,7 @@ void TestAreaAndVolume(MedialPDESolver *xSolver)
 
 void Test01()
 {
-  MedialPDE *mp = new MedialPDE(3, 5, 20, 40);
+  CartesianMPDE *mp = new CartesianMPDE(3, 5, 20, 40);
   //mp->LoadFromParameterFile(fMrep.c_str());
   
   mp->LoadFromDiscreteMRep("/tmp/surf01.txt",-0.3);
@@ -166,7 +159,7 @@ void Test01()
   mp->SaveBYUMesh("temp.byu");
 
   // Make sure areas and volumes add up
-  TestAreaAndVolume(mp->GetSolver());
+  TestAreaAndVolume(mp->GetMedialModel());
   
   // Load the image and gradients
   // FloatImage img;
@@ -234,7 +227,7 @@ void Test02()
 void Test03()
 {
   // Create a medial PDE object
-  MedialPDE *mp = new MedialPDE(5, 5, 50, 100);
+  CartesianMPDE *mp = new CartesianMPDE(5, 5, 50, 100);
   mp->LoadFromParameterFile((dirWork + "avg/average_mrepL_01.mpde").c_str());
   mp->Solve();
 
@@ -248,9 +241,9 @@ void Test03()
 
   // Compute the gradient of the match
   cout << "Image Match = " << mp->ComputeImageMatch(img) << endl;
-  mp->SetOptimizerToGradientDescent(0.01);
-  mp->SetOptimizationToAffine();
-  mp->RunOptimization(img, 30);
+
+  // TODO: Load optimization parameters from a file
+  mp->RunOptimization(img, 30, "file.txt");
   mp->SaveToParameterFile((dirWork + "avg/average_mrepL_02.mpde").c_str());
   mp->SaveBYUMesh((dirWork + "avg/average_mrepL_02.byu").c_str());
 }
@@ -273,7 +266,7 @@ void TestCellVolume()
 int TestDifferentialGeometry(const char *fnMPDE)
 {
   // Load a medial PDE for the test
-  MedialPDE mp(2, 4, 25, 49);
+  CartesianMPDE mp(2, 4, 25, 49);
   mp.LoadFromParameterFile(fnMPDE);
 
   // Pick a point to evaluate at
@@ -362,50 +355,63 @@ int TestBasisFunctionVariation(const char *fnMPDE)
   int iReturn = 0;
 
   // Load a medial PDE for the test
-  MedialPDE mp(2, 4, 25, 49);
+  CartesianMPDE mp(2, 4, 25, 49);
   mp.LoadFromParameterFile(fnMPDE);
 
+  // Get the model
+  GenericMedialModel *model = mp.GetMedialModel();
+
   // Set up a selection mask
-  size_t xSel[] = {0,1,4,6};
-  
+  vnl_vector<size_t> xMask(model->GetNumberOfCoefficients(), 0);
+  vnl_random rnd;
+  for(size_t i = 0; i < xMask.size(); i+=4)
+    xMask.update(vnl_vector<size_t>(4, rnd.lrand32(0, 1)), i);
+
   // Set up an array of coefficient masks
-  vector<IMedialCoefficientMask *> vm;
-  vm.push_back(new PassThroughCoefficientMask(mp.GetSurface()));
-  vm.push_back(new AffineTransformCoefficientMask(mp.GetSurface()));
-  vm.push_back(new SelectionMedialCoefficientMask( mp.GetSurface(), 4, xSel));
+  vector<CoefficientMapping *> vm;
+  vm.push_back(new IdentityCoefficientMapping(model->GetNumberOfCoefficients()));
+  vm.push_back(new AffineTransformCoefficientMapping(model));
+  vm.push_back(new SubsetCoefficientMapping(xMask));
   
   char *nm[] = {
-    "PassThroughCoefficientMask",
-    "AffineTransformCoefficientMask",
-    "SelectionMedialCoefficientMask" };
+    "IdentityCoefficientMapping",
+    "AffineTransformCoefficientMapping",
+    "SubsetCoefficientMapping" };
   
   // Repeat for each mask
   for(size_t i=0; i<vm.size(); i++)
     {
-    // Create a random variation vector
-    vnl_vector<double> dx(vm[i]->GetNumberOfCoefficients());
-    for(size_t j=0; j<dx.size(); j++)
-      dx[j] = rand() * 2.0 / RAND_MAX - 1.0;
+    // Get the current value of the coefficients and parameters
+    vnl_vector<double> C, C0 = model->GetCoefficientArray();
+    vnl_vector<double> P(vm[i]->GetNumberOfParameters(), 0.0);
 
-    // Get the current coefficient vector
-    vnl_vector<double> 
-      x(vm[i]->GetCoefficientArray(), vm[i]->GetNumberOfCoefficients());
+    // Create a random variation vector in P
+    double eps = 0.0001;
+    vnl_vector<double> dP(vm[i]->GetNumberOfParameters());
+    for(size_t j=0; j < dP.size(); j++)
+      dP[j] = rand() * 2.0 / RAND_MAX - 1.0;
 
     // Compute the surface derivative using each variation
     SMLVec4d f1, f2, dfNum, dfAn;
 
     // Evaluate the surface at finite differences
-    double eps = 0.0001;
-    vm[i]->SetCoefficientArray( (x + eps * dx).data_block() );
+    model->SetCoefficientArray(vm[i]->Apply(C0, P + eps * dP));
+    model->ComputeAtoms();
     mp.GetSurface()->Evaluate(0.5, 0.5, f1.data_block());
 
-    vm[i]->SetCoefficientArray( (x - eps * dx).data_block() );
+    model->SetCoefficientArray(vm[i]->Apply(C0, P - eps * dP));
+    model->ComputeAtoms();
     mp.GetSurface()->Evaluate(0.5, 0.5, f2.data_block());
 
     dfNum = (f1 - f2) * 0.5 / eps;
 
-    vm[i]->SetCoefficientArray(x.data_block());
-    IHyperSurface2D *xVariation = vm[i]->GetVariationSurface(dx.data_block());
+    // Same evaluation using analytical derivative
+    model->SetCoefficientArray(vm[i]->Apply(C0, P));
+    model->ComputeAtoms();
+
+    // Get the variation corresponding to dP
+    IHyperSurface2D *xVariation = mp.GetSurface()->GetVariationSurface(
+      vm[i]->ApplyJacobianInParameters(C0, P, dP).data_block());
     xVariation->Evaluate(0.5, 0.5, dfAn.data_block());
 
     // Report
@@ -433,20 +439,24 @@ int TestDerivativesNoImage(const char *fnMPDE, const char *fnPCA)
 {
   int iReturn = 0;
 
-  MedialPDE mp(2, 4, 25, 49);
+  // Create a cartesian medial model for testing
+  CartesianMPDE mp(2, 4, 25, 49);
   mp.LoadFromParameterFile(fnMPDE);
+
+  // Extract the medial model itself
+  GenericMedialModel *model = mp.GetMedialModel();
 
   // Test straight-through gradient computation
   cout << "**************************************************" << endl;
-  cout << "** TESTIING PassThroughCoefficientMask          **" << endl;
+  cout << "** TESTIING IdentityCoefficientMapping          **" << endl;
   cout << "**************************************************" << endl;
  
-  PassThroughCoefficientMask xMask(mp.GetSurface());
-  iReturn += TestGradientComputation(mp.GetSolver(), &xMask, 3);
+  IdentityCoefficientMapping xMapping(model);
+  iReturn += TestGradientComputation(model, &xMapping, 3);
 
   // Test affine transform gradient computation
   cout << "**************************************************" << endl;
-  cout << "** TESTIING AffineTransform3DCoefficientMask    **" << endl;
+  cout << "** TESTIING AffineTransformCoefficientMapping   **" << endl;
   cout << "**************************************************" << endl;
 
   // Don't start at the default position, or we may get a false positive
@@ -456,9 +466,9 @@ int TestDerivativesNoImage(const char *fnMPDE, const char *fnPCA)
       0.3,-0.2, 1.4,
       7.0,-4.5, 2.3 };
   
-  AffineTransform3DCoefficientMask xAffineMask(mp.GetSurface());
-  xAffineMask.SetCoefficientArray(xAffinePosn);
-  iReturn += TestGradientComputation(mp.GetSolver(), &xAffineMask, 3);
+  AffineTransformCoefficientMapping xAffineMask(model);
+  vnl_vector<double> pAffine(xAffinePosn, 12);
+  iReturn += TestGradientComputation(mp.GetMedialModel(), &xAffineMask, pAffine, 3);
 
   // Test the most convoluted mask that we have
   cout << "**************************************************" << endl;
@@ -473,12 +483,20 @@ int TestDerivativesNoImage(const char *fnMPDE, const char *fnPCA)
       5.0, 3.0,-2.0,           // Translation Vector
       0.5, 0.4, 0.3,-0.2, 0.3  // PCA offsets
     };
+
+  // Read principal components from the file
+  vnl_matrix<double> pcaMatrix;
+  ReadMatrixFile(pcaMatrix, fnPCA);
+  PrincipalComponents pca(pcaMatrix);
+
+  // Create the PCA/Affine optimizer with 5 modes
+  PCAPlusAffineCoefficientMapping xPCAMask(model, &pca, 5);
+
+  // Create the starting point vector
+  vnl_vector<double> pPCA(xAPCAPosn, 17);
   
-  mp.SetPCAMatrix(8, 10, fnPCA);
-  IMedialCoefficientMask *xPCAMask = mp.CreatePCACoefficientMask(5);
-  xPCAMask->SetCoefficientArray(xAPCAPosn);
-  iReturn += TestGradientComputation(mp.GetSolver(), xPCAMask, 3);
-  mp.ReleasePCACoefficientMask(xPCAMask);
+  // Perform the test
+  iReturn += TestGradientComputation(model, &xPCAMask, pPCA, 3);
 
   // Return the total of the test values
   return iReturn;
@@ -487,12 +505,12 @@ int TestDerivativesNoImage(const char *fnMPDE, const char *fnPCA)
 int TestGradientTiming(const char *fnMPDE)
 {
   // Create and read the MPDE
-  MedialPDE mp(2, 4, 32, 80);
+  CartesianMPDE mp(2, 4, 32, 80);
   mp.LoadFromParameterFile(fnMPDE);
 
   // Test straight-through gradient computation
-  PassThroughCoefficientMask xMask(mp.GetSurface());
-  return TestGradientComputation(mp.GetSolver(), &xMask);
+  IdentityCoefficientMapping xMask(mp.GetMedialModel());
+  return TestGradientComputation(mp.GetMedialModel(), &xMask);
 }
 
 void MakeFlatTemplate(FourierSurface *xSurface)
@@ -529,32 +547,26 @@ int TestDerivativesWithImage(const char *fnMPDE)
   int iReturn = 0;
 
   // Load the Medial PDE
-  MedialPDE mp(2, 4, 33, 81, 0.5, 0, 0);
+  CartesianMPDE mp(2, 4, 33, 81, 0.5, 0, 0);
   mp.LoadFromParameterFile(fnMPDE);
   
   // Define a test image (this in not a real thing)
-  SMLVec3d C = mp.GetSurface()->GetCenterOfRotation().extract(3);
+  GenericMedialModel *model = mp.GetMedialModel();
+  SMLVec3d C = model->GetCenterOfRotation();
   TestFloatImage img( C, 7.0, 4.0 );
-
-  // Define another solver to represent the template - this is used in 
-  // conjunction with the regularity prior 
-  MedialPDE mpTemplate(4, 4, 33, 81);
-  MakeFlatTemplate(mpTemplate.GetSurface());
-  mpTemplate.Solve();
 
   // Create an array of image match terms
   vector<EnergyTerm *> vt;
   vt.push_back(new MedialAnglesPenaltyTerm());
-  vt.push_back(new MedialRegularityTerm(
-      mp.GetSolver()->GetAtomGrid(), mp.GetSolver()->GetAtomArray()));
+  vt.push_back(new MedialRegularityTerm(model->GetIterationContext(), model->GetAtomArray()));
   vt.push_back(new BoundaryJacobianEnergyTerm());
   vt.push_back(new BoundaryImageMatchTerm(&img));
   vt.push_back(new ProbabilisticEnergyTerm(&img, 4));
 
   // Create an array of masks
-  vector<IMedialCoefficientMask *> vm;
-  vm.push_back(new PassThroughCoefficientMask(mp.GetSurface()));
-  vm.push_back(new AffineTransformCoefficientMask(mp.GetSurface()));
+  vector<CoefficientMapping *> vm;
+  vm.push_back(new IdentityCoefficientMapping(model));
+  vm.push_back(new AffineTransformCoefficientMapping(model));
 
   // Create labels
   char *nt[] = {
@@ -564,8 +576,8 @@ int TestDerivativesWithImage(const char *fnMPDE)
     "BoundaryImageMatchTerm",
     "ProbabilisticEnergyTerm" };
   char *nm[] = {
-    "PassThroughCoefficientMask",
-    "AffineTransformCoefficientMask" };
+    "IdentityCoefficientMapping",
+    "AffineTransformCoefficientMapping" };
 
   // Loop over both options
   size_t i, j;
@@ -576,9 +588,9 @@ int TestDerivativesWithImage(const char *fnMPDE)
     cout << "-------------------------------------------------------------------" << endl;
     
     // Set up the test
-    MedialOptimizationProblem mop(mp.GetSolver(), vm[j]);
+    MedialOptimizationProblem mop(model, vm[j]);
     mop.AddEnergyTerm(vt[i], 1.0);
-    iReturn += TestOptimizerGradientComputation(mop, *vm[j], mp.GetSolver());
+    iReturn += TestOptimizerGradientComputation(mop, *vm[j], model);
     }
 
   // Delete both pointers
@@ -591,16 +603,6 @@ int TestDerivativesWithImage(const char *fnMPDE)
   return iReturn;
 }
 
-
-void TestFDMasksInMedialSolver()
-{
-  // Load a medial PDE
-  MedialPDE mp(8, 12, 33, 17);
-  
-  
-  // Define a function
-
-}
 
 int usage()
 {

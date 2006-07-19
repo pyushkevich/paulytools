@@ -4,6 +4,8 @@
 #include "vnl/vnl_vector.h"
 #include "vnl/vnl_matrix.h"
 
+bool ReadMatrixFile(vnl_matrix<double> &mat, const char *file);
+
 class PrincipalComponents
 {
 public:
