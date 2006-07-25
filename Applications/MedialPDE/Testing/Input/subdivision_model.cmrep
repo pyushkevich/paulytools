@@ -1,0 +1,3 @@
+Grid.Model.Atom.SubdivisionLevel = 3
+Grid.Model.Coefficient.FileName = subdivision_model.vtk
+Grid.Model.Coefficient.FileType = VTK
