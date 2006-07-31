@@ -1,10 +1,11 @@
 #include "vnl/vnl_random.h"
 #include "MedialAtom.h"
+#include "MedialModelIO.h"
 #include "vtkOBJReader.h"
 #include "vtkBYUWriter.h"
 #include "vtkPolyData.h"
 #include "SubdivisionSurface.h"
-#include "MeshMedialPDESolver.h"
+#include "SubdivisionMedialModel.h"
 #include "SubdivisionSurfaceMedialIterationContext.h"
 
 #include <string>
@@ -152,41 +153,26 @@ int TestSubdivisionPDE(const char *objMesh)
     rhoCtl[i] = -0.25;
     }
 
-  // Subdivide the mesh once
-  SubdivisionSurface::MeshLevel meshint, meshint2, meshsub;
-  SubdivisionSurface::Subdivide(&mesh, &meshint);
-  SubdivisionSurface::Subdivide(&meshint, &meshint2);
-  SubdivisionSurface::Subdivide(&meshint2, &meshsub);
-
-  // Compute the subdivision surface
-  SMLVec3d *xData = new SMLVec3d[meshsub.nVertices];
-  double *rhoData = new double[meshsub.nVertices];
-  SubdivisionSurface::ApplySubdivision(xCtl, rhoCtl, xData, rhoData, meshsub);
-
-  for(size_t j = 0; j < meshsub.nVertices; j++)
-    cout << "Vertex " << j << " is " << xData[j] << endl;
-
-  // Create arrays for solver
-  double *phi = new double[meshsub.nVertices];
-  double *soln = new double[meshsub.nVertices];
-  fill_n(phi, meshsub.nVertices, 0.0);
-
-  // Create a mesh-based PDE solver
-  MeshMedialPDESolver solver;
-  solver.SetMeshTopology(&meshsub);
-  solver.SetInputData(xData, rhoData, phi);
-  solver.SolveEquation();
+  // Create the medial model
+  SubdivisionMedialModel model;
+  
+  // Pass the mesh to the medial model with specified number of levels
+  model.SetMesh(mesh, xCtl, rhoCtl, 2, 0); 
+  model.ComputeAtoms();
 
   // Temp: test derivatives
-  solver.TestPartialDerivatives();
+  int iTest = model.GetSolver()->TestPartialDerivatives();
 
   // Save the result
-  SubdivisionSurfaceMedialIterationContext ctx(&meshsub);
-  // ExportMedialMeshToVTK(&ctx, solver.GetAtomArray(), "mesh_medial.vtk");
-  // ExportBoundaryMeshToVTK(&ctx, solver.GetAtomArray(), "mesh_boundary.vtk");
+  ExportMedialMeshToVTK(&model, "mesh_medial.vtk");
+  ExportBoundaryMeshToVTK(&model, "mesh_boundary.vtk");
 
-  return 0;
+  // Save the model itself
+  MedialModelIO::WriteModel(&model, "subdivision_model.cmrep");
+
+  return iTest;
 }
+
 
 int usage()
 {

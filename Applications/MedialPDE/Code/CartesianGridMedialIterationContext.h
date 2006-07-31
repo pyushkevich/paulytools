@@ -57,8 +57,8 @@ public:
       {
       size_t i00 = iv * nu + iu;
       xTriMap[i].v[0] = i00;
-      xTriMap[i].v[1] = xTriMap[i+1].v[2] = i00 + nu;
-      xTriMap[i].v[2] = xTriMap[i+1].v[1] = i00 + 1;
+      xTriMap[i].v[1] = xTriMap[i+1].v[2] = i00 + 1;
+      xTriMap[i].v[2] = xTriMap[i+1].v[1] = i00 + nu;
       xTriMap[i+1].v[0] = i00 + nu + 1;
       i+=2; 
       }

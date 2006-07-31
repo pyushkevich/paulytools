@@ -691,10 +691,15 @@ MedialPDESolver
     xSites[iSite]->ComputeVariationalDerivativeMatrix(
       y, xSparseValues + xRowIndex[iSite] - 1, &xAtom);
 
-    // Compute each of the right hand sides
     for(k = 0; k < N; k++)
+      {
+      // Compute the derivatives of the metric tensor
+      xAtom.ComputeMetricTensorDerivatives(dAtomArray[k][iGrid]);
+
+      // Compute each of the right hand sides
       rhs[k][iSite] = xSites[iSite]->ComputeVariationalDerivativeRHS(
         y, &xAtom, &dAtomArray[k][iGrid]);
+      }
     }
   cout << " [RHS: " << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
 

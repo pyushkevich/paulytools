@@ -91,20 +91,12 @@ public:
     // List of triangles in this mesh level
     vector<Triangle> triangles;
 
-    // List of vertices in this mesh level
-    // vector<Vertex> vertices;
-
     // Number of vertices at this mesh level
     size_t nVertices;
 
     // Parent mesh level
-    MeshLevel *parent;
+    const MeshLevel *parent;
 
-    // Representation of vertex walks in the mesh level. This representation
-    // associates each vertex with a set of vertices that form a loop around
-    // it or, if the vertex is on the boundary, it gives an open walk
-    size_t *xWalkIndex, *xWalk;
-    
     // Sparse matrix mapping the mesh level to the parent level
     ImmutableSparseMatrix<double> weights;
 
@@ -120,6 +112,11 @@ public:
     // Check if the vertex is on the boundary
     bool IsVertexInternal(size_t ivtx)
       { return nbr.GetSparseData()[nbr.GetRowIndex()[ivtx]].tBack != NOID; }
+
+    // Set the mesh level as the 'root'. This means that its weight matrix
+    // becomes identity and its parent is null
+    void SetAsRoot()
+      { parent = NULL; weights.Reset(); }
     
     // Constructor
     MeshLevel()
@@ -127,14 +124,29 @@ public:
   };
 
   /** Subdivide a mesh level once */
-  static void Subdivide(MeshLevel *src, MeshLevel *dst);
+  static void Subdivide(const MeshLevel *src, MeshLevel *dst);
 
-  /** Import a mesh from a VTK mesh that's been wrapped in a half-edge structure */
+  /** 
+   * Subdivide a mesh level n times. The intermediate levels will be
+   * discarded.
+   */
+  static void RecursiveSubdivide(const MeshLevel *src, MeshLevel *dst, size_t n);
+
+  /** Import a mesh from a VTK mesh */
   static void ImportLevelFromVTK(vtkPolyData *, MeshLevel &dest);
+
+  /** Export a mesh to VTK (only sets the cells, not the points) */
+  static void ExportLevelToVTK(MeshLevel &src, vtkPolyData *mesh);
 
   /** Apply a subdivision to a vtk mesh */
   static void ApplySubdivision(
     vtkPolyData *src, vtkPolyData *target, MeshLevel &m);
+
+  /** 
+   * Apply subdivision to arbitrary double data (in strides of nComp
+   * components)
+   */
+  static void ApplySubdivision(const double *xsrc, double *xdst, size_t nComp, MeshLevel &m);
 
   /** Apply subdivision to raw data */
   static void ApplySubdivision(
@@ -156,11 +168,11 @@ private:
 
   // Set the weights for an even vertex
   static void SetEvenVertexWeights(MutableSparseMatrix &W,
-    MeshLevel *parent, MeshLevel *child, size_t t, size_t v);
+    const MeshLevel *parent, MeshLevel *child, size_t t, size_t v);
 
   // Set the weights for an odd vertex
   static void SetOddVertexWeights(MutableSparseMatrix &W,
-    MeshLevel *parent, MeshLevel *child, size_t t, size_t v);
+    const MeshLevel *parent, MeshLevel *child, size_t t, size_t v);
 
   // Compute the walks in a mesh level. This associates each vertex with a
   // triangle, which makes subsequent processing a lot easier
@@ -179,7 +191,7 @@ class EdgeWalkAroundVertex
 {
 public:
   /** Constructor: takes a vertex in a fully initialized mesh level */
-  EdgeWalkAroundVertex(SubdivisionSurface::MeshLevel *mesh, size_t iVertex)
+  EdgeWalkAroundVertex(const SubdivisionSurface::MeshLevel *mesh, size_t iVertex)
     { 
     this->mesh = mesh;
     this->iVertex = iVertex;
@@ -285,7 +297,7 @@ public:
 
 private:
   // The mesh being iterated around
-  SubdivisionSurface::MeshLevel *mesh;
+  const SubdivisionSurface::MeshLevel *mesh;
   
   // The index of the vertex walked around by this iterator
   size_t iVertex;

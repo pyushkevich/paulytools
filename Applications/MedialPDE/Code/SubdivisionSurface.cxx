@@ -26,7 +26,7 @@ SubdivisionSurface::Triangle::Triangle()
 void 
 SubdivisionSurface
 ::SetOddVertexWeights(MutableSparseMatrix &W, 
-  MeshLevel *parent, MeshLevel *child, size_t t, size_t v)
+  const MeshLevel *parent, MeshLevel *child, size_t t, size_t v)
 {
   // Weight constants
   const static double W_INT_EDGE_CONN = 3.0 / 8.0;
@@ -34,7 +34,7 @@ SubdivisionSurface
   const static double W_BND_EDGE_CONN = 1.0 / 2.0;
   
   // Get the parent and child triangles
-  Triangle &tp = parent->triangles[t / 4];
+  const Triangle &tp = parent->triangles[t / 4];
   Triangle &tc = child->triangles[t];
 
   // Get the child vertex index
@@ -45,7 +45,7 @@ SubdivisionSurface
   if(tp.neighbors[v] != NOID)
     {
     // Get the neighbor of the parent triangle
-    Triangle &topp = parent->triangles[tp.neighbors[v]];
+    const Triangle &topp = parent->triangles[tp.neighbors[v]];
     
     // Internal triangle. It's weights are 3/8 for the edge-connected parent 
     // vertices and 1/8 for the face-connected vertices
@@ -168,7 +168,7 @@ void SubdivisionSurface
  */
 void SubdivisionSurface
 ::SetEvenVertexWeights(MutableSparseMatrix &W,
-  MeshLevel *parent, MeshLevel *child, size_t t, size_t v)
+  const MeshLevel *parent, MeshLevel *child, size_t t, size_t v)
 {
   // Weight constants
   const static double W_BND_EDGE_CONN = 1.0 / 8.0;
@@ -227,7 +227,7 @@ SubdivisionSurface
                                (mesh->triangles[t].nedges[(v+2) % 3] + 2) % 3, id);  
 }
 
-void SubdivisionSurface::Subdivide(MeshLevel *parent, MeshLevel *child)
+void SubdivisionSurface::Subdivide(const MeshLevel *parent, MeshLevel *child)
 {
   // Get the numbers of triangles before and after
   size_t ntParent = parent->triangles.size();
@@ -245,7 +245,7 @@ void SubdivisionSurface::Subdivide(MeshLevel *parent, MeshLevel *child)
   for (i = 0; i < ntParent; i++)
     {
     // Get pointers to the four ctren
-    Triangle &pt = parent->triangles[i];
+    const Triangle &pt = parent->triangles[i];
     Triangle *ct[4] = {
       &child->triangles[4*i], &child->triangles[4*i+1], 
       &child->triangles[4*i+2], &child->triangles[4*i+3]};
@@ -314,9 +314,58 @@ void SubdivisionSurface::Subdivide(MeshLevel *parent, MeshLevel *child)
     ImmutableSparseMatrix<double>::Multiply(
       child->weights, child->weights, parent->weights);
 
-
   // Compute the walks in the child mesh
   ComputeWalks(child);
+}
+
+void
+SubdivisionSurface::
+RecursiveSubdivide(const MeshLevel *src, MeshLevel *dst, size_t n)
+{
+  // N has to be greater than 1
+  if(n == 0) 
+    { *dst = *src; return; }
+  else if(n == 1)
+    { Subdivide(src, dst); return; }
+
+  // Create an array of intermedial mesh levels
+  MeshLevel *temp = new MeshLevel[n - 1];
+
+  // Subdivide the intermediate levels
+  const MeshLevel *parent = src; 
+  for(size_t i = 0; i < n-1; i++)
+    {
+    Subdivide(parent, temp + i);
+    parent = temp + i;
+    }
+
+  // Subdivide the last level
+  Subdivide(parent, dst);
+
+  // Delete the intermediates
+  delete[] temp;
+
+  // Set the parent pointer in dst to src (bypass intermediates)
+  dst->parent = src;
+}
+
+void SubdivisionSurface::ExportLevelToVTK(MeshLevel &src, vtkPolyData *mesh)
+{
+  // The important thing with importing and exporting mesh levels is that the
+  // order of triangles and vertices must be maintained.
+
+  // Allocate an array of cells
+  mesh->Allocate(src.triangles.size());
+
+  // Add all of the triangles in the mesh
+  for(size_t i = 0; i < src.triangles.size(); i++)
+    {
+    vtkIdType pts[3];
+    pts[0] = src.triangles[i].vertices[0];
+    pts[1] = src.triangles[i].vertices[1];
+    pts[2] = src.triangles[i].vertices[2];
+    mesh->InsertNextCell(VTK_TRIANGLE, 3, pts);
+    }
 }
 
 void SubdivisionSurface::ImportLevelFromVTK(vtkPolyData *mesh, MeshLevel &dest)
@@ -456,7 +505,34 @@ void SubdivisionSurface
     }
 }
 
+void SubdivisionSurface
+::ApplySubdivision(const double *xsrc, double *xdst, size_t nComp, MeshLevel &m)
+{  
+  typedef ImmutableSparseMatrix<double>::RowIterator IteratorType;
 
+  // Get the total number of values
+  size_t n = nComp * m.nVertices;
+
+  // Set the target array to zero
+  std::fill_n(xdst, n, 0.0);
+
+  // Iterate over the output vertices
+  for(size_t iv = 0; iv < m.nVertices; iv++)
+    {
+    size_t i = iv * nComp;
+
+    // Iterate over contributing input vertices
+    for(IteratorType it = m.weights.Row(iv); !it.IsAtEnd(); ++it)
+      {
+      double w = it.Value();
+      size_t j = it.Column() * nComp;
+
+      // Iterate over the component
+      for(size_t k = 0; k < nComp; k++)
+        xdst[i+k] = w * xsrc[j+k];
+      }
+    }
+}
   
 bool SubdivisionSurface::CheckMeshLevel (MeshLevel &mesh)
 {

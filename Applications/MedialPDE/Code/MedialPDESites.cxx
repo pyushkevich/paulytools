@@ -87,28 +87,12 @@ ComputeVariationalDerivativeRHS(
   SMLVec3d &Nvv = dAtom->Xvv; SMLVec3d &Xvv = xAtom->Xvv;
 
   // Get shorthand for the differential geometric operators
-  double (*G1)[2] = xAtom->G.xCovariantTensor;
   double (*G2)[2] = xAtom->G.xContravariantTensor;
   double (*K)[2][2] = xAtom->G.xChristoffelFirst;
   double (*K2)[2][2] = xAtom->G.xChristoffelSecond;
-  double &g = xAtom->G.g;
   
-  // Compute the derivatives of the contravariant tensor
-  double NuXu = dot(Nu, Xu);
-  double NvXu = dot(Nv, Xu);
-  double NuXv = dot(Nu, Xv);
-  double NvXv = dot(Nv, Xv);
-
-  // The derivative of 'g'
-  double dgdN = dAtom->G.g = 
-    2 * ( NuXu * G1[1][1] + NvXv * G1[0][0] - (NuXv + NvXu) * G1[0][1] );
-  double g2inv = xAtom->G.gInv * xAtom->G.gInv;
-
   // The derivative of the contravariant tensor
   double (*z)[2] = dAtom->G.xContravariantTensor; 
-  z[0][0] = (2 * NvXv * g - G1[1][1] * dgdN) * g2inv;
-  z[1][1] = (2 * NuXu * g - G1[0][0] * dgdN) * g2inv;
-  z[0][1] = z[1][0] = - ((NuXv + NvXu) * g - G1[1][0] * dgdN) * g2inv;
 
   // Compute the derivative of the Christoffel symbols of the second kind
   double NuXuu = dot(Nu, Xuu), NvXuu = dot(Nv, Xuu);
@@ -230,30 +214,8 @@ FDBorderSite
 ::ComputeVariationalDerivativeRHS(
   const Mat &Y, MedialAtom *xAtom, MedialAtom *dAtom)
 {
-  // Next, compute the weights for Hu and Hv and H
-  double (*G1)[2] = xAtom->G.xCovariantTensor;
-  double (*G2)[2] = xAtom->G.xContravariantTensor;
-
-  // Compute the derivatives of the contravariant tensor
-  SMLVec3d &Nu = dAtom->Xu; SMLVec3d &Nv = dAtom->Xv;
-  SMLVec3d &Xu = xAtom->Xu; SMLVec3d &Xv = xAtom->Xv;
-
-  double NuXu = dot(Nu, Xu);
-  double NvXu = dot(Nv, Xu);
-  double NuXv = dot(Nu, Xv);
-  double NvXv = dot(Nv, Xv);
-  
-  // The derivative of 'g'
-  double &g = xAtom->G.g;
-  double dgdN = dAtom->G.g = 
-    2 * ( NuXu * G1[1][1] + NvXv * G1[0][0] - (NuXv + NvXu) * G1[0][1] );
-  double g2 = g * g;
-
   // The derivative of the contravariant tensor
   double (*z)[2] = dAtom->G.xContravariantTensor; 
-  z[0][0] = (2 * NvXv * g - G1[1][1] * dgdN) / g2;
-  z[1][1] = (2 * NuXu * g - G1[0][0] * dgdN) / g2;
-  z[0][1] = z[1][0] = - ((NuXv + NvXu) * g - G1[1][0] * dgdN) / g2;
 
   // Compute the right hand side
   return - (z[0][0] * Fu * Fu + 2.0 * z[0][1] * Fu * Fv + z[1][1] * Fv * Fv);

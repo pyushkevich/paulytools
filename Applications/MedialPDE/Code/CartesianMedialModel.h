@@ -76,8 +76,12 @@ public:
    */
   void SetDefaultInitialGuess(double xMagnitude = 0.01);
 
-  /** Specify the surface for which the problem should be solved */
-  void SetMedialSurface(IBasisRepresentation2D *xSurface);
+  /** 
+   * Specify the surface for which the problem should be solved. The medial
+   * surface will be owned by this class, and this class will be responsible
+   * for deleting it
+   */
+  void AdoptMedialSurface(IBasisRepresentation2D *xSurface);
 
   /** Get the pointer to the internal surface */
   IBasisRepresentation2D *GetMedialSurface() 

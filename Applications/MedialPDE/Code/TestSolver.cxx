@@ -3,10 +3,12 @@
 #include "BasisFunctions2D.h"
 #include "ITKImageWrapper.h"
 #include "MedialPDERenderer.h"
+#include "MedialAtomGrid.h"
 #include "OptimizationTerms.h"
 #include "Procrustes.h"
 #include "Registry.h"
 #include <iostream>
+#include <iomanip>
 #include <ctime>
 
 using namespace std;
@@ -18,23 +20,60 @@ inline void UpdateMax(double xValue, double &xMaxValue)
     xMaxValue = xValue;
 }
 
-void TestGradientComputationPrintReport(
-  double xMaxPhiDiff, double xMaxGradRDiff, double xMaxGRMS, double xMaxBndDiff, 
-  double xMaxBndNrmDiff, double xMaxBndAreaDiff, double xMaxCellVolumeDiff,
-  double xTotalAreaDiff, double xTotalVolumeDiff)
-{
-    // Print out the max difference
-    cout << "Maximal differences between numeric and analytic derivatives:" << endl;
-    cout << "Phi                      : " <<  xMaxPhiDiff << endl;
-    cout << "Grad R                   : " <<  xMaxGradRDiff << endl;
-    cout << "Sqr. Grad. Mag. of Phi   : " <<  xMaxGRMS << endl;
-    cout << "Boundary Node Positions  : " <<  xMaxBndDiff << endl;
-    cout << "Boundary Node Normals    : " <<  xMaxBndNrmDiff << endl;
-    cout << "Boundary Area Elements   : " <<  xMaxBndAreaDiff << endl;
-    cout << "Total Boundary Area      : " <<  xMaxBndAreaDiff << endl;
-    cout << "Internal Volume Elements : " <<  xTotalAreaDiff << endl;
-    cout << "Total Internal Volume    : " <<  xTotalVolumeDiff << endl;
-}
+class DerivativeTestQuantities {
+public:
+  DerivativeTestQuantities()
+    { slenmax = 0; }
+
+  void Update(const std::string &s, double v)
+    {
+    MapIter it = xMap.find(s);
+    if(it == xMap.end())
+      {
+      xMap.insert(std::make_pair(s, v));
+      slenmax = std::max(slenmax, s.size());
+      }
+    else
+      it->second = std::max(it->second, v);
+    }
+
+  void Update(const std::string &s, double dv, double v1, double v2, double eps)
+    {
+    this->Update(s, fabs(dv - (v1 - v2) * 0.5 / eps)); 
+    }
+
+  void Update(const std::string &s, SMLVec3d dv, SMLVec3d v1, SMLVec3d v2, double eps)
+    {
+    this->Update(s, (dv - (v1 - v2) * 0.5 / eps).two_norm()); 
+    }
+
+  void Update(const DerivativeTestQuantities &src)
+    {
+    for(ConstMapIter it = src.xMap.begin(); it != src.xMap.end(); ++it)
+      this->Update(it->first, it->second);
+    }
+
+  bool Test(double xMaxError)
+    {
+    for(ConstMapIter it = xMap.begin(); it != xMap.end(); ++it)
+      if(it->second > xMaxError) return false;
+    return true;
+    }
+
+  void PrintReport() 
+    {
+    for(ConstMapIter it = xMap.begin(); it != xMap.end(); ++it)
+      cout << std::setw(slenmax) << it->first << " : " << it->second << endl;
+    }
+
+private:
+  typedef std::map<std::string, double> MapType;
+  typedef MapType::iterator MapIter;
+  typedef MapType::const_iterator ConstMapIter;
+  MapType xMap;
+
+  size_t slenmax;
+};
 
 int TestGradientComputation(
   GenericMedialModel *xSolver, CoefficientMapping *xMapping, 
@@ -55,11 +94,9 @@ int TestGradientComputation(
   size_t nParams = xMapping->GetNumberOfParameters();
   size_t nCoeffs = xMapping->GetNumberOfCoefficients();
   
-  // Max values for different classes of error
-  double xGlobalMaxPhiDiff = 0.0, xGlobalMaxGradR = 0.0, xGlobalMaxGRMS = 0.0;
-  double xGlobalMaxBndDiff = 0.0, xGlobalMaxBndNrmDiff = 0.0;
-  double xGlobalMaxBndAreaDiff = 0.0, xGlobalMaxCellVolumeDiff = 0.0;
-  double xGlobalTotalAreaDiff = 0.0, xGlobalTotalVolumeDiff = 0.0;
+  // Holder for all the test quantities. This object will report the maximum
+  // value for each quantity over all the tests
+  DerivativeTestQuantities dtqGlobal;
 
   cout << "*****************************************" << endl;
   cout << "Comparing Numeric Derivatives to Analytic" << endl;
@@ -103,11 +140,18 @@ int TestGradientComputation(
   // Repeat for all variations
   for(iVar = 0; iVar < xVariations.size(); iVar++)
     {
+    // Transform the variation in parameters to a variation in coefficients
+    vnl_vector<double> dC = 
+      xMapping->ApplyJacobianInParameters(C0, P0, xVariations[iVar]);
+
     // Create an array of atoms to hold the derivative data
     MedialAtom *dAtoms = new MedialAtom[nAtoms];
-    xSolver->PrepareAtomsForVariationalDerivative(xVariations[iVar], dAtoms);
+    xSolver->PrepareAtomsForVariationalDerivative(dC, dAtoms);
     dAtomArray.push_back(dAtoms);
     }
+
+  // Set the coefficients for the initial solution
+  xSolver->SetCoefficientArray(xMapping->Apply(C0, P0));
 
   // Solve the medial PDE for all these variations
   tInitialSolver.Start();
@@ -126,6 +170,7 @@ int TestGradientComputation(
   tAnalytic.Start();
   xSolver->ComputeAtomGradient(dAtomArray);
   tAnalytic.Stop();
+  cout << endl;
 
   // Compute all the other derivatives
   for(iVar = 0; iVar < xVariations.size(); iVar++) 
@@ -144,14 +189,10 @@ int TestGradientComputation(
     tCentral.Start(); xSolver->ComputeAtoms(A0); tCentral.Stop();
     std::copy(xSolver->GetAtomArray(), xSolver->GetAtomArray() + nAtoms, A2);
 
-    // Compute the values of dPhi/dC between central difference and analytic
-    // derivatives
-    double xMaxPhiDiff = 0.0;
-    double xMaxBndDiff = 0.0;
-    double xMaxBndNrmDiff = 0.0;
-    double xMaxGRMS = 0.0;
-    double xMaxGradRDiff = 0.0;
+    // Define an accumulator for all atom-wise errors
+    DerivativeTestQuantities dtq;
 
+    // Compute atom-wise errors
     for(unsigned int i = 0; i < nAtoms; i++)
       {
       // Point to the atoms
@@ -159,35 +200,45 @@ int TestGradientComputation(
       MedialAtom &a2 = A2[i];
       MedialAtom &a0 = dAtomArray[iVar][i];
 
+      // Look at such a simple thing as a.X
+      dtq.Update("Atom's X", a0.X, a1.X, a2.X, eps);
+      dtq.Update("Atom's Xu", a0.Xu, a1.Xu, a2.Xu, eps);
+      dtq.Update("Atom's Xv", a0.Xv, a1.Xv, a2.Xv, eps);
+      dtq.Update("Atom's Xuu", a0.Xuu, a1.Xuu, a2.Xuu, eps);
+      dtq.Update("Atom's Xuv", a0.Xuv, a1.Xuv, a2.Xuv, eps);
+      dtq.Update("Atom's Xvv", a0.Xvv, a1.Xvv, a2.Xvv, eps);
+
+      // Look at the difference in the specific terms of metric tensor
+      for(size_t u = 0; u < 2; u++) for(size_t v = 0; v < 2; v++)
+        {
+        dtq.Update("Metric Tensor (Covariant)", 
+          a0.G.xCovariantTensor[u][v],
+          a1.G.xCovariantTensor[u][v],
+          a2.G.xCovariantTensor[u][v], eps);
+
+        dtq.Update("Metric Tensor (Contra)", 
+          a0.G.xContravariantTensor[u][v],
+          a1.G.xContravariantTensor[u][v],
+          a2.G.xContravariantTensor[u][v], eps);
+        }
+
       // Take the largest difference in Phi
-      double dcPhi = 0.5 * (a1.F - a2.F) / eps;
-      double daPhi = a0.F;
-      UpdateMax(fabs(dcPhi - daPhi), xMaxPhiDiff);
+      dtq.Update("Phi", a0.F, a1.F, a2.F, eps);
 
       // Also look at the differences in grad R mag sqr.
-      double dcGRMS = 0.5 * (a1.xGradRMagSqr - a2.xGradRMagSqr) / eps;
-      double daGRMS = a0.xGradRMagSqr;
-      UpdateMax(fabs(dcGRMS - daGRMS), xMaxGRMS);
+      dtq.Update("Sqr. Grad. Mag. of R", 
+        a0.xGradRMagSqr, a1.xGradRMagSqr, a2.xGradRMagSqr, eps);
 
       // Look at the gradR difference
-      SMLVec3d dcGradR = 0.5 * (a1.xGradR - a2.xGradR) / eps;
-      SMLVec3d daGradR = a0.xGradR;
-      UpdateMax((dcGradR - daGradR).two_norm(), xMaxGradRDiff);
+      dtq.Update("Grad R", a0.xGradR, a1.xGradR, a2.xGradR, eps);
 
       // Take the largest difference in boundary derivs
-      for(unsigned int k = 0; k < 2; k++)
-        {
-        SMLVec3d dcBnd = (0.5 / eps) * (a1.xBnd[k].X - a2.xBnd[k].X);
-        SMLVec3d daBnd = a0.xBnd[k].X;
-        UpdateMax((dcBnd - daBnd).two_norm(), xMaxBndDiff);
-
-        SMLVec3d dcBndNrm = (0.5 / eps) * (a1.xBnd[k].N - a2.xBnd[k].N);
-        SMLVec3d daBndNrm = a0.xBnd[k].N;
-        UpdateMax((dcBndNrm - daBndNrm).two_norm(), xMaxBndNrmDiff);
-        }
+      // for(unsigned int k = 0; k < 2; k++)
+      //   {
+      //   dtq.Update("Boundary Node Positions", a0.xBnd[k].X, a1.xBnd[k].X, a2.xBnd[k].X, eps);
+      //   dtq.Update("Boundary Node Normals", a0.xBnd[k].N, a1.xBnd[k].N, a2.xBnd[k].N, eps);
+      //   }
       }
-
-    cout << endl;
 
     // Now, test the effect on SolutionData objects
     MedialIterationContext *xGrid = xSolver->GetIterationContext();
@@ -204,13 +255,22 @@ int TestGradientComputation(
 
     // Compute the area weight difference
     double xMaxBndAreaDiff = 0.0;
-    for(MedialBoundaryPointIterator itBnd(xGrid); !itBnd.IsAtEnd(); ++itBnd)
+    for(MedialBoundaryPointIterator it(xGrid); !it.IsAtEnd(); ++it)
       {
-      double aNumeric = 0.5 * ( 
-        sd1.xBoundaryWeights[itBnd.GetIndex()] - 
-        sd2.xBoundaryWeights[itBnd.GetIndex()]) / eps;
-      double aAnalytic = pdsd.xBoundaryWeights[itBnd.GetIndex()];
-      UpdateMax(fabs(aAnalytic - aNumeric), xMaxBndAreaDiff);
+      dtq.Update("Boundary Area Element",
+        pdsd.xBoundaryWeights[it.GetIndex()],
+        sd1.xBoundaryWeights[it.GetIndex()],
+        sd2.xBoundaryWeights[it.GetIndex()], eps);
+
+      dtq.Update("Boundary Node Positions",
+        GetBoundaryPoint(it, dAtomArray[iVar]).X,
+        GetBoundaryPoint(it, A1).X,
+        GetBoundaryPoint(it, A2).X, eps);
+
+      dtq.Update("Boundary Node Normals",
+        GetBoundaryPoint(it, dAtomArray[iVar]).N,
+        GetBoundaryPoint(it, A1).N,
+        GetBoundaryPoint(it, A2).N, eps);
       }
 
     // Compute the difference in internal point volume weights
@@ -223,40 +283,17 @@ int TestGradientComputation(
     // Compute the area weight difference
     double xMaxCellVolumeDiff = 0.0;
     for(MedialInternalPointIterator itPoint(xGrid,nInternal); !itPoint.IsAtEnd(); ++itPoint)
-      {
-      double aNumeric = 0.5 * ( 
-        sd1.xInternalWeights[itPoint.GetIndex()] - 
-        sd2.xInternalWeights[itPoint.GetIndex()]) / eps;
-      double aAnalytic = pdsd.xInternalWeights[itPoint.GetIndex()];
-      UpdateMax(fabs(aAnalytic - aNumeric), xMaxCellVolumeDiff);
-      }
-
-    // Compare total area and volume derivatives
-    double xTotalVolumeDiff = 
-      fabs(0.5 * (sd1.xInternalVolume - sd2.xInternalVolume) / eps 
-        - pdsd.xInternalVolume);
-
-    double xTotalAreaDiff = 
-      fabs(0.5 * (sd1.xBoundaryArea - sd2.xBoundaryArea) / eps 
-        - pdsd.xBoundaryArea);
+      dtq.Update("Internal Volume Element",
+        pdsd.xInternalWeights[itPoint.GetIndex()],
+        sd1.xInternalWeights[itPoint.GetIndex()],
+        sd2.xInternalWeights[itPoint.GetIndex()], eps);
 
     // Print the report
-    /*
-    TestGradientComputationPrintReport(
-      xMaxPhiDiff, xMaxGradRDiff, xMaxGRMS, xMaxBndDiff, 
-      xMaxBndNrmDiff, xMaxBndAreaDiff, xMaxCellVolumeDiff,
-      xTotalAreaDiff, xTotalVolumeDiff); */
+    cout << "Maximal differences between numeric and analytic derivatives:" << endl;
+    dtq.PrintReport();
 
     // Update the global maximum counters
-    UpdateMax(xMaxPhiDiff, xGlobalMaxPhiDiff);
-    UpdateMax(xMaxGRMS, xGlobalMaxGRMS);
-    UpdateMax(xMaxGradRDiff, xGlobalMaxGradR);
-    UpdateMax(xMaxBndDiff, xGlobalMaxBndDiff);
-    UpdateMax(xMaxBndNrmDiff, xGlobalMaxBndNrmDiff);
-    UpdateMax(xMaxBndAreaDiff, xGlobalMaxBndAreaDiff);
-    UpdateMax(xMaxCellVolumeDiff, xGlobalMaxCellVolumeDiff);
-    UpdateMax(xTotalAreaDiff, xGlobalTotalAreaDiff);
-    UpdateMax(xTotalVolumeDiff, xGlobalTotalVolumeDiff);
+    dtqGlobal.Update(dtq);
 
     // Delete the atoms
     delete dAtomArray[iVar];
@@ -271,10 +308,8 @@ int TestGradientComputation(
   cout << "             FINAL REPORT               " << endl;
   cout << "----------------------------------------" << endl;
 
-  TestGradientComputationPrintReport(
-    xGlobalMaxPhiDiff, xGlobalMaxGradR, xGlobalMaxGRMS, xGlobalMaxBndDiff, 
-    xGlobalMaxBndNrmDiff, xGlobalMaxBndAreaDiff, xGlobalMaxCellVolumeDiff,
-    xGlobalTotalAreaDiff, xGlobalTotalVolumeDiff);
+  cout << "Maximal differences between numeric and analytic derivatives:" << endl;
+  dtqGlobal.PrintReport();
 
   cout << "----------------------------------------" << endl;
   cout << "Numeric Gradient CPU Secs. :" << tCentral.Read() << endl;
@@ -282,23 +317,18 @@ int TestGradientComputation(
   cout << "Initial Solution CPU Secs.:" << tInitialSolver.Read() << endl; 
   cout << "----------------------------------------" << endl;
 
-  // The return value is based on any of the error terms exceeding epsilon
-  int iPass = 
-    (xGlobalMaxPhiDiff > eps || xGlobalMaxGRMS > eps ||
-     xGlobalMaxGradR > eps ||
-     xGlobalMaxBndDiff > eps || xGlobalMaxBndNrmDiff > eps ||
-     xGlobalMaxBndAreaDiff > eps || xGlobalMaxCellVolumeDiff > eps ||
-     xGlobalTotalAreaDiff > eps || xGlobalTotalVolumeDiff > eps) ? -1 : 0;
+  // Check if all the errors are reasonable
+  bool flagPass = dtqGlobal.Test(eps);
 
   // Describe what happened
-  if(iPass == 0)
+  if(flagPass)
     cout << "TEST PASSED! (No error exceeds " << eps << ")" << endl;
   else
     cout << "TEST FAILED! (Errors exceed " << eps << ")" << endl;
   cout << "========================================" << endl;
 
   // Return value
-  return iPass;
+  return flagPass ? 0 : -1;
 }
 
 int TestOptimizerGradientComputation(
@@ -322,6 +352,7 @@ int TestOptimizerGradientComputation(
   P += 0.1 * xGradient;
 
   // Now we are ready to perform the test.
+  mop.PrintReport(cout);
 
   // Compute the analytic gradient
   tAnalytic.Start();

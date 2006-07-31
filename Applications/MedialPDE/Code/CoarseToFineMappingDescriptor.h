@@ -134,4 +134,37 @@ private:
 
 };
 
+class SubdivisionSurfaceCoarseToFineMappingDescriptor : public CoarseToFineMappingDescriptor
+{
+public:
+  typedef vnl_vector<size_t> MaskVector;
+
+  SubdivisionSurfaceCoarseToFineMappingDescriptor(size_t n)
+    { this->n = n; }
+
+  /** 
+   * Get the number of levels that a model supports. There is only one level.
+   * However, you can subdivide the model 'by hand' to get more coefficients
+   */
+  virtual size_t GetNumberOfLevels() const { return 1; }
+
+  /** 
+   * Get the mask corresponding to a given level. There is only one level where 
+   * all the control points are selected
+   */
+  virtual MaskVector GetMaskForLevel(int level) const 
+    { return MaskVector(n * 4, 1); }
+
+  /**
+   * Get the mask specified by a registry folder. This method always returns a
+   * mask of all ones
+   */
+  virtual MaskVector GetMask(const CoarseToFineSettings *settings) const 
+    { return MaskVector(n * 4, 1); }
+
+private:
+  size_t n;
+
+};
+
 #endif // __CoarseToFineMappingDescriptor_h_

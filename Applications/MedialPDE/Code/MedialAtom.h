@@ -66,9 +66,35 @@ struct MedialAtom
    * compute GradR and the boundary sites. */
   bool ComputeBoundaryAtoms(bool flagEdgeAtom);
 
-  /** An alternative method for subdivision surface atoms, where the gradient
-   * of phi is passed in rather than calculated from Cu and Cv */
-  bool ComputeBoundaryAtoms(const SMLVec3d &gradPhi, bool flagEdgeAtom);
+  /**
+   * These terms are used to compute Gateaux derivatives of the atom's
+   * boundary nodes with respect to different variations
+   */
+  struct DerivativeTerms {
+    double x1_2R, Ru, Rv, x1_2F, Ru_R, Rv_R, Ru_2F, Rv_2F;
+    double g1iRi, g2iRi;
+    SMLVec3d N_2g, N_2nt, Xu_aelt, Xv_aelt;
+  };
+
+  /** 
+   * Compute directional derivative of the contravariant tensor given the
+   * directional derivatives of X, Xu and Xv contained in dAtom
+   */
+  void ComputeMetricTensorDerivatives(MedialAtom &dAtom) const;
+
+  /**
+   * Compute terms that are common in derivative computations (i.e. terms that
+   * are the same when computing the Gateaux derivative of the boundary atoms
+   * with respect to different variations in X and phi
+   */
+  void ComputeCommonDerivativeTerms(DerivativeTerms &dt) const;
+
+  /** 
+   * Compute the derivatives of the boundary atoms with respect to a
+   * variation. The method will not affect the current atom but will modify
+   * the terms of the 'derivative' Atom passed in as the parameter
+   */
+  void ComputeBoundaryAtomDerivatives(MedialAtom &dAtom, const DerivativeTerms &dt) const;
 };
 
 /**

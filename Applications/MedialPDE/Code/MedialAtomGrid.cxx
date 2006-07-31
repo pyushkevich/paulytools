@@ -149,6 +149,7 @@ double WedgeVolume(
   SMLVec3d U = (B1 + B0) - (A1 + A0);
   SMLVec3d V = (C1 + C0) - (A1 + A0);
   SMLVec3d W = (A1 + B1 + C1) - (A0 + B0 + C0);
+  
   return FACTOR * ScalarTripleProduct(U, V, W);
 }
 
@@ -511,6 +512,7 @@ double ComputeMedialInteralWeights(
     }
 
   // Return the total area
+  cout << "TOTAL VOLUME " << xTotalVolume << endl;
   return xTotalVolume; 
 }
 

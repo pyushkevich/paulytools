@@ -1,0 +1,5 @@
+Grid.Model.Atom.SubdivisionLevel = 3
+Grid.Model.Coefficient.FileName = gr1a_gimpel_CN_snap_left.obj
+Grid.Model.Coefficient.FileType = OBJ
+Grid.Model.Coefficient.DefaultRho = -0.5
+Grid.Type = LoopSubdivision

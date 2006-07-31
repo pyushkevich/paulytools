@@ -148,6 +148,106 @@ void TestAreaAndVolume(GenericMedialModel *xSolver)
   termJac.PrintReport(cout);
 }
 
+void ExportMedialMeshToVTK(
+  GenericMedialModel *xModel, ITKImageWrapper<float> *xImage, const char *file);
+
+void ExportBoundaryMeshToVTK(
+  GenericMedialModel *xModel, ITKImageWrapper<float> *xImage, const char *file);
+
+/**
+ * This test ensures that all the volume elements in a model are computed
+ * correctly.
+ */
+int TestVolumeComputation(const char *file)
+{
+  // The number of cuts at which to test
+  size_t i,j,k,nCuts = 5;
+ 
+  // Success code
+  bool flagSuccess = true;
+
+  // Read the model
+  MedialPDE mp(file);
+  GenericMedialModel *model = mp.GetMedialModel();
+
+  // Create a solution data based on this model
+  MedialIterationContext *grid = model->GetIterationContext();
+  SolutionData sd(grid, model->GetAtomArray());
+
+  // Generate internal weights in the solution
+  sd.UpdateInternalWeights(nCuts);
+  sd.UpdateBoundaryWeights();
+
+  // Test 1. Ensure that the volume of every wedge in the model is positive
+  double minWeight = sd.xInternalWeights[0], maxWeight = sd.xInternalWeights[0];
+  for(i = 1; i < sd.nInternalPoints; i++)
+    {
+    minWeight = std::min(minWeight, sd.xInternalWeights[i]);
+    maxWeight = std::max(maxWeight, sd.xInternalWeights[i]);
+    }
+  cout << "Max volume element: " << maxWeight << endl;
+  cout << "Min volume element: " << minWeight << endl;
+  cout << "Avg volume element: " << (sd.xInternalVolume / sd.nInternalPoints) << endl;
+
+  if(minWeight < 0.0)
+    flagSuccess = false;
+
+  // Test 2. Ensure that the boundary area elements are also positive
+  double minAreaElt = sd.xBoundaryWeights[0], 
+         maxAreaElt = sd.xBoundaryWeights[0],
+         sumAreaElt = sd.xBoundaryWeights[0];
+  for(i = 1; i < model->GetNumberOfBoundaryPoints(); i++)
+    {
+    minAreaElt = std::min(minAreaElt, sd.xBoundaryWeights[i]);
+    maxAreaElt = std::max(minAreaElt, sd.xBoundaryWeights[i]);
+    sumAreaElt += sd.xBoundaryWeights[i];
+    }
+  cout << "Max area element: " << maxAreaElt << endl;
+  cout << "Min area element: " << minAreaElt << endl;
+  cout << "Avg area element: " << 
+    (sd.xBoundaryArea / model->GetNumberOfBoundaryPoints()) << endl;
+  cout << "Sum area element: " << sumAreaElt << endl;
+  cout << "Surface area: " << sd.xBoundaryArea << endl;
+
+  if(minAreaElt < 0.0 || sumAreaElt != sd.xBoundaryArea)
+    flagSuccess = false;
+
+  // Test 3. Compare volume computed by integration to volume estimated by
+  // Green's theorem
+  double xVolGreen = 0.0;
+  for(MedialBoundaryPointIterator bit(grid); !bit.IsAtEnd(); ++bit)
+    {
+    BoundaryAtom bat = GetBoundaryPoint(bit, model->GetAtomArray());
+    xVolGreen += dot_product(bat.X, bat.N) * sd.xBoundaryWeights[bit.GetIndex()];
+    }
+  xVolGreen /= 3.0;
+
+  cout << "Volume Integral : " << sd.xInternalVolume << endl;
+  cout << "Green Thm. Integral : " << xVolGreen << endl;
+
+  // Test 4. Another way to compute Green's integral
+  double xVolGreen2 = 0.0;
+  for(MedialBoundaryTriangleIterator btt(grid); !btt.IsAtEnd(); ++btt)
+    {
+    // Get the triangle
+    SMLVec3d A = GetBoundaryPoint(btt, model->GetAtomArray(), 0).X;
+    SMLVec3d B = GetBoundaryPoint(btt, model->GetAtomArray(), 1).X;
+    SMLVec3d C = GetBoundaryPoint(btt, model->GetAtomArray(), 2).X;
+
+    // Get the area-scaled normal vector
+    SMLVec3d N = vnl_cross_3d(B-A,C-A) / 2.0;
+    SMLVec3d X = (A + B + C) / 3.0;
+    xVolGreen2 += dot_product(X, N) / 3.0;
+    }
+  cout << "Green Thm. Integral 2 : " << xVolGreen2 << endl;
+
+  // Export model for external verification
+  ExportBoundaryMeshToVTK(model, NULL, "volume_test.vtk");
+
+  // Return the test score
+  return flagSuccess ? 0 : -1;
+}
+
 void Test01()
 {
   CartesianMPDE *mp = new CartesianMPDE(3, 5, 20, 40);
@@ -248,6 +348,19 @@ void Test03()
   mp->SaveBYUMesh((dirWork + "avg/average_mrepL_02.byu").c_str());
 }
 
+int TestWedgeVolume()
+{
+  // Define an object with a volume that we know
+  double vol1 = WedgeVolume(
+    SMLVec3d(0, 0, 0), SMLVec3d(1, 0, 0), SMLVec3d(1, 1, 0),
+    SMLVec3d(0, 0, 1), SMLVec3d(1, 0, 1), SMLVec3d(1, 1, 1));
+
+  cout << "Volume 1 = " << vol1 << " and should be 0.5" << endl;
+  
+  // Compare to the right amount
+  return (vol1 == 0.5) ? 0 : -1;
+}
+
 void TestCellVolume()
 {
   // Compute the volume of a unit cube
@@ -274,16 +387,16 @@ int TestDifferentialGeometry(const char *fnMPDE)
 
   // Compute the jet at this point
   SMLVec3d X00, X10, X01, X20, X11, X02;
-  mp.GetSurface()->EvaluateDerivative(u, v, 0, 0, 0, 3, X00.data_block());
-  mp.GetSurface()->EvaluateDerivative(u, v, 1, 0, 0, 3, X10.data_block());
-  mp.GetSurface()->EvaluateDerivative(u, v, 0, 1, 0, 3, X01.data_block());
-  mp.GetSurface()->EvaluateDerivative(u, v, 2, 0, 0, 3, X20.data_block());
-  mp.GetSurface()->EvaluateDerivative(u, v, 1, 1, 0, 3, X11.data_block());
-  mp.GetSurface()->EvaluateDerivative(u, v, 0, 2, 0, 3, X02.data_block());
+  mp.GetMedialSurface()->EvaluateDerivative(u, v, 0, 0, 0, 3, X00.data_block());
+  mp.GetMedialSurface()->EvaluateDerivative(u, v, 1, 0, 0, 3, X10.data_block());
+  mp.GetMedialSurface()->EvaluateDerivative(u, v, 0, 1, 0, 3, X01.data_block());
+  mp.GetMedialSurface()->EvaluateDerivative(u, v, 2, 0, 0, 3, X20.data_block());
+  mp.GetMedialSurface()->EvaluateDerivative(u, v, 1, 1, 0, 3, X11.data_block());
+  mp.GetMedialSurface()->EvaluateDerivative(u, v, 0, 2, 0, 3, X02.data_block());
 
   // Compute the differential geometry
   GeometryDescriptor gd;
-  gd.SetJet(
+  gd.SetTwoJet(
     X00.data_block(), X10.data_block(), X01.data_block(),
     X20.data_block(), X11.data_block(), X02.data_block());
 
@@ -355,8 +468,7 @@ int TestBasisFunctionVariation(const char *fnMPDE)
   int iReturn = 0;
 
   // Load a medial PDE for the test
-  CartesianMPDE mp(2, 4, 25, 49);
-  mp.LoadFromParameterFile(fnMPDE);
+  CartesianMPDE mp(fnMPDE);
 
   // Get the model
   GenericMedialModel *model = mp.GetMedialModel();
@@ -397,11 +509,11 @@ int TestBasisFunctionVariation(const char *fnMPDE)
     // Evaluate the surface at finite differences
     model->SetCoefficientArray(vm[i]->Apply(C0, P + eps * dP));
     model->ComputeAtoms();
-    mp.GetSurface()->Evaluate(0.5, 0.5, f1.data_block());
+    mp.GetMedialSurface()->Evaluate(0.5, 0.5, f1.data_block());
 
     model->SetCoefficientArray(vm[i]->Apply(C0, P - eps * dP));
     model->ComputeAtoms();
-    mp.GetSurface()->Evaluate(0.5, 0.5, f2.data_block());
+    mp.GetMedialSurface()->Evaluate(0.5, 0.5, f2.data_block());
 
     dfNum = (f1 - f2) * 0.5 / eps;
 
@@ -410,7 +522,7 @@ int TestBasisFunctionVariation(const char *fnMPDE)
     model->ComputeAtoms();
 
     // Get the variation corresponding to dP
-    IHyperSurface2D *xVariation = mp.GetSurface()->GetVariationSurface(
+    IHyperSurface2D *xVariation = mp.GetMedialSurface()->GetVariationSurface(
       vm[i]->ApplyJacobianInParameters(C0, P, dP).data_block());
     xVariation->Evaluate(0.5, 0.5, dfAn.data_block());
 
@@ -434,14 +546,93 @@ int TestBasisFunctionVariation(const char *fnMPDE)
  * This test routine makes sure that the derivatives computed in the MedialPDE
  * solver and related classes are correct, bt comparing them to central
  * difference derivatives
- */
+ *
 int TestDerivativesNoImage(const char *fnMPDE, const char *fnPCA)
 {
   int iReturn = 0;
 
   // Create a cartesian medial model for testing
-  CartesianMPDE mp(2, 4, 25, 49);
-  mp.LoadFromParameterFile(fnMPDE);
+  CartesianMPDE mp(fnMPDE);
+
+  // Extract the medial model itself
+  GenericMedialModel *model = mp.GetMedialModel();
+
+  // Test the most convoluted mask that we have
+  cout << "**************************************************" << endl;
+  cout << "** TESTIING Affine3DAndPCACoefficientMask       **" << endl;
+  cout << "**************************************************" << endl;
+ 
+  // We have to set the number of coefficients to match the PCA matrix
+  mp.SetNumberOfCoefficients(8, 10);
+  
+  // Create a PCA based mask based on the test matrix
+  double xAPCAPosn[] = 
+    { 1.2, 0.1, 0.2,           // Affine Matrix
+     -0.2, 0.9, 0.1, 
+     -0.1, 0.1, 1.0, 
+      5.0, 3.0,-2.0,           // Translation Vector
+      0.5, 0.4, 0.3,-0.2, 0.3  // PCA offsets
+    };
+
+  // Read principal components from the file
+  vnl_matrix<double> pcaMatrix;
+  ReadMatrixFile(pcaMatrix, fnPCA);
+  PrincipalComponents pca(pcaMatrix);
+  cout << "PCA Matrix Size: " << pcaMatrix.rows() << " x " << pcaMatrix.columns() << endl;
+
+  // Create the PCA/Affine optimizer with 5 modes
+  PCAPlusAffineCoefficientMapping xPCAMask(model, &pca, 5);
+  // PCACoefficientMapping xPCAMask(&pca, 5);
+
+  // Create the starting point vector
+  vnl_vector<double> pPCA(xAPCAPosn, 17);
+
+  // Perform the test
+  // iReturn += TestGradientComputation(model, &xPCAMask, pPCA, 3);
+  iReturn += TestGradientComputation(model, &xPCAMask, 3);
+
+  // We have to set the number of coefficients to match the PCA matrix
+  mp.SetNumberOfCoefficients(2, 4);
+  
+  // Test straight-through gradient computation
+  cout << "**************************************************" << endl;
+  cout << "** TESTIING IdentityCoefficientMapping          **" << endl;
+  cout << "**************************************************" << endl;
+ 
+  IdentityCoefficientMapping xMapping(model);
+  iReturn += TestGradientComputation(model, &xMapping, 3);
+
+  // Test affine transform gradient computation
+  cout << "**************************************************" << endl;
+  cout << "** TESTIING AffineTransformCoefficientMapping   **" << endl;
+  cout << "**************************************************" << endl;
+
+  // Don't start at the default position, or we may get a false positive
+  double xAffinePosn[] = 
+    { 1.2, 0.2, 0.1, 
+      0.1, 0.9,-0.2,
+      0.3,-0.2, 1.4,
+      7.0,-4.5, 2.3 };
+  
+  AffineTransformCoefficientMapping xAffineMask(model);
+  vnl_vector<double> pAffine(xAffinePosn, 12);
+  iReturn += TestGradientComputation(mp.GetMedialModel(), &xAffineMask, pAffine, 3);
+
+  // Return the total of the test values
+  return iReturn;
+}*/
+
+/**
+ * This test routine makes sure that the derivatives computed in the MedialPDE
+ * solver and related classes are correct, bt comparing them to central
+ * difference derivatives
+ */
+int TestDerivativesNoImage(const char *fnMPDE)
+{
+  int iReturn = 0;
+
+  // Create a cartesian medial model for testing
+  MedialPDE mp(fnMPDE);
 
   // Extract the medial model itself
   GenericMedialModel *model = mp.GetMedialModel();
@@ -477,16 +668,19 @@ int TestDerivativesNoImage(const char *fnMPDE, const char *fnPCA)
  
   // Create a PCA based mask based on the test matrix
   double xAPCAPosn[] = 
-    { 1.2, 0.1, 0.2,           // Affine Matrix
-     -0.2, 0.9, 0.1, 
-     -0.1, 0.1, 1.0, 
+    { 0.2, 0.1, 0.2,           // Affine Matrix
+     -0.2,-0.1, 0.1, 
+     -0.1, 0.1, 0.0, 
       5.0, 3.0,-2.0,           // Translation Vector
       0.5, 0.4, 0.3,-0.2, 0.3  // PCA offsets
     };
 
-  // Read principal components from the file
-  vnl_matrix<double> pcaMatrix;
-  ReadMatrixFile(pcaMatrix, fnPCA);
+  // Create a PCA based on a random matrix
+  vnl_matrix<double> pcaMatrix(15, model->GetNumberOfCoefficients());
+  vnl_random randy;
+  for(size_t q = 0; q < pcaMatrix.rows(); q++) 
+    for(size_t k = 0; k < pcaMatrix.columns(); k++)
+      pcaMatrix[q][k] = randy.drand32(-0.01, 0.01);
   PrincipalComponents pca(pcaMatrix);
 
   // Create the PCA/Affine optimizer with 5 modes
@@ -494,7 +688,7 @@ int TestDerivativesNoImage(const char *fnMPDE, const char *fnPCA)
 
   // Create the starting point vector
   vnl_vector<double> pPCA(xAPCAPosn, 17);
-  
+
   // Perform the test
   iReturn += TestGradientComputation(model, &xPCAMask, pPCA, 3);
 
@@ -546,9 +740,8 @@ int TestDerivativesWithImage(const char *fnMPDE)
   // Return Code
   int iReturn = 0;
 
-  // Load the Medial PDE
-  CartesianMPDE mp(2, 4, 33, 81, 0.5, 0, 0);
-  mp.LoadFromParameterFile(fnMPDE);
+  // Load a cartesian medial PDE
+  MedialPDE mp(fnMPDE);
   
   // Define a test image (this in not a real thing)
   GenericMedialModel *model = mp.GetMedialModel();
@@ -557,11 +750,11 @@ int TestDerivativesWithImage(const char *fnMPDE)
 
   // Create an array of image match terms
   vector<EnergyTerm *> vt;
+  vt.push_back(new BoundaryImageMatchTerm(&img));
+  vt.push_back(new ProbabilisticEnergyTerm(&img, 4));
   vt.push_back(new MedialAnglesPenaltyTerm());
   vt.push_back(new MedialRegularityTerm(model->GetIterationContext(), model->GetAtomArray()));
   vt.push_back(new BoundaryJacobianEnergyTerm());
-  vt.push_back(new BoundaryImageMatchTerm(&img));
-  vt.push_back(new ProbabilisticEnergyTerm(&img, 4));
 
   // Create an array of masks
   vector<CoefficientMapping *> vm;
@@ -570,11 +763,12 @@ int TestDerivativesWithImage(const char *fnMPDE)
 
   // Create labels
   char *nt[] = {
+    "BoundaryImageMatchTerm",
+    "ProbabilisticEnergyTerm",
     "MedialAnglesPenaltyTerm",
     "MedialRegularityTerm",
     "BoundaryJacobianEnergyTerm", 
-    "BoundaryImageMatchTerm",
-    "ProbabilisticEnergyTerm" };
+  };
   char *nm[] = {
     "IdentityCoefficientMapping",
     "AffineTransformCoefficientMapping" };
@@ -623,8 +817,8 @@ int main(int argc, char *argv[])
   if(argc == 1) return usage();
 
   // Choose a test depending on the parameters
-  if(0 == strcmp(argv[1], "DERIV1") && argc > 3)
-    return TestDerivativesNoImage(argv[2], argv[3]);
+  if(0 == strcmp(argv[1], "DERIV1") && argc > 2)
+    return TestDerivativesNoImage(argv[2]);
   else if(0 == strcmp(argv[1], "DERIV2") && argc > 2)
     return TestDerivativesWithImage(argv[2]);
   else if(0 == strcmp(argv[1], "DERIV3") && argc > 2)
@@ -633,6 +827,10 @@ int main(int argc, char *argv[])
     return TestDifferentialGeometry(argv[2]);
   else if(0 == strcmp(argv[1], "DERIV5") && argc > 2)
     return TestGradientTiming(argv[2]);
+  else if(0 == strcmp(argv[1], "WEDGE"))
+    return TestWedgeVolume();
+  else if(0 == strcmp(argv[1], "VOLUME1") && argc > 2)
+    return TestVolumeComputation(argv[2]);
   else 
     return usage();
 }

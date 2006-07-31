@@ -14,6 +14,8 @@ SET(COMMON_SRCS
   Code/ITKImageWrapper.cxx
   Code/MedialAtom.cxx
   Code/MedialAtomGrid.cxx
+  Code/MeshMedialPDESolver.cxx
+  Code/MedialModelIO.cxx
   Code/MedialPDEMasks.cxx 
   Code/MedialPDESites.cxx 
   Code/MedialPDERenderer.cxx
@@ -25,19 +27,17 @@ SET(COMMON_SRCS
   Code/Registry.cxx
   Code/ScriptImaging.cxx
   Code/ScriptInterface.cxx
+  Code/SparseMatrix.cxx
+  Code/SubdivisionMedialModel.cxx
+  Code/SubdivisionSurface.cxx
   Code/TestSolver.cxx
   Code/VTKMedialMesh.cxx
+  Code/VTKSubdivision.cxx
   ${PAULY_SOURCE_DIR}/Applications/CMRepTool3d/Code/fracviewer.cpp
   ${PAULY_SOURCE_DIR}/Applications/CMRepTool3d/Code/glengine.cpp)
 
-SET(SUBSURF_SRCS
-  Code/GeometryDescriptor.cxx
-  Code/MedialAtom.cxx
-  Code/MeshMedialPDESolver.cxx
-  Code/PardisoInterface.cxx
-  Code/SparseMatrix.cxx
-  Code/SubdivisionSurface.cxx
-  Code/VTKSubdivision.cxx)
+# Create a directory for SWIG output
+FILE(MAKE_DIRECTORY ${MedialPDE_BINARY_DIR}/Code)
 
 # Apply SWIG to the .i file
 SET(SWIG_SOURCE ${MedialPDE_SOURCE_DIR}/Code/medialpde.i)
@@ -79,10 +79,6 @@ SET(PDE_LIBS
 ADD_LIBRARY(medialpde SHARED ${COMMON_SRCS})
 TARGET_LINK_LIBRARIES(medialpde ${PDE_LIBS})
 
-# Create a library for the subsurf stuff
-ADD_LIBRARY(mpdesub SHARED ${SUBSURF_SRCS})
-TARGET_LINK_LIBRARIES(mpdesub ${PDE_LIBS})
-
 # Create the Python module
 ADD_LIBRARY("_medialpdemodule" SHARED ${SWIG_TARGET})
 TARGET_LINK_LIBRARIES("_medialpdemodule" medialpde)
@@ -95,7 +91,7 @@ TARGET_LINK_LIBRARIES(testpde medialpde)
 
 ADD_EXECUTABLE(testsub Code/TestSubdivision.cxx)
 TARGET_LINK_LIBRARIES(testsub ${PDE_LIBS})
-TARGET_LINK_LIBRARIES(testsub mpdesub)
+TARGET_LINK_LIBRARIES(testsub medialpde)
 
 # Create a statically linked profiling executable
 ### ADD_EXECUTABLE(mpdeprof Code/ProfilerDriver.cxx ${COMMON_SRCS})
@@ -115,21 +111,31 @@ SET(MPDE_TESTDATA_DIR ${MedialPDE_SOURCE_DIR}/Testing/Input)
 SET(MPDE_TEST_CMREP ${MPDE_TESTDATA_DIR}/st1001L.align.mpde)
 SET(MPDE_TEST_PCA ${MPDE_TESTDATA_DIR}/shapemat.mat)
 # SET(MPDE_TEST_OBJMESH ${MPDE_TESTDATA_DIR}/triangle_mesh.obj)
-SET(MPDE_TEST_OBJMESH ${MPDE_TESTDATA_DIR}/tiny_mesh.obj)
+SET(MPDE_TEST_OBJMESH ${MPDE_TESTDATA_DIR}/gr1a_gimpel_CN_snap_left_49pt.obj)
+SET(MPDE_TEST_SUBMREP ${MPDE_TESTDATA_DIR}/gr1a_gimpel_CN_snap_left_49pt.cmrep)
 
 # Test various derivative computations
-ADD_TEST(TestDerivativesNoImage testpde 
-  DERIV1 ${MPDE_TEST_CMREP} ${MPDE_TEST_PCA})
+ADD_TEST(TestVolumeComputation testpde VOLUME1 ${MPDE_TEST_CMREP})
+ADD_TEST(TestDerivativesNoImage testpde DERIV1 ${MPDE_TEST_CMREP})
 ADD_TEST(TestDerivativesWithImage testpde DERIV2 ${MPDE_TEST_CMREP})
 ADD_TEST(TestBasisFunctionVariation testpde DERIV3 ${MPDE_TEST_CMREP})
 ADD_TEST(TestDifferentialGeometry testpde DERIV4 ${MPDE_TEST_CMREP})
 ADD_TEST(TestSparseMatrix testsub SPARSEMAT)
 ADD_TEST(TestSubdivisionSurface testsub SUBSURF1 ${MPDE_TEST_OBJMESH})
 ADD_TEST(TestSubdivisionPDE testsub SUBSURF2 ${MPDE_TEST_OBJMESH})
+ADD_TEST(TestSubSurfVolumeComputation testpde VOLUME1 ${MPDE_TEST_SUBMREP})
+ADD_TEST(TestSubSurfDerivativesNoImage testpde DERIV1 ${MPDE_TEST_SUBMREP})
+ADD_TEST(TestSubSurfDerivativesWithImage testpde DERIV2 ${MPDE_TEST_SUBMREP})
+ADD_TEST(TestWedgeVolume testpde WEDGE)
 
 
 # Copy the script files
 SET(SCRIPT_FILES 
+  cmrep_common.py
+  cmrep_fitbinary.py
+  cmrep_refine_fourier.py
+  cmrep_render.py
+  cmrep_subdivide.py
   blurimage.py
   example.py 
   example2.py 

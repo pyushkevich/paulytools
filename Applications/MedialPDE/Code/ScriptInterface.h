@@ -7,7 +7,7 @@
 
 class GenericMedialModel;
 class CartesianMedialModel;
-class FourierSurface;
+class IBasisRepresentation2D;
 class MedialOptimizationProblem;
 class IMedialCoefficientMask;
 class PrincipalComponents;
@@ -132,17 +132,23 @@ class MedialPDE
 {
 public:
 
-  /** Constructor. Takes the medial model from child class. */
-  MedialPDE();
+  /** Public constructor. Reads the MPDE from a model file */
+  MedialPDE(const char *file);
 
   /** Virtual destructor. Child must delete the medial model. */
-  virtual ~MedialPDE() {};
+  virtual ~MedialPDE();
+
+  /** 
+   * Set the model. This method is virtual and child methods should check
+   * that the model's type is correct
+   */
+  virtual void SetMedialModel(GenericMedialModel *model);
   
   /** Save to a parameter file */
   void SaveToParameterFile(const char *file);
 
   /** Load from a parameter file */
-  bool LoadFromParameterFile(const char *file);
+  void LoadFromParameterFile(const char *file);
 
   /** Compute the match between the model and a floating point image */
   double ComputeImageMatch(FloatImage *image);
@@ -217,6 +223,9 @@ public:
 
 protected:
   
+  /** Constructor. Takes the medial model from child class. */
+  MedialPDE();
+
   // The solver
   GenericMedialModel *xMedialModel;
 
@@ -263,13 +272,19 @@ public:
     unsigned int nBasesU, unsigned int nBasesV, unsigned int xResU, unsigned int xResV, 
     double xFineScale = 0.0, unsigned int xFineU = 0, unsigned int xFineV = 0);
 
-  /** Destructor */
-  virtual ~CartesianMPDE();
+  /**
+   * File-IO constructor
+   */
+  CartesianMPDE(const char *file);
+
+  /** Access the medial surface */
+  IBasisRepresentation2D *GetMedialSurface();
 
   /** 
-   * Get a pointer to the surface used to interpolate the skeleton
+   * Set the medial model. This will ensure that the model is of the correct
+   * type, and throw a ModelIOException if it is not.
    */
-  FourierSurface *GetSurface() { return xSurface; }
+  virtual void SetMedialModel(GenericMedialModel *model);
 
   /** Set the number of Fourier coefficients */
   void SetNumberOfCoefficients(unsigned int m, unsigned int n);
@@ -296,14 +311,36 @@ public:
 
 private:
 
-  // The surface
-  FourierSurface *xSurface;
-
   // The cartesian medial model
   CartesianMedialModel *xCartesianMedialModel;
 };
 
 
+/**
+ * This is a cm-rep on Subdivision surfaces 
+ */
+class SubdivisionMPDE : public MedialPDE
+{
+public:
+
+  /**
+   * File-IO constructor. Reads the surface from file.
+   */
+  SubdivisionMPDE(const char *file) : MedialPDE()
+    {
+    this->LoadFromParameterFile(file);
+    }
+
+  /**
+   * Subdivide the cm-rep. The subdivision surface cm-rep is defined by a
+   * coefficient mesh and an atom mesh, which are typically separated by a
+   * level of atoms. This method will subdivide either of the meshes.
+   */
+  void SubdivideMeshes(size_t iCoeffSub, size_t iAtomSub);
+
+private:
+
+};
 
 class MedialPCA
 {

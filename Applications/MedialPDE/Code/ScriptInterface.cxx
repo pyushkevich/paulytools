@@ -8,6 +8,8 @@
 #include "PrincipalComponents.h"
 #include "Registry.h"
 #include "MedialAtomGrid.h"
+#include "MedialModelIO.h"
+#include "MedialException.h"
 
 #include "itkImageRegionConstIteratorWithIndex.h"
 #include "itkNearestNeighborInterpolateImageFunction.h"
@@ -26,7 +28,6 @@
 #include <vnl/algo/vnl_qr.h>
 #include <vnl/vnl_random.h>
 
-#include <gsl/gsl_multimin.h>
 
 #include <iostream>
 #include <fstream>
@@ -75,35 +76,51 @@ MedialPDE::MedialPDE()
   xStepSize = 0.1;
   xMeshDumpImprovementPercentage = 0.0;
   flagIntensityPresent = false;
+  xMedialModel = NULL;
+}
+
+MedialPDE::MedialPDE(const char *file)
+{
+  // Set default values of attributes
+  xStepSize = 0.1;
+  xMeshDumpImprovementPercentage = 0.0;
+  flagIntensityPresent = false;
+  xMedialModel = NULL;
+
+  // Load the model
+  LoadFromParameterFile(file);
+}
+
+MedialPDE::~MedialPDE()
+{
+  if(xMedialModel != NULL) delete xMedialModel;
+}
+
+void MedialPDE::SetMedialModel(GenericMedialModel *model)
+{
+  if(xMedialModel != model)
+    {
+    if(xMedialModel != NULL) delete xMedialModel;
+    xMedialModel = model;
+    }
 }
 
 void MedialPDE::SaveToParameterFile(const char *file)
 {
-  // Use the registry to save the data
-  Registry R;
-
-  // Write the model to the registry
-  xMedialModel->WriteToRegistry(R);
-
-  // Save the registry
-  R.WriteToFile(file);
+  // Write the model to the file
+  MedialModelIO::WriteModel(xMedialModel, file);
 }
 
-bool MedialPDE::LoadFromParameterFile(const char *file)
+void MedialPDE::LoadFromParameterFile(const char *file)
 {
-  // Use the registry to load the data
-  Registry R(file);
-
-  // Read a cartesian model (for now)
   try 
     {
-    xMedialModel->ReadFromRegistry(R);
-    return true;
+    GenericMedialModel *model = MedialModelIO::ReadModel(file);
+    this->SetMedialModel(model);
     } 
-  catch(...)
+  catch(ModelIOException &exc) 
     {
-    cerr << "Error reading the model" << endl;
-    return false;
+    cerr << "Error reading model: " << exc.what() << endl;
     }
 }
 
@@ -1086,6 +1103,68 @@ void MedialPDE::ReleasePCACoefficientMask(IMedialCoefficientMask *xMask)
 }
 */
 
+/***************************************************************************
+ * SubdivisionMPDE Code
+ * ----------------
+ * This is the code for the subdivision surface based cm-rep
+ **************************************************************************/
+void SubdivisionMPDE::SubdivideMeshes(size_t iCoeffSub, size_t iAtomSub)
+{
+  // Get the subdivision surface medial model that is currently available
+  SubdivisionMedialModel *smm = dynamic_cast<SubdivisionMedialModel *>(xMedialModel);
+  if(!smm)
+    throw MedialModelException(
+      "SubdivisionMPDE given a cmrep not based on subdivision surfaces");
+
+  // Create a new mesh where the subdivided data will be stored
+  SubdivisionMedialModel *smmNew = new SubdivisionMedialModel();
+
+  // Set the mesh topology for the new mesh
+  smmNew->SetMesh(
+    smm->GetCoefficientMesh(), smm->GetCoefficientArray(), 
+    iAtomSub + smm->GetSubdivisionLevel(), iCoeffSub);
+
+  // Now, we must solve the model. The way we do this depends on whether the
+  // atom level has been changed or not. If it has, we will interpolate the
+  // phi from the previous level to generate an initialization. Hopefully
+  // this will help solve the PDE better...
+  if(iAtomSub > 0) 
+    {
+    // Get the mesh currently stored in the medial model
+    SubdivisionSurface::MeshLevel mCurrentAtomLevel = smm->GetAtomMesh();
+
+    // Set this mesh as root for subdivision
+    mCurrentAtomLevel.SetAsRoot();
+
+    // Subdivide to get the new mesh level
+    SubdivisionSurface::MeshLevel mNewAtomLevel;
+    SubdivisionSurface::RecursiveSubdivide(&mCurrentAtomLevel, &mNewAtomLevel, iAtomSub);
+
+    // Get the array of phi values for the source
+    vnl_vector<double> phiCurrent = smm->GetPhi();
+
+    // Allocate the phi vector for the target 
+    vnl_vector<double> phiNew(mNewAtomLevel.nVertices);
+
+    // Subdivide the source into the target
+    SubdivisionSurface::ApplySubdivision(
+      phiCurrent.data_block(), phiNew.data_block(), 1, mNewAtomLevel);
+
+    // Put the new phi into the subdivision surface model
+    smmNew->SetPhi(phiNew);
+
+    // Solve the PDE without hints
+    smmNew->ComputeAtoms();
+    }
+  else
+    {
+    // The solution is already there in the source-level mesh
+    smmNew->ComputeAtoms(smm->GetAtomArray());
+    }
+
+  // Set the new mesh to replace the old mesh
+  this->SetMedialModel(smmNew);
+}
 
 /***************************************************************************
  * CartesianMPDE Code
@@ -1101,28 +1180,49 @@ CartesianMPDE::CartesianMPDE(unsigned int nBasesU, unsigned int nBasesV,
     new CartesianMedialModel(xResU, xResV, xFineScale, xFineU, xFineV);
 
   // Associate the model with a Fourier surface
-  xSurface = new FourierSurface(nBasesU, nBasesV);
-  xCartesianMedialModel->SetMedialSurface(xSurface);
+  FourierSurface *xSurface = new FourierSurface(nBasesU, nBasesV);
+  xCartesianMedialModel->AdoptMedialSurface(xSurface);
 
   // Set the internal surface representation
   this->xMedialModel = xCartesianMedialModel;
 }
 
-
-CartesianMPDE::~CartesianMPDE()
+CartesianMPDE::CartesianMPDE(const char *file) :
+  MedialPDE()
 {
-  delete xSurface;
-  delete xCartesianMedialModel;
+  // Load the model
+  this->LoadFromParameterFile(file);
 }
 
+void CartesianMPDE::SetMedialModel(GenericMedialModel *model)
+{
+  // Cast the model to Cartesian model
+  CartesianMedialModel *mc = dynamic_cast<CartesianMedialModel *>(model);
+  if(mc == NULL)
+    throw ModelIOException("Type mismatch in CartesianMPDE::SetMedialModel");
+
+  // Call the parent's method
+  MedialPDE::SetMedialModel(model);
+
+  // Set my own pointer
+  xCartesianMedialModel = mc;
+}
+
+IBasisRepresentation2D *
+CartesianMPDE::GetMedialSurface()
+{ 
+  return xCartesianMedialModel->GetMedialSurface(); 
+}
 
 void CartesianMPDE::SetNumberOfCoefficients(unsigned int m, unsigned int n)
 {
+  // TODO: This is bad C++
+  FourierSurface *xSurface = dynamic_cast<FourierSurface *>(
+    xCartesianMedialModel->GetMedialSurface());
   xSurface->SetNumberOfCoefficients(m, n);
-  xCartesianMedialModel->SetMedialSurface(xSurface);
+  xCartesianMedialModel->AdoptMedialSurface(xSurface);
   xCartesianMedialModel->ComputeAtoms();
 }
-
 
 void CartesianMPDE::LoadFromDiscreteMRep(const char *file, double xRhoInit)
 {
@@ -1181,6 +1281,9 @@ void CartesianMPDE::LoadFromDiscreteMRep(const char *file, double xRhoInit)
     vv[i] = xAtoms[i].v;
     rr[i] = xRhoInit;
     }
+  
+  // Get the underlying surface
+  IBasisRepresentation2D *xSurface = xCartesianMedialModel->GetMedialSurface();
 
   // Perform the fitting on x, y and z
   xSurface->FitToData(xAtoms.size(), 0, uu, vv, xx);
@@ -1189,6 +1292,9 @@ void CartesianMPDE::LoadFromDiscreteMRep(const char *file, double xRhoInit)
 
   // Fit the rho function to a constant
   xSurface->FitToData(xAtoms.size(), 3, uu, vv, rr);
+
+  // Compute the atoms
+  xCartesianMedialModel->ComputeAtoms();
 
   // Clean up
   delete xx; delete yy; delete zz; delete uu; delete vv; delete rr;
@@ -1221,11 +1327,17 @@ void CartesianMPDE::GenerateSampleModel()
       ++i;
       }
 
+  // Get the underlying surface
+  IBasisRepresentation2D *xSurface = xCartesianMedialModel->GetMedialSurface();
+
   // Peform the fit
   xSurface->FitToData(nPoints, 0, uPoints, vPoints, xPoints);
   xSurface->FitToData(nPoints, 1, uPoints, vPoints, yPoints);
   xSurface->FitToData(nPoints, 2, uPoints, vPoints, zPoints);
   xSurface->FitToData(nPoints, 3, uPoints, vPoints, rhoPoints);
+
+  // Generate the atoms
+  xCartesianMedialModel->ComputeAtoms();
 }
 
 

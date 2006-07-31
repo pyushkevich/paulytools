@@ -118,6 +118,16 @@ double CellVolume(
   const SMLVec3d &X100, const SMLVec3d &X101, 
   const SMLVec3d &X110, const SMLVec3d &X111);
 
+
+/**
+ * Here is a similar formula for a wedge volume. The wedge here is treated as
+ * a half of a parallellepiped. The vectors forming its edges are computed by 
+ * averaging the contributing points
+ */
+double WedgeVolume(
+  const SMLVec3d &A0, const SMLVec3d &B0, const SMLVec3d &C0,
+  const SMLVec3d &A1, const SMLVec3d &B1, const SMLVec3d &C1);
+
 /**
  * This function computes the volume associated with each cell in the medial
  * interior and assigns a portion of this cell to each internal point that is

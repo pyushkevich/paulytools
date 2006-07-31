@@ -274,6 +274,9 @@ CartesianMedialModel
 
   // Compute the initial solution
   SetDefaultInitialGuess(1);
+
+  // Set the surface to NULL
+  xSurface = NULL;
 }
 
 CartesianMedialModel
@@ -296,6 +299,9 @@ CartesianMedialModel
   delete xSparseValues;
   delete xRowIndex;
   delete xColIndex;
+
+  // Delete the surface
+  if(xSurface != NULL) delete xSurface;
 }
 
 void
@@ -318,9 +324,13 @@ CartesianMedialModel
 
 void 
 CartesianMedialModel
-::SetMedialSurface(IBasisRepresentation2D *xSurface)
+::AdoptMedialSurface(IBasisRepresentation2D *xSurface)
 {
-  // Remember the surface
+  // Delete the old surface
+  if(this->xSurface != NULL && this->xSurface != xSurface) 
+    delete this->xSurface;
+
+  // Adopt the new surface
   this->xSurface = xSurface;
 
   // Tell the surface where it will be evaluated
@@ -428,7 +438,11 @@ double CartesianMedialModel::ComputeNewtonRHS(const Mat& x, Mat &b)
 {
   size_t i, j;
   for(i = 0; i < m; i++) for(j = 0; j < n; j++)
+    {
     b[i][j] = - xSites[xSiteIndex[i][j]]->ComputeEquation(x);
+    if(vnl_math_isnan(b[i][j]))
+      cout << "Gotcha! " << i << "," << j << endl;
+    }
   return dot_product(b, b);
 }
 
@@ -532,128 +546,6 @@ CartesianMedialModel
   ReconstructAtoms(y);
 }
 
-struct AtomGradientTerms
-{
-  double x1_2R, Ru, Rv, x1_2F, Ru_R, Rv_R, Ru_2F, Rv_2F;
-  double g1iRi, g2iRi;
-  SMLVec3d N_2g, N_2nt, Xu_aelt, Xv_aelt;
-};
-
-void ComputeMedialAtomBoundaryDerivativeCommonTerms(
-  MedialAtom *xAtom, AtomGradientTerms &agt)
-{
-  // Get the relevant elements of the atoms
-  SMLVec3d &X = xAtom->X, &Xu = xAtom->Xu, &Xv = xAtom->Xv;
-  
-  // Get the elements of the first fundamental form and its derivative
-  double &g11 = xAtom->G.xContravariantTensor[0][0];
-  double &g12 = xAtom->G.xContravariantTensor[0][1];
-  double &g22 = xAtom->G.xContravariantTensor[1][1];
-
-  // Get the g's
-  double &g = xAtom->G.g; 
-
-  // Get the partials of Phi and its variational derivative
-  double &F = xAtom->F, &Fu = xAtom->Fu, &Fv = xAtom->Fv;
-
-  // Get the derivatives of R
-  double &R = xAtom->R; 
-  agt.x1_2R = 0.5 / R;
-  agt.Ru = Fu * agt.x1_2R, agt.Rv = Fv * agt.x1_2R;
-  agt.Ru_R = agt.Ru / R;
-  agt.Rv_R = agt.Rv / R;
-  agt.Ru_2F = 0.5 * agt.Ru / F;
-  agt.Rv_2F = 0.5 * agt.Rv / F;
-  
-  // Terms used to compute the derivative of the normal vector
-  agt.Xu_aelt = Xu / xAtom->aelt; agt.Xv_aelt = Xv / xAtom->aelt;
-  agt.N_2g = 0.5 * xAtom->N / g;
-
-  // We will compute several intermediate terms
-  agt.g1iRi = g11 * agt.Ru + g12 * agt.Rv;
-  agt.g2iRi = g12 * agt.Ru + g22 * agt.Rv;
-
-  // Compute the plus-minus term
-  agt.N_2nt = 0.5 * xAtom->N / xAtom->xNormalFactor;
-}
-
-void ComputeMedialAtomBoundaryDerivative(
-  MedialAtom *xAtom, MedialAtom *dAtom, AtomGradientTerms &agt, bool isEdge)
-{
-  // Get the relevant elements of the atoms
-  SMLVec3d &X = xAtom->X, &Xu = xAtom->Xu, &Xv = xAtom->Xv;
-  SMLVec3d &Y = dAtom->X, &Yu = dAtom->Xu, &Yv = dAtom->Xv;
-  
-  // Get the elements of the first fundamental form and its derivative
-  double &g11 = xAtom->G.xContravariantTensor[0][0];
-  double &g12 = xAtom->G.xContravariantTensor[0][1];
-  double &g22 = xAtom->G.xContravariantTensor[1][1];
-  double &z11 = dAtom->G.xContravariantTensor[0][0];
-  double &z12 = dAtom->G.xContravariantTensor[0][1];
-  double &z22 = dAtom->G.xContravariantTensor[1][1];
-
-  // Get the g's
-  double &g = xAtom->G.g; double &z = dAtom->G.g;
-
-  // Get the partials of Phi and its variational derivative
-  double &F = xAtom->F, &Fu = xAtom->Fu, &Fv = xAtom->Fv;
-  double &H = dAtom->F, &Hu = dAtom->Fu, &Hv = dAtom->Fv;
-
-  // Get the derivatives of R
-  double &R = xAtom->R;
-  double P = H * agt.x1_2R;
-  double Pu = Hu * agt.x1_2R - H * agt.Ru_2F;
-  double Pv = Hv * agt.x1_2R - H * agt.Rv_2F;
-  
-  // This is the derivative of the normal vector
-  dAtom->N =  vnl_cross_3d(agt.Xu_aelt, Yv);
-  dAtom->N += vnl_cross_3d(Yu, agt.Xv_aelt);
-  vmuladd(dAtom->N, agt.N_2g, -z);
-
-  // We will compute several intermediate terms
-  double z1iRi = z11 * agt.Ru + z12 * agt.Rv;
-  double z2iRi = z12 * agt.Ru + z22 * agt.Rv;
-
-  // Compute the derivative of grad R
-  vmulset(dAtom->xGradR, Xu, z1iRi + g11 * Pu + g12 * Pv);
-  vmuladd(dAtom->xGradR, Xv, z2iRi + g12 * Pu + g22 * Pv);
-  vmuladd(dAtom->xGradR, Yu, agt.g1iRi);
-  vmuladd(dAtom->xGradR, Yv, agt.g2iRi);
-
-  // Address the edge case first
-  if(isEdge) 
-    {
-    // The normal term vanishes
-    dAtom->xBnd[0].N = dAtom->xBnd[1].N = - dAtom->xGradR;
-    dAtom->xBnd[1].X = dAtom->xBnd[0].X = 
-      Y + R * dAtom->xBnd[0].N + P * xAtom->xBnd[0].N;
-    dAtom->xGradRMagSqr = 0.0;
-    dAtom->xNormalFactor = 0.0;
-    return;
-    }
-
-  // Compute the derivative of grad R . grad R
-  dAtom->xGradRMagSqr = z1iRi * agt.Ru + z2iRi * agt.Rv 
-    + 2.0 * (agt.g1iRi * Pu + agt.g2iRi * Pv);
-
-  // Compute the plus-minus term
-  SMLVec3d dNormalTerm;
-  vmulset(dNormalTerm, dAtom->N, xAtom->xNormalFactor);
-  vmuladd(dNormalTerm, agt.N_2nt, -dAtom->xGradRMagSqr);
-  
-  // Compute the boundary atom normals
-  dAtom->xBnd[0].N = dAtom->xBnd[1].N = - dAtom->xGradR;
-  dAtom->xBnd[0].N -= dNormalTerm;
-  dAtom->xBnd[1].N += dNormalTerm;
-
-  // Compute the boundary atoms
-  dAtom->xBnd[0].X = dAtom->xBnd[1].X = Y;
-  vmuladd(dAtom->xBnd[0].X, dAtom->xBnd[0].N, R);
-  vmuladd(dAtom->xBnd[0].X, xAtom->xBnd[0].N, P);
-  vmuladd(dAtom->xBnd[1].X, dAtom->xBnd[1].N, R);
-  vmuladd(dAtom->xBnd[1].X, xAtom->xBnd[1].N, P);
-}
-
 void
 CartesianMedialModel
 ::PrepareAtomsForVariationalDerivative(const Vec &xVariation, MedialAtom *dAtoms) const
@@ -699,7 +591,7 @@ CartesianMedialModel
   Mat rhs(N, nSites), soln(N, nSites);
 
   // Create an array of helper structs for atom computation
-  vector<AtomGradientTerms> agt(nSites);
+  vector<MedialAtom::DerivativeTerms> agt(nSites);
 
   // Prepare for the gradient computation
   double t0 = clock();
@@ -713,16 +605,25 @@ CartesianMedialModel
     MedialAtom &xAtom = xAtoms[iGrid];
 
     // Initialize the atom gradient terms
-    ComputeMedialAtomBoundaryDerivativeCommonTerms(&xAtom, agt[iSite]);
+    xAtom.ComputeCommonDerivativeTerms(agt[iSite]);
 
     // Compute the matrix for linear solver
     xSites[iSite]->ComputeVariationalDerivativeMatrix(
       y, xSparseValues + xRowIndex[iSite] - 1, &xAtom);
 
-    // Compute each of the right hand sides
+    // For each variation compute atom's geometry gradient and RHS
     for(k = 0; k < N; k++)
-      rhs[k][iSite] = xSites[iSite]->ComputeVariationalDerivativeRHS(
-        y, &xAtom, &dAtomArray[k][iGrid]);
+      {
+      // Get the reference to the atom's derivative
+      MedialAtom &dAtom = dAtomArray[k][iGrid];
+
+      // Compute the derivative of the atom's metric tensor
+      xAtom.ComputeMetricTensorDerivatives(dAtom);
+      
+      // Compute the right hand side
+      rhs[k][iSite] = 
+        xSites[iSite]->ComputeVariationalDerivativeRHS(y, &xAtom, &dAtom);
+      }
     }
   cout << " [RHS: " << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
 
@@ -755,8 +656,7 @@ CartesianMedialModel
       dAtom.F = xMasks[iSite]->ComputeOneJet(phi.data_block(), dAtom.Fu, dAtom.Fv);
 
       // Compute the rest of the atom derivative
-      ComputeMedialAtomBoundaryDerivative(
-        &xAtoms[iGrid], &dAtom, agt[iSite], xSites[iSite]->IsBorderSite());
+      xAtoms[iGrid].ComputeBoundaryAtomDerivatives(dAtom, agt[iSite]);
       }
     }
   cout << " [BND: " << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;

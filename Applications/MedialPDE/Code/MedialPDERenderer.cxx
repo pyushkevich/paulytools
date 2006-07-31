@@ -1,6 +1,7 @@
 #include "GenericMedialModel.h"
 #include "MedialPDERenderer.h"
 #include "OptimizationTerms.h"
+#include "MedialAtomGrid.h"
 #include <set>
 #include <map>
 
@@ -77,9 +78,9 @@ void glDrawWireframeElements(MedialIterationContext *grid)
   // For each triangle, add the edges to the accumulator
   for(MedialBoundaryTriangleIterator it(grid); !it.IsAtEnd(); ++it)
     {
-    unsigned int i0 = it.GetBoundaryIndex(0);
-    unsigned int i1 = it.GetBoundaryIndex(1);
-    unsigned int i2 = it.GetBoundaryIndex(2);
+    unsigned int i0 = it.GetAtomIndex(0);
+    unsigned int i1 = it.GetAtomIndex(1);
+    unsigned int i2 = it.GetAtomIndex(2);
 
     xEdgeSet.insert( Edge(min(i0,i1), max(i0,i1)) );
     xEdgeSet.insert( Edge(min(i1,i2), max(i1,i2)) );
@@ -178,19 +179,41 @@ PDESplineRenderer
   matMedial->apply();
 
   // Supply the vertex list (medial surface)
+  glDisable(GL_LIGHTING);
   MedialAtom *mp = solver->GetAtomArray();
   glVertexPointer(3, GL_DOUBLE, sizeof(MedialAtom), mp->X.data_block());
   glNormalPointer(GL_DOUBLE, sizeof(MedialAtom), mp->X.data_block());
 
   // Build the quad array
-  glColor3d(1, 0, 0);
-  // glDrawWireframeElements(m, n);
+  glColor3d(1, 1, 1);
+  glDrawWireframeElements(solver->GetIterationContext());
   // glDrawQuadElements(solver->GetAtomGrid());
+  
+  for(size_t i = 0; i < solver->GetNumberOfAtoms(); i++)
+    {
+    glBegin(GL_LINES);
+    if(mp[i].flagCrest)
+      {
+      if(mp[i].xGradR.magnitude() != 1.0)
+        {
+        if(mp[i].xGradR.magnitude() < 1.0)
+          glColor3d(1, 0, 0);
+        else
+          glColor3d(1, 1, 0);
+
+        glVertex3dv(mp[i].X.data_block());
+        glVertex3dv((mp[i].X - mp[i].xGradR).data_block());
+        }
+      }
+    glEnd();
+    }
   
   // DrawInternalPoints( 5 );
 
   // Display the boundary
   matBoundary->apply();
+
+  /*
 
   // Supply the first boundary array
   glVertexPointer(3, GL_DOUBLE, sizeof(MedialAtom), mp->xBnd[0].X.data_block());
@@ -207,9 +230,49 @@ PDESplineRenderer
   // Draw the wireframe
   glDrawWireframeElements(solver->GetIterationContext());
 
-  // Junk
-   
+  // Compute the length for the normal vector. It should be equal to the
+  // square root of the average area of the triangle on the boundary
+  MedialIterationContext *grid = solver->GetIterationContext();
+  SolutionData s(grid, solver->GetAtomArray());
+  s.UpdateBoundaryWeights();
+  double lNormal = 0.75 * sqrt(s.xBoundaryArea / grid->GetNumberOfBoundaryPoints());
+
+  // Draw normal vectors
   glDisable(GL_LIGHTING);
+
+  glColor3d(0.2, 0.8, 0.2);
+  glBegin(GL_LINES);
+  for(MedialBoundaryPointIterator bit(grid); !bit.IsAtEnd(); ++bit)
+    {
+    BoundaryAtom &bat = GetBoundaryPoint(bit, solver->GetAtomArray());
+    SMLVec3d X1 = bat.X + bat.N * s.xBoundaryWeights[bit.GetIndex()];
+    glVertex3dv(bat.X.data_block());
+    glVertex3dv(X1.data_block());
+    }
+  glEnd();
+
+  // Draw normals to cells
+  glColor3d(0.4, 0.6, 0.4);
+  glBegin(GL_LINES);
+  for(MedialBoundaryTriangleIterator btt(grid); !btt.IsAtEnd(); ++btt)
+    {
+    SMLVec3d X0 = GetBoundaryPoint(btt, solver->GetAtomArray(), 0).X;
+    SMLVec3d X1 = GetBoundaryPoint(btt, solver->GetAtomArray(), 1).X;
+    SMLVec3d X2 = GetBoundaryPoint(btt, solver->GetAtomArray(), 2).X;
+
+    SMLVec3d N = 0.5 * vnl_cross_3d(X1 - X0, X2 - X0);
+    SMLVec3d X = (X0 + X1 + X2) / 3.0;
+    SMLVec3d Xn = X + N;
+
+    glVertex3dv(X.data_block());
+    glVertex3dv(Xn.data_block());
+    }
+  glEnd();
+
+  */
+
+  // Junk
+  /*  
   glBegin(GL_POINTS);
   for(size_t i = 0; i < solver->GetNumberOfAtoms(); i++)
     {
@@ -228,7 +291,7 @@ PDESplineRenderer
     glVertex3d(20 * mp[i].u - 10, 20 * mp[i].v - 10, mp[i].xGradRMagSqr - 1.0);
     }
   glEnd();
-  
+  */
   
   // Restore the client state
   glPopClientAttrib();

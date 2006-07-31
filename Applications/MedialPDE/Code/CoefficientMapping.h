@@ -171,6 +171,9 @@ public:
     AffineMatrix A(p.data_block());
     AffineVector b = p.extract(3, 9);
 
+    // Add an identity matrix to A (so that p is zero-based)
+    A[0][0] += 1.0; A[1][1] += 1.0; A[2][2] += 1.0;
+
     // Apply the affine transform to the coefficients
     return xTransformDescriptor->ApplyAffineTransform(C, A, b, xCenter);
     }
@@ -183,7 +186,7 @@ public:
     AffineVector varb = varP.extract(3, 9);
 
     // Compute the corresponding variation using the model
-    return xTransformDescriptor->ApplyJacobianInParameters(C, varA, varb);
+    return xTransformDescriptor->ApplyJacobianInParameters(C, varA, varb, xCenter);
     }
 
   /** Compute the variation J_T(C) * v_C given C, P and v_C */
@@ -192,6 +195,9 @@ public:
     // Split the variation into matrix A and vector b
     AffineMatrix A(P.data_block());
     AffineVector b = P.extract(3, 9);
+
+    // Add an identity matrix to A (so that p is zero-based)
+    A[0][0] += 1.0; A[1][1] += 1.0; A[2][2] += 1.0;
 
     // Compute the corresponding variation using the model
     return xTransformDescriptor->ApplyJacobianInCoefficients(varC, A, b, xCenter);

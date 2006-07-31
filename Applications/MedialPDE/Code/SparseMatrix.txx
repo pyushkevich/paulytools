@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cassert>
 
 template<class TVal>
 ImmutableSparseArray<TVal>
@@ -145,6 +146,102 @@ ImmutableSparseMatrix<TVal>
   return true;
 }
 
+template<class TVal>
+ImmutableSparseArray<TVal>::ImmutableSparseArray(const ImmutableSparseArray<TVal> &src)
+{
+  // Make copies of all non-arrays
+  nRows = src.nRows;
+  nColumns = src.nColumns;
+  nSparseEntries = src.nSparseEntries;
+
+  // If the source object is NULL, there is nothing to do
+  if(src.xSparseValues == NULL) 
+  {
+    xSparseValues = NULL;
+    xRowIndex = NULL;
+    xColIndex = NULL;
+    return;
+  }
+
+  // Allocate the arrays
+  xRowIndex = new size_t[nRows + 1];
+  xColIndex = new size_t[nSparseEntries];
+  xSparseValues = new TVal[nSparseEntries];
+
+  // Copy the array contennts
+  std::copy(src.xRowIndex, src.xRowIndex + nRows + 1, xRowIndex);
+  std::copy(src.xColIndex, src.xColIndex + nSparseEntries, xColIndex);
+  std::copy(src.xSparseValues, src.xSparseValues + nSparseEntries, xSparseValues);
+}
+
+template<class TVal>
+ImmutableSparseArray<TVal> &
+ImmutableSparseArray<TVal>::operator= (const ImmutableSparseArray<TVal> &src)
+{
+  // Check if this is the same object (or both are reset)
+  if(xSparseValues == src.xSparseValues)
+    return *this;
+
+  // Clear all the data
+  Reset();
+
+  // If the source object is NULL, there is nothing to do
+  if(src.xSparseValues == NULL) return *this;
+
+  // Make copies of all non-arrays
+  nRows = src.nRows;
+  nColumns = src.nColumns;
+  nSparseEntries = src.nSparseEntries;
+
+  // Allocate the arrays
+  xRowIndex = new size_t[nRows + 1];
+  xColIndex = new size_t[nSparseEntries];
+  xSparseValues = new TVal[nSparseEntries];
+
+  // Copy the array contennts
+  std::copy(src.xRowIndex, src.xRowIndex + nRows + 1, xRowIndex);
+  std::copy(src.xColIndex, src.xColIndex + nSparseEntries, xColIndex);
+  std::copy(src.xSparseValues, src.xSparseValues + nSparseEntries, xSparseValues);
+}
+
+
+template<class TVal>
+typename ImmutableSparseMatrix<TVal>::Vec 
+ImmutableSparseMatrix<TVal>
+::MultiplyTransposeByVector(const Vec &b)
+{
+  // Make sure the dimensions match
+  assert(b.size() == this->nRows);
+
+  // Initialize the vector
+  Vec c(this->nColumns, 0);
+
+  // Iterate over rows and columns of the matrix
+  for(size_t i = 0; i < this->nRows; i++)
+    for(size_t j = this->xRowIndex[i]; j < this->xRowIndex[i+1]; j++)
+      c[this->xColIndex[j]] += this->xSparseValues[j] * b[i];
+
+  return c;
+}
+
+template<class TVal>
+typename ImmutableSparseMatrix<TVal>::Vec 
+ImmutableSparseMatrix<TVal>
+::MultiplyByVector(const Vec &b)
+{
+  // Make sure the dimensions match
+  assert(b.size() == this->nColumns);
+
+  // Initialize the vector
+  Vec c(this->nRows, 0);
+
+  // Iterate over rows and columns of the matrix
+  for(size_t i = 0; i < this->nRows; i++)
+    for(size_t j = this->xRowIndex[i]; j < this->xRowIndex[i+1]; j++)
+      c[i] += this->xSparseValues[j] * b[this->xColIndex[j]];
+
+  return c;
+}
 
 template<class TVal>
 void 

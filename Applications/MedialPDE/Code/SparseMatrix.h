@@ -11,6 +11,7 @@
 #include <iostream>
 #include <list>
 #include <vector>
+#include <stdexcept>
 
 template<class TVal>
 class ImmutableSparseArray
@@ -45,9 +46,32 @@ public:
   void SetArrays(size_t rows, size_t cols, size_t *xRowIndex, size_t *xColIndex, TVal *data);
 
   // Pointers to the data stored inside the matrix
-  size_t *GetRowIndex() { return xRowIndex; }
-  size_t *GetColIndex() { return xColIndex; }
+  size_t *GetRowIndex() const { return xRowIndex; }
+  size_t *GetColIndex() const { return xColIndex; }
+  const TVal *GetSparseData() const { return xSparseValues; }
   TVal *GetSparseData() { return xSparseValues; }
+
+  class ConstRowIterator {
+  public:
+    ConstRowIterator(const Self *p, size_t row)
+      { this->p = p; iPos = p->xRowIndex[row]; iEnd = p->xRowIndex[row+1]; }
+    
+    bool IsAtEnd()
+      { return iPos == iEnd; }
+
+    const TVal &Value()
+      { return p->xSparseValues[iPos]; }
+
+    size_t Column()
+      { return p->xColIndex[iPos]; }
+
+    ConstRowIterator &operator++()
+      { ++iPos; return *this; }
+    
+  private:
+    const Self *p;
+    size_t iPos, iEnd;
+  };
 
   // Row iterator goes through nonzero elements of rows
   class RowIterator {
@@ -76,6 +100,10 @@ public:
   RowIterator Row(size_t iRow)
     { return RowIterator(this, iRow); } 
 
+  // Get the row iterator
+  ConstRowIterator Row(size_t iRow) const
+    { return ConstRowIterator(this, iRow); } 
+
   // Set i-th non-zero value in a row
   TVal &GetValueBySparseIndex(size_t iRow, size_t iNZInRow)
     { return xSparseValues[xRowIndex[iRow] + iNZInRow]; }
@@ -87,14 +115,20 @@ public:
   size_t GetNumberOfRows() { return nRows; }
   size_t GetNumberOfColumns() { return nColumns; }  
 
+  // Reset the matrix (clear all data, revert to initialized state)
+  void Reset();
+
+  // A copy operator that actually copies the data
+  Self & operator = (const Self &src);
+
+  // A copy constructor
+  ImmutableSparseArray(const ImmutableSparseArray<TVal> &src);
+
 protected:
   
   /** Representation for the sparse matrix */
   TVal *xSparseValues;
   size_t *xRowIndex, *xColIndex, nRows, nColumns, nSparseEntries;
-
-  // Method to reinitialize storage if needed
-  void Reset();
 
   // Iterator is our friend
   friend class RowIterator;
@@ -107,12 +141,19 @@ class ImmutableSparseMatrix : public ImmutableSparseArray<TVal>
 public:
   // Typedefs
   typedef ImmutableSparseMatrix<TVal> Self;
+  typedef vnl_vector<TVal> Vec;
 
   // Compare two matrices
   bool operator == (const Self &B);
 
   // Compute the matrix product C = A * B
   static void Multiply(Self &C, const Self &A, const Self &B);
+
+  // Compute the matrix product c = A^t * b
+  Vec MultiplyByVector(const Vec &b);
+
+  // Compute the matrix product c = A^t * b
+  Vec MultiplyTransposeByVector(const Vec &b);
 
   // Print to the standard stream
   void PrintSelf(std::ostream &out) const;

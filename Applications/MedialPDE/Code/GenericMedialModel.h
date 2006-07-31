@@ -118,16 +118,6 @@ public:
   virtual void ComputeAtomGradient(std::vector<MedialAtom *> &dAtoms) = 0;
 
   /**
-   * Load a medial model from the Registry.
-   */
-  virtual void ReadFromRegistry(Registry &folder) = 0;
-
-  /**
-   * Save the model to registry folder
-   */
-  virtual void WriteToRegistry(Registry &folder) = 0;
-
-  /**
    * Get a pointer to the affine transform descriptor corresponding to this class. 
    * The descriptor is a lightweight object, and its allocation should be
    * managed by the child of GenericMedialModel.

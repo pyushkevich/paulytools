@@ -4,7 +4,7 @@ using namespace std;
 
 void
 GeometryDescriptor
-::SetJet(double *X, double *Xu, double *Xv, double *Xuu, double *Xuv, double *Xvv)
+::SetOneJet(double *X, double *Xu, double *Xv)
 {
   // Compute the covariant tensor
   xCovariantTensor[0][0] = Xu[0] * Xu[0] + Xu[1] * Xu[1] + Xu[2] * Xu[2];
@@ -22,6 +22,14 @@ GeometryDescriptor
   xContravariantTensor[1][1] = gInv * xCovariantTensor[0][0];
   xContravariantTensor[0][1] = - gInv * xCovariantTensor[1][0];
   xContravariantTensor[1][0] = xContravariantTensor[0][1];
+}
+
+void
+GeometryDescriptor
+::SetTwoJet(double *X, double *Xu, double *Xv, double *Xuu, double *Xuv, double *Xvv)
+{
+  // Set the 1-jet
+  this->SetOneJet(X, Xu, Xv);
 
   // Compute the Christoffel symbols of the first kind
   xChristoffelFirst[0][0][0] = Xuu[0] * Xu[0] + Xuu[1] * Xu[1] + Xuu[2] * Xu[2];
