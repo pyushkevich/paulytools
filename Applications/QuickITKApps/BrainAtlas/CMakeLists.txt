@@ -37,7 +37,6 @@ SET(COMMON_LIBS
   vtkGraphics 
   vtkHybrid
   vtkRendering
-  vtkPatented
   ${FLTK_LIBRARY}
 )
 

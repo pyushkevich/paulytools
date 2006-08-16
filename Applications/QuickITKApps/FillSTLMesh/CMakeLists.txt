@@ -10,7 +10,11 @@ ADD_EXECUTABLE(avgmesh AverageMeshes.cxx)
 ADD_EXECUTABLE(identimg IdentifyImage.cxx)
 ADD_EXECUTABLE(scalemesh ScaleMesh.cxx)
 ADD_EXECUTABLE(dumpmeshpoints DumpMeshPoints.cxx)
-ADD_EXECUTABLE(importqvoronoi ImportQVoronoi.cxx)
+
+ADD_EXECUTABLE(importqvoronoi 
+  ImportQVoronoi.cxx
+  ${PAULY_SOURCE_DIR}/Applications/BrainTracer/Code/VTKMeshShortestDistance.cxx
+)
 
 SET(ITK_LIBS
   BasicImaging
@@ -30,7 +34,8 @@ SET(COMMON_LIBS
   vtkRendering
 )
 
-INCLUDE_DIRECTORIES(${MYLIBS_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(${MYLIBS_INCLUDE_DIRS}
+  ${PAULY_SOURCE_DIR}/Applications/BrainTracer/Code)
 
 TARGET_LINK_LIBRARIES(meshdiff ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(avgmesh ${COMMON_LIBS})

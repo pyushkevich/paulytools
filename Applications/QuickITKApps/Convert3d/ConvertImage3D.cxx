@@ -15,11 +15,13 @@
 #include "itkNearestNeighborInterpolateImageFunction.h"
 #include "itkBSplineInterpolateImageFunction.h"
 #include "itkLinearInterpolateImageFunction.h" 
+#include "itkAntiAliasBinaryImageFilter.h"
 #include "itkDiscreteGaussianImageFilter.h"
 #include "itkShiftScaleImageFilter.h"
 #include "itkBinaryThresholdImageFilter.h"
 #include "itkVoxBoCUBImageIOFactory.h"
 #include "itkPovRayDF3ImageIOFactory.h"
+#include "itkImageRegionConstIteratorWithIndex.h"
 
 #include <iostream>
 #include <cctype>
@@ -47,10 +49,12 @@ private:
   // Internal functions
   void ReadImage(const char *file);
   void WriteImage(const char *file);
+  void AntiAliasImage(double iso);
   void CopyImage();
   void ScaleShiftImage(double a, double b);
   void PrintImageInfo(bool flagFullInfo);
   void ThresholdImage(double u1, double u2, double vIn, double vOut);
+  void TrimImage(const RealVector &margin);
   int ProcessCommand(int argc, char *argv[]);
   int ProcessResampleCommand(int argc, char *argv[]);
   int ProcessSmoothCommand(int argc, char *argv[]);
@@ -58,6 +62,9 @@ private:
   // Read vectors, etc from command line
   SizeType ReadSizeVector(char *vec);
   RealVector ReadRealVector(char *vec);
+
+  // Get bounding box of an image
+  void GetBoundingBox(ImageType *image, RealVector &bb0, RealVector &bb1);
 
   // Templated write function
   template<class TOutPixel> void TemplatedWriteImage(const char *file, double xRoundFactor);
@@ -80,6 +87,12 @@ private:
   // Whether SPM extensions are used
   bool m_FlagSPM;
 
+  // Number of iterations for various algorithms
+  size_t m_Iterations;
+
+  // Root mean square error for anti-aliasing algorithm
+  double m_AntiAliasRMS;
+
   // Verbose output stream
   std::ostringstream devnull;
   std::ostream *verbose;
@@ -96,6 +109,8 @@ ImageConverter<TPixel,VDim>
   m_Background = 0.0;
   m_RoundFactor = 0.5;
   m_FlagSPM = false;
+  m_AntiAliasRMS = 0.07;
+  m_Iterations = 0;
 }
 
 template<class TPixel, unsigned int VDim>
@@ -105,9 +120,25 @@ ImageConverter<TPixel, VDim>
 {
   // Get the first command
   string cmd = argv[0];
+
+  // Anti-alias a binary image, turning it into a smoother floating point image;
+  // the argument is the iso-surface value
+  // This command is affected by -iterations and -rms flags
+  if(cmd == "-antialias" || cmd == "-alias")
+    {
+    AntiAliasImage(atof(argv[1]));
+    return 1;
+    }
   
-  if(cmd == "-background")
+  else if(cmd == "-background")
     { m_Background = atof(argv[1]); return 1; }
+
+  // f(x) = (x == xBackground) ? 0 : 1
+  else if(cmd == "-binarize")
+    {
+    ThresholdImage(m_Background, m_Background, 0.0, 1.0);
+    return 0;
+    }
 
   else if(cmd == "-info")
     { PrintImageInfo(false); return 0; }
@@ -117,6 +148,9 @@ ImageConverter<TPixel, VDim>
 
   else if(cmd == "-interpolation")
     { m_Interpolation = argv[1]; return 1; }
+
+  else if(cmd == "-iterations")
+    { m_Iterations = static_cast<size_t>(atoi(argv[1])); return 1; }
 
   else if(cmd == "-noround")
     { m_RoundFactor = 0.0; return 0; }
@@ -128,6 +162,9 @@ ImageConverter<TPixel, VDim>
   // Resample command
   else if(cmd == "-resample")
     return ProcessResampleCommand(argc-1, argv+1);
+
+  else if(cmd == "-rms")
+    { m_AntiAliasRMS = atof(argv[1]); return 1; }
  
   else if(cmd == "-round")
     { m_RoundFactor = 0.5; return 0; }
@@ -193,6 +230,19 @@ ImageConverter<TPixel, VDim>
     double v2 = atof(argv[4]);
     ThresholdImage(u1, u2, v1, v2);
     return 4;
+    }
+
+  // Trim the image (trim background values from the margin)
+  else if(cmd == "-trim")
+    {
+    // Read the size of the wrap region
+    RealVector margin = ReadRealVector(argv[1]);
+
+    // Trim the image accordingly
+    TrimImage(margin);
+
+    // Return the number of arguments consumed
+    return 1;
     }
 
   // Output type specification
@@ -389,30 +439,6 @@ ImageConverter<TPixel, VDim>
   // Push the image into the stack
   m_ImageStack.push_back(image);
 }
-
-template<class TPixel, unsigned int VDim>
-typename ImageConverter<TPixel, VDim>::ImageType::SizeType
-ImageConverter<TPixel, VDim>
-::ReadSizeVector(char *vec)
-{
-  typename ImageType::SizeType sz;
-  
-  // Find all the 'x' in the string
-  char *tok = strtok(vec, "x");
-  for(size_t i = 0; i < VDim; i++)
-    {
-    if(tok == NULL)
-      { cerr << "Invalid size specification: " << vec << endl; throw -1; }      
-    int x = atoi(tok);
-    if(x <= 0)
-      { cerr << "Non-positive size specification: " << vec << endl; throw -1; }      
-    sz[i] = (unsigned long)(x);
-    tok = strtok(NULL, "x");
-    } 
-
-  return sz;
-}
-
 bool str_ends_with(const std::string &s, const std::string &pattern)
 {
   size_t ipos = s.rfind(pattern);
@@ -466,6 +492,59 @@ ImageConverter<TPixel, VDim>
     x[i] *= scale[i];
 
   return x;
+}
+
+template<class TPixel, unsigned int VDim>
+typename ImageConverter<TPixel, VDim>::ImageType::SizeType
+ImageConverter<TPixel, VDim>
+::ReadSizeVector(char *vec)
+{
+  string vecbk = vec;
+  size_t i;
+
+  typename ImageType::SizeType sz;
+
+  // Check if the string ends with %
+  if(str_ends_with(vec, "%"))
+    {
+    // Read floating point size
+    RealVector factor;
+    char *tok = strtok(vec, "x%");
+    for(i = 0; i < VDim && tok != NULL; i++)
+      {
+      factor[i] = atof(tok);
+      if(factor[i] <= 0)
+        { cerr << "Non-positive percent size specification: " << vecbk << endl; throw -1; }      
+      tok = strtok(NULL, "x%");
+      } 
+
+    if(i == 1)
+      factor.fill(factor[0]);
+
+    // Get the size of the image in voxels
+    for(size_t i = 0; i < VDim; i++)
+      sz[i] = (unsigned long)(m_ImageStack.back()->GetBufferedRegion().GetSize(i) * 0.01 * factor[i] + 0.5);
+    }
+  else
+    {
+    // Find all the 'x' in the string
+    char *tok = strtok(vec, "x");
+    for(size_t i = 0; i < VDim; i++)
+      {
+      if(tok == NULL)
+        { cerr << "Invalid size specification: " << vecbk << endl; throw -1; }      
+      int x = atoi(tok);
+      if(x <= 0)
+        { cerr << "Non-positive size specification: " << vecbk << endl; throw -1; }      
+      sz[i] = (unsigned long)(x);
+      tok = strtok(NULL, "x");
+      } 
+    }
+
+  
+  
+
+  return sz;
 }
 
 template<class TPixel, unsigned int VDim>
@@ -541,11 +620,15 @@ ImageConverter<TPixel, VDim>
   typename ImageType::SpacingType spc = input->GetSpacing();
   for(size_t i = 0; i < VDim; i++)
     spc[i] *= input->GetBufferedRegion().GetSize()[i] * 1.0 / sz[i];
+
+  // Get the bounding box of the input image
+  RealVector bb0, bb1;
+  GetBoundingBox(input, bb0, bb1);
   
   // Set the image sizes and spacing.
   fltSample->SetSize(sz);
   fltSample->SetOutputSpacing(spc);
-  fltSample->SetOutputOrigin(input->GetOrigin());
+  fltSample->SetOutputOrigin(bb0.data_block());
 
   // Set the unknown intensity to positive value
   fltSample->SetDefaultPixelValue(m_Background);
@@ -614,8 +697,87 @@ ImageConverter<TPixel, VDim>
   filter->SetInsideValue(vIn);
   filter->SetOutsideValue(vOut);
   filter->Update();
+
   m_ImageStack.pop_back();
   m_ImageStack.push_back(filter->GetOutput());
+}
+
+template<unsigned int VDim>
+void ExpandRegion(itk::ImageRegion<VDim> &region, const itk::Index<VDim> &idx)
+{
+  if(region.GetNumberOfPixels() == 0)
+    {
+    region.SetIndex(idx);
+    for(size_t i = 0; i < VDim; i++)
+      region.SetSize(i, 1);
+    }
+  else {
+    for(size_t i = 0; i < VDim; i++)
+      {
+      if(region.GetIndex(i) > idx[i])
+        {
+        region.SetSize(i, region.GetSize(i) + (region.GetIndex(i) - idx[i]));
+        region.SetIndex(i, idx[i]);
+        }
+      else if(region.GetIndex(i) + region.GetSize(i) <= idx[i])
+        {
+        region.SetSize(i, 1 + idx[i] - region.GetIndex(i));
+        }
+      }
+  }
+}
+
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
+::TrimImage(const RealVector &margin)
+{
+  // Get the input image
+  ImagePointer input = m_ImageStack.back();
+
+  // Debugging info
+  *verbose << "Trimming #" << m_ImageStack.size() << endl;
+  *verbose << "  Wrapping non-background voxels with margin of " << margin << " voxels." << endl;
+
+  // Initialize the bounding box
+  typename ImageType::RegionType bbox;
+
+  // Find the extent of the non-background region of the image
+  itk::ImageRegionConstIteratorWithIndex<ImageType> it(input, input->GetBufferedRegion());
+  for( ; !it.IsAtEnd(); ++it)
+    if(it.Value() != m_Background)
+      ExpandRegion(bbox, it.GetIndex());
+
+  // Pad the region by radius specified by user
+  typename ImageType::SizeType radius;
+  for(size_t i = 0; i < VDim; i++)
+    radius[i] = (int) ceil(margin[i] / input->GetSpacing()[i]);
+  bbox.PadByRadius(radius);
+
+  // Make sure the bounding box is within the contents of the image
+  bbox.Crop(input->GetBufferedRegion());
+
+  // Report the bounding box size
+  *verbose << "  Extracting bounding box " << bbox.GetIndex() << " " << bbox.GetSize() << endl;
+
+  // Chop off the region
+  typedef itk::ExtractImageFilter<ImageType, ImageType> TrimFilter;
+  typename TrimFilter::Pointer fltTrim = TrimFilter::New();
+  fltTrim->SetInput(input);
+  fltTrim->SetExtractionRegion(bbox);
+  fltTrim->Update();
+
+  // Unfortunately we have to adjust the index and origin of the trimmed region
+  RealVector bb0, bb1;
+  GetBoundingBox(fltTrim->GetOutput(), bb0, bb1);
+  typename ImageType::RegionType outreg;
+  outreg.SetSize(fltTrim->GetOutput()->GetBufferedRegion().GetSize());
+  fltTrim->GetOutput()->SetRegions(outreg);
+  fltTrim->GetOutput()->SetOrigin(bb0.data_block());
+
+  // Update the image stack
+  m_ImageStack.pop_back();
+  m_ImageStack.push_back(fltTrim->GetOutput());
 }
 
 template<class TPixel, unsigned int VDim>
@@ -644,8 +806,53 @@ ImageConverter<TPixel, VDim>
   filter->SetScale(a);
   filter->SetShift(b / a);
   filter->Update();
+
   m_ImageStack.pop_back();
   m_ImageStack.push_back(filter->GetOutput());
+}
+
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
+::AntiAliasImage(double xIsoSurface)
+{
+  // Get the input image
+  ImagePointer input = m_ImageStack.back();
+
+  // Report what the filter is doing
+  *verbose << "Anti-aliasing #" << m_ImageStack.size() << endl;
+  *verbose << "  Root Mean Square error: " << m_AntiAliasRMS << endl;
+  *verbose << "  Iterations: "; 
+  if(m_Iterations == 0) 
+    *verbose << "Unlimited" << endl; 
+  else 
+    *verbose << m_Iterations << endl;
+
+  // Apply antialiasing to the image
+  typedef itk::AntiAliasBinaryImageFilter<ImageType,ImageType> AntiFilterType;
+  typename AntiFilterType::Pointer fltAnti = AntiFilterType::New();
+  fltAnti->SetInput(input);
+  fltAnti->SetMaximumRMSError(m_AntiAliasRMS);
+  if(m_Iterations > 0)
+    fltAnti->SetNumberOfIterations(m_Iterations);
+  fltAnti->SetIsoSurfaceValue(xIsoSurface);
+  // fltAnti->AddObserver(itk::ProgressEvent(),command);
+  fltAnti->Update();
+
+  m_ImageStack.pop_back();
+  m_ImageStack.push_back(fltAnti->GetOutput());
+}
+
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
+::GetBoundingBox(ImageType *image, RealVector &bb0, RealVector &bb1)
+{
+  for(size_t i = 0; i < VDim; i++)
+    {
+    bb0[i] = image->GetOrigin()[i];
+    bb1[i] = bb0[i] + image->GetSpacing()[i] * image->GetBufferedRegion().GetSize()[i];
+    }
 }
 
 template<class TPixel, unsigned int VDim>
@@ -694,7 +901,10 @@ ImageConverter<TPixel, VDim>
     cout << endl;
     cout << "  Image Dimensions: " << image->GetBufferedRegion().GetSize() << endl;
     cout << "  Bounding Box: " << "{[" << bb0 << "], [" << bb1 << "]}" << endl;
+    cout << "  BufferedRegion: " << image->GetBufferedRegion() << endl;
+    cout << "  LargestPossibleRegion: " << image->GetLargestPossibleRegion() << endl;
     cout << "  Voxel Size: " << image->GetSpacing() << endl;
+    cout << "  Direction Matrix: " << image->GetDirection() << endl;
     cout << "  Position of Origin in Voxel Units (SPM Origin): " << ospm << endl;
     cout << "  Intensity Range: [" << iMin << ", " << iMax << "]" << endl;
     cout << "  Mean Intensity: " << iMean << endl;

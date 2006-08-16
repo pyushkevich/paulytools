@@ -68,8 +68,15 @@ public:
     delete m_Predecessor;
     }
 
-  /** Compute the shortest paths for given source vertex */
-  void ComputePathsFromSource(unsigned int iSource)
+  /** 
+   * Compute the shortest paths for given source vertex. The first parameter
+   * is the vertex from which distances are to be computed. The second is the
+   * threshold after which distances are no longer computed. For example, if
+   * xMaxDistance is 10 then only those distances that are less or equal to 10
+   * will be computed, and the rest will be set to infinity. This way, we can 
+   * compute the distances a lot faster in certain applications
+   */
+  void ComputePathsFromSource(unsigned int iSource, double xMaxDistance = INFINITE_WEIGHT)
     {
     unsigned int i;
 
@@ -104,6 +111,10 @@ public:
       {
       // Pop off the closest vertex
       unsigned int w = m_Heap->PopMinimum();
+
+      // Check if the weight is above the threshold (all subsequent weights
+      // will also be above the threshold)
+      if(m_Distance[w] > xMaxDistance) break;
 
       // Relax the vertices remaining in the heap
       for(i = m_AdjacencyIndex[w]; i < m_AdjacencyIndex[w+1]; i++)

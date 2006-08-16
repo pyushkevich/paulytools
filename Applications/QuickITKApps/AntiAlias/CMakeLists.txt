@@ -18,8 +18,7 @@ SET(COMMON_LIBS
   vtkIO 
   vtkGraphics 
   vtkHybrid
-  vtkRendering
-  vtkPatented)
+  vtkRendering)
 
 TARGET_LINK_LIBRARIES(aalias ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(lsplit ${COMMON_LIBS})

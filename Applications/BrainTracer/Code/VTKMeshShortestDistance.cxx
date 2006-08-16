@@ -150,9 +150,9 @@ VTKMeshShortestDistance
 
 void 
 VTKMeshShortestDistance
-::ComputeDistances(vtkIdType iStartNode)
+::ComputeDistances(vtkIdType iStartNode, double xMaxDistance)
 {
-  m_ShortestPath->ComputePathsFromSource(iStartNode);
+  m_ShortestPath->ComputePathsFromSource(iStartNode, xMaxDistance);
 }
 
 void 

@@ -5,10 +5,9 @@ ADD_EXECUTABLE(identify3d IdentifyImage.cxx)
 
 SET(COMMON_LIBS
   ITKCommon 
+  ITKNumerics
   ITKBasicFilters 
   ITKIO 
-  ITKNumerics
-  ITKStatistics
   ITKPovRayIO
   ITKVoxBoIO)
 

@@ -17,11 +17,12 @@
 #include <vtkImageMarchingCubes.h>
 #include <vtkImageImport.h>
 #include <itkVTKImageExport.h>
-#include <vtkDecimate.h>
+#include <vtkDecimatePro.h>
 #include <vtkPolyDataConnectivityFilter.h>
 #include <vtkStripper.h>
 #include <vtkCleanPolyData.h>
 #include <vtkSmoothPolyDataFilter.h>
+#include <vtkImageData.h>
 
 #include <iostream>
 
@@ -55,6 +56,9 @@ public:
 
   inline float operator()(short in)
     { return in == 0 ? -m_InsideValue : m_InsideValue; }
+
+  inline bool operator != (const UnaryFunctorBinaryToFloat &otro) const
+    { return this->m_InsideValue != otro.m_InsideValue; }
 private:
   float m_InsideValue;
 };
@@ -172,8 +176,9 @@ protected:
     ConnectITKToVTK(fltExport.GetPointer(),fltImport);
 
     // Compute marching cubes
+    vtkImageData *importPipeEnd = fltImport->GetOutput();
     fltMarching = vtkImageMarchingCubes::New();
-    fltMarching->SetInput(fltImport->GetOutput());
+    fltMarching->SetInput(importPipeEnd);
     fltMarching->ComputeScalarsOff();
     fltMarching->ComputeGradientsOff();
     fltMarching->SetNumberOfContours(1);
@@ -192,7 +197,7 @@ protected:
     meshPipeEnd = fltClean->GetOutput();
 
     // Decimate the data 
-    fltDecimate = vtkDecimate::New();
+    fltDecimate = vtkDecimatePro::New();
     fltDecimate->SetInput(meshPipeEnd);
     fltDecimate->PreserveTopologyOn();
     meshPipeEnd = fltDecimate->GetOutput();
@@ -395,7 +400,7 @@ private:
   vtkPolyDataConnectivityFilter *fltConnect;
   vtkCleanPolyData *fltClean;
   vtkTriangleFilter *fltTriangle;
-  vtkDecimate *fltDecimate;
+  vtkDecimatePro *fltDecimate;
   vtkSmoothPolyDataFilter *fltSmoothMesh;
 
   bool m_InvertInput;

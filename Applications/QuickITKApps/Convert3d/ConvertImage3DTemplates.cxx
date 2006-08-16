@@ -11,6 +11,7 @@
 #include "itkNearestNeighborInterpolateImageFunction.h"
 #include "itkBSplineInterpolateImageFunction.h"
 #include "itkLinearInterpolateImageFunction.h" 
+#include "itkAntiAliasBinaryImageFilter.h"
 #include "itkDiscreteGaussianImageFilter.h"
 #include "itkShiftScaleImageFilter.h"
 #include "itkBinaryThresholdImageFilter.h"
@@ -22,36 +23,38 @@
 typedef itk::Image<double, 3> DoubleImage;
 
 // Double image stuff
-template DoubleImage;
-template itk::ImageFileReader<DoubleImage>;
-template itk::ImageFileWriter<DoubleImage>;
-template itk::ResampleImageFilter<DoubleImage,DoubleImage>;
-template itk::DiscreteGaussianImageFilter<DoubleImage,DoubleImage>;
-template itk::ImageToImageFilter<DoubleImage,DoubleImage>;
-template itk::ShiftScaleImageFilter<DoubleImage,DoubleImage>;
-template itk::FixedArray<double,3>;
-template itk::Array2D<double>;
-template itk::LinearInterpolateImageFunction<DoubleImage, double>;
-template itk::NearestNeighborInterpolateImageFunction<DoubleImage>;
-template itk::BSplineInterpolateImageFunction<DoubleImage>;
-template itk::MetaDataObject<std::string>;
-template itk::Transform<double, 3, 3>;
-template itk::BinaryThresholdImageFilter<DoubleImage, DoubleImage>;
+template class itk::Image<double, 3>;
+template class itk::ImageFileReader<DoubleImage>;
+template class itk::ImageFileWriter<DoubleImage>;
+template class itk::ResampleImageFilter<DoubleImage,DoubleImage>;
+template class itk::AntiAliasBinaryImageFilter<DoubleImage,DoubleImage>;
+template class itk::DiscreteGaussianImageFilter<DoubleImage,DoubleImage>;
+template class itk::ImageToImageFilter<DoubleImage,DoubleImage>;
+template class itk::ShiftScaleImageFilter<DoubleImage,DoubleImage>;
+template class itk::ExtractImageFilter<DoubleImage, DoubleImage>;
+template class itk::FixedArray<double,3>;
+template class itk::Array2D<double>;
+template class itk::LinearInterpolateImageFunction<DoubleImage, double>;
+template class itk::NearestNeighborInterpolateImageFunction<DoubleImage>;
+template class itk::BSplineInterpolateImageFunction<DoubleImage>;
+template class itk::MetaDataObject<std::string>;
+template class itk::Transform<double, 3, 3>;
+template class itk::BinaryThresholdImageFilter<DoubleImage, DoubleImage>;
 
 
 // Stuff associated with writing images
-template itk::Image<unsigned char,3>;
-template itk::Image<char,3>;
-template itk::Image<unsigned short,3>;
-template itk::Image<short,3>;
-template itk::Image<unsigned int,3>;
-template itk::Image<int,3>;
-template itk::Image<float,3>;
+template class itk::Image<unsigned char,3>;
+template class itk::Image<char,3>;
+template class itk::Image<unsigned short,3>;
+template class itk::Image<short,3>;
+template class itk::Image<unsigned int,3>;
+template class itk::Image<int,3>;
+template class itk::Image<float,3>;
 
-template itk::ImageFileWriter<itk::Image<unsigned char,3> >;
-template itk::ImageFileWriter<itk::Image<char,3> >;
-template itk::ImageFileWriter<itk::Image<unsigned short,3> >;
-template itk::ImageFileWriter<itk::Image<short,3> >;
-template itk::ImageFileWriter<itk::Image<unsigned int,3> >;
-template itk::ImageFileWriter<itk::Image<int,3> >;
-template itk::ImageFileWriter<itk::Image<float,3> >;
+template class itk::ImageFileWriter<itk::Image<unsigned char,3> >;
+template class itk::ImageFileWriter<itk::Image<char,3> >;
+template class itk::ImageFileWriter<itk::Image<unsigned short,3> >;
+template class itk::ImageFileWriter<itk::Image<short,3> >;
+template class itk::ImageFileWriter<itk::Image<unsigned int,3> >;
+template class itk::ImageFileWriter<itk::Image<int,3> >;
+template class itk::ImageFileWriter<itk::Image<float,3> >;

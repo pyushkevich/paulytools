@@ -5,16 +5,19 @@
 #include <vtkCellArray.h>
 #include <vtkCellLocator.h>
 #include <vtkPolyData.h>
+#include <vtkPointData.h>
 #include <vtkLODActor.h>
 #include <vtkRenderer.h>
 #include <vtkRenderWindow.h>
 #include <vtkRenderWindowInteractor.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkPolyDataReader.h>
+#include <vtkPolyDataWriter.h>
 #include <vtkBYUReader.h>
 #include <vtkSTLReader.h>
 #include <vtkTriangleFilter.h>
 #include <vtkTriangle.h>
+#include <vtkFloatArray.h>
 
 #include <itkImageFileWriter.h>
 #include <itkImageRegionConstIterator.h>
@@ -425,7 +428,7 @@ int main(int argc, char **argv)
     p1->GetPointData()->AddArray(dist);
     for(size_t q=0; q < d1.size(); q++)
       dist->SetTuple1(q, d1[q]);
-    vtkPolyDataWriter pdw = vtkPolyDataWriter::New();
+    vtkPolyDataWriter *pdw = vtkPolyDataWriter::New();
     pdw->SetFileName(fnMesh.c_str());
     pdw->SetInput(p1);
     pdw->Update();

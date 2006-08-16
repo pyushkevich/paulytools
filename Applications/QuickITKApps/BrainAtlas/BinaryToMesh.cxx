@@ -29,7 +29,7 @@ int usage()
   cout << "   -ea FILE    Export the anti-aliased image as an image file FILE" << endl;
   cout << "   -es FILE    Export the scaled image as an image file FILE" << endl;
   cout << "   -d X.XX     Decimate the mesh by a factor of X.XX (between 0 and 1)" << endl;
-  cout << "   -s NNN      Smooth the mesh for NNN iterations" << endl;
+  cout << "   -sm NNN      Smooth the mesh for NNN iterations" << endl;
   return -1;
 }
 
