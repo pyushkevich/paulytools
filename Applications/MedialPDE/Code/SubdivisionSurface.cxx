@@ -529,7 +529,7 @@ void SubdivisionSurface
 
       // Iterate over the component
       for(size_t k = 0; k < nComp; k++)
-        xdst[i+k] = w * xsrc[j+k];
+        xdst[i+k] += w * xsrc[j+k];
       }
     }
 }

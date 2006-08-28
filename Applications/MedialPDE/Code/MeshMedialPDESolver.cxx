@@ -676,7 +676,6 @@ MeshMedialPDESolver
 {
   size_t i;
 
-
   // Compute the mesh geometry
   ComputeMeshGeometry(flagGradient);
 
@@ -686,8 +685,8 @@ MeshMedialPDESolver
   for(i = 0; i < topology->nVertices; i++)
     xSoln[i] = xInitSoln == NULL ? xAtoms[i].F : xInitSoln[i];
 
-  // Post-solution RHS
-  double xPostSolveRHS;
+  // Flag indicating that Newton's method converged (without tricks)
+  bool flagConverge = false;
 
   // Run for up to 50 iterations
   for(i = 0; i < 20; i++)
@@ -697,21 +696,12 @@ MeshMedialPDESolver
 
     // Now, fill in the right hand side 
     double xStartingRHS = FillNewtonRHS(xSoln.data_block());
-    vnl_vector<double> xStartingSoln = xSoln;
-
-    // Compute the gradient at the initial point
-    Vec xStartingGrad = - A.MultiplyTransposeByVector(xRHS);
-
-    // Check if the right hand side is close enough to zero that we can terminate
-    // cout << "Iteration: " << i << ", error: " << xRHS.inf_norm() << endl;
-    cout << " IT[" << i << "]";
-    cout << " " << xStartingRHS << " ";
 
     // If the right hand side is close enough to zero, we can exit
-    if(xRHS.inf_norm() < 1.0e-13) 
+    if(xRHS.inf_norm() < 1.0e-10) 
       {
-      // Print exclamation to indicate solution
-      cout << "!";
+      // Set the converge flag
+      flagConverge = true;
 
       // Exit the loop
       break;
@@ -726,117 +716,16 @@ MeshMedialPDESolver
     xPardiso.NumericFactorization(A.GetSparseData());
     xPardiso.Solve(xRHS.data_block(), xEpsilon.data_block());
 
-    this->ComputeJacobianConditionNumber();
-
-    // Print "+" to indicate a solver step
-    cout << "+";
-
     // Add epsilon to the current guess
-    xSoln = xStartingSoln + xEpsilon;
-
-    // Compute the right hand side after the solution
-    xPostSolveRHS = FillNewtonRHS(xSoln.data_block());
-    cout << " " << xPostSolveRHS << " ";
- 
-    // If calling Solve() caused the right hand side to increase, we backtrack
-    size_t k = 0; double lambda = 0.5;
-
-    // while(xPostSolveRHS > xStartingRHS && k++ < 20 )
-    while(lambda > 0.01 &&
-      xPostSolveRHS - xStartingRHS > 0.01 * dot_product(xStartingGrad, xSoln - xStartingSoln))
-      {
-      // Compute the step increase
-      // double r = xPostSolveRHS / xStartingRHS;
-      // double t = (sqrt(1 + 6 * r) - 1) / (3 * r);
-
-      // Go back along eps
-      xSoln = xStartingSoln + lambda * xEpsilon;
-
-      // Compute the right hand side again
-      xPostSolveRHS = FillNewtonRHS(xSoln.data_block());
-
-      // Print "-" to indicate a backtracking step
-      // cout << "-";
-      // cout << " t=" << lambda << " ";
-      // cout << " " << xPostSolveRHS - xStartingRHS << " ";
-
-      // Scale lambda
-      lambda *= 0.5;
-      }
-
-    cout << "BT: " << xPostSolveRHS << " ";
-
-    if(xPostSolveRHS > xStartingRHS)
-      {
-      cout << "GD: ";
-
-      // Set up the optimizer with target functions
-      gsl_multimin_function_fdf my_func;
-      my_func.f = &MeshMedialPDESolver::gsl_f;
-      my_func.df = &MeshMedialPDESolver::gsl_df;
-      my_func.fdf = &MeshMedialPDESolver::gsl_fdf;
-      my_func.n = topology->nVertices;
-      my_func.params = this;
-
-      // Create the initial solution
-      gsl_vector *my_start = gsl_vector_alloc(my_func.n);
-      memcpy(my_start->data, xStartingSoln.data_block(), sizeof(double) * my_func.n);
-
-      // Create conjugate gradient minimizer
-      gsl_multimin_fdfminimizer *my_min = 
-        gsl_multimin_fdfminimizer_alloc( gsl_multimin_fdfminimizer_conjugate_pr, my_func.n);
-
-      // Set up the parameters of the optimizer
-      gsl_multimin_fdfminimizer_set(my_min, &my_func, my_start, 0.1, 1e-7);
-
-      // Iterate until we converge
-      size_t w = 0;
-      while(0 == gsl_multimin_fdfminimizer_iterate(my_min) && w++ < 3000)
-        {
-        }
-
-      // Report
-      cout << gsl_multimin_fdfminimizer_minimum(my_min) << flush;
-
-      // Get the best solution
-      xSoln.copy_in(gsl_multimin_fdfminimizer_x(my_min)->data);
-      xPostSolveRHS = FillNewtonRHS(xSoln.data_block());
-      }
-
-    // If calling Solve() caused the right hand side to increase, we backtrack
-    // size_t k = 0; double lambda = 0.5;
-
-    // while(xPostSolveRHS > xStartingRHS && k++ < 20 )
-    /* 
-    while(xPostSolveRHS - xStartingRHS > 0.01 * dot_product(xStartingGrad, xSoln - xStartingSoln))
-      {
-      // Compute the step increase
-      // double r = xPostSolveRHS / xStartingRHS;
-      // double t = (sqrt(1 + 6 * r) - 1) / (3 * r);
-
-      // Go back along eps
-      xSoln = xStartingSoln + lambda * xEpsilon;
-
-      // Compute the right hand side again
-      xPostSolveRHS = FillNewtonRHS(xSoln.data_block());
-
-      // Print "-" to indicate a backtracking step
-      cout << "-";
-      cout << " t=" << lambda << " ";
-      cout << " " << xPostSolveRHS - xStartingRHS << " ";
-
-      // Scale lambda
-      lambda *= 0.9;
-      }
-    */
-
-    // cout << "Epsilon: " << xEpsilon << endl;
-    // cout << "Solution: " << xSoln << endl;
-    cout << endl;
+    xSoln += xEpsilon;
     }
 
-  // New line
-  cout << endl;
+  // If the iteration failed to converge, we may need to backtrack
+  if(!flagConverge)
+    {
+    cout << "{Conv. Fail. " << xRHS.inf_norm() << "}" << endl;
+    throw MedialModelException("Convergence Failure");
+    }
 
   // If Newton fails to converge revert to gradient descent
   /*

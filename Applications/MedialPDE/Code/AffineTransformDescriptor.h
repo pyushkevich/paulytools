@@ -54,17 +54,17 @@ public:
 
   /** 
    * Apply the transform to the coefficients. The rule is:
-   *   C'[ij] = C[ij] + b         if i = j = 0
-   *   C'[ij] = A * C[ij]         o/w
+   *   C'[ij] = A * (C[ij]-c) + b + c        if i = j = 0
+   *   C'[ij] = A * C[ij]                    o/w
    */
   Vec ApplyAffineTransform(const Vec &C, const Mat &A, const Vec &b, const Vec &ctr) const
     {
     Vec CPrime = C;
 
-    // For the first coefficient, add the b vector
-    CPrime[0] += b[0]; CPrime[1] += b[1]; CPrime[2] += b[2];
+    // The first coefficient undergoes the complete affine transform
+    CPrime.update(A * (C.extract(3, 0) - ctr) + ctr + b, 0);
 
-    // For the rest of the coefficients, multiply by A
+    // For the rest of the coefficients, we only multiply by A
     for(size_t i = 4; i < C.size(); i+=4)
       CPrime.update(A * C.extract(3, i), i);
 
@@ -73,14 +73,7 @@ public:
 
   /**
    * Compute direction in coefficient space corresponding to a direction in
-   * the affine transform space. By differentiating the expression above we
-   * have:
-   *
-   *   dC'[ijk]/db[a] = a         if i=j=0 and a=k
-   *                  = 0         o/w
-   *
-   *   dC'[ijk]/dA[ab] = C[ijb]   if a=k
-   *                   = 0        o/w
+   * the affine transform space. 
    */
   Vec ApplyJacobianInParameters(
     const Vec &C, const Mat &dA, const Vec &db, const Vec &ctr) const
@@ -88,7 +81,7 @@ public:
     Vec dCPrime(C.size(), 0.0);
 
     // Apply the variation in the first coefficient
-    dCPrime[0] = db[0]; dCPrime[1] = db[1]; dCPrime[2] = db[2];
+    dCPrime.update(dA * (C.extract(3, 0) - ctr) + db, 0);
 
     // Apply the variation in the rest of the coefficients
     for(size_t i = 4; i < C.size(); i+=4)
@@ -108,7 +101,7 @@ public:
     Vec dCPrime = dC;
 
     // Apply the variation in the affine-transformed coefficients
-    for(size_t i = 4; i < dC.size(); i+=4)
+    for(size_t i = 0; i < dC.size(); i+=4)
       dCPrime.update(A * dC.extract(3, i), i);
 
     return dCPrime;

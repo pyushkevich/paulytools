@@ -163,6 +163,9 @@ int TestGradientComputation(
   MedialAtom *A1 = new MedialAtom[nAtoms];
   MedialAtom *A2 = new MedialAtom[nAtoms];
 
+  // Create a hint vector
+  GenericMedialModel::Vec xHint = xSolver->GetHintArray();
+
   // Copy the current solution into the first array
   std::copy(xSolver->GetAtomArray(), xSolver->GetAtomArray() + nAtoms, A0);
 
@@ -181,12 +184,12 @@ int TestGradientComputation(
     
     // Solve for the forward difference
     xSolver->SetCoefficientArray(xMapping->Apply(C0, P0 + eps * xVariations[iVar]));
-    tCentral.Start(); xSolver->ComputeAtoms(A0); tCentral.Stop();
+    tCentral.Start(); xSolver->ComputeAtoms(xHint.data_block()); tCentral.Stop();
     std::copy(xSolver->GetAtomArray(), xSolver->GetAtomArray() + nAtoms, A1);
 
     // Solve for the backward difference
     xSolver->SetCoefficientArray(xMapping->Apply(C0, P0 - eps * xVariations[iVar]));
-    tCentral.Start(); xSolver->ComputeAtoms(A0); tCentral.Stop();
+    tCentral.Start(); xSolver->ComputeAtoms(xHint.data_block()); tCentral.Stop();
     std::copy(xSolver->GetAtomArray(), xSolver->GetAtomArray() + nAtoms, A2);
 
     // Define an accumulator for all atom-wise errors

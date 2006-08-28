@@ -1175,6 +1175,7 @@ MedialOptimizationProblem
 
   flagLastEvalAvailable = false;
   flagPhiGuessAvailable = false;
+  flagGradientComputed = false;
 
   // Save the initial coefficients currently in the model
   xInitialCoefficients = xMedialModel->GetCoefficientArray();
@@ -1228,6 +1229,9 @@ bool MedialOptimizationProblem::SolvePDE(double *xEvalPoint)
   if(flagLastEvalAvailable && X == xLastEvalPoint)
     return false;
 
+  // Turn of the last eval flag in case that exception is thrown below
+  flagLastEvalAvailable = false;
+
   // Solve the equation
   xSolveTimer.Start();
 
@@ -1235,7 +1239,10 @@ bool MedialOptimizationProblem::SolvePDE(double *xEvalPoint)
   xMedialModel->SetCoefficientArray(xCoeff->Apply(xInitialCoefficients, X));
 
   // Solve the PDE using the last phi field if we have it
-  xMedialModel->ComputeAtoms();
+  if(flagGradientComputed)
+    xMedialModel->ComputeAtoms(xLastGradHint.data_block());
+  else
+    xMedialModel->ComputeAtoms();
 
   // Stop timing
   xSolveTimer.Stop();
@@ -1251,19 +1258,33 @@ bool MedialOptimizationProblem::SolvePDE(double *xEvalPoint)
 double MedialOptimizationProblem::Evaluate(double *xEvalPoint)
 {
   // Solve the PDE - if there is no update, return the last solution value
-  if( SolvePDE(xEvalPoint) )
+  double t0 = clock();
+
+  bool flagUpdate = SolvePDE(xEvalPoint);
+
+  cout << "[SLV: " << (clock() - t0)/CLOCKS_PER_SEC << " s] " << flush;
+
+  // If the solution changed compute the terms
+  if(flagUpdate)
     {
+    t0 = clock();
+
     // Create a solution data object representing current solution
     SolutionData S0(xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
 
     // Compute the solution for each term
     xLastSolutionValue = 0.0;
+    xLastTermValues.set_size(xTerms.size());
+
     for(size_t iTerm = 0; iTerm < xTerms.size(); iTerm++)
       { 
       xTimers[iTerm].Start();
-      xLastSolutionValue += xTerms[iTerm]->ComputeEnergy(&S0) * xWeights[iTerm]; 
+      xLastTermValues[iTerm] = xTerms[iTerm]->ComputeEnergy(&S0);
+      xLastSolutionValue += xLastTermValues[iTerm] * xWeights[iTerm]; 
       xTimers[iTerm].Stop();
       }
+
+    cout << "[MAP: " << (clock() - t0)/CLOCKS_PER_SEC << " s] " << endl;
     }
 
   // Return the result
@@ -1333,6 +1354,9 @@ MedialOptimizationProblem
   MedialAtom *a0 = new MedialAtom[n];
   std::copy(xMedialModel->GetAtomArray(), xMedialModel->GetAtomArray()+n, a0);
 
+  // Get a hint array to improve computation of c.d. gradients
+  GenericMedialModel::Vec xHint = xMedialModel->GetHintArray(); 
+
   // Create a timer for this procedure
   CodeTimer tCDG;
 
@@ -1345,7 +1369,7 @@ MedialOptimizationProblem
     // Compute the forward differences
     xLastEvalPoint[iCoeff] = c + eps;
     xMedialModel->SetCoefficientArray(xCoeff->Apply(xInitialCoefficients, xLastEvalPoint));
-    xMedialModel->ComputeAtoms(a0);
+    xMedialModel->ComputeAtoms(xHint.data_block());
 
     // Save the atoms
     std::copy(xMedialModel->GetAtomArray(), xMedialModel->GetAtomArray()+n, a1);
@@ -1353,7 +1377,7 @@ MedialOptimizationProblem
     // Compute the backward differences
     xLastEvalPoint[iCoeff] = c - eps;
     xMedialModel->SetCoefficientArray(xCoeff->Apply(xInitialCoefficients, xLastEvalPoint));
-    xMedialModel->ComputeAtoms(a0);
+    xMedialModel->ComputeAtoms(xHint.data_block());
 
     // Save the atoms
     std::copy(xMedialModel->GetAtomArray(), xMedialModel->GetAtomArray()+n, a2);
@@ -1387,8 +1411,7 @@ MedialOptimizationProblem
   // Solve the PDE
   double t0 = clock();
   SolvePDE(xEvalPoint);
-  cout << " [SLV: " << (clock() - t0) / CLOCKS_PER_SEC << " ms] " << flush;
-
+  cout << " [SLV: " << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
 
   // Compute the gradient
   xSolveGradTimer.Start();
@@ -1408,7 +1431,9 @@ MedialOptimizationProblem
     }
 
   // Now, compute the actual gradient
+  t0 = clock();
   xMedialModel->ComputeAtomGradient(dAtomArray); 
+  cout << " [GRAD: " << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
   
   // Stop the timer
   xSolveGradTimer.Stop();
@@ -1419,14 +1444,16 @@ MedialOptimizationProblem
   // Compute the value at the solution and init gradient computation
   t0 = clock();
   xLastSolutionValue = 0.0;
+  xLastTermValues.set_size(xTerms.size());
+
   for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
     {
     xTimers[iTerm].Start();
-    xLastSolutionValue += 
-      xWeights[iTerm] * xTerms[iTerm]->BeginGradientComputation(&S);
+    xLastTermValues[iTerm] = xTerms[iTerm]->BeginGradientComputation(&S);
+    xLastSolutionValue += xWeights[iTerm] * xLastTermValues[iTerm];
     xTimers[iTerm].Stop();
     }
-  cout << " [" << (clock() - t0) / CLOCKS_PER_SEC << " ms] " << flush;
+  cout << " [" << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
     
   // Repeat for each coefficient
   t0 = clock();
@@ -1448,7 +1475,7 @@ MedialOptimizationProblem
     // Dump the gradient
     // cout << iCoeff << "; " << XGradient[iCoeff] << endl;
     }
-  cout << " [" << (clock() - t0) / CLOCKS_PER_SEC << " ms] " << flush;
+  cout << " [" << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
 
   // Clear up gradient computation
   for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
@@ -1457,9 +1484,19 @@ MedialOptimizationProblem
   // Increment the evaluation counter
   evaluationCost += nCoeff;
 
-  cout << " [[" << (clock() - t00) / CLOCKS_PER_SEC << " ms]] " << flush;
+  cout << " [[" << (clock() - t00) / CLOCKS_PER_SEC << " s]] " << flush;
 
   cout << endl;
+
+  // Store the information about the gradient
+  xLastGradPoint = vnl_vector<double>(xEvalPoint, nCoeff);
+  xLastGradient = vnl_vector<double>(xGradient, nCoeff);
+  xLastGradHint = xMedialModel->GetHintArray();
+  flagGradientComputed = true;
+
+  // Store the information about the atoms, to guide PDE solving afterwards
+  
+
   // Return the solution value
   return xLastSolutionValue;
 }
@@ -1479,8 +1516,11 @@ void MedialOptimizationProblem::PrintReport(ostream &sout)
     {
     sout << "Term " << iTerm << endl;
     xTerms[iTerm]->PrintReport(sout);
-    sout << "    elapsed time: " << xTimers[iTerm].Read() << endl;
-    sout << "    gradient time: " << xGradTimers[iTerm].Read() << endl;
+    sout << "  Contribution: " << 
+      xWeights[iTerm] << " * " << xLastTermValues[iTerm] <<
+      " = " << xWeights[iTerm] * xLastTermValues[iTerm] << endl;
+    sout << "  Elapsed time: " << xTimers[iTerm].Read() << endl;
+    sout << "  Gradient time: " << xGradTimers[iTerm].Read() << endl;
     }
 }
 

@@ -7,6 +7,7 @@
 #include "SubdivisionSurface.h"
 #include "SubdivisionMedialModel.h"
 #include "SubdivisionSurfaceMedialIterationContext.h"
+#include "ScriptInterface.h"
 
 #include <string>
 #include <iostream>
@@ -173,6 +174,24 @@ int TestSubdivisionPDE(const char *objMesh)
   return iTest;
 }
 
+int TestModelSubdivision(const char *file)
+{
+  medialpde::SubdivisionMPDE mp1(file), mp2(file);
+  mp2.SubdivideMeshes(1,0);
+
+  GenericMedialModel *mm1 = mp1.GetMedialModel();
+  GenericMedialModel *mm2 = mp2.GetMedialModel();
+
+  double maxerr = 0.0;
+  for(size_t i = 0; i < mm1->GetNumberOfAtoms(); i++)
+    {
+    double del = (mm1->GetAtomArray()[i].X - mm2->GetAtomArray()[i].X).magnitude();
+    if(del > maxerr) maxerr = del;
+    }
+
+  return (maxerr > 1.0e-10);
+}
+
 
 int usage()
 {
@@ -182,6 +201,7 @@ int usage()
   cout << "    SUBSURF1 XX.obj            Test subdivision with OBJ mesh" << endl;
   cout << "    SUBSURF2 XX.obj            Test subdivision PDE" << endl;
   cout << "    SPARSEMAT                  Test sparse matrix routines" << endl;
+  cout << "    MODELSUB                   Test model subdivistion" << endl;
   cout << endl;
   return -1;
 }
@@ -198,6 +218,8 @@ int main(int argc, char *argv[])
     return TestSubdivisionPDE(argv[2]);
   else if(0 == strcmp(argv[1], "SPARSEMAT"))
     return TestSparseMatrix();
+  else if(0 == strcmp(argv[1], "MODELSUB"))
+    return TestModelSubdivision(argv[2]);
   else 
     return usage();
 }

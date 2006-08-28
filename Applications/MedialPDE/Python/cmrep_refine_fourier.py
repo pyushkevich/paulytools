@@ -18,10 +18,14 @@ parser.add_option("-a", "--atoms",
     nargs=2, type="int", metavar="NU NV",
     help="Change the number of atoms in U and V")
 
-parser.add_option("-e", "--edges", metavar="N",
-    type=int,
+parser.add_option("-e", "--edges", 
+    type=int, nargs=2, metavar="NU NV", default=(0, 0),
     help='''Number of additional atoms inserted into the grid
-         near the edges of the cm-rep''')
+         near the edges of the medial sheet (2 is a good amount) ''')
+
+parser.add_option("-f", "--edgefactor",
+    type=float, metavar="X", default=0.5,
+    help='''Factor by which to subdivide the atom grid near edges''')
 
 # Process the command line options
 (options,args) = parser.parse_args()
@@ -34,14 +38,18 @@ if(len(args) <> 2):
 cmrep = CartesianMPDE(args[0])
 
 # Change the number of Fourier coefficients if requested
-if(parser.has_option("-c")):
-  (nu, nv) = parser.get_option("-c")
+if options.coefficients:
+  (nu, nv) = options.coefficients
+  print "Setting number of coefficients to", nu, ",", nv
   cmrep.SetNumberOfCoefficients(nu, nv)
 
 # Change the grid size if requested
-if(parser.has_option("-a")):
-  (nu, nv) = parser.get_option("-a")
-  cmrep.SetGridSize(nu, nv)
+if options.atoms:
+  (nu, nv) = options.atoms
+  (eu, ev) = options.edges
+  efac = options.edgefactor
+  print "Setting number of atoms to", nu + eu * 2, ",", nv + ev * 2
+  cmrep.SetGridSize(nu, nv, eu, ev, efac)
 
 # Save the cmrep
-cmrep.SaveToFile(args[1])
+cmrep.SaveToParameterFile(args[1])

@@ -127,8 +127,9 @@ void CartesianMedialModelIO
 ::WriteModel(CartesianMedialModel *model, const char *file)
 {
   // This code really needs to be unified!
-  Registry R(file);
+  Registry R;
   model->WriteToRegistry(R);
+  R.WriteToFile(file);
 }
 
 vtkPolyData *
@@ -234,7 +235,7 @@ SubdivisionMedialModelIO
   // should be in the same directory and name as the file, but with a different
   // extension. So basically, we need to strip the extension on the file
   std::string fnreg(file);
-  std::string fnbase = itksys::SystemTools::GetFilenameWithoutExtension(fnreg);
+  std::string fnbase = itksys::SystemTools::GetFilenameWithoutLastExtension(fnreg);
   std::string fnmesh = fnbase + ".vtk";
 
   // Create a registry to save the data

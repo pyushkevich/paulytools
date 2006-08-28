@@ -32,16 +32,12 @@ opts,args = parser.parse_args()
 if(len(args) <> 2):
   parser.error("incorrect number of positional arguments")
 
-# Make sure that the options have been passed in
-if(not parser.has_option("-c") and not parser.has_option("-a")):
-  parser.error("please use either -c or -a option!")
-
 # Load a cmrep from file
 cmrep = SubdivisionMPDE(args[0])
 
 # Subdivide the cm-rep as requested
-# cmrep.SubdivideMeshes(opts['c'], opts['a'])
-cmrep.SubdivideMeshes(0, 1)
+print "Subdividing coeffs by", opts.c , "levels; atoms by", opts.a, "levels"
+cmrep.SubdivideMeshes(opts.c, opts.a)
 
 # Save the cm-rep to a new file
 cmrep.SaveToParameterFile(args[1])

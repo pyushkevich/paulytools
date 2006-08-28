@@ -73,6 +73,7 @@ SET(PDE_LIBS
   vtkIO
   ${LAPACK_OR_MKL_LIBS}
   ${GSL_LIBRARY} ${GSL_CBLAS_LIBRARY} 
+  toms611
   )
 
 # Create a common library
@@ -115,24 +116,31 @@ SET(MPDE_TEST_OBJMESH ${MPDE_TESTDATA_DIR}/gr1a_gimpel_CN_snap_left_49pt.obj)
 SET(MPDE_TEST_SUBMREP ${MPDE_TESTDATA_DIR}/gr1a_gimpel_CN_snap_left_49pt.cmrep)
 
 # Test various derivative computations
+ADD_TEST(TestAffineTransform testpde AFFINE ${MPDE_TEST_CMREP})
 ADD_TEST(TestVolumeComputation testpde VOLUME1 ${MPDE_TEST_CMREP})
 ADD_TEST(TestDerivativesNoImage testpde DERIV1 ${MPDE_TEST_CMREP})
 ADD_TEST(TestDerivativesWithImage testpde DERIV2 ${MPDE_TEST_CMREP})
 ADD_TEST(TestBasisFunctionVariation testpde DERIV3 ${MPDE_TEST_CMREP})
 ADD_TEST(TestDifferentialGeometry testpde DERIV4 ${MPDE_TEST_CMREP})
 ADD_TEST(TestSparseMatrix testsub SPARSEMAT)
+ADD_TEST(TestSubdivisionAffineTransform testpde AFFINE ${MPDE_TEST_SUBMREP})
 ADD_TEST(TestSubdivisionSurface testsub SUBSURF1 ${MPDE_TEST_OBJMESH})
 ADD_TEST(TestSubdivisionPDE testsub SUBSURF2 ${MPDE_TEST_OBJMESH})
 ADD_TEST(TestSubSurfVolumeComputation testpde VOLUME1 ${MPDE_TEST_SUBMREP})
 ADD_TEST(TestSubSurfDerivativesNoImage testpde DERIV1 ${MPDE_TEST_SUBMREP})
 ADD_TEST(TestSubSurfDerivativesWithImage testpde DERIV2 ${MPDE_TEST_SUBMREP})
 ADD_TEST(TestWedgeVolume testpde WEDGE)
+ADD_TEST(TestModelSubdivision testsub MODELSUB ${MPDE_TEST_SUBMREP})
+
 
 
 # Copy the script files
 SET(SCRIPT_FILES 
+  cmrep_align_moments.py
+  cmrep_build_images.py
   cmrep_common.py
   cmrep_fitbinary.py
+  cmrep_getmesh.py
   cmrep_refine_fourier.py
   cmrep_render.py
   cmrep_subdivide.py

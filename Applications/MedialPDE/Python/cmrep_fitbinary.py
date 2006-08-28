@@ -1,9 +1,7 @@
 #!/usr/bin/python
 
 # Import the symbols from the MPDE library
-from medialpde import *
-import sys
-import os
+from cmrep_common import *
 
 # Usage stuff
 def usage():
@@ -14,24 +12,21 @@ def usage():
   os._exit(-1)
 
 # Check that the parameters are accurate
-if(len(sys.argv) <> 4):
+if(len(sys.argv) <> 6):
   usage()
 
 # Get the filenames
 fnTemplate, fnImage, fnOutput, fnParams = sys.argv[1:5]
-nSteps = int(sys[5])
+nSteps = int(sys.argv[5])
 
 # Load the template from file
-cmrep = MedialPDE()
-cmrep.LoadFromFile(fnTemplate)
+cmrep = MedialPDE(fnTemplate)
 
 # Load the image and its gradients from file
-img = FloatImage()
-img.LoadFromPath(fnImage)
-img.SetOutsideValue(-1)
+img = LoadImageJet(fnImage)
 
 # Run the optimization
-cmrep.RunOptimization(img, fnParams, nSteps);
+cmrep.RunOptimization(img, nSteps, fnParams);
 
 # Save the result
-cmrep.SaveToFile(fnOutput)
+cmrep.SaveToParameterFile(fnOutput)

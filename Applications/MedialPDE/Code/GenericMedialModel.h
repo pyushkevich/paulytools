@@ -94,11 +94,20 @@ public:
   virtual void SetCoefficientArray(const Vec &xData) = 0;
 
   /** 
-   * Compute the atoms from given a set of coefficients. In PDE-based models this step
-   * involves solving the PDE. The optional parameter is an array of atoms to be used as
-   * the initialization (previous solution, nearby solution).
+   * Get 'hint' for computing atoms near the current solution. The 'hint' is
+   * a vector specific to the individual model, and for some models there may
+   * not be any hints. The hints are relevant for PDE-based models, where the
+   * hint vector is the solution of the PDE. By initializing the solver with
+   * this solution, solutions at nearby points can be computed easily
    */
-  virtual void ComputeAtoms(MedialAtom *xInitialSolution = NULL) = 0;
+  virtual Vec GetHintArray() const = 0;
+
+  /** 
+   * Compute the atoms from given a set of coefficients. In PDE-based models
+   * this step involves solving the PDE. The optional parameter is the hint
+   * array that may increase the efficiency of the computation
+   */
+  virtual void ComputeAtoms(const double *xHint = NULL) = 0;
 
   /**
    * This method is called before multiple calls to the ComputeJet routine. Given a  

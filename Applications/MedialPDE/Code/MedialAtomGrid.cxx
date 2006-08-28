@@ -512,7 +512,7 @@ double ComputeMedialInteralWeights(
     }
 
   // Return the total area
-  cout << "TOTAL VOLUME " << xTotalVolume << endl;
+  // cout << "TOTAL VOLUME " << xTotalVolume << endl;
   return xTotalVolume; 
 }
 

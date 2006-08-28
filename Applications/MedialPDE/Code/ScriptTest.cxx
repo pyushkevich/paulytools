@@ -797,6 +797,82 @@ int TestDerivativesWithImage(const char *fnMPDE)
   return iReturn;
 }
 
+int TestAffineTransform(const char *fnMPDE)
+{
+  // Load the model from file
+  MedialPDE mp(fnMPDE);
+  GenericMedialModel *model = mp.GetMedialModel();
+  vnl_vector<double> hint = model->GetHintArray();
+
+  // Generate a random affine transform. Because the PDE solution may change
+  // under shear and non-uniform scaling, we stick just to the similarity
+  // transform (A is an orthogonal matrix)
+  AffineTransformDescriptor::Vec b(3, 0.0), c(3, 0.0);
+  AffineTransformDescriptor::Mat A(3, 3, 0.0);
+
+  // Generate random vectors V1, V2 for making the matrix A, plus b and c
+  SMLVec3d v1, v2;
+  vnl_random rnd;
+  for(size_t i = 0; i < 3; i++)
+    {
+    b[i] = rnd.drand32(-1.0, 1.0);
+    c[i] = rnd.drand32(-1.0, 1.0);
+    v1[i] = rnd.drand32(-1.0, 1.0);
+    v2[i] = rnd.drand32(-1.0, 1.0);
+    }
+
+  // Create the orthogonal matrix A
+  A.set_column(0, v1.normalize());
+  A.set_column(1, vnl_cross_3d(A.get_column(0), v2).normalize());
+  A.set_column(2, vnl_cross_3d(A.get_column(0), A.get_column(1)).normalize());
+  double s = rnd.drand32(0.0, 1.0); A *= s;
+
+  // Print the transform
+  cout << "Affine Matrix: " << endl << A << endl;
+  cout << "A.t() * A: " << endl << A.transpose() * A << endl;
+  cout << "Translation: " << b << endl;
+  cout << "Center of Rotation: " << c << endl;
+
+  // Get a list of interior points
+  vector<SMLVec3d> X1;
+
+  MedialInternalPointIterator it = model->GetInternalPointIterator(6);
+  for( ; !it.IsAtEnd(); ++it)
+    {
+    SMLVec3d x = GetInternalPoint(it, model->GetAtomArray());
+    SMLVec3d Ax = (A * (x - c)) + b + c;
+    X1.push_back(Ax); 
+    }
+
+  cout << "Obtained initial point data" << endl;
+
+  // Get the coefficients of the model
+  vnl_vector<double> xCoeff = model->GetCoefficientArray();
+
+  // Scale the hint by the square of s (hint = phi)
+  hint *= s * s;
+
+  // Apply the transform to the model
+  const AffineTransformDescriptor *adt = model->GetAffineTransformDescriptor();
+  model->SetCoefficientArray(adt->ApplyAffineTransform(xCoeff, A, b, c));
+  model->ComputeAtoms(hint.data_block());
+
+  // Max difference accumulator
+  double maxdiff = 0.0;
+
+  size_t q = 0;
+  for(it = model->GetInternalPointIterator(6); !it.IsAtEnd(); ++it, ++q)
+    {
+    SMLVec3d x = GetInternalPoint(it, model->GetAtomArray());
+    double diff = (x - X1[q]).two_norm();
+    maxdiff = std::max(maxdiff, diff);
+    }
+
+  // Report
+  cout << "Maximum difference in Affine Transform computations: " << maxdiff << endl;
+  return (maxdiff > 1.0e-6);
+}
+
 
 int usage()
 {
@@ -807,6 +883,7 @@ int usage()
   cout << "    DERIV2 XX.mpde             Check gradient computation in image match terms." << endl;
   cout << "    DERIV3 XX.mpde             Check variations on basis functions." << endl;
   cout << "    DERIV4 XX.mpde             Test diff. geom. operators." << endl;
+  cout << "    AFFINE XX.mpde             Test affine transform computation." << endl;
   cout << endl;
   return -1;
 }
@@ -831,6 +908,8 @@ int main(int argc, char *argv[])
     return TestWedgeVolume();
   else if(0 == strcmp(argv[1], "VOLUME1") && argc > 2)
     return TestVolumeComputation(argv[2]);
+  else if(0 == strcmp(argv[1], "AFFINE") && argc > 2)
+    return TestAffineTransform(argv[2]);
   else 
     return usage();
 }

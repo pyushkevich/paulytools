@@ -246,6 +246,8 @@ protected:
   void ExportIterationToVTK(unsigned int iIter);
   void ConjugateGradientOptimization(MedialOptimizationProblem *xProblem, 
     vnl_vector<double> &xSolution, unsigned int nSteps, double xStep);
+  void ConjugateGradientOptimizationTOMS(MedialOptimizationProblem *xProblem, 
+    vnl_vector<double> &xSolution, unsigned int nSteps, double xStep);
   friend void RenderMedialPDE(MedialPDE *);
   friend class MedialPCA;
 
@@ -288,6 +290,12 @@ public:
 
   /** Set the number of Fourier coefficients */
   void SetNumberOfCoefficients(unsigned int m, unsigned int n);
+
+  /** Set the size of the evaluation grid */
+  void SetGridSize(size_t nu, size_t nv);
+
+  /** Set the size of the evaluation grid with special sampling along edges */
+  void SetGridSize(size_t nu, size_t nv, size_t eu, size_t ev, double eFactor = 0.5);
 
   /** 
    * This method takes an image and an m-rep and samples the image using the 

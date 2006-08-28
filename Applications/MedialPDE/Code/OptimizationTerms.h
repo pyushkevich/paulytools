@@ -435,6 +435,9 @@ private:
   // Value of the last match
   double xLastSolutionValue;
 
+  // Value of the solution for each of the energy terms
+  Vec xLastTermValues;
+
   // The value of the coefficients before optimization began
   Vec xInitialCoefficients;
 
@@ -460,6 +463,10 @@ private:
   
   // Last place where the function was evaluated
   vnl_vector<double> xLastEvalPoint;
+
+  // Last place where the gradient was evaluated and its value there
+  vnl_vector<double> xLastGradPoint, xLastGradient, xLastGradHint;
+  bool flagGradientComputed;
 
   // The solution at the last evaluation point
   vnl_matrix<double> xLastPhiField;

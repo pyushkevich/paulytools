@@ -446,7 +446,16 @@ double CartesianMedialModel::ComputeNewtonRHS(const Mat& x, Mat &b)
   return dot_product(b, b);
 }
 
-void CartesianMedialModel::SolveOnce(const MedialAtom *xGuess, double delta)
+CartesianMedialModel::Vec 
+CartesianMedialModel::GetHintArray() const
+{
+  Vec xHint(nSites, 0.0);
+  for(size_t i = 0; i < m; i++) for(size_t j = 0; j < n; j++)
+    xHint[GetGridAtomIndex(i,j)] = y[i][j];
+  return xHint;
+}
+
+void CartesianMedialModel::SolveOnce(const double *xHint, double delta)
 {
   size_t i, j, k, iIter;
   double epsMax, bMax, bMagSqr;
@@ -455,9 +464,9 @@ void CartesianMedialModel::SolveOnce(const MedialAtom *xGuess, double delta)
   eps.fill(0.0);
   
   // Copy the initial solution to the current solution
-  if(xGuess != NULL)
+  if(xHint != NULL)
     for(unsigned int i = 0; i < m; i++) for(unsigned int j = 0; j < n; j++)
-      y[i][j] = xGuess[GetGridAtomIndex(i,j)].F;
+      y[i][j] = xHint[GetGridAtomIndex(i,j)];
 
   // Compute the right hand side, put it into b
   bMagSqr = ComputeNewtonRHS(y, b);
@@ -534,13 +543,13 @@ void CartesianMedialModel::SolveOnce(const MedialAtom *xGuess, double delta)
 
 void
 CartesianMedialModel
-::Solve(const MedialAtom *xGuess, double delta)
+::Solve(const double *xHint, double delta)
 {
   // Intialize the sites
   InitializeSiteGeometry();
 
   // Just solve once - no initialization tricks!
-  SolveOnce(xGuess, delta);
+  SolveOnce(xHint, delta);
   
   // Reconstruct the medial atoms
   ReconstructAtoms(y);
@@ -729,6 +738,8 @@ CartesianMedialModel
   unsigned int m = R["Grid.Size.U"][64];
   unsigned int n = R["Grid.Size.V"][64];
 
+  // Try reading the 
+
   // Ensure that the grid size matches the model (in the original code there was
   // no support for grid resizing, and we keep it that way for compatibility)
   if(this->m != m || this->n != n)
@@ -777,6 +788,11 @@ void CartesianMedialModel
   R["Grid.Type"] << "Cartesian";
   R["Grid.Size.U"] << m;
   R["Grid.Size.V"] << n;
+
+  // Store the grid points (this is not required to read, needed for
+  // non-uniform grids)
+  R.Folder("Grid.Spacing.U").PutArray(m, uGrid.data_block());
+  R.Folder("Grid.Spacing.V").PutArray(n, vGrid.data_block());
 
   // Store the phi values computed for this mpde
   Mat xPhi(m, n);

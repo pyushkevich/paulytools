@@ -30,7 +30,23 @@
 
 
 #include <iostream>
+#include <algorithm>
 #include <fstream>
+
+// References to FORTRAN code
+extern "C" {
+  void deflt_(int &alg, int *iv, int &liv, int &lv, double *v);
+
+  void sumsl_(
+    int &n, double *d, double *x,
+    void (*calcf)(int &, double *, int &, double &, int *, double *, void *),
+    void (*calcg)(int &, double *, int &, double *, int *, double *, void *),
+    int *iv, int &liv, int &lv, double *v,
+    int *uiparm, double *urparm, void *ufparm);
+}
+
+// Reference to constants in Fortran code
+const int mxiter_ = 18, mxfcal_ = 17, solprt_ = 22;
 
 // VTK Export Methods
 vtkUnstructuredGrid * ExportVolumeMeshToVTK(
@@ -380,6 +396,80 @@ void my_fdf(const gsl_vector *v, void *params, double *f, gsl_vector *df)
   *f = mop->ComputeGradient(v->data, df->data);
 }
 
+/** CALLBACK FUNCTIONS FOR TOMS611 ROUTINE */
+void my_calcf(int &n, double *x, int &nf, double &f, int *dummy1, double *dummy2, void *info)
+{
+  // Get a pointer to the object on which to evaluate
+  MedialOptimizationProblem *mop = static_cast<MedialOptimizationProblem *>(info);
+
+  // Try to evaluate at this point, and if we fail return 0 in nf (request
+  // smaller step from the solver, this is a nice feature of toms611)
+  try { f = mop->Evaluate(x); }
+  catch(...) { nf = 0; }
+}
+
+void my_calcg(int &n, double *x, int &nf, double *g, int *, double *, void *info)
+{
+  // Get a pointer to the object on which to evaluate
+  MedialOptimizationProblem *mop = static_cast<MedialOptimizationProblem *>(info);
+
+  // Try to evaluate at this point, and if we fail return 0 in nf (request
+  // smaller step from the solver, this is a nice feature of toms611)
+  try { mop->ComputeGradient(x, g); }
+  catch(...) { nf = 0; }
+}
+
+void MedialPDE::ConjugateGradientOptimizationTOMS(
+  MedialOptimizationProblem *xProblem, 
+  vnl_vector<double> &xSolution, unsigned int nSteps, double xStep)
+{
+  int nCoeff = (int) xSolution.size();
+
+  // For some reason there is a problem if we pass in VNL.data_blocks to the
+  // fortran routines. So, instead, we will pass hand-created C arrays
+  double *scaling = (double *) malloc(nCoeff * sizeof(double));
+  double *x = (double *) malloc(nCoeff * sizeof(double));
+
+  // Initialize the scaline and x arrays
+  std::fill_n(scaling, nCoeff, 1.0);
+  std::copy(xSolution.data_block(), xSolution.data_block() + nCoeff, x);
+
+  // Specify the parameters to the sumsl_ routine
+  int liv = 60, lv = 71+ nCoeff * (nCoeff+15) / 2;
+  int *iv = (int *) malloc(liv * sizeof(int));
+  double *v = (double *) malloc(lv * sizeof(double));
+
+  std::fill_n(iv, liv, 0);
+  std::fill_n(v, lv, 0.0);
+
+  // Load the defaults
+  int xAlg = 2;
+
+  // Initialize the parameters of the method
+  deflt_(xAlg, iv, liv, lv, v);
+  iv[mxiter_ - 1] = nSteps;
+  iv[mxfcal_ - 1] = 10 * nSteps;
+  iv[solprt_ - 1] = 0;
+
+  // Execute the routine
+  sumsl_(
+    nCoeff, scaling, x,
+    &my_calcf, &my_calcg,
+    iv, liv, lv, v,
+    NULL, NULL, (void *) xProblem);
+
+  // Copy the solution value into xSolution
+  xSolution.copy_in(x);
+
+  // Evaluate the problem at the best solution
+  xProblem->Evaluate(xSolution.data_block());
+  xProblem->PrintReport(std::cout);
+
+  // Free the data
+  free(iv); free(v); free(scaling); free(x);
+}
+
+
 void MedialPDE::ConjugateGradientOptimization(
   MedialOptimizationProblem *xProblem, 
   vnl_vector<double> &xSolution, unsigned int nSteps, double xStep)
@@ -405,11 +495,11 @@ void MedialPDE::ConjugateGradientOptimization(
   // Create conjugate gradient minimizer
   gsl_multimin_fdfminimizer *my_min = 
     gsl_multimin_fdfminimizer_alloc( gsl_multimin_fdfminimizer_conjugate_pr, nCoeff);
-
-  //  gsl_multimin_fdfminimizer_alloc(gsl_multimin_fdfminimizer_vector_bfgs, nCoeff);
+    // gsl_multimin_fdfminimizer_alloc(gsl_multimin_fdfminimizer_vector_bfgs, nCoeff);
+    // gsl_multimin_fdfminimizer_alloc(gsl_multimin_fdfminimizer_steepest_descent, nCoeff);
 
   // Set up the parameters of the optimizer
-  gsl_multimin_fdfminimizer_set(my_min, &my_func, my_start, xStep, 1e-4);
+  gsl_multimin_fdfminimizer_set(my_min, &my_func, my_start, xStep, 1e-6);
 
   // Perform the iterations
   for(size_t i = 0; i < nSteps; i++)
@@ -426,7 +516,7 @@ void MedialPDE::ConjugateGradientOptimization(
     cout << "Step " << setw(5) << i << "  ";
     cout << "Minimum " << setw(16) << gsl_multimin_fdfminimizer_minimum(my_min) << "  ";
     cout << "F-value " << setw(16) << my_min->f << endl;
-    xProblem->PrintReport(cout);
+    // xProblem->PrintReport(cout);
 
     // Check for convergence
     if(gsl_multimin_test_gradient(my_min->gradient, 1e-8) == GSL_SUCCESS)
@@ -635,20 +725,24 @@ void MedialPDE
   if(p.xMapping != OptimizationParameters::AFFINE && p.xMapping != OptimizationParameters::PCA)
     {
     // Add the boundary Jacobian term
-    xProblem.AddEnergyTerm(
-      &xTermJacobian, p.xTermWeights[OptimizationParameters::BOUNDARY_JACOBIAN]);
+    if(p.xTermWeights[OptimizationParameters::BOUNDARY_JACOBIAN] > 0.0)
+      xProblem.AddEnergyTerm(
+        &xTermJacobian, p.xTermWeights[OptimizationParameters::BOUNDARY_JACOBIAN]);
 
     // Add the atom badness term
-    xProblem.AddEnergyTerm(
-      &xTermBadness, p.xTermWeights[OptimizationParameters::ATOM_BADNESS]);
+    if(p.xTermWeights[OptimizationParameters::ATOM_BADNESS] > 0.0)
+      xProblem.AddEnergyTerm(
+        &xTermBadness, p.xTermWeights[OptimizationParameters::ATOM_BADNESS]);
 
     // Add the regularization term
-    xProblem.AddEnergyTerm(
-      &xTermRegularize, p.xTermWeights[OptimizationParameters::MEDIAL_REGULARITY]);
+    if(p.xTermWeights[OptimizationParameters::MEDIAL_REGULARITY] > 0.0)
+      xProblem.AddEnergyTerm(
+        &xTermRegularize, p.xTermWeights[OptimizationParameters::MEDIAL_REGULARITY]);
 
     // Add the radius penalty term
-    xProblem.AddEnergyTerm(
-      &xTermRadius, p.xTermWeights[OptimizationParameters::RADIUS]);
+    if(p.xTermWeights[OptimizationParameters::RADIUS] > 0.0)
+      xProblem.AddEnergyTerm(
+        &xTermRadius, p.xTermWeights[OptimizationParameters::RADIUS]);
     }
 
   // Initial solution report
@@ -658,7 +752,7 @@ void MedialPDE
 
   // At this point, split depending on the method
   if(p.xOptimizer == OptimizationParameters::CONJGRAD)
-    ConjugateGradientOptimization(&xProblem, xSolution, nSteps, xStepSize);
+    ConjugateGradientOptimizationTOMS(&xProblem, xSolution, nSteps, xStepSize);
   else if(p.xOptimizer == OptimizationParameters::GRADIENT)
     GradientDescentOptimization(&xProblem, xSolution, nSteps, xStepSize);
   else if(p.xOptimizer == OptimizationParameters::EVOLUTION)
@@ -1116,13 +1210,40 @@ void SubdivisionMPDE::SubdivideMeshes(size_t iCoeffSub, size_t iAtomSub)
     throw MedialModelException(
       "SubdivisionMPDE given a cmrep not based on subdivision surfaces");
 
+  // Get the coefficient-level mesh
+  SubdivisionSurface::MeshLevel mlCoeffOld = smm->GetCoefficientMesh();
+  vnl_vector<double> xCoeffOld = smm->GetCoefficientArray();
+
+  SubdivisionSurface::MeshLevel mlCoeffNew;
+  vnl_vector<double> xCoeffNew;
+
+  // Select the coefficient mesh
+  if(iCoeffSub > 0) 
+    {
+    // Subdivide the coefficient-level mesh as requested
+    SubdivisionSurface::RecursiveSubdivide(&mlCoeffOld, &mlCoeffNew, iCoeffSub);
+
+    // Compute the coefficients for the new cm-rep
+    xCoeffNew.set_size(mlCoeffNew.nVertices * 4);
+    SubdivisionSurface::ApplySubdivision(
+      xCoeffOld.data_block(), xCoeffNew.data_block(), 4, mlCoeffNew);
+
+    // Set the subdivided mesh at the root
+    mlCoeffNew.SetAsRoot();
+    }
+  else
+    {
+    // Use the same mesh as before
+    xCoeffNew = xCoeffOld;
+    mlCoeffNew = mlCoeffOld;
+    }
+
   // Create a new mesh where the subdivided data will be stored
   SubdivisionMedialModel *smmNew = new SubdivisionMedialModel();
 
   // Set the mesh topology for the new mesh
   smmNew->SetMesh(
-    smm->GetCoefficientMesh(), smm->GetCoefficientArray(), 
-    iAtomSub + smm->GetSubdivisionLevel(), iCoeffSub);
+    mlCoeffNew, xCoeffNew, smm->GetSubdivisionLevel() + iAtomSub - iCoeffSub, 0);
 
   // Now, we must solve the model. The way we do this depends on whether the
   // atom level has been changed or not. If it has, we will interpolate the
@@ -1159,7 +1280,8 @@ void SubdivisionMPDE::SubdivideMeshes(size_t iCoeffSub, size_t iAtomSub)
   else
     {
     // The solution is already there in the source-level mesh
-    smmNew->ComputeAtoms(smm->GetAtomArray());
+    vnl_vector<double> xHint = smm->GetHintArray();
+    smmNew->ComputeAtoms(xHint.data_block());
     }
 
   // Set the new mesh to replace the old mesh
@@ -1186,6 +1308,37 @@ CartesianMPDE::CartesianMPDE(unsigned int nBasesU, unsigned int nBasesV,
   // Set the internal surface representation
   this->xMedialModel = xCartesianMedialModel;
 }
+
+
+/** Set the size of the evaluation grid */
+void CartesianMPDE::SetGridSize(size_t nu, size_t nv)
+{
+  this->SetGridSize(nu, nv, 0, 0, 0.0);
+}
+
+/** Set the size of the evaluation grid with special sampling along edges */
+void CartesianMPDE::SetGridSize(
+  size_t nu, size_t nv, size_t eu, size_t ev, double eFactor)
+{
+  // Create a new model
+  CartesianMedialModel *cmmnew = new CartesianMedialModel(nu, nv, eFactor, eu, ev);
+
+  // Create a new surface
+  size_t ncu, ncv; 
+  FourierSurface *surfold = dynamic_cast<FourierSurface *>(
+    this->xCartesianMedialModel->GetMedialSurface());
+  surfold->GetNumberOfCoefficientsUV(ncu, ncv);
+  FourierSurface *surfnew = new FourierSurface(ncu, ncv);
+  cmmnew->AdoptMedialSurface(surfnew);
+
+  // Set the coefficients of the new surface
+  cmmnew->SetCoefficientArray(this->xCartesianMedialModel->GetCoefficientArray());
+
+  // Get rid of the old surface and model
+  this->SetMedialModel(cmmnew);
+  this->xCartesianMedialModel = cmmnew;
+}
+
 
 CartesianMPDE::CartesianMPDE(const char *file) :
   MedialPDE()

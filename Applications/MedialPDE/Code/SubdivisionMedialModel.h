@@ -53,8 +53,11 @@ public:
   void SetCoefficientArray(const Vec &xData)
     { xCoefficients = xData; }
 
+  /** Get the hint array (solution phi) */
+  virtual Vec GetHintArray() const;
+
   /** Compute the atoms from given a set of coefficients.  */
-  void ComputeAtoms(MedialAtom *xInitialSolution = NULL);
+  void ComputeAtoms(const double *xHint = NULL);
 
   /**
    * This method is called before multiple calls to the ComputeJet routine. Given a  

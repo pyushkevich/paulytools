@@ -58,9 +58,12 @@ public:
   void SetCoefficientArray(const Vec &xData)
     { xSurface->SetCoefficientArray(xData.data_block()); }
 
+  /** Get the hint array based on the current state of the model */
+  Vec GetHintArray() const;
+
   /** Compute the PDE solution and the atoms */
-  void ComputeAtoms(MedialAtom *xInitialSolution = NULL)
-    { this->Solve(xInitialSolution); }
+  void ComputeAtoms(const double *xHint = NULL)
+    { this->Solve(xHint); }
 
   /** Compute the gradient of the solution */
   void ComputeAtomGradient(std::vector<MedialAtom *> &dAtoms)
@@ -91,13 +94,7 @@ public:
    * Solve the PDE for a given surface and a given rho function up to the required 
    * level of accuracy.
    */
-  void Solve(const MedialAtom * xGuess, double delta = 1e-12);
-
-  /** 
-   * Solve, using the default initial guess
-   */
-  void Solve(double delta = 1e-12)
-    { return Solve(xAtoms); }
+  void Solve(const double *xHint = NULL, double delta = 1e-12);
 
   /**
    * This is a prelimiary step for computing the gradient of the phi-function
@@ -204,7 +201,7 @@ private:
   void TestJacobi();
   void ReconstructAtoms(const Mat &ySolution);
   void InitializeSiteGeometry();
-  void SolveOnce(const MedialAtom *xGuess, double delta);
+  void SolveOnce(const double *xHint, double delta);
   double EstimateLBOperator(const Mat &F, size_t i, size_t j);
   double ComputeNewtonRHS(const Mat& x, Mat &b);
 

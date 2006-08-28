@@ -16,7 +16,7 @@ SubdivisionMedialModel
 {
   // Validity check
   assert(nAtomSubs >= nCoeffSubs);
-
+  
   // Set the subdivision level
   xSubdivisionLevel = nAtomSubs - nCoeffSubs;
 
@@ -75,7 +75,7 @@ SubdivisionMedialModel
 
 void 
 SubdivisionMedialModel
-::ComputeAtoms(MedialAtom *xInitialSolution)
+::ComputeAtoms(const double *xHint)
 {
   size_t i;
 
@@ -97,13 +97,21 @@ SubdivisionMedialModel
     }
 
   // If the initial solution is specified, take the F values from it
-  if(xInitialSolution != NULL)
+  if(xHint != NULL)
     for(i = 0; i < mlAtom.nVertices; i++)
-      xAtoms[i].F = xInitialSolution[i].F;
+      xAtoms[i].F = xHint[i];
 
   // Now have the solver solve the equation
   xSolver.SolveEquation(NULL, true);
-  xSolver.SolveEquation(NULL, true);
+}
+
+SubdivisionMedialModel::Vec
+SubdivisionMedialModel::GetHintArray() const
+{
+  Vec xHint(mlAtom.nVertices, 0.0);
+  for(size_t i = 0; i < xHint.size(); i++)
+    xHint[i] = xAtoms[i].F;
+  return xHint;
 }
 
 void
