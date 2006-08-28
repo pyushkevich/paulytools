@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include <vtkCellArray.h>
+#include <vtkFloatArray.h>
 #include <vtkCellLocator.h>
 #include <vtkPolyData.h>
 #include <vtkPointData.h>

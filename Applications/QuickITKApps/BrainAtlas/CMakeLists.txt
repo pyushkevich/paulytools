@@ -1,5 +1,6 @@
 INCLUDE_DIRECTORIES(
   ${PAULY_SOURCE_DIR}/Applications/QuickITKApps/BrainAtlas
+  ${PAULY_SOURCE_DIR}/CoreLibraries/ITKExtensions/WellComposed
 )
 
 OPTION(USE_ITK_FFTW "Set this option if ITK has FFTW support" OFF)
@@ -37,6 +38,7 @@ SET(COMMON_LIBS
   vtkGraphics 
   vtkHybrid
   vtkRendering
+  vtkPatented
   ${FLTK_LIBRARY}
 )
 

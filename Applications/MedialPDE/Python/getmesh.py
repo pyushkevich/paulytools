@@ -12,7 +12,7 @@ su = int(sys.argv[2]);
 sv = int(sys.argv[3]);
 
 # Load the template
-mp = MedialPDE(2, 4, su, sv, 0.5, 2, 2);
+mp = MedialPDE(2, 4, su, sv, 0, 0, 0);
 mp.LoadFromParameterFile(fnMesh);
 
 # Render

@@ -420,7 +420,7 @@ bool MedialPDESolver::SolveOnce(const Mat &xGuess, double delta)
   bMagSqr = ComputeNewtonRHS(y, b);
 
   // We are now ready to perform the Newton loop
-  for(iIter = 0; iIter < 50; iIter++)
+  for(iIter = 0; iIter < 20; iIter++)
     {
     // Compute the Jacobian matrix
     for(size_t iSite = 0; iSite < nSites; iSite++)

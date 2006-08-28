@@ -1967,22 +1967,40 @@ void MedialPCA::ComputePCA()
   cout << endl;
   */
 
+  // Project everything into the PCA
+  for(i = 0; i < n; i++)
+    {
+    Vec y = xPCA->MapToCoefficientSpace(xDataShape.get_row(i), 8);
+    cout << "Inp. Mah. Dist.: " << i << " " << y.two_norm() << " " << y << endl;
+    }
+
   // Sample shapes at random along the first 8 eigenvectors
-  size_t k = 8, nt = 10000;
+  size_t k = 2, nt = 10000; double lMax = 1.0;
   vnl_random myrand;
   
+  MedialPDE xJunk2(8,12,32,80);
+  xJunk2.xSurface = new FourierSurface(*xSurfaces[0]);
+  xJunk2.xSolver->SetMedialSurface(xJunk2.xSurface);
+
   for(i = 0; i < nt; i++)
     {
+    /*
     // Generate random vector with uniform-distributed Mahalanobis distance
     Vec y(k); 
-    double d = myrand.drand32(0.0, 10.0), l = 2.0;
-    while(l > 1.0)
+    double d = myrand.drand32(0.0, 10.0), l = lMax;
+    while(l >= lMax)
       {
       for(j = 0; j < k; j++)
         y[j] = myrand.drand32(-1.0, 1.0);
       l = y.two_norm();
       }
     y *= d / l;
+    */
+
+    Vec y(k); 
+    for(j = 0; j < k; j++)
+      y[j] = myrand.drand32(-8.0, 8.0);
+    double d = y.two_norm();
 
     // Map this position to coefficient space
     Vec x = xPCA->MapToFeatureSpace(y);
@@ -1990,6 +2008,29 @@ void MedialPCA::ComputePCA()
     double x0 = 0, x1 = 0;
 
     // Create the shape
+<<<<<<< ScriptInterface.cxx
+    try 
+      {
+      xJunk2.xSurface->SetCoefficientArray(x.data_block());
+      if(!xJunk2.Solve())
+        x0 = 0;
+      else
+        {
+        x0 = 1;
+
+        // Create a solution object
+        SolutionData S(xJunk2.xSolver);
+
+        // Compute the penalty term
+        BoundaryJacobianEnergyTerm bjet;
+        bjet.ComputeEnergy(&S);
+        x1 = bjet.GetMinJacobian();
+        }
+      } 
+    catch(...) 
+      {
+      x0 = 0;
+=======
     CartesianMPDE xJunk(8,12,32,80);
     xJunk.xMedialModel->SetCoefficientArray(x);
     
@@ -2010,6 +2051,7 @@ void MedialPCA::ComputePCA()
       // Set the flags
       x0 = 1;
       x1 = bjet.GetMinJacobian();
+>>>>>>> 1.22
       }
     catch(MedialModelException &exc)
       {

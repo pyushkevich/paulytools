@@ -1,9 +1,14 @@
 #include "vtkPolyData.h"
 #include "vtkBYUWriter.h"
 #include "vtkBYUReader.h"
+#include <vtkSTLReader.h>
 #include "vtkPoints.h"
 #include "vtkProcrustesAlignmentFilter.h"
 #include "vtkLandmarkTransform.h"
+#include <vtkPolyDataReader.h>
+#include <vtkPolyDataWriter.h>
+#include <vtkFloatArray.h>
+#include <vtkPointData.h>
 #include <iostream>
 
 using namespace std;
@@ -16,8 +21,40 @@ int usage()
   return -1;
 }
 
+vtkPolyData *ReadVTKData(string fn)
+{
+  vtkPolyData *p1 = NULL;
+
+  // Choose the reader based on extension
+
+  if(fn.rfind(".byu") == fn.length() - 4)
+    {
+    vtkBYUReader *reader = vtkBYUReader::New();
+    reader->SetFileName(fn.c_str());
+    reader->Update();
+    p1 = reader->GetOutput();
+    }
+  else if(fn.rfind(".vtk") == fn.length() - 4)
+    {
+    vtkPolyDataReader *reader = vtkPolyDataReader::New();
+    reader->SetFileName(fn.c_str());
+    reader->Update();
+    p1 = reader->GetOutput();
+    }
+  else
+    {
+    cout << "Could not find a reader for " << fn << endl;
+    cout << fn.rfind(".byu") << endl;
+    cout << fn.rfind(".vtk") << endl;
+    return NULL;
+    }
+
+  // Convert the model to triangles
+  return p1;
+}
 int main(int argc, char *argv[])
 {
+  size_t i, j;
   if(argc < 3) return usage();
 
   // Load a list of meshes
@@ -31,15 +68,10 @@ int main(int argc, char *argv[])
   fltAlign->GetLandmarkTransform()->SetModeToRigidBody();
 
   // Read the meshes
-  for(unsigned int i = 0; i < nMeshes; i++)
+  for(i = 0; i < nMeshes; i++)
     {
     // Read the polydata
-    vtkBYUReader *reader = vtkBYUReader::New();
-    reader->SetFileName(argv[1 + i]);
-    reader->Update();
-
-    // Read the mesh
-    xMeshes[i] = reader->GetOutput();
+    xMeshes[i] = ReadVTKData(argv[1 + i]);
 
     // Plug into procrustes
     fltAlign->SetInput(i, xMeshes[i]);
@@ -70,8 +102,18 @@ int main(int argc, char *argv[])
     */
 
   // Save the average
-  vtkBYUWriter *writer = vtkBYUWriter::New();
-  writer->SetGeometryFileName(argv[argc - 1]);
-  writer->SetInput(xMeshes[0]);
-  writer->Update();
+  if(strstr(argv[argc - 1], ".byu") != NULL)
+    {
+    vtkBYUWriter *writer = vtkBYUWriter::New();
+    writer->SetGeometryFileName(argv[argc - 1]);
+    writer->SetInput(xMeshes[0]);
+    writer->Update();
+    }
+  else
+    {
+    vtkPolyDataWriter *pdw = vtkPolyDataWriter::New();
+    pdw->SetFileName(argv[argc - 1]);
+    pdw->SetInput(xMeshes[0]);
+    pdw->Update();
+    }
 }

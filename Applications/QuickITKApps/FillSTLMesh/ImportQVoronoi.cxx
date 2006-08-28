@@ -80,10 +80,11 @@ void ComputeGeodesics(
   vector<double> &d)                  // Output vector (geodesic distance)
 {
   size_t i, n = mesh->GetNumberOfPoints();
+  cout << "Computing Geodesics on the Boundary" << endl;
 
   // For each vertex, compute its radius (right now these are only for pairs)
   vector<double> rmax(n, 0.0);
-  for(i = 0; i < dmax.size(); i++)
+  for(i = 0; i < pairs.size(); i++)
     {
     rmax[pairs[i].first] = std::max(rmax[pairs[i].first], dmax[i]);
     rmax[pairs[i].second] = std::max(rmax[pairs[i].second], dmax[i]);
@@ -120,11 +121,19 @@ void ComputeGeodesics(
     for(VertexPairArray::iterator it = pairs.begin(); it != pairs.end(); ++it, ++j)
       {
       if(it->first == i)
+        {
         d[j] = dijkstra.GetVertexDistance(it->second);
+        }
       else if(it->second == i)
+        {
         d[j] = dijkstra.GetVertexDistance(it->first);
+        }
       }
+
+    // Track progress
+    if((i % 1000) == 999) cout << "." << flush;
     }
+  cout << endl;
 }
 
 vtkPolyData *ReadVoronoiOutput(
@@ -189,7 +198,7 @@ vtkPolyData *ReadVoronoiOutput(
       P[0] = pts->GetPoint(ids[k])[0];
       P[1] = pts->GetPoint(ids[k])[1];
       P[2] = pts->GetPoint(ids[k])[2];
-      if(!fMask->IsInsideBuffer(P) || fMask->Evaluate(P) > threshold)
+      if(!fMask->IsInsideBuffer(P) || fMask->Evaluate(P) < threshold)
         isout = true;
       }
 
@@ -341,26 +350,28 @@ int main(int argc, char *argv[])
   // Compute the geodesic distances for the pairs of associated boundary points
   // TODO: ignore geodesics longer than k * r
   std::vector<double> geod(pgen.size());
-  ComputeGeodesics(bnd, pgen, rad, 4.0, geod);
+  ComputeGeodesics(bnd, pgen, rad, 1.6, geod);
 
   // Create a new cell array for the pruning
   vtkCellArray *prune = vtkCellArray::New();
 
   // Prune the voronoi diagram
   for(k = 0; k < pgen.size(); k++)
-    if(geod[k] >= 4.0 * rad[k])
+    if(geod[k] > 1.6 * rad[k])
       prune->InsertNextCell(poly->GetCell(k));
      
   // Insert the new pruned cell list
   poly->SetPolys(prune);
 
   // Compute the distance from the medial axis to the voronoi mesh
+  /*
   vnl_vector<vtkFloatingPointType> dist;
   vnl_vector<vtkFloatingPointType> area;
   ComputeAreaElement(med, area);
   ComputeExactMeshToMeshDistance(med, poly, dist);
   cout << "Avg, Max, Edge: " << dot_product(dist, area) / area.one_norm() 
     << " " << dist.inf_norm() << " " << ComputeAverageEdgeLength(med) << endl;
+  */
   
   vtkPolyDataWriter *writer = vtkPolyDataWriter::New();
   writer->SetInput(poly);

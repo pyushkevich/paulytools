@@ -7,8 +7,11 @@
 #include "itkImage.h"
 #include "itkResampleImageFilter.h"
 #include "itkWindowedSincInterpolateImageFunction.h"
+#include "itkNearestNeighborInterpolateImageFunction.h"
 #include "itkAntiAliasBinaryImageFilter.h"
 #include "itkUnaryFunctorImageFilter.h"
+#include "itkBinaryWellComposed3DImageFilter.h"
+#include "itkMinimumMaximumImageCalculator.h"
 #include "itkCommand.h"
 
 #include <vtkCellArray.h>
@@ -149,8 +152,12 @@ protected:
     this->SetNumberOfInputs(1);
     this->SetNumberOfOutputs(1);
 
+    // Begin with the well-connectedness filter
+    fltTopology = TopologyFilter::New();
+
     // Create the converter to float
     fltToFloat = ToFloatFilter::New();
+    fltToFloat->SetInput(fltTopology->GetOutput());
     typename FloatImageType::Pointer imgPipeEnd = fltToFloat->GetOutput();
 
     // Initialize the interpolation function
@@ -254,8 +261,22 @@ protected:
     typename TImage::ConstPointer inputImage = 
       reinterpret_cast<TImage *>(this->GetInput(0));
 
+    // Pass the input to the topology filter
+    fltTopology->SetInput(inputImage);
+
+    // Compute the max/min of the image to set fore/back
+    typedef itk::MinimumMaximumImageCalculator<TImage> CalcType;
+    typename CalcType::Pointer calc = CalcType::New();
+    calc->SetImage(inputImage);
+    calc->Compute();
+
+    // Set the background and foreground in the topology filter
+    fltTopology->SetBackgroundValue(calc->GetMinimum());
+    fltTopology->SetForegroundValue(calc->GetMaximum());
+    fltTopology->Update();
+
     // Pass the input to the remapper
-    fltToFloat->SetInput(inputImage);
+    fltToFloat->SetInput(fltTopology->GetOutput());
 
     // Set the inversion if necessary
     m_ToFloatFunctor.SetInvertImage(m_InvertInput);
@@ -299,8 +320,16 @@ protected:
       }
 
     // Run the filters
-    cout << "   anti-aliasing the image " << endl;
-    fltAlias->Update();
+    if(fltAlias->GetMaximumRMSError() > 0.0)
+      {
+      cout << "   anti-aliasing the image " << endl;
+      fltAlias->Update();
+      fltExport->SetInput(fltAlias->GetOutput());
+      }
+    else
+      {
+      fltExport->SetInput(fltAlias->GetInput());
+      }
 
     cout << endl << "   converting image to VTK" << endl;
     fltImport->Update();
@@ -367,6 +396,9 @@ private:
   typedef itk::ImageRegionIterator<TImage> IteratorType;
   typedef itk::ImageRegionConstIterator<TImage> ConstIteratorType;
 
+  // Topology correction filter
+  typedef itk::BinaryWellComposed3DImageFilter<TImage> TopologyFilter;
+
   // Functor for remapping to float
   UnaryFunctorBinaryToFloat m_ToFloatFunctor;
   
@@ -376,9 +408,8 @@ private:
 
   // Windowed sinc for resampling
   typedef itk::Function::WelchWindowFunction<4> WindowFunction;
-  typedef itk::WindowedSincInterpolateImageFunction<
-    FloatImageType, 4, WindowFunction, 
-    itk::ConstantBoundaryCondition<FloatImageType>, double> ResampleFunction;
+  typedef itk::NearestNeighborInterpolateImageFunction<
+    FloatImageType, double> ResampleFunction;
 
   // Filter to resample image
   typedef itk::ResampleImageFilter<FloatImageType,FloatImageType> ResampleFilter;
@@ -389,6 +420,7 @@ private:
   // Export to VTK filter
   typedef itk::VTKImageExport<FloatImageType> ExportFilter;
 
+  typename TopologyFilter::Pointer fltTopology;
   typename AAFilter::Pointer fltAlias;
   typename ExportFilter::Pointer fltExport;
   typename ToFloatFilter::Pointer fltToFloat;
