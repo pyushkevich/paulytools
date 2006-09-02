@@ -209,7 +209,7 @@ SubdivisionMedialModelIO
   // Generate the rho array. We initialize to a constant, and then use the rho
   // array in the polydata. This may not exist.
   vnl_vector<double> rho(mesh.nVertices, xDefaultRho);
-  if(poly->GetPointData()->HasArray("Rho")) 
+  if(poly->GetPointData()->GetArray("Rho") != NULL) 
     {
     vtkDataArray *daRho = poly->GetPointData()->GetScalars("Rho");
     for(i = 0; i < mesh.nVertices; i++)

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!@PYTHON_BINARY@
 from cmrep_common import *
 
 # Define the options in this program

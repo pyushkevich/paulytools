@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!@PYTHON_BINARY@
 from cmrep_common import *
 
 # Get the command line arguments

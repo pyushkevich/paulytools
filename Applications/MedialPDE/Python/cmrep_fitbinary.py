@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!@PYTHON_BINARY@
 
 # Import the symbols from the MPDE library
 from cmrep_common import *

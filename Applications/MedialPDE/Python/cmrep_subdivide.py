@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!@PYTHON_BINARY@
 # =========================================================
 # PROGRAM: cmrep_subdivide
 # PURPOSE: Subdivide subdivision surface cm-rep mesh into 

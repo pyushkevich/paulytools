@@ -1,5 +1,10 @@
 # We must first find PYTHON
 INCLUDE(${CMAKE_ROOT}/Modules/FindPythonLibs.cmake)
+
+# Find the python binary
+GET_FILENAME_COMPONENT(PYTHON_BIN_DIR ${PYHTON_INCLUDE_PATH}/../../bin ABSOLUTE)
+MARK_AS_ADVANCED(PYTHON_BIN_DIR)
+FIND_PROGRAM(PYTHON_BINARY python ${PYTHON_BIN_DIR})
   
 # Search for Standard-SWIG (not ITK-based CMakeSwig)
 FIND_PROGRAM(SWIG_PROGRAM swig)
