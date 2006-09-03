@@ -221,6 +221,9 @@ public:
   /** Set the PCA data for PCA-based optimization */
   void SetPCAMatrix(size_t ncu, size_t ncv, const char *fnMatrix);
 
+  /** Store coordinates of interior (and exterior) points in a file */
+  void SampleInterior(const char *file, double xStep, double xStart, double xEnd);
+
 protected:
   
   /** Constructor. Takes the medial model from child class. */

@@ -1145,6 +1145,34 @@ void MedialPDE::SetPCAMatrix(size_t ncu, size_t ncv, const char *fname)
     << " x " << mPCAMatrix.columns() << endl;
 }
 
+void MedialPDE::SampleInterior(const char *file, double xStep, double xStart, double xEnd)
+{
+  // Create a file for writing the points
+  ofstream fout(file, ios_base::out);
+
+  // We can not simply iterate over the interior points because there may also
+  // be points outside of the range -1, 1 in xi, and we don't have an iterator
+  // that handles them. So we just go atom by atom, outputting the coordinates
+  MedialAtomIterator it = xMedialModel->GetAtomIterator();
+  for( ; !it.IsAtEnd(); ++it)
+    {
+    // Get the atom out
+    MedialAtom a = xMedialModel->GetAtomArray()[it.GetIndex()];
+
+    // Write out the points for this atom
+    for(double xi = xStart; xi < xEnd + 0.5 * xStep; xi += xStep)
+      {
+      SMLVec3d b = (xi < 0) ? a.xBnd[0].X : a.xBnd[1].X;
+      SMLVec3d x = (1.0 - fabs(xi)) * a.X + fabs(xi) * b;
+      fout << a.u << " " << a.v << " " << xi << " ";
+      fout << x[0] << " " << x[1] << " " << x[2] << endl;
+      }
+    }
+
+  // Close the output stream
+  fout.close();
+}
+
 /*
 IMedialCoefficientMask *MedialPDE::CreatePCACoefficientMask(size_t nModes)
 {
