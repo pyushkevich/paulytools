@@ -1,6 +1,7 @@
 #undef ITK_MANUAL_INSTANTIATION
 
 #include "itkImage.h"
+#include "itkImageRegion.h"
 #include "itkImageFileReader.h"
 #include "itkImageFileWriter.h"
 #include "itkImageRegionIterator.h"
@@ -24,6 +25,7 @@ typedef itk::Image<double, 3> DoubleImage;
 
 // Double image stuff
 template class itk::Image<double, 3>;
+template class itk::ImageRegion<3>;
 template class itk::ImageFileReader<DoubleImage>;
 template class itk::ImageFileWriter<DoubleImage>;
 template class itk::ResampleImageFilter<DoubleImage,DoubleImage>;
