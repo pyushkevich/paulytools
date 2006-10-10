@@ -65,6 +65,8 @@ int main(int argc, char **argv)
       imgBin->SetRegions(imgInput->GetBufferedRegion());
       imgBin->Allocate();
       imgBin->FillBuffer(0);
+      imgBin->SetOrigin(imgInput->GetOrigin());
+      imgBin->SetSpacing(imgInput->GetSpacing());
       
       IteratorType itSource(imgInput,imgInput->GetBufferedRegion());
       BinIteratorType itTarget(imgBin,imgBin->GetBufferedRegion());
