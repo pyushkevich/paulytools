@@ -37,7 +37,7 @@ cmrep = MedialPDE(args[0])
 if options.image:
   image = FloatImage(options.image)
   cmrep.SampleInterior(args[1], xiStep, xiStart, xiEnd, image);
-else
+else:
   cmrep.SampleInterior(args[1], xiStep, xiStart, xiEnd);
 
 

@@ -1172,7 +1172,7 @@ void MedialPDE::SampleInterior(
       fout << a.u << " " << a.v << " " << xi << " ";
       fout << x[0] << " " << x[1] << " " << x[2];
      
-      if(fim) fout << fim->InterpolateNearestNeighbor(x);
+      if(fim) fout << " " << fim->InterpolateNearestNeighbor(x);
       fout << endl;
       }
     }
