@@ -25,7 +25,15 @@ parser.add_option("-e", "--edges",
 
 parser.add_option("-f", "--edgefactor",
     type=float, metavar="X", default=0.5,
-    help='''Factor by which to subdivide the atom grid near edges''')
+    help="Factor by which to subdivide the atom grid near edges")
+
+parser.add_option("-u", "--usehint",
+    action="store_true", 
+    help='''This option is only useful for importing old-style cmrep (.mpde)
+         files where the gridlines were not explicitly specified. When enabled,
+         this option will cause the 'hint' information (the PDE solution cached
+         in the .cmrep file) to be used when building the resampled model.
+         This only applies if the size of the grid matches the hint array.''')
 
 # Process the command line options
 (options,args) = parser.parse_args()
@@ -49,7 +57,7 @@ if options.atoms:
   (eu, ev) = options.edges
   efac = options.edgefactor
   print "Setting number of atoms to", nu + eu * 2, ",", nv + ev * 2
-  cmrep.SetGridSize(nu, nv, eu, ev, efac)
+  cmrep.SetGridSize(nu, nv, eu, ev, efac, (options.usehint == True))
 
 # Save the cmrep
 cmrep.SaveToParameterFile(args[1])

@@ -10,10 +10,10 @@ parser = OptionParser(
     system. The u and v samples are the same as the grid in the cm-rep and the
     xi coordinate is sampled according to the -x option. By default, the
     sampling is from -1 to 1 with 0.1 step size. The points are saved to a
-    file. Each line in this file has six entries separated by spaces: u v xi x y z'''
+    file. Each line in this file has six entries separated by spaces: u v xi x y z''')
 
 parser.add_option("-x", "--xi", 
-    nargs=3, type="real", metavar="X0 X1 DX", default=(-1.0, 1.0, 0.1),
+    nargs=3, type="float", metavar="X0 X1 DX", default=(-1.0, 1.0, 0.1),
     help="Set the sampling in xi (from X0 to X1, step size DX).")
 
 # Process the command line options

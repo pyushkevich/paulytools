@@ -1,6 +1,7 @@
 #ifndef __MedialException_h_
 #define __MedialException_h_
 
+#include <exception>
 #include <stdexcept>
 
 // Exception classes

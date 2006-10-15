@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <stdexcept>
 #include <smlmath.h>
 
 class GenericMedialModel;
@@ -295,10 +296,12 @@ public:
   void SetNumberOfCoefficients(unsigned int m, unsigned int n);
 
   /** Set the size of the evaluation grid */
-  void SetGridSize(size_t nu, size_t nv);
+  void SetGridSize(size_t nu, size_t nv, bool useHint = false);
 
   /** Set the size of the evaluation grid with special sampling along edges */
-  void SetGridSize(size_t nu, size_t nv, size_t eu, size_t ev, double eFactor = 0.5);
+  void SetGridSize(size_t nu, size_t nv, 
+    size_t eu, size_t ev, double eFactor = 0.5,
+    bool useHint = false);
 
   /** 
    * This method takes an image and an m-rep and samples the image using the 

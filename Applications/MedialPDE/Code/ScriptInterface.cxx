@@ -1339,14 +1339,14 @@ CartesianMPDE::CartesianMPDE(unsigned int nBasesU, unsigned int nBasesV,
 
 
 /** Set the size of the evaluation grid */
-void CartesianMPDE::SetGridSize(size_t nu, size_t nv)
+void CartesianMPDE::SetGridSize(size_t nu, size_t nv, bool useHint)
 {
-  this->SetGridSize(nu, nv, 0, 0, 0.0);
+  this->SetGridSize(nu, nv, 0, 0, 0.0, useHint);
 }
 
 /** Set the size of the evaluation grid with special sampling along edges */
 void CartesianMPDE::SetGridSize(
-  size_t nu, size_t nv, size_t eu, size_t ev, double eFactor)
+  size_t nu, size_t nv, size_t eu, size_t ev, double eFactor, bool useHint)
 {
   // Create a new model
   CartesianMedialModel *cmmnew = new CartesianMedialModel(nu, nv, eFactor, eu, ev);
@@ -1354,13 +1354,24 @@ void CartesianMPDE::SetGridSize(
   // Create a new surface
   size_t ncu, ncv; 
   FourierSurface *surfold = dynamic_cast<FourierSurface *>(
-    this->xCartesianMedialModel->GetMedialSurface());
+    xCartesianMedialModel->GetMedialSurface());
   surfold->GetNumberOfCoefficientsUV(ncu, ncv);
   FourierSurface *surfnew = new FourierSurface(ncu, ncv);
   cmmnew->AdoptMedialSurface(surfnew);
 
   // Set the coefficients of the new surface
-  cmmnew->SetCoefficientArray(this->xCartesianMedialModel->GetCoefficientArray());
+  cmmnew->SetCoefficientArray(xCartesianMedialModel->GetCoefficientArray());
+
+  // Solve, potentially using the hint array
+  if(useHint && 
+    xCartesianMedialModel->GetGridU().size() == cmmnew->GetGridU().size() &&
+    xCartesianMedialModel->GetGridV().size() == cmmnew->GetGridV().size())
+    {
+    CartesianMedialModel::Vec xHint = xCartesianMedialModel->GetHintArray();
+    cmmnew->ComputeAtoms(xHint.data_block());
+    }
+  else
+    cmmnew->ComputeAtoms();
 
   // Get rid of the old surface and model
   this->SetMedialModel(cmmnew);

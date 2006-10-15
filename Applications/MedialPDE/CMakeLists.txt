@@ -143,34 +143,8 @@ SET(SCRIPT_FILES
   cmrep_getmesh.py
   cmrep_refine_fourier.py
   cmrep_render.py
+  cmrep_sample_interior.py
   cmrep_subdivide.py
-  blurimage.py
-  example.py 
-  example2.py 
-  example3.py 
-  example4.py
-  example5.py
-  example6.py
-  common.py 
-  common2.py 
-  getmesh.py
-  imageprep.py
-  segment.py
-  segment2.py
-  segment2.py
-  segment3.py
-  segment_new.py
-  pipeline.py
-  pipeline2.py
-  pca.py
-  pcalite.py
-  pca_segment.py
-  sample.py
-  sample_img.py
-  sample_ref.py
-  testdphi.py
-  vis.py
-  vis_sample.py
   )
 
 FOREACH(FILE ${SCRIPT_FILES})  

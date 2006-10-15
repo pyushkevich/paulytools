@@ -405,14 +405,21 @@ CartesianMedialModel
 
       // Compute the boundary properties of the medial point
       xAtom.ComputeBoundaryAtoms(xSites[iLocal]->IsBorderSite());
+
+      // Report bad atoms
+      if(!xAtom.flagValid)
+        cout << "Invalid atom at " << xAtom.u << ", " << xAtom.v <<
+          "(|gradR|^2 = " << xAtom.xGradRMagSqr << ")" << endl;
       }
     else
       {
       // What are we supposed to do?
-      // cout << "Negative F at " << xAtom.u << ", " << xAtom.v << endl;
+      cout << "Negative F at " << xAtom.u << ", " << xAtom.v << 
+        " ( F = " << ySolution[i][j] << ")" << endl;
       xAtom.R = xAtom.F = xAtom.Fu = xAtom.Fv = 0.0;
       xAtom.flagValid = false;
       }
+
 
     // Update the valid atoms flag
     flagAllAtomsValid &= xAtom.flagValid;
@@ -441,7 +448,7 @@ double CartesianMedialModel::ComputeNewtonRHS(const Mat& x, Mat &b)
     {
     b[i][j] = - xSites[xSiteIndex[i][j]]->ComputeEquation(x);
     if(vnl_math_isnan(b[i][j]))
-      cout << "Gotcha! " << i << "," << j << endl;
+      throw MedialModelException("NAN in CartesianMedialModel::ComputeNewtonRHS");
     }
   return dot_product(b, b);
 }
@@ -766,9 +773,9 @@ CartesianMedialModel
     vnl_matrix<double> xPhi(m, n);
     R.Folder("Grid.Phi").GetArray(xPhi.data_block(), 0.0);
 
-    // Pass the phi values to atoms
+    // Pass the phi values to atoms (and to the phi-array)
     for(size_t i = 0; i < m; i++) for(size_t j = 0; j < n; j++)
-      xAtoms[GetGridAtomIndex(i,j)].F = xPhi[i][j];
+      xAtoms[GetGridAtomIndex(i,j)].F = y[i][j] = xPhi[i][j];
     }
   else
     {
