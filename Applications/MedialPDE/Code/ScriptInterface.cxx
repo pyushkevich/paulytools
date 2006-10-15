@@ -1145,7 +1145,12 @@ void MedialPDE::SetPCAMatrix(size_t ncu, size_t ncv, const char *fname)
     << " x " << mPCAMatrix.columns() << endl;
 }
 
-void MedialPDE::SampleInterior(const char *file, double xStep, double xStart, double xEnd)
+void MedialPDE::SampleInterior(
+  const char *file, 
+  double xStep, 
+  double xStart, 
+  double xEnd,
+  FloatImage *fim)
 {
   // Create a file for writing the points
   ofstream fout(file, ios_base::out);
@@ -1165,7 +1170,10 @@ void MedialPDE::SampleInterior(const char *file, double xStep, double xStart, do
       SMLVec3d b = (xi < 0) ? a.xBnd[0].X : a.xBnd[1].X;
       SMLVec3d x = (1.0 - fabs(xi)) * a.X + fabs(xi) * b;
       fout << a.u << " " << a.v << " " << xi << " ";
-      fout << x[0] << " " << x[1] << " " << x[2] << endl;
+      fout << x[0] << " " << x[1] << " " << x[2];
+     
+      if(fim) fout << fim->InterpolateNearestNeighbor(x);
+      fout << endl;
       }
     }
 

@@ -74,6 +74,9 @@ public:
   // Interpolate the image at a given position
   virtual float Interpolate(const SMLVec3d &x);
 
+  // Interpolate the image at a given position
+  virtual float InterpolateNearestNeighbor(const SMLVec3d &x);
+
   // Interpolate the image gradient
   virtual void InterpolateImageGradient(const SMLVec3d &x, SMLVec3f &g);
 
@@ -223,7 +226,8 @@ public:
   void SetPCAMatrix(size_t ncu, size_t ncv, const char *fnMatrix);
 
   /** Store coordinates of interior (and exterior) points in a file */
-  void SampleInterior(const char *file, double xStep, double xStart, double xEnd);
+  void SampleInterior(const char *file, double xStep, double xStart, double xEnd,
+                      FloatImage *fim = NULL);
 
 protected:
   

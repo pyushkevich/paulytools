@@ -16,6 +16,10 @@ parser.add_option("-x", "--xi",
     nargs=3, type="float", metavar="X0 X1 DX", default=(-1.0, 1.0, 0.1),
     help="Set the sampling in xi (from X0 to X1, step size DX).")
 
+parser.add_option("-i", "--image",
+    nargs=1, type="string", metavar="IMAGE",
+    help="Image from which to sample intensity values");
+
 # Process the command line options
 (options,args) = parser.parse_args()
 
@@ -28,5 +32,12 @@ if(len(args) <> 2):
 
 # Load the cm-rep and perform the sampling
 cmrep = MedialPDE(args[0])
-cmrep.SampleInterior(args[1], xiStep, xiStart, xiEnd);
+
+# See if the image has been supplied
+if options.image:
+  image = FloatImage(options.image)
+  cmrep.SampleInterior(args[1], xiStep, xiStart, xiEnd, image);
+else
+  cmrep.SampleInterior(args[1], xiStep, xiStart, xiEnd);
+
 

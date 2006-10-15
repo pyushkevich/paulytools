@@ -32,6 +32,9 @@ public:
   // Interpolate the image at a continuous index, or return background if out of bounds
   virtual float Interpolate(float x, float y, float z, float xBackground) = 0;
 
+  // Interpolate the image at a continuous index, or return background if out of bounds
+  virtual float InterpolateNearestNeighbor(float x, float y, float z, float xBackground) = 0;
+
   // Get the internal ITK image pointer
   virtual ImageType *GetInternalImage() = 0;
 };

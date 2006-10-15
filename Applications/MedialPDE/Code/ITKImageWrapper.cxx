@@ -2,6 +2,7 @@
 
 #include "itkImage.h"
 #include "itkLinearInterpolateImageFunction.h"
+#include "itkNearestNeighborInterpolateImageFunction.h"
 #include "itkImageFileReader.h"
 #include "itkImageFileWriter.h"
 #include "itkVoxBoCUBImageIOFactory.h"
@@ -14,6 +15,7 @@ public:
   typedef ITKImageWrapper<TPixel> Superclass;
   typedef typename Superclass::ImageType ImageType;
   typedef itk::LinearInterpolateImageFunction<ImageType, float> InterpolatorType;
+  typedef itk::NearestNeighborInterpolateImageFunction<ImageType, float> NNInterpolator;
   
   // Load the image from a file
   void LoadFromFile(const char *file);
@@ -48,6 +50,9 @@ public:
   // Interpolate the image at a continuous index, or return background if out of bounds
   float Interpolate(float x, float y, float z, float xBackground);
 
+  // Interpolate the image at a continuous index, or return background if out of bounds
+  float InterpolateNearestNeighbor(float x, float y, float z, float xBackground);
+
   // Get the internal ITK image pointer
   ImageType *GetInternalImage()
     { return xImage.GetPointer(); }
@@ -61,6 +66,7 @@ private:
 
   // The linear interpolator for the currently stored image
   typename InterpolatorType::Pointer fnInterpolator;
+  typename NNInterpolator::Pointer fnInterpolatorNN;
 
   // Function called when the image is updated externally
   void OnImageUpdate();
@@ -75,6 +81,7 @@ ITKImageWrapperImpl<TPixel>
 {
   xImage = ImageType::New();
   fnInterpolator = InterpolatorType::New();
+  fnInterpolatorNN = NNInterpolator::New();
 }
 
 
@@ -99,10 +106,31 @@ ITKImageWrapperImpl<TPixel>
 }
 
 template<typename TPixel>
+float
+ITKImageWrapperImpl<TPixel>
+::InterpolateNearestNeighbor(float x, float y, float z, float xBackground)
+{
+  // Create a point with the passed in coordinates
+  itk::Point<float, 3> xPoint;
+  xPoint[0] = x; xPoint[1] = y; xPoint[2] = z;
+
+  // Create a continuous index from the point
+  itk::ContinuousIndex<float, 3> xIndex;
+  xImage->TransformPhysicalPointToContinuousIndex(xPoint, xIndex);
+
+  // Interpolate at the index
+  if(fnInterpolatorNN->IsInsideBuffer(xIndex))
+    return (float) fnInterpolatorNN->EvaluateAtContinuousIndex(xIndex);
+  else
+    return xBackground;
+}
+
+template<typename TPixel>
 void ITKImageWrapperImpl<TPixel>
 ::OnImageUpdate()
 {
   fnInterpolator->SetInputImage(xImage);
+  fnInterpolatorNN->SetInputImage(xImage);
 }
 
 static bool glob_ITKCUBFactoryRegistered = false;

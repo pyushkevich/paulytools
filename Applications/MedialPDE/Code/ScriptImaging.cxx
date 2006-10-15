@@ -37,6 +37,12 @@ float FloatImage::Interpolate(const SMLVec3d &x)
   return xImage->Interpolate(x[0], x[1], x[2], xOutsideValue); 
 }
 
+// Interpolate the image at a given position
+float FloatImage::InterpolateNearestNeighbor(const SMLVec3d &x)
+{ 
+  return xImage->InterpolateNearestNeighbor(x[0], x[1], x[2], xOutsideValue); 
+}
+
 // Interpolate the image gradient
 void FloatImage::InterpolateImageGradient(const SMLVec3d &x, SMLVec3f &g)
 {
