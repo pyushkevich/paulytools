@@ -184,7 +184,7 @@ vtkPolyData *ReadVoronoiOutput(
     
     size_t m; fin >> m; m-=2;
     vtkIdType ip1, ip2; fin >> ip1; fin >> ip2;
-    
+
     vtkIdType *ids = new vtkIdType[m];
     for(size_t k = 0; k < m; k++)
       {
@@ -198,6 +198,7 @@ vtkPolyData *ReadVoronoiOutput(
       P[0] = pts->GetPoint(ids[k])[0];
       P[1] = pts->GetPoint(ids[k])[1];
       P[2] = pts->GetPoint(ids[k])[2];
+
       if(!fMask->IsInsideBuffer(P) || fMask->Evaluate(P) < threshold)
         isout = true;
       }
