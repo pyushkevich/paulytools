@@ -7,10 +7,11 @@ SET(FILLSTLMESH_SRCS
 ADD_EXECUTABLE(meshdiff CompareMeshes.cxx)
 ADD_EXECUTABLE(mesh2img ${FILLSTLMESH_SRCS})
 ADD_EXECUTABLE(avgmesh AverageMeshes.cxx)
-ADD_EXECUTABLE(submesh SubdivideMesh.cxx)
+ADD_EXECUTABLE(submesh SubdivideMesh.cxx ReadWriteVTK.cxx)
+ADD_EXECUTABLE(smoothmesh SmoothMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(avgmesharr AverageMeshArrays.cxx)
 ADD_EXECUTABLE(identimg IdentifyImage.cxx)
-ADD_EXECUTABLE(scalemesh ScaleMesh.cxx)
+ADD_EXECUTABLE(scalemesh ScaleMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(dumpmeshpoints DumpMeshPoints.cxx)
 
 ADD_EXECUTABLE(importqvoronoi 
@@ -42,6 +43,7 @@ INCLUDE_DIRECTORIES(${MYLIBS_INCLUDE_DIRS}
 TARGET_LINK_LIBRARIES(meshdiff ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(avgmesh ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(submesh ${COMMON_LIBS})
+TARGET_LINK_LIBRARIES(smoothmesh ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(avgmesharr ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(identimg ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(scalemesh ${COMMON_LIBS})

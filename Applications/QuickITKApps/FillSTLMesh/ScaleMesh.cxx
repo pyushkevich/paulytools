@@ -9,13 +9,8 @@
 #include <vtkRenderWindow.h>
 #include <vtkRenderWindowInteractor.h>
 #include <vtkPolyDataMapper.h>
-#include <vtkPolyDataReader.h>
-#include <vtkBYUReader.h>
-#include <vtkSTLReader.h>
-#include <vtkPolyDataWriter.h>
-#include <vtkBYUWriter.h>
-#include <vtkSTLWriter.h>
 #include <vtkTriangleFilter.h>
+#include "ReadWriteVTK.h"
 
 #include <itkImageFileWriter.h>
 #include <itkImageRegionConstIterator.h>
@@ -44,67 +39,21 @@ int usage()
   return -1;
 }
 
-vtkPolyData *ReadVTKData(string fn)
+vtkPolyData *ReadAndTriangulateVTKData(string fn)
 {
-  vtkPolyData *p1 = NULL;
-
-  // Choose the reader based on extension
-
-  if(fn.rfind(".byu") == fn.length() - 4)
+  vtkPolyData *p1 = ReadVTKData(fn);
+  if(p1 != NULL)
     {
-    vtkBYUReader *reader = vtkBYUReader::New();
-    reader->SetFileName(fn.c_str());
-    reader->Update();
-    p1 = reader->GetOutput();
+    // Convert the model to triangles
+    vtkTriangleFilter *tri = vtkTriangleFilter::New();
+    tri->SetInput(p1);
+    cout << "Converting to triangles ..." << endl;
+    tri->Update();
+    vtkPolyData *pd = tri->GetOutput();
+    return pd;
     }
-  else if(fn.rfind(".vtk") == fn.length() - 4)
-    {
-    vtkPolyDataReader *reader = vtkPolyDataReader::New();
-    reader->SetFileName(fn.c_str());
-    reader->Update();
-    p1 = reader->GetOutput();
-    }
-  else
-    {
-    cout << "Could not find a reader for " << fn << endl;
-    cout << fn.rfind(".byu") << endl;
-    cout << fn.rfind(".vtk") << endl;
-    return NULL;
-    }
-
-  // Convert the model to triangles
-  vtkTriangleFilter *tri = vtkTriangleFilter::New();
-  tri->SetInput(p1);
-  cout << "Converting to triangles ..." << endl;
-  tri->Update();
-  vtkPolyData *pd = tri->GetOutput();
-
-  return pd;
+  else return NULL;
 }
-
-vtkPolyData *WriteVTKData(string fn, vtkPolyData *data)
-{
-  // Choose the writer based on extension
-  if(fn.rfind(".byu") == fn.length() - 4)
-    {
-    vtkBYUWriter *writer = vtkBYUWriter::New();
-    writer->SetGeometryFileName(fn.c_str());
-    writer->SetInput(data);
-    writer->Update();
-    }
-  else if(fn.rfind(".vtk") == fn.length() - 4)
-    {
-    vtkPolyDataWriter *writer = vtkPolyDataWriter::New();
-    writer->SetFileName(fn.c_str());
-    writer->SetInput(data);
-    writer->Update();
-    }
-  else
-    {
-    cout << "Could not find a writer for " << fn << endl;
-    }
-}
-
 
 void ProgressCommand(Object *, const EventObject &, void *)
 { 
@@ -124,7 +73,7 @@ int main(int argc, char **argv)
   double sz = atof(argv[5]);
 
   // Read the appropriate meshes
-  vtkPolyData *p1 = ReadVTKData(fn1);
+  vtkPolyData *p1 = ReadAndTriangulateVTKData(fn1);
   vtkPoints *pts = p1->GetPoints();
 
   // Scale all the points in the mesh
@@ -137,5 +86,5 @@ int main(int argc, char **argv)
     pts->SetPoint(iPoint, x);
     }
 
-  WriteVTKData(fn2, p1);
+  WriteVTKData(p1, fn2);
 }
