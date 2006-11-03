@@ -25,6 +25,6 @@ int main(int argc, char *argv[])
   fltButterfly->SetNumberOfSubdivisions(atoi(argv[3]));
   fltButterfly->Update();
 
-  WriteVTKData(fltButterfly->GetOutput(), argv[argc - 1]);
+  WriteVTKData(fltButterfly->GetOutput(), argv[2]);
 }
 
