@@ -5,13 +5,14 @@
 #include <set>
 
 #include <vtkCellArray.h>
+#include <vtkCellDataToPointData.h>
 #include <vtkPolyData.h>
 #include <vtkLODActor.h>
 #include <vtkRenderer.h>
 #include <vtkRenderWindow.h>
 #include <vtkRenderWindowInteractor.h>
 #include <vtkPolyDataMapper.h>
-#include <vtkPolyDataReader.h>
+#include "ReadWriteVTK.h"
 #include <vtkBYUReader.h>
 #include <vtkSTLReader.h>
 #include <vtkPolyDataWriter.h>
@@ -19,7 +20,10 @@
 #include <vtkSTLWriter.h>
 #include <vtkTriangleFilter.h>
 #include <vtkCell.h>
+#include <vtkCellData.h>
 #include <vtkCellLocator.h>
+#include <vtkDoubleArray.h>
+#include <vtkCleanPolyData.h>
 
 #include <itkImageFileReader.h>
 #include <itkLinearInterpolateImageFunction.h>
@@ -64,6 +68,62 @@ void ComputeExactMeshToMeshDistance(vtkPolyData *source, vtkPolyData *target, vn
 
   // Take square root
   dist = dist.apply(sqrt);
+}
+
+/**
+ * Compute the mesh distances (#edges) between generator points in a mesh. Only
+ * distances smaller than a threshold are considered
+ */
+void ComputeMeshDistances(
+  vtkPolyData *mesh,
+  VertexPairArray &pairs,
+  size_t dMax,
+  vector<double> &d)
+{
+  size_t i, n = mesh->GetNumberOfPoints();
+  cout << "Computing Simple Geodesics on the Boundary" << endl;
+
+  // Fill the output vector with zero
+  d.resize(pairs.size(), 0.0);
+
+  // Wrap the mesh in a half-edge structure
+  VTKMeshHalfEdgeWrapper hewrap(mesh);
+
+  // Create a Dijkstra object
+  VTKMeshShortestDistance dijkstra;
+  dijkstra.SetInputMesh(&hewrap);
+
+  // Set the weight function to euclidean distance
+  UnitLengthMeshEdgeWeightFunction wfunc;
+  dijkstra.SetEdgeWeightFunction(&wfunc);
+
+  // Compute the edge graph
+  dijkstra.ComputeGraph();
+
+  // For each vertex, compute the points around it
+  for(i = 0; i < n; i++)
+    {
+    // Compute distances in a geodesic ball of radius rmax * dscale
+    dijkstra.ComputeDistances(i, dMax);
+
+    // Compute distances for all pairs that involve i (brute force again)
+    size_t j = 0;
+    for(VertexPairArray::iterator it = pairs.begin(); it != pairs.end(); ++it, ++j)
+      {
+      if(it->first == i)
+        {
+        d[j] = dijkstra.GetVertexDistance(it->second);
+        }
+      else if(it->second == i)
+        {
+        d[j] = dijkstra.GetVertexDistance(it->first);
+        }
+      }
+
+    // Track progress
+    if((i % 1000) == 999) cout << "." << flush;
+    }
+  cout << endl;
 }
 
 /** 
@@ -137,16 +197,20 @@ void ComputeGeodesics(
 }
 
 vtkPolyData *ReadVoronoiOutput(
-  string fn,                // Filename from which to read the points
-  ImageType *mask,          // The mask image (to tell if diagram is inside the object)
-  float threshold,          // The threshold for the mask image
+  string fn,                  // Filename from which to read the points
+  ImageType *mask,            // The mask image (to tell if diagram is inside the object)
+  float threshold,            // The threshold for the mask image
   VertexPairArray &src)       // Output: for each cell in the VD, the pair of generators
 {
   // Build an interpolator for the image
   typedef itk::LinearInterpolateImageFunction<ImageType, double> FuncType;
-  FuncType::Pointer fMask = FuncType::New();
-  fMask->SetInputImage(mask);
-  
+  FuncType::Pointer fMask = NULL;
+  if(mask)
+    {
+    fMask = FuncType::New();
+    fMask->SetInputImage(mask);
+    }
+
   // Load the file
   ifstream fin(fn.c_str());
 
@@ -172,7 +236,7 @@ vtkPolyData *ReadVoronoiOutput(
   // Read the number of cells
   fin >> np;
 
-  // Clear the src and r arrays
+  // Clear the src array
   src.clear();
 
   // Create the polygons 
@@ -194,18 +258,24 @@ vtkPolyData *ReadVoronoiOutput(
       if(ids[k] == 0) isinf = true; else ids[k]--;
 
       // Is this point in the image?
-      FuncType::PointType P;
-      P[0] = pts->GetPoint(ids[k])[0];
-      P[1] = pts->GetPoint(ids[k])[1];
-      P[2] = pts->GetPoint(ids[k])[2];
+      if(!fMask.IsNull())
+        {
+        FuncType::PointType P;
+        P[0] = pts->GetPoint(ids[k])[0];
+        P[1] = pts->GetPoint(ids[k])[1];
+        P[2] = pts->GetPoint(ids[k])[2];
 
-      if(!fMask->IsInsideBuffer(P) || fMask->Evaluate(P) < threshold)
-        isout = true;
+        if(!fMask->IsInsideBuffer(P) || fMask->Evaluate(P) < threshold)
+          isout = true;
+        }
       }
 
     if(!isinf && !isout)
       {
+      // add the cell
       cells->InsertNextCell(m, ids);
+
+      // add the pair of generators
       src.push_back(make_pair(ip1, ip2)); // TODO: is this numbering 0-based?
       }
 
@@ -292,50 +362,107 @@ void ComputeAreaElement(vtkPolyData *poly, vnl_vector<vtkFloatingPointType> &elt
     }
 }
 
+int usage()
+{
+  cout << "Usage: " << endl;
+  cout << "    importqvoronoi [options] voronoi.txt mesh.vtk output.vtk" << endl;
+  cout << "Parameters: " << endl;
+  cout << "    voronoi.txt          Output produced by \"qvoronoi p Fv\"" << endl;
+  cout << "    mesh.vtk             Mesh from which the voronoi diag was made" << endl;
+  cout << "    output.vtk           Mesh where to save the skeleton" << endl;
+  cout << "Options:" << endl;
+  cout << "    -e N                 Minimal number of mesh edges separating two generator" << endl;
+  cout << "                         points of a VD face for it to be considered (try 2, 3)" << endl;
+  cout << "    -p X.XX              Prune the mesh using factor X.XX (try 2.0). The " << endl;
+  cout << "                         pruning algorithm deletes faces in the VD for " << endl;
+  cout << "                         which the ratio of the geodesic distance between " << endl;
+  cout << "                         the generating points and the euclidean distance " << endl;
+  cout << "                         between these points is less than X.XX" << endl;
+  cout << "    -m mask.img X.XX     Use use-supplied binary image as a mask. Faces in the VD" << endl;
+  cout << "                         that have a vertex where the mask is below the threshhold" << endl;
+  cout << "                         X.XX will be eliminated" << endl;
+  cout << "    -c N                 Take at most N connected components of the skeleton" << endl;
+  cout << "    -s mesh.vtk          Load a skeleton from mesh.vtk and compare to the output skeleton" << endl;
+  cout << "    -g                   Compute full geodesic information. This is only useful for" << endl;
+  cout << "                         debugging the pruning code." << endl;
+  return -1;
+}
+  
+
 int main(int argc, char *argv[])
 {
   size_t k;
 
-  if(argc != 7)
+  // Command line arguments
+  string fnVoronoi, fnMesh, fnOutput, fnMask, fnSkel;
+  double xPrune = 2.0, xThresh = 0.0;
+  int nComp = 0, nDegrees = 0;
+  bool flagGeodFull = false;
+
+  // Check that there are at least three command line arguments
+  if(argc < 4) return usage();
+  fnVoronoi = argv[argc-3];
+  fnMesh = argv[argc-2];
+  fnOutput = argv[argc-1];
+  
+  // Parse the command line for options
+  for(size_t iArg = 1; iArg < argc - 3; ++iArg)
     {
-    cerr << "Usage: importqvoronoi voronoi.txt mask.img mask_thresh bnd.vtk med.vtk output.vtk" << endl;
-    cerr << "Diagrams must be gerenated with \"qvoronoi p Fv\"" << endl;
-    return -1;
+    string arg = argv[iArg];
+    if(arg == "-p")
+      {
+      xPrune = atof(argv[++iArg]);
+      }
+    else if(arg == "-m")
+      {
+      fnMask = argv[++iArg];
+      xThresh = atof(argv[++iArg]);
+      }
+    else if(arg == "-c")
+      {
+      nComp = atoi(argv[++iArg]);
+      }
+    else if(arg == "-e")
+      {
+      nDegrees = atoi(argv[++iArg]);
+      }
+    else if(arg == "-s")
+      {
+      fnSkel = argv[++iArg];
+      }
+    else if(arg == "-g")
+      {
+      flagGeodFull = true;
+      }
+    else return usage();
     }
 
-  // Load the image
-  typedef itk::ImageFileReader<ImageType> ReaderType;
-  ReaderType::Pointer reader = ReaderType::New();
-  reader->SetFileName(argv[2]);
-  try {
-    reader->Update();
-  } catch (itk::ExceptionObject &exc) {
-    cerr << exc << endl;
-    return -1;
-  }
+  // Load the mask image if specified
+  ImageType::Pointer imgMask = NULL;
+  if(fnMask.length())
+    {
+    typedef itk::ImageFileReader<ImageType> ReaderType;
+    ReaderType::Pointer reader = ReaderType::New();
+    reader->SetFileName(fnMask.c_str());
+    try 
+      {
+      reader->Update();
+      imgMask = reader->GetOutput();
+      } 
+    catch (itk::ExceptionObject &exc) 
+      {
+      cerr << exc << endl;
+      return -1;
+      }
+    }
 
   // Load the input mesh
-  vtkPolyDataReader *pdr = vtkPolyDataReader::New();
-  pdr->SetFileName(argv[4]);
-  pdr->Update();
-  vtkPolyData *bnd = pdr->GetOutput();
+  vtkPolyData *bnd = ReadVTKData(fnMesh);
   bnd->BuildCells();
-
-  // Load the input medial mesh
-  vtkPolyDataReader *pdr2 = vtkPolyDataReader::New();
-  pdr2->SetFileName(argv[5]);
-  pdr2->Update();
-  vtkTriangleFilter *tri = vtkTriangleFilter::New();
-  tri->SetInput(pdr2->GetOutput());
-  tri->Update();
-  vtkPolyData *med = tri->GetOutput();
-  med->BuildCells();
-  med->BuildLinks();
 
   // Run the program 
   VertexPairArray pgen;
-  vtkPolyData *poly = ReadVoronoiOutput(
-    argv[1], reader->GetOutput(), atof(argv[3]), pgen);
+  vtkPolyData *poly = ReadVoronoiOutput(fnVoronoi, imgMask, xThresh, pgen);
   poly->BuildCells();
   poly->BuildLinks();
 
@@ -348,36 +475,89 @@ int main(int argc, char *argv[])
     rad[k] = (p1 - p2).magnitude();
     }
 
+  // Compute the number of mesh edges between generator points
+  std::vector<double> meshdist(pgen.size());
+  if(nDegrees)
+    ComputeMeshDistances(bnd, pgen, nDegrees, meshdist);
+
   // Compute the geodesic distances for the pairs of associated boundary points
-  // TODO: ignore geodesics longer than k * r
   std::vector<double> geod(pgen.size());
-  ComputeGeodesics(bnd, pgen, rad, 1.6, geod);
+  ComputeGeodesics(bnd, pgen, rad, flagGeodFull ? 1e100 : xThresh, geod);
 
   // Create a new cell array for the pruning
   vtkCellArray *prune = vtkCellArray::New();
 
+  // Allocate the output radius data array
+  vtkDoubleArray *daRad = vtkDoubleArray::New();
+  daRad->SetNumberOfComponents(1);
+  daRad->SetName("Radius");
+
+  // Another array for prune strength
+  vtkDoubleArray *daPrune = vtkDoubleArray::New();
+  daPrune->SetNumberOfComponents(1);
+  daPrune->SetName("Pruning Ratio");
+
+  // Another array for prune strength
+  vtkDoubleArray *daGeod = vtkDoubleArray::New();
+  daGeod->SetNumberOfComponents(1);
+  daGeod->SetName("Geodesic");
+
   // Prune the voronoi diagram
   for(k = 0; k < pgen.size(); k++)
-    if(geod[k] > 1.6 * rad[k])
+    {
+    double xRad = rad[k];
+    double xGeod = geod[k];
+    double xRatio = xGeod / xRad;
+    double xMeshDist = nDegrees ? meshdist[k] : 0.0;
+    if(xMeshDist >= nDegrees && xRatio > xPrune)
+      {
       prune->InsertNextCell(poly->GetCell(k));
+      daRad->InsertNextTuple(&xRad);
+      daGeod->InsertNextTuple(&xGeod);
+      daPrune->InsertNextTuple(&xRatio);
+      }
+    }
      
   // Insert the new pruned cell list
   poly->SetPolys(prune);
+  poly->GetCellData()->AddArray(daRad);
+  poly->GetCellData()->AddArray(daPrune);
+  poly->GetCellData()->AddArray(daGeod);
+  poly->BuildCells();
+  poly->BuildLinks();
 
   // Compute the distance from the medial axis to the voronoi mesh
-  /*
-  vnl_vector<vtkFloatingPointType> dist;
-  vnl_vector<vtkFloatingPointType> area;
-  ComputeAreaElement(med, area);
-  ComputeExactMeshToMeshDistance(med, poly, dist);
-  cout << "Avg, Max, Edge: " << dot_product(dist, area) / area.one_norm() 
-    << " " << dist.inf_norm() << " " << ComputeAverageEdgeLength(med) << endl;
-  */
-  
-  vtkPolyDataWriter *writer = vtkPolyDataWriter::New();
-  writer->SetInput(poly);
-  writer->SetFileName(argv[argc-1]);
-  writer->Update();
+  if(fnSkel != "")
+    {
+    // Load the input medial mesh
+    vtkPolyData *pd = ReadVTKData(fnSkel);
+    vtkTriangleFilter *tri = vtkTriangleFilter::New();
+    tri->SetInput(pd);
+    tri->Update();
+    vtkPolyData *med = tri->GetOutput();
+    med->BuildCells();
+    med->BuildLinks();
+
+    vnl_vector<vtkFloatingPointType> dist;
+    vnl_vector<vtkFloatingPointType> area;
+    ComputeAreaElement(med, area);
+    ComputeExactMeshToMeshDistance(med, poly, dist);
+    cout << "Avg, Max, Edge: " << dot_product(dist, area) / area.one_norm() 
+      << " " << dist.inf_norm() << " " << ComputeAverageEdgeLength(med) << endl;
+    }
+
+  // Drop the singleton points from the diagram (points not in any cell)
+  vtkCleanPolyData *fltClean = vtkCleanPolyData::New();
+  fltClean->SetInput(poly);
+  fltClean->Update();
+
+  // Convert the cell data to point data
+  vtkCellDataToPointData *c2p = vtkCellDataToPointData::New();
+  c2p->SetInput(fltClean->GetOutput());
+  c2p->PassCellDataOn();
+  c2p->Update();
+    
+  WriteVTKData(c2p->GetPolyDataOutput(), fnOutput);
   return 0;
 }
 

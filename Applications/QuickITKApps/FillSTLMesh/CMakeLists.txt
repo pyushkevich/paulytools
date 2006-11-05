@@ -12,11 +12,12 @@ ADD_EXECUTABLE(smoothmesh SmoothMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(avgmesharr AverageMeshArrays.cxx)
 ADD_EXECUTABLE(identimg IdentifyImage.cxx)
 ADD_EXECUTABLE(scalemesh ScaleMesh.cxx ReadWriteVTK.cxx)
-ADD_EXECUTABLE(dumpmeshpoints DumpMeshPoints.cxx)
+ADD_EXECUTABLE(dumpmeshpoints DumpMeshPoints.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(real2mesh RealImageToMesh.cxx ReadWriteVTK.cxx)
 
 ADD_EXECUTABLE(importqvoronoi 
   ImportQVoronoi.cxx
+  ReadWriteVTK.cxx
   ${PAULY_SOURCE_DIR}/Applications/BrainTracer/Code/VTKMeshShortestDistance.cxx
 )
 
