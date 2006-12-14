@@ -18,10 +18,17 @@
 #include "itkBinaryThresholdImageFilter.h"
 #include "itkVoxBoCUBImageIOFactory.h"
 #include "itkPovRayDF3ImageIOFactory.h"
+#include "itkArray.h"
+#include "itkImageRegionIteratorWithIndex.h"
+#include "itkImageRegionConstIteratorWithIndex.h"
+#include "itkVnlFFTRealToComplexConjugateImageFilter.h"
+#include "itkComplexToRealImageFilter.h"
+#include "itkComplexToImaginaryImageFilter.h"
 
 #include <string>
 
 typedef itk::Image<double, 3> DoubleImage;
+typedef itk::Image<std::complex<double>, 3> ComplexImage;
 
 // Double image stuff
 template class itk::Image<double, 3>;
@@ -42,7 +49,19 @@ template class itk::BSplineInterpolateImageFunction<DoubleImage>;
 template class itk::MetaDataObject<std::string>;
 template class itk::Transform<double, 3, 3>;
 template class itk::BinaryThresholdImageFilter<DoubleImage, DoubleImage>;
+template class itk::ImageRegionIteratorWithIndex<DoubleImage>;
+template class itk::ImageRegionConstIteratorWithIndex<DoubleImage>;
+template class itk::Array<double>;
 
+// All the junk we need for complex
+template class itk::VnlFFTRealToComplexConjugateImageFilter<double, 3>;
+template class itk::ComplexToRealImageFilter<ComplexImage, DoubleImage>;
+template class itk::ComplexToImaginaryImageFilter<ComplexImage, DoubleImage>;
+template class itk::ImageToImageFilter<ComplexImage,DoubleImage>;
+template class itk::ImageToImageFilter<DoubleImage,ComplexImage>;
+template class itk::Image<std::complex<double>, 3>;
+template class itk::ImageSource<ComplexImage>;
+template class itk::InPlaceImageFilter<ComplexImage, DoubleImage>;
 
 // Stuff associated with writing images
 template class itk::Image<unsigned char,3>;

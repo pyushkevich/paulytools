@@ -22,6 +22,11 @@
 #include "itkVoxBoCUBImageIOFactory.h"
 #include "itkPovRayDF3ImageIOFactory.h"
 #include "itkImageRegionConstIteratorWithIndex.h"
+#include "itkImageRegionIteratorWithIndex.h"
+
+#include "itkVnlFFTRealToComplexConjugateImageFilter.h"
+#include "itkComplexToRealImageFilter.h"
+#include "itkComplexToImaginaryImageFilter.h"
 
 #include <iostream>
 #include <cctype>
@@ -45,14 +50,26 @@ private:
   typedef typename ImageType::SizeType SizeType;
   typedef vnl_vector_fixed<double, VDim> RealVector;
   typedef vnl_vector_fixed<int, VDim> IntegerVector;
+
+  // Complex stuff
+  typedef std::complex<TPixel> ComplexPixel;
+  typedef itk::Image<ComplexPixel, VDim> ComplexImageType;
+
+  // Iterators
+  typedef itk::ImageRegionIteratorWithIndex<ImageType> Iterator;
+  typedef itk::ImageRegionConstIteratorWithIndex<ImageType> ConstIterator;
   
   // Internal functions
   void ReadImage(const char *file);
   void WriteImage(const char *file);
   void AntiAliasImage(double iso);
   void CopyImage();
+  void ComputeFFT();
+  void ComputeOverlaps(double value);
+  void SampleImage(const RealVector &x);
   void ScaleShiftImage(double a, double b);
   void PrintImageInfo(bool flagFullInfo);
+  void ReplaceIntensities(vector<double> &rules);
   void ThresholdImage(double u1, double u2, double vIn, double vOut);
   void TrimImage(const RealVector &margin);
   int ProcessCommand(int argc, char *argv[]);
@@ -140,6 +157,13 @@ ImageConverter<TPixel, VDim>
     return 0;
     }
 
+  else if(cmd == "-probe")
+    {
+    // Get the probe point
+    RealVector x = ReadRealVector(argv[1]);
+    SampleImage(x);
+    }
+
   else if(cmd == "-info")
     { PrintImageInfo(false); return 0; }
 
@@ -151,6 +175,7 @@ ImageConverter<TPixel, VDim>
 
   else if(cmd == "-iterations")
     { m_Iterations = static_cast<size_t>(atoi(argv[1])); return 1; }
+  
 
   else if(cmd == "-noround")
     { m_RoundFactor = 0.0; return 0; }
@@ -158,6 +183,34 @@ ImageConverter<TPixel, VDim>
   // Enable SPM extensions
   else if(cmd == "-nospm")
     { m_FlagSPM = false; return 0; }
+
+  else if(cmd == "-overlap")
+    {
+    double label = atof(argv[1]);
+    ComputeOverlaps(label);
+    return 1;
+    }
+
+  else if (cmd == "-replace")
+    {
+    vector<double> vReplace;
+
+    // Read a list of numbers from the command line
+    for(int i = 1; (i < argc) && (argv[i][0] != '-'); i++)
+      vReplace.push_back(atof(argv[i]));
+
+    // Make sure the number of replacement rules is even
+    if(vReplace.size() % 2 == 1)
+      {
+      cerr << "The number of parameters to '-replace' must be even!" << endl;
+      throw -1;
+      }
+
+    // Replace the intensities with values supplie
+    ReplaceIntensities(vReplace);
+
+    return vReplace.size();
+    }
 
   // Resample command
   else if(cmd == "-resample")
@@ -192,6 +245,12 @@ ImageConverter<TPixel, VDim>
     return 1;
     }
   */
+
+  else if(cmd == "-fft")
+    {
+    ComputeFFT();
+    return 0;
+    }
 
   else if(cmd == "-shift")
     {
@@ -583,6 +642,51 @@ ImageConverter<TPixel, VDim>
 }
 
 template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
+::SampleImage(const RealVector &x)
+{
+  // Typedefs for interpolators
+  typedef itk::NearestNeighborInterpolateImageFunction<ImageType,double> NNInterpolatorType;
+  typedef itk::LinearInterpolateImageFunction<ImageType,double> LinearInterpolatorType;
+  typedef itk::BSplineInterpolateImageFunction<ImageType,double> CubicInterpolatorType;
+
+  // Create a point
+  itk::Point<double, VDim> p;
+  for(size_t i = 0; i < VDim; i++)
+    p[i] = x[i];
+
+  // Create the intensity value
+  double xVal = 0.0;
+
+  // Create an interpolating function
+  if(m_Interpolation == "NearestNeighbor")
+    {
+    typename NNInterpolatorType::Pointer fltSample 
+      = NNInterpolatorType::New();
+    fltSample->SetInputImage(m_ImageStack.back());
+    xVal = fltSample->Evaluate(p);
+    }
+  else if(m_Interpolation == "Linear")
+    {
+    typename LinearInterpolatorType::Pointer fltSample 
+      = LinearInterpolatorType::New();
+    fltSample->SetInputImage(m_ImageStack.back());
+    xVal = fltSample->Evaluate(p);
+    }
+  else if(m_Interpolation == "Cubic")
+    {
+    typename CubicInterpolatorType::Pointer fltSample 
+      = CubicInterpolatorType::New();
+    fltSample->SetInputImage(m_ImageStack.back());
+    xVal = fltSample->Evaluate(p);
+    }
+
+  // Print out the interpolated value
+  cout << "Interpolated image value at " << x << " is " << xVal << endl;
+}
+
+template<class TPixel, unsigned int VDim>
 int
 ImageConverter<TPixel, VDim>
 ::ProcessResampleCommand(int argc, char *argv[])
@@ -846,6 +950,115 @@ ImageConverter<TPixel, VDim>
 template<class TPixel, unsigned int VDim>
 void
 ImageConverter<TPixel, VDim>
+::ComputeOverlaps(double v)
+{
+  // There must be two images available on the stack!
+  if(m_ImageStack.size() < 2)
+    {
+    cerr << "Overlap requires two images on the stack!" << endl;
+    throw -1;
+    }
+
+  // Get the last two images
+  ImagePointer i2 = m_ImageStack[m_ImageStack.size() - 1];
+  ImagePointer i1 = m_ImageStack[m_ImageStack.size() - 2];
+
+  // Report what the filter is doing
+  *verbose << "Computing overlap #" << m_ImageStack.size() - 1 
+    << " and #" << m_ImageStack.size() << endl;
+
+  // The images must have the same size
+  if(i1->GetBufferedRegion() != i2->GetBufferedRegion())
+    {
+    cerr << "Overlap requires the images to be of the same dimensions!" << endl;
+    throw -1;
+    }
+
+  // Create iterators for the two images
+  ConstIterator it1(i1, i1->GetBufferedRegion());
+  ConstIterator it2(i2, i2->GetBufferedRegion());
+  double eps = 0.000001;
+
+  // Counters of the overlap scores
+  long n1 = 0, n2 = 0, n12 = 0;
+
+  // Iterate over all pixels
+  for(; !it1.IsAtEnd(); ++it1, ++it2)
+    {
+    // Read the values
+    double v1 = it1.Get();
+    double v2 = it2.Get();
+
+    // Compare the values to target (within machine error)
+    bool m1 = (v1 == v) || (fabs(2 * (v1 - v) / (v1 + v)) < eps);
+    bool m2 = (v2 == v) || (fabs(2 * (v2 - v) / (v2 + v)) < eps);
+    if(m1) n1++;
+    if(m2) n2++;
+    if(m1 && m2) n12++;
+    }
+
+  // Report the overlaps on one line
+  double xDice = n12 * 2.0 / (n1 + n2);
+  double xRobust = n12 * 1.0 / (n1 + n2 - n12);
+
+  cout << "OVL: " << v << ", " << n1 << ", " << n2 << ", " << n12;
+  cout << ", " << xDice << ", " << xRobust << endl;
+  
+  // Print the overlap to verbose channel
+  *verbose << "  Matching voxels in first image:  " << n1 << endl;
+  *verbose << "  Matching voxels in second image: " << n2 << endl;
+  *verbose << "  Size of overlap region:          " << n12 << endl;
+  *verbose << "  Dice similarity coefficient:     " << xDice << endl;
+  *verbose << "  Intersection / ratio:            " << xRobust << endl;
+}
+
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
+::ReplaceIntensities(vector<double> &xRule)
+{
+  // Get the input image
+  ImagePointer input = m_ImageStack.back();
+
+  // This is a slightly sensitive procedure. We need to set an epsilon so that
+  // intensities that are within machine precision are treated as equal. We define
+  // this as 2 (a - b) / (a + b) < eps.
+  double epsilon = 0.000001;
+
+  // Report what we are doing
+  *verbose << "Replacing intensities in #" << m_ImageStack.size() << endl;
+  *verbose << "  Replacement Rules: ";
+  for(size_t i = 0; i < xRule.size(); i+=2)
+    *verbose << xRule[i] << " -> " << xRule[i+1] << "; ";
+  *verbose << endl;
+
+  // Create an iterator to process the image
+  long nReps = 0;
+  for(Iterator it(input, input->GetBufferedRegion()); !it.IsAtEnd(); ++it)
+    {
+    // Get the pixel value
+    TPixel val = it.Get();
+
+    // Repeat over the rules
+    for(size_t k = 0; k < xRule.size(); k += 2)
+      {
+      double u = xRule[k], v = xRule[k+1];
+      if((val == 0 && u == 0) || fabs(2*(val-u)/(val+u)) < epsilon)
+        {
+        it.Set(v);
+        nReps++;
+        break;
+        }
+      }
+    }
+
+  // Report what the filter is doing
+  *verbose << "  Replacements Made: " << nReps << endl;
+}
+
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
 ::GetBoundingBox(ImageType *image, RealVector &bb0, RealVector &bb1)
 {
   for(size_t i = 0; i < VDim; i++)
@@ -853,6 +1066,55 @@ ImageConverter<TPixel, VDim>
     bb0[i] = image->GetOrigin()[i];
     bb1[i] = bb0[i] + image->GetSpacing()[i] * image->GetBufferedRegion().GetSize()[i];
     }
+}
+
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
+::ComputeFFT()
+{
+  // Compute the fourier transform of the image. This will take one image
+  // off the stack and place two images (real, imag) on the stack
+  ImagePointer image = m_ImageStack.back();
+  
+  // Create the fourier transform filter
+  typedef itk::VnlFFTRealToComplexConjugateImageFilter<TPixel, VDim> FFTFilter;
+  typename FFTFilter::Pointer fltFourier = FFTFilter::New();
+
+  // Get the real and imaginary components
+  typedef itk::ComplexToRealImageFilter<ComplexImageType,ImageType> RealFilter;
+  typedef itk::ComplexToImaginaryImageFilter<ComplexImageType,ImageType> ImagFilter;
+  typename RealFilter::Pointer fltReal = RealFilter::New();
+  typename ImagFilter::Pointer fltImag = ImagFilter::New();
+
+  // Set inputs and outputs
+  cout << "DOING FFT" << endl;
+  try 
+    {
+    fltFourier->SetInput(image);
+    fltFourier->Update();
+    }
+  catch(itk::ExceptionObject &exc) 
+    {
+    cerr << "Exception caught : " << exc;
+    cerr << endl;
+    return;
+    }
+  cout << "DID MAIN PART" << endl;
+
+  fltReal->SetInput(fltFourier->GetOutput());
+  fltImag->SetInput(fltFourier->GetOutput());
+
+  // Compute the transforms
+  fltReal->Update();
+  fltImag->Update();
+  cout << "DID FFT" << endl;
+
+  // Pop the last guy from the stack and push the real and imag
+  m_ImageStack.pop_back();
+  m_ImageStack.push_back(fltReal->GetOutput());
+  m_ImageStack.push_back(fltImag->GetOutput());
+  cout << "FINISHED STACK" << endl;
 }
 
 template<class TPixel, unsigned int VDim>
@@ -901,8 +1163,12 @@ ImageConverter<TPixel, VDim>
     cout << endl;
     cout << "  Image Dimensions: " << image->GetBufferedRegion().GetSize() << endl;
     cout << "  Bounding Box: " << "{[" << bb0 << "], [" << bb1 << "]}" << endl;
-    cout << "  BufferedRegion: " << image->GetBufferedRegion() << endl;
-    cout << "  LargestPossibleRegion: " << image->GetLargestPossibleRegion() << endl;
+    cout << "  BufferedRegion: " << endl;
+    image->GetBufferedRegion().Print(cout, 4); 
+    cout << endl;
+    cout << "  LargestPossibleRegion: " << endl; 
+    image->GetLargestPossibleRegion().Print(cout, 4); 
+    cout << endl;
     cout << "  Voxel Size: " << image->GetSpacing() << endl;
     cout << "  Direction Matrix: " << image->GetDirection() << endl;
     cout << "  Position of Origin in Voxel Units (SPM Origin): " << ospm << endl;
