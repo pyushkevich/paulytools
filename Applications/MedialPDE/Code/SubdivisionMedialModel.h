@@ -5,14 +5,18 @@
 #include "MeshMedialPDESolver.h"
 #include "SubdivisionSurface.h"
 
+/**
+ * This is a generic interface for medial models based on subdivision surfaces
+ * It supports models that use a PDE and non-PDE models
+ */
 class SubdivisionMedialModel : public GenericMedialModel
 {
 public:
   typedef SubdivisionSurface::MeshLevel MeshLevel;
 
   SubdivisionMedialModel();
-  
-  /** 
+
+  /**
    * This method associates the medial model with a mesh. The two parameters
    * that follow are levels of subdivision: the number of levels at which the
    * atoms are interpolated and a smaller number, at which the coefficients
@@ -20,18 +24,10 @@ public:
    * coefficients, but it is possible to request that the input mesh first be
    * subdivided and the nodes of that mesh be used as coefficients
    */
-  void SetMesh(const MeshLevel &mesh, SMLVec3d *X, double *rho, 
-    size_t nAtomSubs, size_t nCoeffSubs = 0);
-
-  /**
-   * A version of SetMesh that takes a coefficient array rather than X and rho
-   */
-  void SetMesh(const MeshLevel &mesh, const vnl_vector<double> &C,
+  void SetMesh(
+    const MeshLevel &mesh, 
+    const Vec &C, const Vec &u, const Vec &v,
     size_t nAtomSubs, size_t nCoeffSubs);
-
-  /** Get the solver */
-  MeshMedialPDESolver *GetSolver() 
-    { return &xSolver; }
 
   /** Get the number of optimizable coefficients that define this model */
   size_t GetNumberOfCoefficients() const
@@ -40,6 +36,10 @@ public:
   /** Get the array of (optimizable) coefficients that define this model */
   const Vec GetCoefficientArray() const
     { return xCoefficients; }
+
+  /** Get the u array of the coefficients */
+  const Vec GetCoefficientU() const { return uCoeff; }
+  const Vec GetCoefficientV() const { return vCoeff; }
 
   /** Get one of the coefficients defining this model */
   double GetCoefficient(size_t i) const
@@ -52,29 +52,6 @@ public:
   /** Set the array of coefficients defining this model */
   void SetCoefficientArray(const Vec &xData)
     { xCoefficients = xData; }
-
-  /** Get the hint array (solution phi) */
-  virtual Vec GetHintArray() const;
-
-  /** Compute the atoms from given a set of coefficients.  */
-  void ComputeAtoms(const double *xHint = NULL);
-
-  /**
-   * This method is called before multiple calls to the ComputeJet routine. Given a  
-   * of variation (direction in which directional derivatives will be computed), and 
-   * an array of atoms corresponding to the variation, this method will precompute the
-   * parts of the atoms that do not depend on the position in coefficient space where 
-   * the gradient is taken. This method must be called for each variation in the Jet.
-   */
-  void PrepareAtomsForVariationalDerivative(
-    const Vec &xVariation, MedialAtom *dAtoms) const;
-
-  /**
-   * This method computes the 'gradient' (actually, any set of directional derivatives)
-   * for the current values of the coefficients. As in ComputeAtoms, a set of initial 
-   * values can be passed in. By default, the previous solution is used to initialize.
-   */
-  void ComputeAtomGradient(std::vector<MedialAtom *> &dAtoms);
 
   /**
    * Load a medial model from the Registry.
@@ -92,7 +69,7 @@ public:
   size_t GetSubdivisionLevel() const { return xSubdivisionLevel; }
 
   /**
-   * Get a pointer to the affine transform descriptor corresponding to this class. 
+   * Get a pointer to the affine transform descriptor corresponding to this class.
    * The descriptor is a lightweight object, and its allocation should be
    * managed by the child of GenericMedialModel.
    */
@@ -115,38 +92,24 @@ public:
   const MeshLevel &GetAtomMesh() const
     { return mlAtom; }
 
-  /** Get the vector of phi-values for this model (equal to xAtoms.F) */
-  Vec GetPhi() const 
-    { 
-    Vec phi(this->GetNumberOfAtoms());
-    for(size_t i = 0; i < phi.size(); i++)
-      phi[i] = xAtoms[i].F;
-    return phi;
-    }
-
-  /** Set the vector of phi-values for the model */
-  void SetPhi(const Vec &phi)
-    {
-    for(size_t i = 0; i < phi.size(); i++)
-      xAtoms[i].F = phi[i];
-    }
-
-private:
+protected:
   // Vector typedef
   typedef vnl_vector<double> Vec;
-
-  // PDE solver which does most of the work in this method
-  MeshMedialPDESolver xSolver;
 
   // Mesh levels corresponding to the coefficients and the atoms
   MeshLevel mlCoefficient, mlAtom;
 
-  // The array of coefficients (4-tuples at each vertex)
+  // The array of coefficients (4-tuples at each vertex, it is assumed at this
+  // point that the coefficients are always xyz + something, whether rho or rad
+  // but that may change at some point in time
   Vec xCoefficients;
+
+  // U and V values at the coefficients and atoms
+  Vec uCoeff, vCoeff, uAtom, vAtom;
 
   // Coarse-to-fine mapping descriptor (dummy)
   SubdivisionSurfaceCoarseToFineMappingDescriptor xCTFDescriptor;
-  
+
   // Affine transform mapping descriptor
   PointArrayAffineTransformDescriptor xAffineDescriptor;
 

@@ -85,7 +85,7 @@ double ComputeProcrustesError(size_t m, Mat *A)
     E += D.transpose() * D;
     }
 
-  return vnl_trace(E);
+  return sqrt(vnl_trace(E) / (m * m * p));
 }
 
 /**
@@ -95,6 +95,8 @@ void GeneralizedProcrustesAnalysis(size_t m, Mat *A, Mat *R, Vec *t, double *s)
 {
   // Get the data dimensions
   size_t k = A[0].cols(), p = A[0].rows(), i, j;
+
+  cerr << "Procrustes matrix: " << endl << A[2] << endl;
 
   // Make a copy of all the original objects
   Mat *B = new Mat[m];
@@ -109,7 +111,8 @@ void GeneralizedProcrustesAnalysis(size_t m, Mat *A, Mat *R, Vec *t, double *s)
 
   // Continue until the Procrustes mean converges
   bool done = false;
-  while(!done)
+  int niter = 0;
+  while(!done && niter++ < 40)
     {
     // Map every matrix onto the centroid
     for(i = 0; i < m; i++)

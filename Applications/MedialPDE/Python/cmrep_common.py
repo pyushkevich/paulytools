@@ -21,3 +21,9 @@ def LoadImageJet(image):
   # Return the image
   return jet
 
+# Ensure that a filename can be created
+def CheckDir(dir):
+  if(not os.access(dir,os.X_OK)):
+    os.makedirs(dir)
+  return dir
+  

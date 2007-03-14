@@ -3,6 +3,7 @@
 
 #include "MedialAtom.h"
 #include "MedialAtomIterators.h"
+#include "SubdivisionSurface.h"
 
 using namespace std;
 
@@ -163,5 +164,37 @@ double AdaptivelyIntegrateFunctionOverBoundary(
   MedialIterationContext *xGrid, MedialAtom *xAtoms, 
   double xMinQuadArea, EuclideanFunction *fMatch);
 
+/**
+ * This is an extension of the loop tangent scheme that works with
+ * medial atoms rather than arrays of data. It's a convenience class
+ * and this seemed like the best place to stick it in
+ */
+class MedialAtomLoopScheme : public LoopTangentScheme
+{
+public:
+  double PartialPhi(size_t d, size_t v, MedialAtom *atoms)
+    {
+    size_t *ri = level->nbr.GetRowIndex();
+    size_t *ci = level->nbr.GetColIndex();
+
+    double y = xVtxTangentWeights[d][v] * atoms[v].F;
+    for(size_t i = ri[v]; i < ri[v+1]; ++i)
+      y += xNbrTangentWeights[d][i] * atoms[ci[i]].F;
+
+    return y;
+    }
+
+  SMLVec3d TangentX(size_t d, size_t v, MedialAtom *atoms)
+    {
+    size_t *ri = level->nbr.GetRowIndex();
+    size_t *ci = level->nbr.GetColIndex();
+
+    SMLVec3d y = xVtxTangentWeights[d][v] * atoms[v].X;
+    for(size_t i = ri[v]; i < ri[v+1]; ++i)
+      y += xNbrTangentWeights[d][i] * atoms[ci[i]].X;
+
+    return y;
+    }
+};
 
 #endif

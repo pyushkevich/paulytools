@@ -141,6 +141,9 @@ MedialAtom
 
   dAtom.G.xContravariantTensor[0][1] = dAtom.G.xContravariantTensor[1][0] = - G.gInv *
     (dAtom.G.xCovariantTensor[0][1] + G.xContravariantTensor[0][1] * dAtom.G.g);
+
+  // Compute the area element
+  dAtom.aelt = 0.5 * dAtom.G.g / aelt;
 }
 
 // Prerequisites:

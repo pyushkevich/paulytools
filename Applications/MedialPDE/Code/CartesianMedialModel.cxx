@@ -396,7 +396,7 @@ CartesianMedialModel
     MedialAtom &xAtom = xAtoms[iGrid];
 
     // The case where phi is negative is undefined
-    if( ySolution[i][j] > 0 )
+    if( ySolution[i][j] >= 0 )
       {
       // Compute the derivatives of R using finite differences
       double xTest = xSites[iLocal]->ComputeEquation(ySolution);
@@ -409,7 +409,7 @@ CartesianMedialModel
       // Report bad atoms
       if(!xAtom.flagValid)
         cout << "Invalid atom at " << xAtom.u << ", " << xAtom.v <<
-          "(|gradR|^2 = " << xAtom.xGradRMagSqr << ")" << endl;
+          "(1 - |gradR|^2 = " << 1.0 - xAtom.xGradRMagSqr << ")" << endl;
       }
     else
       {

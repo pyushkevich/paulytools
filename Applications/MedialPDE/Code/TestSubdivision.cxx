@@ -4,8 +4,9 @@
 #include "vtkOBJReader.h"
 #include "vtkBYUWriter.h"
 #include "vtkPolyData.h"
+#include "vtkPointData.h"
 #include "SubdivisionSurface.h"
-#include "SubdivisionMedialModel.h"
+#include "PDESubdivisionMedialModel.h"
 #include "SubdivisionSurfaceMedialIterationContext.h"
 #include "ScriptInterface.h"
 
@@ -110,13 +111,13 @@ int TestSparseMatrix()
   for(i = 0; i < N2; i++) for(j = 0; j < N3; j++)
     if(rnd.lrand32(0, 4) == 0)
       B(i,j) = rnd.lrand32(0,18) - 9;
-  
+
   // Compute their product using VNL
   A.mult(B, C);
 
   // Compute the product using immutable matrices
   Immutable AI, BI, CI, DI;
-  AI.SetFromVNL(A); 
+  AI.SetFromVNL(A);
   BI.SetFromVNL(B);
   CI.SetFromVNL(C);
   Immutable::Multiply(DI, AI, BI);
@@ -144,21 +145,31 @@ int TestSubdivisionPDE(const char *objMesh)
   SubdivisionSurface::ImportLevelFromVTK(poly, mesh);
 
   // Get the polygon data
-  SMLVec3d *xCtl = new SMLVec3d[mesh.nVertices];
-  double *rhoCtl = new double[mesh.nVertices];
+  vnl_vector<double> xCtl(mesh.nVertices * 4);
+
+  // Set the u and v values of the data
+  vnl_vector<double> u(mesh.nVertices, 0.0), v(mesh.nVertices, 0.0);
+
+  // Get the texture arrays
+  vtkDataArray *uv = poly->GetPointData()->GetTCoords();
+
+  // Make sure arrays exist
+  if(!uv) throw ModelIOException("Missing UV arrays in VTK/OBJ mesh");
+
+  // Read the coordinates and u,v from the mesh
   for(size_t i = 0; i < mesh.nVertices; i++)
     {
-    xCtl[i][0] = poly->GetPoint(i)[0];
-    xCtl[i][1] = poly->GetPoint(i)[1];
-    xCtl[i][2] = poly->GetPoint(i)[2];
-    rhoCtl[i] = -0.25;
+    for(size_t d = 0; d < 3; d++)
+      xCtl[i * 4 + d] = poly->GetPoint(i)[d];
+    u[i] = uv->GetTuple(i)[0];
+    v[i] = uv->GetTuple(i)[1];
     }
 
   // Create the medial model
-  SubdivisionMedialModel model;
-  
+  PDESubdivisionMedialModel model;
+
   // Pass the mesh to the medial model with specified number of levels
-  model.SetMesh(mesh, xCtl, rhoCtl, 2, 0); 
+  model.SetMesh(mesh, xCtl, u, v, 2, 0);
   model.ComputeAtoms();
 
   // Temp: test derivatives
@@ -220,7 +231,7 @@ int main(int argc, char *argv[])
     return TestSparseMatrix();
   else if(0 == strcmp(argv[1], "MODELSUB"))
     return TestModelSubdivision(argv[2]);
-  else 
+  else
     return usage();
 }
 

@@ -26,6 +26,7 @@ int TestGradientComputation(
 int TestOptimizerGradientComputation(
   MedialOptimizationProblem &mop, 
   CoefficientMapping &xMask,
-  GenericMedialModel *xSolver);
+  GenericMedialModel *xSolver,
+  double xStepSize);
 
 #endif

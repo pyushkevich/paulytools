@@ -346,6 +346,20 @@ NumericalGradientEnergyTerm
   return 0.5 * (f1 - f2) / xEpsilon;
 }
 
+
+/*********************************************************************************
+ * MEDIAL INTEGRATION ENERGY TERM
+ ********************************************************************************/
+MedialIntegrationEnergyTerm
+::MedialIntegrationEnergyTerm(GenericMedialModel *model)
+{
+  // Generate an array of weights for irregular grids
+  xDomainWeights.set_size(model->GetNumberOfAtoms());
+  xDomainArea = ComputeMedialDomainAreaWeights(
+    model->GetIterationContext(), model->GetAtomArray(), 
+    xDomainWeights.data_block());
+}
+
 /*********************************************************************************
  * BOUNDARY IMAGE MATCH TERM
  ********************************************************************************/
@@ -822,7 +836,7 @@ double CrestLaplacianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
       xAvgLaplacian += x;
       
       // Update the total penalty
-      xTotalPenalty += PenaltyFunction(x, 100, 0.0);
+      xTotalPenalty += PenaltyFunction(x, 300, 0.0);
       }
     }
 
@@ -848,26 +862,37 @@ void CrestLaplacianEnergyTerm::PrintReport(ostream &sout)
  ********************************************************************************/
 double AtomBadnessTerm::ComputeEnergy(SolutionDataBase *S)
 {
+  // This term computes the irregularity of medial atoms. The following are examples
+  // of irregular atom conditions that must be penalized. These penalties are quite
+  // relative and should be set on case-by-case basis
+  // 
+  //   -  Internal atom has |gradR| > 1 - eps1
+  //   -  Boundary atom has |gradR| < 1 - eps2
+
+  // Initialize the penalty array
+  size_t nAtoms = S->xAtomGrid->GetNumberOfAtoms();
+  xPenalty.set_size(nAtoms);
+  
   // Initialize the accumulators
-  xMaxBadness = 0;
+  xMinBadness = 1.0;
   xTotalPenalty = xAvgBadness = 0.0;
   nBadAtoms = 0;
   
   // Iterate over all crest atoms
-  for(MedialAtomIterator itAtom(S->xAtomGrid) ; !itAtom.IsAtEnd(); ++itAtom)
+  for(size_t i = 0; i < nAtoms; i++)
     {
-    // We only care about invalid atoms
-    MedialAtom &A = S->xAtoms[itAtom.GetIndex()];
-    if(!A.flagValid)
+    // Penalize internal atoms where gradR is excessive
+    if(!S->xAtoms[i].flagCrest)
       {
-      nBadAtoms++;
-      xTotalPenalty += A.xGradRMagSqr - 1.0;
+      double badness = 1.0 - S->xAtoms[i].xGradRMagSqr;
+      xPenalty[i] = exp(300 * - (badness - 0.05));
+      xTotalPenalty += xPenalty[i];
+      xMinBadness = std::min(badness, xMinBadness);
       }
     }
 
   // Finish up
-  nAtoms = S->xAtomGrid->GetNumberOfAtoms();
-  xAvgBadness = xTotalPenalty / nBadAtoms;
+  xTotalPenalty /= nAtoms;
 
   // Return the total penalty
   return xTotalPenalty;
@@ -880,12 +905,18 @@ double AtomBadnessTerm::ComputePartialDerivative(
   double dTotalPenalty = 0.0;
   
   // Iterate over all crest atoms
-  for(MedialAtomIterator itAtom(S->xAtomGrid) ; !itAtom.IsAtEnd(); ++itAtom)
+  size_t nAtoms = S->xAtomGrid->GetNumberOfAtoms();
+  for(size_t i = 0; i < nAtoms; i++)
     {
-    size_t i = itAtom.GetIndex();
-    if(!S->xAtoms[i].flagValid)
-      dTotalPenalty += dS->xAtoms[i].xGradRMagSqr;
+    if(!S->xAtoms[i].flagCrest)
+      {
+      double d_badness = -dS->xAtoms[i].xGradRMagSqr;
+      double d_penalty = xPenalty[i] * (-100 * d_badness);
+      dTotalPenalty += d_penalty;
+      }
     }
+
+    dTotalPenalty /= nAtoms;
 
   return dTotalPenalty;
 }
@@ -895,7 +926,7 @@ void AtomBadnessTerm::PrintReport(ostream &sout)
   sout << "  Atom Penalty Term:           " << endl;
   sout << "    number of atoms          : " << nAtoms << endl; 
   sout << "    number of bad atoms      : " << nBadAtoms << endl; 
-  sout << "    largest badness value    : " << xMaxBadness << endl; 
+  sout << "    largest badness value    : " << xMinBadness << endl; 
   sout << "    average badness value    : " << xAvgBadness << endl; 
   sout << "    total penalty            : " << xTotalPenalty << endl;
 }
@@ -984,46 +1015,152 @@ double CosineSquareTupleDerivative(MedialAtom *A, MedialAtom *dA, MedialTriangle
   return dC0 + dC1 + dC2;
 }
 
+MedialAnglesPenaltyTerm
+::MedialAnglesPenaltyTerm(GenericMedialModel *model)
+: MedialIntegrationEnergyTerm(model)
+{
+}
+
 double MedialAnglesPenaltyTerm::ComputeEnergy(SolutionDataBase *S)
 {
-  xTotalPenalty = 0.0;
+  xTotalPenalty = xMaxPenalty = 0.0;
+
+  // Compute the square of the cosine of the angle between Xu and Xv
+  for(MedialAtomIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
+    {
+    MedialAtom &a = S->xAtoms[it.GetIndex()];
+    double penalty = 
+      a.G.xCovariantTensor[0][1] * a.G.xCovariantTensor[0][1] / a.G.g;
+    xTotalPenalty += penalty * xDomainWeights[it.GetIndex()];
+    xMaxPenalty = std::max(penalty, xMaxPenalty);
+    }
 
   // Sum the penalty over all triangles in the mesh
-  for(MedialTriangleIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
-    xTotalPenalty += CosineSquareTuple(S->xAtoms, it);
+  // for(MedialTriangleIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
+  //  xTotalPenalty += CosineSquareTuple(S->xAtoms, it);
 
-  return 0.25 * xTotalPenalty / S->xAtomGrid->GetNumberOfAtoms();
+  // return 0.25 * xTotalPenalty / S->xAtomGrid->GetNumberOfAtoms();
+  xTotalPenalty /= xDomainArea;
+  return xTotalPenalty;
 }
 
 double MedialAnglesPenaltyTerm::ComputePartialDerivative(SolutionData *S, PartialDerivativeSolutionData *dS)
 {
   double dTotalPenalty = 0.0;
 
+  // Compute the square of the cosine of the angle between Xu and Xv
+  for(MedialAtomIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
+    {
+    MedialAtom &a = S->xAtoms[it.GetIndex()];
+    MedialAtom &da = dS->xAtoms[it.GetIndex()];
+    double numerator = 
+      a.G.xCovariantTensor[0][1] * a.G.xCovariantTensor[0][1];
+    double d_numerator = 
+      2.0 * a.G.xCovariantTensor[0][1] * da.G.xCovariantTensor[0][1];
+    double d_penalty = 
+      (d_numerator * a.G.g - numerator * da.G.g) / (a.G.g * a.G.g);
+    xTotalPenalty += d_penalty * xDomainWeights[it.GetIndex()];
+    }
+  /*
   // Sum the penalty over all triangles in the mesh
   for(MedialTriangleIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
     dTotalPenalty += CosineSquareTupleDerivative(S->xAtoms, dS->xAtoms, it);
 
   return 0.25 * dTotalPenalty / S->xAtomGrid->GetNumberOfAtoms();
+  */
+  return dTotalPenalty / xDomainArea;
 }
 
 void MedialAnglesPenaltyTerm::PrintReport(ostream &sout)
 {
   sout << "  Square Cosine Penalty Term : " << endl;
+  sout << "    max penalty              : " << xMaxPenalty << endl;
   sout << "    total penalty            : " << xTotalPenalty << endl;
 }
 
 
 /*********************************************************************************
+ * Bending Energy Term
+ ********************************************************************************/
+MedialBendingEnergyTerm::MedialBendingEnergyTerm(GenericMedialModel *model)
+  : MedialIntegrationEnergyTerm(model)
+{
+}
+
+double MedialBendingEnergyTerm::ComputeEnergy(SolutionDataBase *S)
+{
+  // Bending energy defined as Xuu * Xuu + Xvv * Xvv + 2 Xuv * Xuv
+  xMaxBending = 0;
+  xTotalBending = 0;
+  
+  // Integrate over all atoms
+  for(MedialAtomIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
+    {
+    // Get the medial atom
+    MedialAtom &a = S->xAtoms[it.GetIndex()];
+
+    // Compute the regularity term here
+    double be = 
+      dot_product(a.Xuu, a.Xuu) + 
+      dot_product(a.Xvv, a.Xvv) + 
+      2.0 * dot_product(a.Xuv, a.Xuv);
+
+    // Update the maximum
+    xMaxBending = std::max(xMaxBending, be);
+
+    // Update the integral
+    xTotalBending += be * xDomainWeights[it.GetIndex()];
+    }
+
+  cout << xDomainArea << endl;
+
+  xMeanBending = xTotalBending / xDomainArea;
+  return xMeanBending;
+}
+
+double MedialBendingEnergyTerm
+::ComputePartialDerivative(SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  double dTotalBending = 0.0;
+  
+  // Integrate over all atoms
+  for(MedialAtomIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
+    {
+    // Get the four atoms at the corner of the quad
+    MedialAtom &a = S->xAtoms[it.GetIndex()];
+    MedialAtom &da = dS->xAtoms[it.GetIndex()];
+
+    // Compute the regularity term here
+    double d_be = 
+      2.0 * dot_product(a.Xuu, da.Xuu) + 
+      2.0 * dot_product(a.Xvv, da.Xvv) + 
+      4.0 * dot_product(a.Xuv, da.Xuv);
+
+    // Update the integral
+    dTotalBending += xDomainWeights[it.GetIndex()] * d_be;
+    }
+
+  // Return the error
+  return dTotalBending / xDomainArea; 
+}
+
+void MedialBendingEnergyTerm::PrintReport(ostream &sout)
+{
+  sout << "  Medial Bending Energy Term: " << endl;
+  sout << "    maximum bending energy:     " << xMaxBending << endl;
+  sout << "    total bending energy: " << xTotalBending << endl;
+  sout << "    average bending energy: " << xMeanBending << endl;
+}
+
+
+
+
+/*********************************************************************************
  * Regularity term (used to maintain correspondence)
  ********************************************************************************/
-MedialRegularityTerm::MedialRegularityTerm(
-  MedialIterationContext *inAtomGrid, MedialAtom *inAtomArray)
+MedialRegularityTerm::MedialRegularityTerm(GenericMedialModel *model)
+  : MedialIntegrationEnergyTerm(model)
 {
-  // Generate an array of weights for irregular grids
-  xDomainWeights.set_size(inAtomGrid->GetNumberOfAtoms());
-  xDomainArea = ComputeMedialDomainAreaWeights(
-    inAtomGrid, inAtomArray, xDomainWeights.data_block());
-  cout << "Domain Area: " << xDomainArea << endl;
 }
 
 double MedialRegularityTerm::ComputeEnergy(SolutionDataBase *S)
@@ -1040,8 +1177,8 @@ double MedialRegularityTerm::ComputeEnergy(SolutionDataBase *S)
     MedialAtom &a = S->xAtoms[it.GetIndex()];
 
     // Only compute the penalty if the atom is internal
-    if(a.flagCrest || !a.flagValid) 
-      continue;
+    // if(a.flagCrest || !a.flagValid) 
+    //  continue;
 
     // Compute the regularity term here
     double reg1 = a.G.xChristoffelSecond[0][0][0] + a.G.xChristoffelSecond[1][0][1];
@@ -1072,8 +1209,8 @@ double MedialRegularityTerm
     MedialAtom &da = dS->xAtoms[it.GetIndex()];
 
     // Only compute the penalty if the atom is internal
-    if(a.flagCrest || !a.flagValid) 
-      continue;
+    // if(a.flagCrest || !a.flagValid) 
+    //  continue;
 
     // Compute the regularity term here
     double reg1 = a.G.xChristoffelSecond[0][0][0] + a.G.xChristoffelSecond[1][0][1];
@@ -1157,6 +1294,141 @@ void RadiusPenaltyTerm::PrintReport(ostream &sout)
   sout << "    total penalty            : " << xTotalPenalty << endl;
   sout << "    smallest R^2             : " << xMinR2 << endl;
 }
+
+
+/*********************************************************************************
+ * FIT TO POINT SET ENERGY TERM
+ ********************************************************************************/
+DistanceToPointSetEnergyTerm
+::DistanceToPointSetEnergyTerm(GenericMedialModel *model,
+  double *x, double *y, double *z)
+: MedialIntegrationEnergyTerm(model)
+{
+  // Store the XYZ values
+  for(size_t i = 0; i < model->GetNumberOfAtoms(); i++)
+    target.push_back(SMLVec3d(x[i], y[i], z[i]));
+}
+
+double
+DistanceToPointSetEnergyTerm
+::ComputeEnergy(SolutionDataBase *S)
+{
+  xTotalDist = 0.0;
+  xTotalArea = 0.0;
+  for(size_t i = 0; i < S->xAtomGrid->GetNumberOfAtoms(); ++i)
+    {
+    SMLVec3d delta = S->xAtoms[i].X - target[i];
+    double weight = S->xAtoms[i].aelt * xDomainWeights[i];
+    xTotalDist += delta.squared_magnitude() * weight;
+    xTotalArea += weight;
+    }
+  xTotalMatch = xTotalDist / xTotalArea;
+  return xTotalMatch;
+}
+
+double
+DistanceToPointSetEnergyTerm
+::ComputePartialDerivative(
+  SolutionData *S,
+  PartialDerivativeSolutionData *dS)
+{
+  double dTotalDist = 0.0;
+  double dTotalArea = 0.0;
+
+  for(size_t i = 0; i < S->xAtomGrid->GetNumberOfAtoms(); ++i)
+    {
+    SMLVec3d delta = S->xAtoms[i].X - target[i];
+    SMLVec3d d_delta = dS->xAtoms[i].X;
+    double weight = S->xAtoms[i].aelt * xDomainWeights[i];
+    double d_weight = dS->xAtoms[i].aelt * xDomainWeights[i];
+    dTotalDist += 
+      (2.0 * dot_product(delta, d_delta) * weight + 
+       delta.squared_magnitude() * d_weight);
+    dTotalArea += d_weight;
+    }
+
+  double dTotalMatch = (dTotalDist - dTotalArea * xTotalMatch) / xTotalArea;
+  return dTotalMatch;
+}
+
+void
+DistanceToRadiusFieldEnergyTerm
+::PrintReport(ostream &sout)
+{
+  sout << "  DistanceToRadiusFieldEnergyTerm:" << endl;
+  sout << "    Mean squared phi-distance     : " << xTotalMatch << endl;
+}
+
+
+
+/*********************************************************************************
+ * FIT TO RADIUS FIELD ENERGY TERM
+ ********************************************************************************/
+DistanceToRadiusFieldEnergyTerm
+::DistanceToRadiusFieldEnergyTerm(GenericMedialModel *model, double *rad)
+: MedialIntegrationEnergyTerm(model),
+  xTargetPhi(rad, model->GetNumberOfAtoms()), 
+  xLastDelta(model->GetNumberOfAtoms(), 0.0)
+{
+  // Put r^2 in the target field
+  for(size_t i = 0; i < model->GetNumberOfAtoms(); i++)
+    if(xTargetPhi[i] < 0)
+      xTargetPhi[i] = 0.0;
+    else
+      xTargetPhi[i] = xTargetPhi[i] * xTargetPhi[i];
+}
+
+double
+DistanceToRadiusFieldEnergyTerm
+::ComputeEnergy(SolutionDataBase *S)
+{
+  xTotalDiff = 0.0;
+  xTotalArea = 0.0;
+  for(size_t i = 0; i < S->xAtomGrid->GetNumberOfAtoms(); ++i)
+    {
+    double delta = S->xAtoms[i].F - xTargetPhi[i];
+    double weight = S->xAtoms[i].aelt * xDomainWeights[i];
+
+    xLastDelta[i] = delta;
+    xTotalDiff += delta * delta * weight;
+    xTotalArea += weight;
+    }
+  xTotalMatch = sqrt(xTotalDiff / xTotalArea);
+  return xTotalMatch;
+}
+
+double
+DistanceToRadiusFieldEnergyTerm
+::ComputePartialDerivative(
+  SolutionData *S,
+  PartialDerivativeSolutionData *dS)
+{
+  double dTotalDiff = 0.0;
+  double dTotalArea = 0.0;
+
+  for(size_t i = 0; i < S->xAtomGrid->GetNumberOfAtoms(); ++i)
+    {
+    double delta = xLastDelta[i];
+    double d_delta = dS->xAtoms[i].F;
+    double weight = S->xAtoms[i].aelt * xDomainWeights[i];
+    double d_weight = dS->xAtoms[i].aelt * xDomainWeights[i];
+    dTotalDiff += delta * (2.0 * d_delta * weight + delta * d_weight);
+    dTotalArea += d_weight;
+    }
+
+  double dTotalMatch = (dTotalDiff - dTotalArea * xTotalMatch * xTotalMatch) / (2 * xTotalArea * xTotalMatch);
+  return dTotalMatch;
+}
+
+void
+DistanceToPointSetEnergyTerm
+::PrintReport(ostream &sout)
+{
+  sout << "  DistanceToRadiusFieldEnergyTerm:" << endl;
+  sout << "    Mean squared distance     : " << xTotalMatch << endl;
+}
+
+
 
 
 /*********************************************************************************
@@ -1262,7 +1534,7 @@ double MedialOptimizationProblem::Evaluate(double *xEvalPoint)
 
   bool flagUpdate = SolvePDE(xEvalPoint);
 
-  cout << "[SLV: " << (clock() - t0)/CLOCKS_PER_SEC << " s] " << flush;
+  // cout << "[SLV: " << (clock() - t0)/CLOCKS_PER_SEC << " s] " << flush;
 
   // If the solution changed compute the terms
   if(flagUpdate)
@@ -1284,7 +1556,7 @@ double MedialOptimizationProblem::Evaluate(double *xEvalPoint)
       xTimers[iTerm].Stop();
       }
 
-    cout << "[MAP: " << (clock() - t0)/CLOCKS_PER_SEC << " s] " << endl;
+    // cout << "[MAP: " << (clock() - t0)/CLOCKS_PER_SEC << " s] " << endl;
     }
 
   // Return the result
@@ -1391,7 +1663,7 @@ MedialOptimizationProblem
     }
 
   // Print timing information
-  cout << "[CDG: " << tCDG.StopAndRead() << " ms] " << flush;
+  // cout << "[CDG: " << tCDG.StopAndRead() << " ms] " << flush;
 
   // Restore the atoms in the solution
   std::copy(a0, a0 + n, xMedialModel->GetAtomArray());
@@ -1411,7 +1683,7 @@ MedialOptimizationProblem
   // Solve the PDE
   double t0 = clock();
   SolvePDE(xEvalPoint);
-  cout << " [SLV: " << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
+  // cout << " [SLV: " << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
 
   // Compute the gradient
   xSolveGradTimer.Start();
@@ -1433,7 +1705,17 @@ MedialOptimizationProblem
   // Now, compute the actual gradient
   t0 = clock();
   xMedialModel->ComputeAtomGradient(dAtomArray); 
-  cout << " [GRAD: " << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
+
+  /* TODO: erase
+  for(size_t i = 0; i < xCoeff->GetNumberOfParameters(); i++) 
+    {
+    cout << "FULL GRADIENT " << i << endl;
+    for(size_t q = 0; q < dAtomArray.size(); q++)
+      cout << dAtomArray[i][q].xBnd[0].X << "; ";
+    cout << endl;
+    }
+    */
+  // cout << " [GRAD: " << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
   
   // Stop the timer
   xSolveGradTimer.Stop();
@@ -1453,7 +1735,7 @@ MedialOptimizationProblem
     xLastSolutionValue += xWeights[iTerm] * xLastTermValues[iTerm];
     xTimers[iTerm].Stop();
     }
-  cout << " [" << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
+  // cout << " [" << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
     
   // Repeat for each coefficient
   t0 = clock();
@@ -1475,7 +1757,7 @@ MedialOptimizationProblem
     // Dump the gradient
     // cout << iCoeff << "; " << XGradient[iCoeff] << endl;
     }
-  cout << " [" << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
+  // cout << " [" << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
 
   // Clear up gradient computation
   for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
@@ -1484,7 +1766,7 @@ MedialOptimizationProblem
   // Increment the evaluation counter
   evaluationCost += nCoeff;
 
-  cout << " [[" << (clock() - t00) / CLOCKS_PER_SEC << " s]] " << flush;
+  // cout << " [[" << (clock() - t00) / CLOCKS_PER_SEC << " s]] " << flush;
 
   cout << endl;
 
@@ -1493,9 +1775,6 @@ MedialOptimizationProblem
   xLastGradient = vnl_vector<double>(xGradient, nCoeff);
   xLastGradHint = xMedialModel->GetHintArray();
   flagGradientComputed = true;
-
-  // Store the information about the atoms, to guide PDE solving afterwards
-  
 
   // Return the solution value
   return xLastSolutionValue;

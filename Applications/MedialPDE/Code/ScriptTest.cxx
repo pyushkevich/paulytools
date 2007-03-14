@@ -748,30 +748,55 @@ int TestDerivativesWithImage(const char *fnMPDE)
   SMLVec3d C = model->GetCenterOfRotation();
   TestFloatImage img( C, 7.0, 4.0 );
 
+  // Define a test point set and a test radius function for computation
+  vnl_vector<double> px(model->GetNumberOfAtoms(), 0.0);
+  vnl_vector<double> py(model->GetNumberOfAtoms(), 0.0);
+  vnl_vector<double> pz(model->GetNumberOfAtoms(), 0.0);
+  vnl_vector<double> rad(model->GetNumberOfAtoms(), 0.0);
+  vnl_random randy;
+  for(size_t i = 0; i < rad.size(); i++)
+    {
+    px[i] = model->GetAtomArray()[i].X[0] + randy.drand32(-0.1, 0.1);
+    py[i] = model->GetAtomArray()[i].X[1] + randy.drand32(-0.1, 0.1);
+    pz[i] = model->GetAtomArray()[i].X[2] + randy.drand32(-0.1, 0.1);
+    rad[i] = model->GetAtomArray()[i].R * randy.drand32(0.9, 1.1);
+    }
+
   // Create an array of image match terms
   vector<EnergyTerm *> vt;
+  vt.push_back(new MedialBendingEnergyTerm(model));
+  vt.push_back(new DistanceToPointSetEnergyTerm(
+      model, px.data_block(), py.data_block(), pz.data_block()));
   vt.push_back(new BoundaryImageMatchTerm(&img));
+  vt.push_back(new DistanceToRadiusFieldEnergyTerm(model, rad.data_block()));
   vt.push_back(new ProbabilisticEnergyTerm(&img, 4));
-  vt.push_back(new MedialAnglesPenaltyTerm());
-  vt.push_back(new MedialRegularityTerm(model->GetIterationContext(), model->GetAtomArray()));
+  vt.push_back(new MedialAnglesPenaltyTerm(model));
+  vt.push_back(new MedialRegularityTerm(model));
   vt.push_back(new BoundaryJacobianEnergyTerm());
 
   // Create an array of masks
   vector<CoefficientMapping *> vm;
+  vm.push_back(new SubsetCoefficientMapping(model->GetRadialCoefficientMask()));
   vm.push_back(new IdentityCoefficientMapping(model));
   vm.push_back(new AffineTransformCoefficientMapping(model));
 
   // Create labels
   char *nt[] = {
+    "MedialBendingEnergyTerm",
+    "DistanceToPointSetEnergyTerm",
     "BoundaryImageMatchTerm",
+    "DistanceToRadiusFieldEnergyTerm",
     "ProbabilisticEnergyTerm",
     "MedialAnglesPenaltyTerm",
     "MedialRegularityTerm",
     "BoundaryJacobianEnergyTerm", 
   };
   char *nm[] = {
+    "RadialOnlyCoefficientMapping",
     "IdentityCoefficientMapping",
     "AffineTransformCoefficientMapping" };
+
+  double stepsize[] = {0.1, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.1, 0.1};
 
   // Loop over both options
   size_t i, j;
@@ -784,7 +809,7 @@ int TestDerivativesWithImage(const char *fnMPDE)
     // Set up the test
     MedialOptimizationProblem mop(model, vm[j]);
     mop.AddEnergyTerm(vt[i], 1.0);
-    iReturn += TestOptimizerGradientComputation(mop, *vm[j], model);
+    iReturn += TestOptimizerGradientComputation(mop, *vm[j], model, stepsize[i]);
     }
 
   // Delete both pointers

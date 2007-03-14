@@ -117,7 +117,7 @@ class BinaryImage
 public:
   BinaryImage();
   ~BinaryImage();
-  
+
   // Load the image from a file
   void LoadFromFile(const char *file);
 
@@ -142,12 +142,12 @@ public:
   /** Virtual destructor. Child must delete the medial model. */
   virtual ~MedialPDE();
 
-  /** 
+  /**
    * Set the model. This method is virtual and child methods should check
    * that the model's type is correct
    */
   virtual void SetMedialModel(GenericMedialModel *model);
-  
+
   /** Save to a parameter file */
   void SaveToParameterFile(const char *file);
 
@@ -159,11 +159,11 @@ public:
 
   /** Compute the boundary jacobian penalty */
   double ComputeBoundaryJacobianPenalty(bool verbose = false);
-  
+
   /** Fit the model to the binary image by matching moments of inertia */
   void MatchImageByMoments(FloatImage *image, unsigned int nCuts);
 
-  /** 
+  /**
    * Perform an optimization step. Optimization parameters must be specified
    * in a parameter file. They have the following keys:
    *
@@ -186,9 +186,9 @@ public:
    * parameter files.
    */
   void RunOptimization(
-    FloatImage *image, size_t nSteps, 
+    FloatImage *image, size_t nSteps,
     const char *paramfile, const char *folderName = NULL);
-  
+
   /** Save the model as a BYU mesh */
   void SaveBYUMesh(const char *file);
 
@@ -210,7 +210,7 @@ public:
   void EnableOptimizerDump(const char *file)
     { strOptimizerDump = file; }
 
-  void DisableOptimizerDump() 
+  void DisableOptimizerDump()
     { strOptimizerDump = ""; }
 
   /** Should not be here! */
@@ -230,7 +230,7 @@ public:
                       FloatImage *fim = NULL);
 
 protected:
-  
+
   /** Constructor. Takes the medial model from child class. */
   MedialPDE();
 
@@ -250,12 +250,17 @@ protected:
   // Whether the intensities have been loaded
   bool flagIntensityPresent;
 
-  // Friend functions
+  // Fit the model to a radius field, used for fitting discrete m-reps, etc
+  void FitPDEModelToRadius(double *rfield);
+  void FitPDEModelToPointData(double *x, double *y, double *z);
+
   void ExportIterationToVTK(unsigned int iIter);
-  void ConjugateGradientOptimization(MedialOptimizationProblem *xProblem, 
+  void ConjugateGradientOptimization(MedialOptimizationProblem *xProblem,
     vnl_vector<double> &xSolution, unsigned int nSteps, double xStep);
-  void ConjugateGradientOptimizationTOMS(MedialOptimizationProblem *xProblem, 
+  void ConjugateGradientOptimizationTOMS(MedialOptimizationProblem *xProblem,
     vnl_vector<double> &xSolution, unsigned int nSteps, double xStep);
+
+  // Friend functions
   friend void RenderMedialPDE(MedialPDE *);
   friend class MedialPCA;
 
@@ -279,7 +284,7 @@ public:
    * specification of the sampling grid
    */
   CartesianMPDE(
-    unsigned int nBasesU, unsigned int nBasesV, unsigned int xResU, unsigned int xResV, 
+    unsigned int nBasesU, unsigned int nBasesV, unsigned int xResU, unsigned int xResV,
     double xFineScale = 0.0, unsigned int xFineU = 0, unsigned int xFineV = 0);
 
   /**
@@ -290,7 +295,7 @@ public:
   /** Access the medial surface */
   IBasisRepresentation2D *GetMedialSurface();
 
-  /** 
+  /**
    * Set the medial model. This will ensure that the model is of the correct
    * type, and throw a ModelIOException if it is not.
    */
@@ -303,31 +308,51 @@ public:
   void SetGridSize(size_t nu, size_t nv, bool useHint = false);
 
   /** Set the size of the evaluation grid with special sampling along edges */
-  void SetGridSize(size_t nu, size_t nv, 
+  void SetGridSize(size_t nu, size_t nv,
     size_t eu, size_t ev, double eFactor = 0.5,
     bool useHint = false);
 
-  /** 
-   * This method takes an image and an m-rep and samples the image using the 
-   * m-reps coordinate system, with linear interpolation. The result is stored in 
-   * a separate image. 
+  /**
+   * This method takes an image and an m-rep and samples the image using the
+   * m-reps coordinate system, with linear interpolation. The result is stored in
+   * a separate image.
    */
   void SampleImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zSamples);
 
   /**
    * This method is the opposite of SampleImage. Given an image in the medial coordinate
    * system (it must match the sampling rate of the cm-rep), this with map this image back
-   * into the ambient space 
+   * into the ambient space
    */
   void SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zSamples);
 
-  /** Initialize the surface using a discrete m-rep */
-  void LoadFromDiscreteMRep(const char *file, double xInitRho);
+  /** Initialize the surface using a discrete m-rep. If the initial rho is set
+   * to zero the method will perform an optimization problem, where we look for
+   * the rho that gives the closest approximation of the radius function in the
+   * m-rep */
+  void LoadFromDiscreteMRep(const char *file, double xInitRho = 0);
+
+  /** Import the model from a point list file. This file contains has the
+   * structure [u v xi x y z rho r] */
+  void ImportFromPointFile(const char *file, double xConstRho,
+    bool flagFixRegularity, bool flagFitToRadius);
 
   /** Some default initialization */
   void GenerateSampleModel();
 
 private:
+
+  // Structure to represent importable data
+  struct ImportAtom {
+    double x, y, z;
+    double u, v, xi, rho, r;
+  };
+
+  // Method to import a model from a set of sample points
+  void ImportFromPointData(
+    const std::vector<ImportAtom> &atoms,
+    bool flagFixRegularity,
+    bool flagFitToRadius);
 
   // The cartesian medial model
   CartesianMedialModel *xCartesianMedialModel;
@@ -335,7 +360,7 @@ private:
 
 
 /**
- * This is a cm-rep on Subdivision surfaces 
+ * This is a cm-rep on Subdivision surfaces
  */
 class SubdivisionMPDE : public MedialPDE
 {
@@ -365,19 +390,19 @@ class MedialPCA
 public:
   MedialPCA();
   ~MedialPCA();
-  
+
   // Add a sample to the PCA
   void AddSample(MedialPDE *pde);
-  
+
   // Compute the PCA
-  void ComputePCA();
-  
+  void ComputePCA(MedialPDE *mpde);
+
   // Move current sample location to the mean
   void SetFSLocationToMean();
-  
+
   // Move along a given mode a certain number of S.D.
   void SetFSLocation(unsigned int iMode, double xSigma);
-  
+
   // Generate a sample at the current location
   void GetShapeAtFSLocation(MedialPDE *target);
 
@@ -388,16 +413,19 @@ public:
   void ExportShapeMatrix(const char *filename);
 
 private:
-  
+
   typedef vnl_vector<double> Vec;
   typedef vnl_matrix<double> Mat;
 
   std::vector< FloatImage* > xAppearance;
   std::vector< Vec > xModelCoefficients;
-  vnl_vector<double> xPCALocation;  
-  vnl_vector<double> xAppearancePCALocation;  
+  vnl_vector<double> xPCALocation;
+  vnl_vector<double> xAppearancePCALocation;
 
   vnl_matrix<double> xDataShape, xDataAppearance;
+
+  // Hint arrays for all the subjects
+  std::vector<Vec> xHints;
 
   PrincipalComponents *xPCA, *xAppearancePCA;
 };

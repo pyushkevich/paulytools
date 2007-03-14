@@ -154,6 +154,22 @@ public:
   virtual void PrintReport(ostream &sout) = 0;
 };
 
+/**
+ * This is a special energy term that involves integrating stuff
+ * over the medial axis, ie. \int f(u,v) du dv. For such a term, we
+ * want the du dv quantity, which is non-uniform over the mesh in many
+ * cases (because of non-uniform grid spacing)
+ */
+class MedialIntegrationEnergyTerm : public EnergyTerm
+{
+public:
+  MedialIntegrationEnergyTerm(GenericMedialModel *model);
+
+protected:
+  double xDomainArea;
+  vnl_vector<double> xDomainWeights;
+};
+
 class NumericalGradientEnergyTerm : public EnergyTerm
 {
 public:
@@ -301,9 +317,12 @@ private:
 };
 
 
-class MedialAnglesPenaltyTerm : public EnergyTerm
+class MedialAnglesPenaltyTerm : public MedialIntegrationEnergyTerm
 {
 public:
+  // Initialize the term
+  MedialAnglesPenaltyTerm(GenericMedialModel *model);
+
   // Compute the energy
   double ComputeEnergy(SolutionDataBase *data);
 
@@ -315,7 +334,7 @@ public:
     SolutionData *S, PartialDerivativeSolutionData *dS);
   
 private:
-  double xTotalPenalty;
+  double xTotalPenalty, xMaxPenalty;
 };
 
 class CrestLaplacianEnergyTerm : public NumericalGradientEnergyTerm
@@ -345,9 +364,68 @@ public:
     { return nBadAtoms; }
   
 private:
-  double xMaxBadness, xAvgBadness, xTotalPenalty;
+  vnl_vector<double> xPenalty;
+  double xMinBadness, xAvgBadness, xTotalPenalty;
   size_t nBadAtoms, nAtoms;
 };
+
+/**
+ * This term is used to fit phi to an existing radius field. The fitting
+ * is least-squares in phi, which may not be a great idea, but if we make it
+ * least-squares in R, there may be unforseen problems with stability at R=0
+ */
+class DistanceToRadiusFieldEnergyTerm : public MedialIntegrationEnergyTerm
+{
+public:
+  /** Constructor, takes the target radius field */
+  DistanceToRadiusFieldEnergyTerm(GenericMedialModel *model, double *radius);
+  
+  double ComputeEnergy(SolutionDataBase *data);
+  
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
+
+  void PrintReport(ostream &sout);
+
+private:
+
+  typedef vnl_vector<double> Vec;
+  Vec xTargetPhi, xLastDelta;
+  double xTotalDiff, xMaxDiff, xMinDiff, xTotalMatch, xTotalArea;
+};
+
+
+/**
+ * This term is used to fit the medial surface to an existing set of points 
+ * given at u and v coordinates. This should be used in conjunction with a
+ * regularization prior
+ */
+class DistanceToPointSetEnergyTerm : public MedialIntegrationEnergyTerm
+{
+public:
+  /** Constructor, takes the target XYZ field */
+  DistanceToPointSetEnergyTerm(
+    GenericMedialModel *model, double *x, double *y, double *z);
+  
+  double ComputeEnergy(SolutionDataBase *data);
+  
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
+
+  void PrintReport(ostream &sout);
+
+private:
+
+  // Target points
+  vector<SMLVec3d> target;
+
+  // Match components
+  double xTotalDist,  xTotalMatch, xTotalArea;
+};
+
+
+
+
 
 /**
  * Penalty for small values of the radius (phi / scale)^-8
@@ -369,11 +447,29 @@ private:
   double xMinR2, xTotalPenalty, xScale;
 };
 
-class MedialRegularityTerm : public NumericalGradientEnergyTerm
+class MedialBendingEnergyTerm : public MedialIntegrationEnergyTerm
 {
 public:
   /** Initialize with a sample solution */
-  MedialRegularityTerm(MedialIterationContext *xGrid, MedialAtom *xAtoms);
+  MedialBendingEnergyTerm(GenericMedialModel *model);
+  
+  /** Initialize the term with the template info */
+  double ComputeEnergy(SolutionDataBase *data);
+
+  /** Compute partial derivative */
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
+  
+  void PrintReport(ostream &sout);
+private:
+  double xMaxBending, xTotalBending, xMeanBending;
+};
+
+class MedialRegularityTerm : public MedialIntegrationEnergyTerm
+{
+public:
+  /** Initialize with a sample solution */
+  MedialRegularityTerm(GenericMedialModel *model);
   
   /** Initialize the term with the template info */
   double ComputeEnergy(SolutionDataBase *data);
@@ -384,8 +480,7 @@ public:
   
   void PrintReport(ostream &sout);
 private:
-  double xGradMagIntegral, xGradMagMaximum, xDomainArea;
-  vnl_vector<double> xDomainWeights;
+  double xGradMagIntegral, xGradMagMaximum;
 };
 
 class MedialOptimizationProblem : public DifferentiableFunction

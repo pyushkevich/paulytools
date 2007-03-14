@@ -2,12 +2,13 @@ PROJECT(MedialPDE)
 
 # Include the various directories
 INCLUDE_DIRECTORIES(
-  ${MedialPDE_SOURCE_DIR}/Code 
+  ${MedialPDE_SOURCE_DIR}/Code
   ${PAULY_SOURCE_DIR}/Applications/CMRepTool3d/Code)
 
 # Sources for the PDE executable
-SET(COMMON_SRCS 
+SET(COMMON_SRCS
   Code/BasisFunctions2D.cxx
+  Code/BruteForceSubdivisionMedialModel.cxx
   Code/CoefficientMapping.cxx
   Code/CartesianMedialModel.cxx
   Code/GeometryDescriptor.cxx
@@ -16,12 +17,13 @@ SET(COMMON_SRCS
   Code/MedialAtomGrid.cxx
   Code/MeshMedialPDESolver.cxx
   Code/MedialModelIO.cxx
-  Code/MedialPDEMasks.cxx 
-  Code/MedialPDESites.cxx 
+  Code/MedialPDEMasks.cxx
+  Code/MedialPDESites.cxx
   Code/MedialPDERenderer.cxx
   Code/OptimizationTerms.cxx
   Code/OptimizationParameters.cxx
   Code/PardisoInterface.cxx
+  Code/PDESubdivisionMedialModel.cxx
   Code/PrincipalComponents.cxx
   Code/Procrustes.cxx
   Code/Registry.cxx
@@ -45,10 +47,10 @@ SET(SWIG_DEPENDS ${SWIG_SOURCE}  ${MedialPDE_SOURCE_DIR}/Code/ScriptInterface.h)
 SET(SWIG_TARGET ${MedialPDE_BINARY_DIR}/Code/ScriptInterface_wrap.cxx)
 
 ADD_CUSTOM_COMMAND(
-  SOURCE ${SWIG_SOURCE} 
+  SOURCE ${SWIG_SOURCE}
   COMMAND ${SWIG_PROGRAM}
   ARGS -python -shadow -c++ -o ${SWIG_TARGET} -outdir ${MedialPDE_BINARY_DIR} ${SWIG_SOURCE}
-  DEPENDS ${SWIG_DEPENDS} 
+  DEPENDS ${SWIG_DEPENDS}
   OUTPUT ${SWIG_TARGET}
   COMMENT "Python wrappers with SWIG")
 
@@ -62,17 +64,17 @@ SET(LIB_SRCS ${COMMON_SRCS}
 # Set the library set
 SET(PDE_LIBS
   ${PAULY_CORE_LIBS}
-  ${PARDISO_LIB} 
+  ${PARDISO_LIB}
   ITKNumerics
   ITKIO
   ITKCommon
   ITKBasicFilters
-  ITKVoxBoIO 
+  ITKVoxBoIO
   ${GLUT_LIBRARY}
   vtkCommon
   vtkIO
   ${LAPACK_OR_MKL_LIBS}
-  ${GSL_LIBRARY} ${GSL_CBLAS_LIBRARY} 
+  ${GSL_LIBRARY} ${GSL_CBLAS_LIBRARY}
   toms611
   )
 
@@ -104,7 +106,7 @@ IF(MPDE_DATA_ROOT)
   FIND_PATH(MPDE_INPUTDATA_ROOT "init/surf01.txt" ${MPDE_DATA_ROOT}/Input)
   FIND_PATH(MPDE_TEMP_ROOT "" ${MPDE_DATA_ROOT}/tmp "/tmp")
 ENDIF(MPDE_DATA_ROOT)
-  
+
 
 # Generate tests
 ENABLE_TESTING()
@@ -135,20 +137,23 @@ ADD_TEST(TestModelSubdivision testsub MODELSUB ${MPDE_TEST_SUBMREP})
 
 
 # Copy the script files
-SET(SCRIPT_FILES 
+SET(SCRIPT_FILES
   cmrep_align_moments.py
   cmrep_build_images.py
+  cmrep_cartesian_import.py
   cmrep_common.py
   cmrep_fitbinary.py
+  cmrep_fit_discrete.py
   cmrep_getmesh.py
+  cmrep_pca_compute.py
   cmrep_refine_fourier.py
   cmrep_render.py
   cmrep_sample_interior.py
   cmrep_subdivide.py
   )
 
-FOREACH(FILE ${SCRIPT_FILES})  
+FOREACH(FILE ${SCRIPT_FILES})
   CONFIGURE_FILE(
     ${MedialPDE_SOURCE_DIR}/Python/${FILE}
     ${MedialPDE_BINARY_DIR}/${FILE} )
-ENDFOREACH(FILE ${SCRIPT_FILES})  
+ENDFOREACH(FILE ${SCRIPT_FILES})

@@ -8,6 +8,9 @@
 #include "vtkDataArray.h"
 #include "vtkDoubleArray.h"
 
+#include "PDESubdivisionMedialModel.h"
+#include "BruteForceSubdivisionMedialModel.h"
+
 #include <itksys/SystemTools.hxx>
 
 using namespace std;
@@ -27,7 +30,7 @@ MedialModelIO
   std::string type = R["Grid.Type"][""];
 
   // If the grid type is Cartesian, create a new model
-  if(type == "Cartesian") 
+  if(type == "Cartesian")
     {
     CartesianMedialModel *model = CartesianMedialModelIO::ReadModel(R);
     return model;
@@ -81,7 +84,7 @@ CartesianMedialModelIO::ReadModel(Registry &R)
     throw ModelIOException("Grid specification is missing in Cartesian model");
 
   // Check if the grid spacing is available
-  if(R.Folder("Grid.Spacing.U").GetArraySize() == m && 
+  if(R.Folder("Grid.Spacing.U").GetArraySize() == m &&
     R.Folder("Grid.Spacing.V").GetArraySize() == n)
     {
     // Read the grid spacing
@@ -136,11 +139,11 @@ vtkPolyData *
 SubdivisionMedialModelIO
 ::ReadMesh(const string &file, const string &type)
 {
-  try 
+  try
     {
     vtkPolyData *poly = vtkPolyData::New();
 
-    if(type == "OBJ") 
+    if(type == "OBJ")
       {
       vtkOBJReader *reader = vtkOBJReader::New();
       reader->SetOutput(poly);
@@ -148,7 +151,7 @@ SubdivisionMedialModelIO
       reader->Update();
       reader->Delete();
       }
-    else if (type == "BYU") 
+    else if (type == "BYU")
       {
       vtkBYUReader *reader = vtkBYUReader::New();
       reader->SetOutput(poly);
@@ -156,7 +159,7 @@ SubdivisionMedialModelIO
       reader->Update();
       reader->Delete();
       }
-    else if (type == "VTK") 
+    else if (type == "VTK")
       {
       vtkPolyDataReader *reader = vtkPolyDataReader::New();
       reader->SetOutput(poly);
@@ -173,7 +176,7 @@ SubdivisionMedialModelIO
     {
     throw ModelIOException("Error loading VTK mesh in Subdivision Model");
     }
-} 
+}
 
 SubdivisionMedialModel *
 SubdivisionMedialModelIO
@@ -197,34 +200,68 @@ SubdivisionMedialModelIO
   SubdivisionSurface::MeshLevel mesh;
   SubdivisionSurface::ImportLevelFromVTK(poly, mesh);
 
-  // Now we must read the coefficient information. It is normally contained
-  // in the poly itself, although rho might not be available
-  SMLVec3d *xCtl = new SMLVec3d[mesh.nVertices];
+  // Read coefficient data. For both PDE and brute force meshes, the
+  // coefficients are XYZ + [R|Rho], so we can pack them in accordingly
+  vnl_vector<double> C(mesh.nVertices * 4, 0.0);
+  vnl_vector<double> u(mesh.nVertices, 0.0), v(mesh.nVertices, 0.0);
+
+  // Get the texture arrays
+  vtkDataArray *uv = poly->GetPointData()->GetTCoords();
+
+  // Make sure arrays exist
+  if(!uv) throw ModelIOException("Missing UV arrays in VTK/OBJ mesh");
+
+  // Read the coordinates and u,v from the mesh
   for(i = 0; i < mesh.nVertices; i++)
-    xCtl[i].copy_in(poly->GetPoint(i));
-
-  // Get the default rho (constant)
-  double xDefaultRho = R["Grid.Model.Coefficient.ConstantRho"][-0.25];
-
-  // Generate the rho array. We initialize to a constant, and then use the rho
-  // array in the polydata. This may not exist.
-  vnl_vector<double> rho(mesh.nVertices, xDefaultRho);
-  if(poly->GetPointData()->GetArray("Rho") != NULL) 
     {
-    vtkDataArray *daRho = poly->GetPointData()->GetScalars("Rho");
-    for(i = 0; i < mesh.nVertices; i++)
-      rho[i] = daRho->GetTuple1(i);
+    for(size_t d = 0; d < 3; d++)
+      C[i * 4 + d] = poly->GetPoint(i)[d];
+    u[i] = uv->GetTuple(i)[0];
+    v[i] = uv->GetTuple(i)[1];
     }
 
-  // Delete the poly data
+  // Get the model subtype
+  string subtype = R["Grid.Model.SolverType"]["PDE"];
+
+  // Branch by model type (read rho or radius)
+  if(subtype == "PDE")
+  {
+    // Get the default rho (constant)
+    double xDefaultRho = R["Grid.Model.Coefficient.ConstantRho"][-0.25];
+    vtkDataArray *daRho = poly->GetPointData()->GetScalars("Rho");
+
+    // Copy to the coefficient vector
+    for(i = 0; i < mesh.nVertices; i++)
+      C[4 * i + 3] = daRho ? daRho->GetTuple1(i) : xDefaultRho;
+    
+    // Create the medial model
+    PDESubdivisionMedialModel *smm = new PDESubdivisionMedialModel();
+    smm->SetMesh(mesh, C, u, v, nSubs, 0);
+    smm->ComputeAtoms();
+    return smm;
+  }
+  else if(subtype == "BruteForce")
+  {
+    // Get the default radius value (really?)
+    double xDefaultRad = R["Grid.Model.Coefficient.ConstantRadius"][1.0];
+    vtkDataArray *daRad = poly->GetPointData()->GetScalars("Radius");
+
+    // Copy to the coefficient vector
+    for(i = 0; i < mesh.nVertices; i++)
+      C[4 * i + 3] = daRad ? daRad->GetTuple1(i) : xDefaultRad;
+
+    // Create the medial model
+    BruteForceSubdivisionMedialModel *smm = new BruteForceSubdivisionMedialModel();
+    smm->SetMesh(mesh, C, u, v, nSubs, 0);
+    smm->ComputeAtoms();
+    return smm;
+  }
+  else
+  {
+    throw ModelIOException("Unknown subtype of subdivision model");
+  }
+
   poly->Delete();
-
-  // Create the medial model
-  SubdivisionMedialModel *smm = new SubdivisionMedialModel();
-  smm->SetMesh(mesh, xCtl, rho.data_block(), nSubs, 0);
-  smm->ComputeAtoms();
-
-  return smm;
 }
 
 void
@@ -260,22 +297,56 @@ SubdivisionMedialModelIO
   points->Allocate(model->mlCoefficient.nVertices);
   poly->SetPoints(points);
 
-  // Allocate the array for rho
-  vtkDoubleArray *xRho = vtkDoubleArray::New();
-  xRho->SetName("Rho");
-  xRho->SetNumberOfComponents(1);
-  xRho->SetNumberOfTuples(model->mlCoefficient.nVertices);
-  poly->GetPointData()->AddArray(xRho);
+  // Set an auxilliary array
+  vtkDoubleArray *xAux = vtkDoubleArray::New();
+  xAux->SetNumberOfComponents(1);
+  xAux->SetNumberOfTuples(model->mlCoefficient.nVertices);
+  poly->GetPointData()->AddArray(xAux);
 
-  // Set the values of X and Rho
+  // Set the values of X (for now this is the same for all models)
   for(size_t i = 0; i < model->mlCoefficient.nVertices; i++)
-    {
+  {
     // Set the point's coordinates
     points->InsertNextPoint(model->xCoefficients.data_block() + i * 4);
+  }
 
-    // Set rho
-    xRho->SetTuple1(i, model->xCoefficients[i * 4 + 3]);
+  // Branch by the subtype of model
+  PDESubdivisionMedialModel *mpde =
+    dynamic_cast<PDESubdivisionMedialModel *>(model);
+  BruteForceSubdivisionMedialModel *mbf =
+    dynamic_cast<BruteForceSubdivisionMedialModel *>(model);
+
+  if(mpde)
+  {
+    // Set the model subtype
+    R["Grid.Model.SolverType"] << "PDE";
+
+    // Allocate the array for rho
+    xAux->SetName("Rho");
+
+    // Set the values of X and Rho
+    for(size_t i = 0; i < model->mlCoefficient.nVertices; i++)
+    {
+      // Set rho
+      xAux->SetTuple1(i, model->xCoefficients[i * 4 + 3]);
     }
+  }
+  else if(mbf)
+  {
+    // Set the model subtype
+    R["Grid.Model.SolverType"] << "BruteForce";
+
+    // Allocate the array for rho
+    xAux->SetName("Radius");
+
+    // Set the values of X and Rho
+    for(size_t i = 0; i < model->mlCoefficient.nVertices; i++)
+    {
+      // Set rho
+      xAux->SetTuple1(i, model->xCoefficients[i * 4 + 3]);
+    }
+  }
+  else throw ModelIOException("Total nonsense!");
 
   // Populate the cells
   SubdivisionSurface::ExportLevelToVTK(model->mlCoefficient, poly);
@@ -289,7 +360,7 @@ SubdivisionMedialModelIO
 
   // Clean up
   writer->Delete();
-  xRho->Delete();
+  xAux->Delete();
   points->Delete();
   poly->Delete();
 }

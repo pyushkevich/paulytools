@@ -11,12 +11,14 @@ SubdivisionMedialModel::SubdivisionMedialModel() :
 
 void
 SubdivisionMedialModel
-::SetMesh(const MeshLevel &mesh, const vnl_vector<double> &C,
+::SetMesh(
+  const MeshLevel &mesh, 
+  const Vec &C, const Vec &u, const Vec &v,
   size_t nAtomSubs, size_t nCoeffSubs)
 {
   // Validity check
   assert(nAtomSubs >= nCoeffSubs);
-  
+
   // Set the subdivision level
   xSubdivisionLevel = nAtomSubs - nCoeffSubs;
 
@@ -26,128 +28,67 @@ SubdivisionMedialModel
   // Subdivide the input mesh into the coefficient-level mesh
   SubdivisionSurface::RecursiveSubdivide(&mesh, &mlCoefficient, nCoeffSubs);
 
-  // Compute the coefficients from the input data
+  // Compute the coefficients and u/v arrays from the input data
   if(nCoeffSubs > 0)
     {
+    // Initialize the arrays
     xCoefficients.set_size(mlCoefficient.nVertices * 4);
+    uCoeff.set_size(mlCoefficient.nVertices);
+    vCoeff.set_size(mlCoefficient.nVertices);
+
+    // Apply the subdivision to the coefficients
     SubdivisionSurface::ApplySubdivision(
       C.data_block(), xCoefficients.data_block(), 4, mlCoefficient);
+
+    // Apply to the u and v arrays
+    SubdivisionSurface::ApplySubdivision(
+      u.data_block(), uCoeff.data_block(), 1, mlCoefficient);
+    SubdivisionSurface::ApplySubdivision(
+      v.data_block(), vCoeff.data_block(), 1, mlCoefficient);
     }
   else
+    {
     xCoefficients = C;
-    
+    uCoeff = u; vCoeff = v;
+    }
+
   // Set the coefficient-level mesh as the new root (forget the input)
   mlCoefficient.SetAsRoot();
 
   // Subdivide the coefficient-level mesh up to the atom-level mesh
-  SubdivisionSurface::RecursiveSubdivide(&mlCoefficient, &mlAtom, nAtomSubs - nCoeffSubs);
+  SubdivisionSurface::RecursiveSubdivide(
+    &mlCoefficient, &mlAtom, nAtomSubs - nCoeffSubs);
+
+  // Apply the subdivision to the u and v coordinates
+  uAtom.set_size(mlAtom.nVertices); vAtom.set_size(mlAtom.nVertices);
+  SubdivisionSurface::ApplySubdivision(
+    uCoeff.data_block(), uAtom.data_block(), 1, mlAtom);
+  SubdivisionSurface::ApplySubdivision(
+    vCoeff.data_block(), vAtom.data_block(), 1, mlAtom);
+
+  // Create the atoms array
+  if(xAtoms) delete xAtoms;
+  xAtoms = new MedialAtom[mlAtom.nVertices];
+
+  // Copy the u, v values into the atoms
+  for(size_t i = 0; i < mlAtom.nVertices; i++)
+    {
+    xAtoms[i].u = uAtom[i];
+    xAtoms[i].v = vAtom[i];
+    }
 
   // Set up the iteration context
   if(this->xIterationContext != NULL) delete this->xIterationContext;
   this->xIterationContext = new SubdivisionSurfaceMedialIterationContext(&mlAtom);
 
-  // Pass the mesh information to the solver
-  xSolver.SetMeshTopology(&mlAtom);
-
-  // The the atoms to point into the solver
-  xAtoms = xSolver.GetAtomArray();
-
   // Set the coarse-to-fine descriptor
   xCTFDescriptor = SubdivisionSurfaceCoarseToFineMappingDescriptor(mlCoefficient.nVertices);
-}
-
-void
-SubdivisionMedialModel
-::SetMesh(const MeshLevel &mesh, SMLVec3d *X, double *rho, 
-  size_t nAtomSubs, size_t nCoeffSubs)
-{
-  // Flatten the input data into a coefficient array
-  Vec C0(mesh.nVertices * 4, 0.0);
-  for(size_t i = 0, j = 0; i < mesh.nVertices; i++)
-    {
-    C0[j++] = X[i][0]; C0[j++] = X[i][1]; C0[j++] = X[i][2]; 
-    C0[j++] = rho[i];
-    }
-
-  // Pass in to the other SetMesh method
-  this->SetMesh(mesh, C0, nAtomSubs, nCoeffSubs);
-}
-
-void 
-SubdivisionMedialModel
-::ComputeAtoms(const double *xHint)
-{
-  size_t i;
-
-  // The first step is to compute the X and rho of the atoms based on the
-  // coefficients. This step is performed in this class, not in the solver
-  for(i = 0; i < mlAtom.nVertices; i++)
-    {
-    // Set up i-th atom
-    MedialAtom &a = xAtoms[i]; a.X.fill(0.0); a.xLapR = 0.0;
-
-    // Compute the weighted sum of the coefficients
-    ImmutableSparseMatrix<double>::RowIterator it = mlAtom.weights.Row(i);
-    for( ; !it.IsAtEnd(); ++it)
-      {
-      size_t j = it.Column() << 2; double w = it.Value();
-      a.X += w * xCoefficients.extract(3, j);
-      a.xLapR += w * xCoefficients[j+3];
-      }
-    }
-
-  // If the initial solution is specified, take the F values from it
-  if(xHint != NULL)
-    for(i = 0; i < mlAtom.nVertices; i++)
-      xAtoms[i].F = xHint[i];
-
-  // Now have the solver solve the equation
-  xSolver.SolveEquation(NULL, true);
-}
-
-SubdivisionMedialModel::Vec
-SubdivisionMedialModel::GetHintArray() const
-{
-  Vec xHint(mlAtom.nVertices, 0.0);
-  for(size_t i = 0; i < xHint.size(); i++)
-    xHint[i] = xAtoms[i].F;
-  return xHint;
-}
-
-void
-SubdivisionMedialModel
-::PrepareAtomsForVariationalDerivative(
-  const Vec &xVariation, MedialAtom *dAtoms) const
-{
-  // This method must compute the terms in the derivative atoms that will not
-  // change as the coefficients themselves change. This simply means setting
-  // the values of xLapR and X.
-  for(size_t i = 0; i < mlAtom.nVertices; i++)
-    {
-    // Set up i-th atom
-    MedialAtom &da = dAtoms[i]; da.X.fill(0.0); da.xLapR = 0.0;
-
-    // Compute the weighted sum of the coefficients
-    ImmutableSparseMatrix<double>::ConstRowIterator it = mlAtom.weights.Row(i);
-    for( ; !it.IsAtEnd(); ++it)
-      {
-      size_t j = it.Column() << 2; double w = it.Value();
-      da.X += w * xVariation.extract(3, j);
-      da.xLapR += w * xVariation[j+3];
-      }
-    }
-}
-
-void
-SubdivisionMedialModel
-::ComputeAtomGradient(std::vector<MedialAtom *> &dAtoms)
-{
-  xSolver.ComputeGradient(dAtoms);
 }
 
 const CoarseToFineMappingDescriptor *
 SubdivisionMedialModel
 ::GetCoarseToFineMappingDescriptor() const
 {
+  return &xCTFDescriptor;
 
 }

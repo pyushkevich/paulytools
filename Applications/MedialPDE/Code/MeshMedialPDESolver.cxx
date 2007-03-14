@@ -1,4 +1,5 @@
 #include "MeshMedialPDESolver.h"
+#include "MedialAtomGrid.h"
 #include <iomanip>
 #include <vector>
 #include <vnl/vnl_math.h>
@@ -46,7 +47,7 @@ MeshMedialPDESolver
 
 void
 MeshMedialPDESolver
-::SetMeshTopology(MeshLevel *topology)
+::SetMeshTopology(MeshLevel *topology, MedialAtom *inputAtoms)
 {
   // We must first set the dimensions of the matrix A. The finite difference
   // equations involving the LBO are specified at internal vertices in the
@@ -138,84 +139,17 @@ MeshMedialPDESolver
   // Initialize the triangle area array and other such arrays
   xTriangleGeom = new TriangleGeom[topology->triangles.size()];
   xVertexGeom = new VertexGeom[topology->nVertices];
-  xAtoms = new MedialAtom[topology->nVertices];
 
   // Initialize the tangent weights
-  xTangentWeights[0] = new double[nSparseEntries]; 
-  xTangentWeights[1] = new double[nSparseEntries];
-  fill_n(xTangentWeights[0], nSparseEntries, 0.0);
-  fill_n(xTangentWeights[1], nSparseEntries, 0.0);
+  xLoopScheme.SetMeshLevel(topology);
 
-  // Compute tangent weight at each vertex
+  // Copy the pointer to the atoms. The atoms are passed in to this method
+  // and are managed by the parent
+  xAtoms = inputAtoms;
+
+  // Set the initial values of the F field (it sucks having to do this)
   for(i = 0; i < topology->nVertices; i++)
-    {
-    // Create an iterator around the vertex
-    EdgeWalkAroundVertex it(topology, i);
-
-    // Get the valence of the vertex
-    size_t n = it.Valence();
-
-    // If the vertex is internal, weights are easy to compute
-    if(!it.IsOpen()) 
-      {
-      for(j = 0; !it.IsAtEnd(); ++it, ++j)
-        {
-        size_t idxA = xMapVertexNbrToA[it.GetPositionInMeshSparseArray()];
-        xTangentWeights[0][idxA] = cos(j * vnl_math::pi * 2.0 / n);
-        xTangentWeights[1][idxA] = sin(j * vnl_math::pi * 2.0 / n);
-        }
-      }
-    else 
-      {
-      // Get the index of the first neighbor
-      size_t idxFirst = xMapVertexNbrToA[it.GetPositionInMeshSparseArray()];
-
-      // Move the index to the last neighbor
-      it.GoToLastEdge();
-      size_t idxLast = xMapVertexNbrToA[it.GetPositionInMeshSparseArray()];
-
-      // We can now set the along-the-edge tangent vector
-      xTangentWeights[1][idxFirst] = 1.0;
-      xTangentWeights[1][idxLast] = -1.0;
-
-      // Now we branch according to the valence
-      if(n == 2)
-        {
-        xTangentWeights[0][idxFirst] = -1.0;
-        xTangentWeights[0][idxLast] = -1.0;
-        xTangentWeights[0][xMapVertexToA[i]] = 2.0;
-        }
-      else if (n == 3)
-        {
-        // Move iterator to the previous (middle) vertex
-        it.GoToFirstEdge(); ++it;
-
-        // Get the corresponding A index
-        size_t idxMiddle = xMapVertexNbrToA[it.GetPositionInMeshSparseArray()];
-
-        // Set the weights
-        xTangentWeights[0][idxMiddle] = -1.0;
-        xTangentWeights[0][xMapVertexToA[i]] = 1.0;
-        }
-      else
-        {
-        // Compute the angle theta
-        double theta = vnl_math::pi / (n - 1);
-        xTangentWeights[0][idxFirst] = xTangentWeights[0][idxLast] = sin(theta);
-
-        // Assign the weights to intermediate vertices
-        it.GoToFirstEdge(); ++it;
-        for(j = 1; j < n - 1; ++j, ++it)
-          {
-          size_t idxInt = xMapVertexNbrToA[it.GetPositionInMeshSparseArray()];
-          xTangentWeights[0][idxInt] = (2.0 * cos(theta) - 2.0) * sin(theta * j);
-          }
-        }
-      }
-
-    // Set initial values
     xAtoms[i].F = topology->IsVertexInternal(i) ? 1.0 : 0.8;
-    }
 
   // Initialize the weight array for gradient computation
   W = new SMLVec3d[nSparseEntries];
@@ -229,7 +163,6 @@ MeshMedialPDESolver
   xMapVertexNbrToA = NULL;
   xMapVertexToA = NULL;
   topology = NULL;
-  xTangentWeights[0] = xTangentWeights[1] = NULL;
   xPardisoColIndex = NULL;
   xPardisoRowIndex = NULL;
   xAtoms = NULL;
@@ -248,11 +181,8 @@ MeshMedialPDESolver
 {
   reset_ptr(xTriangleGeom);
   reset_ptr(xVertexGeom);
-  reset_ptr(xAtoms);
   reset_ptr(xMapVertexNbrToA);
   reset_ptr(xMapVertexToA);
-  reset_ptr(xTangentWeights[0]); 
-  reset_ptr(xTangentWeights[1]);
   reset_ptr(xPardisoColIndex); 
   reset_ptr(xPardisoRowIndex);
   reset_ptr(W);
@@ -358,35 +288,8 @@ MeshMedialPDESolver
     MedialAtom &a = xAtoms[i];
 
     // Clear the tangent for this vertex
-    a.Xu.fill(0.0);
-    a.Xv.fill(0.0);
-
-    // Computing the tangent is easy. We use the sparse matrix structure from A to do it
-    size_t *xRowIndex = A.GetRowIndex(), *xColIndex = A.GetColIndex();
-    for(j = xRowIndex[i]; j < xRowIndex[i+1]; j++)
-      {
-      const SMLVec3d &xn = xAtoms[xColIndex[j]].X;
-      a.Xu += xn * xTangentWeights[0][j];
-      a.Xv += xn * xTangentWeights[1][j];
-      }
-    
-    /*
-    cout << "Vertex " << (i+1) << " Tangent 1 = ";
-    for(j = xRowIndex[i]; j < xRowIndex[i+1]; j++)
-      cout << xTangentWeights[0][j] << " X[" << xColIndex[j] << "] + ";
-    cout << endl;
-    
-    cout << "Vertex " << (i+1) << " Tangent 2 = ";
-    for(j = xRowIndex[i]; j < xRowIndex[i+1]; j++)
-      cout << xTangentWeights[1][j] << " X[" << xColIndex[j] << "] + ";
-    cout << endl;
-
-    // cout << "Vertex " << i << ", Tangent 1: " << G.t1 << endl;
-    // cout << "Vertex " << i << ", Tangent 2: " << G.t2 << endl;
-    SMLVec3d nrm = vnl_cross_3d(G.t1, G.t2);
-    nrm /= nrm.magnitude();
-    cout << "Vertex " << i << ", Normal Vector: " << nrm << endl;
-    */
+    a.Xu = xLoopScheme.TangentX(0, i, xAtoms);
+    a.Xv = xLoopScheme.TangentX(1, i, xAtoms);
 
     // Set the one get of the geometry descriptor
     a.G.SetOneJet(a.X.data_block(), a.Xu.data_block(), a.Xv.data_block());
@@ -461,14 +364,9 @@ MeshMedialPDESolver
       MedialAtom &a = xAtoms[i];
 
       // Compute the partials of phi in the tangent directions
-      double phi_1 = 0.0, phi_2 = 0.0;
-      for(j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
-        {
-        double phi_i = phi[A.GetColIndex()[j]];
-        phi_1 += xTangentWeights[0][j] * phi_i;
-        phi_2 += xTangentWeights[1][j] * phi_i;
-        }
-
+      double phi_1 = xLoopScheme.GetPartialDerivative(0, i, phi);
+      double phi_2 = xLoopScheme.GetPartialDerivative(1, i, phi);
+        
       // Multiply by the contravariant tensor to get weights
       double xi_1 = 
         a.G.xContravariantTensor[0][0] * phi_1 + 
@@ -479,14 +377,27 @@ MeshMedialPDESolver
         a.G.xContravariantTensor[1][1] * phi_2;
 
       // Add up to get the weights in the sparse matrix
+      EdgeWalkAroundVertex it(topology, i);
+      for(; !it.IsAtEnd(); ++it)
+        {
+        size_t j = xMapVertexNbrToA[it.GetPositionInMeshSparseArray()];
+        A.GetSparseData()[j] = 2.0 * (
+          xLoopScheme.GetNeighborWeight(0, it) * xi_1 +
+          xLoopScheme.GetNeighborWeight(1, it) * xi_2);
+        }
+
+      /*
       for(j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
         {
         A.GetSparseData()[j] = 
           2.0 * (xTangentWeights[0][j] * xi_1 + xTangentWeights[1][j] * xi_2);
         }
+        */
 
       // Finally, add the weight for the point itself (-4 \epsilon)
-      A.GetSparseData()[xMapVertexToA[i]] += -4.0;
+      A.GetSparseData()[xMapVertexToA[i]] = - 4.0 + 2.0 * (
+        xLoopScheme.GetOwnWeight(0, i) * xi_1 + 
+        xLoopScheme.GetOwnWeight(1, i) * xi_2);
 
       // for(j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
       //  cout << "Closed Vertex " << i << ", Neighbor " 
@@ -514,13 +425,8 @@ MeshMedialPDESolver
     {
     // We compute the gradient of phi directly, so that it is possible to
     // call this method without the prerequisite of calling FillNewtonMatrix
-    double Fu = 0.0, Fv = 0.0;
-    for(size_t j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
-      {
-      double Fi = phi[A.GetColIndex()[j]];
-      Fu += Fi * xTangentWeights[0][j];
-      Fv += Fi * xTangentWeights[1][j];
-      }
+    double Fu = xLoopScheme.GetPartialDerivative(0, i, phi);
+    double Fv = xLoopScheme.GetPartialDerivative(1, i, phi);
 
     // Return value is |grad Phi|^2 - 4 \phi
     return xAtoms[i].G.SquaredGradientMagnitude(Fu, Fv) - 4.0 * phi[i];
@@ -554,13 +460,8 @@ MeshMedialPDESolver
     a.F = soln[i];
 
     // Compute the partials of phi in the tangent directions
-    a.Fu = 0.0, a.Fv = 0.0;
-    for(size_t j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
-      {
-      double phi_i = soln[A.GetColIndex()[j]];
-      a.Fu += xTangentWeights[0][j] * phi_i;
-      a.Fv += xTangentWeights[1][j] * phi_i;
-      }
+    a.Fu = xLoopScheme.GetPartialDerivative(0, i, soln);
+    a.Fv = xLoopScheme.GetPartialDerivative(1, i, soln);
 
     // Compute the boundary atoms from this geometric information
     a.ComputeBoundaryAtoms(!topology->IsVertexInternal(i));
@@ -901,9 +802,16 @@ MeshMedialPDESolver
       SMLVec3d Y1 = h11 * a.Xu + h12 * a.Xv;
       SMLVec3d Y2 = h12 * a.Xu + h22 * a.Xv;
 
-      // Compute the weights for each of the neighbor vertices
-      for(j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
-        W[j] = xTangentWeights[0][j] * Y1 + xTangentWeights[1][j] * Y2;
+      // Add up to get the weights in the sparse matrix
+      for(EdgeWalkAroundVertex it(topology, i); !it.IsAtEnd(); ++it)
+        W[xMapVertexNbrToA[it.GetPositionInMeshSparseArray()]] = 
+          xLoopScheme.GetNeighborWeight(0, it) * Y1 +
+          xLoopScheme.GetNeighborWeight(1, it) * Y2;
+
+      // Finally, add the weight for the point itself (-4 \epsilon)
+      W[xMapVertexToA[i]] = 
+        xLoopScheme.GetOwnWeight(0, i) * Y1 + 
+        xLoopScheme.GetOwnWeight(1, i) * Y2;
       }
     }
 }
@@ -954,17 +862,11 @@ MeshMedialPDESolver
       // For each atom, compute F, Fu, Fv, Xu and Xv
       MedialAtom &da = dAtoms[i];
       da.F = soln[i];
-      da.Fu = da.Fv = 0.0;
-      da.Xu = da.Xv = da.Xuu = da.Xuv = da.Xvv = SMLVec3d(0.0); 
-      for(j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
-        {
-        SMLVec3d &Xi = dAtoms[A.GetColIndex()[j]].X;
-        double fi = soln[A.GetColIndex()[j]];
-        da.Xu += xTangentWeights[0][j] * Xi;
-        da.Xv += xTangentWeights[1][j] * Xi;
-        da.Fu += xTangentWeights[0][j] * fi;
-        da.Fv += xTangentWeights[1][j] * fi;
-        }
+      da.Fu = xLoopScheme.GetPartialDerivative(0, i, soln.data_block());
+      da.Fv = xLoopScheme.GetPartialDerivative(1, i, soln.data_block());
+      da.Xu = xLoopScheme.TangentX(0, i, dAtoms);
+      da.Xv = xLoopScheme.TangentX(1, i, dAtoms);
+      da.Xuu = da.Xuv = da.Xvv = SMLVec3d(0.0); 
 
       // Compute the metric tensor derivatives of the atom
       xAtoms[i].ComputeMetricTensorDerivatives(dAtoms[i]);
@@ -989,11 +891,15 @@ MeshMedialPDESolver
   // Epsilon for central differences
   double xEpsilon = 0.00001;
   double z = 0.5 / xEpsilon;
+
+  // Create a pair of atom arrays
+  MedialAtom *atom1 = new MedialAtom[topology->nVertices];
+  MedialAtom *atom2 = new MedialAtom[topology->nVertices];
   
   // Create a pair of alternative solutions
   MeshMedialPDESolver m1, m2;
-  m1.SetMeshTopology(topology);
-  m2.SetMeshTopology(topology);
+  m1.SetMeshTopology(topology, atom1);
+  m2.SetMeshTopology(topology, atom2);
 
   // Compute the solution in the current model
   this->SolveEquation(NULL, true);
@@ -1140,6 +1046,9 @@ MeshMedialPDESolver
         }
       }
     }
+
+  // Clean up
+  delete atom1; delete atom2;
 
   return flagSuccess ? 0 : -1;
 }

@@ -2,6 +2,7 @@
 #define __MeshMedialPDESolver_h_
 
 #include "MedialAtom.h"
+#include "MedialAtomGrid.h"
 #include "SparseMatrix.h"
 #include "SubdivisionSurface.h"
 #include "GenericMedialModel.h"
@@ -17,17 +18,17 @@
  * triangular mesh of arbitrary shape. Finite difference expressions are
  * computed using mesh-based operators rather than differential geometry
  *
- * Solving an equation involves solving a series of linear Newton step 
+ * Solving an equation involves solving a series of linear Newton step
  * partial differential equations:
  * \Delta \epsilon_i = \rho - \Delta \phi_i, subject to
- * 2 \Nabla \epsilon_i \cdot \Nabla \phi_i - 4 \epsilon_i = 
+ * 2 \Nabla \epsilon_i \cdot \Nabla \phi_i - 4 \epsilon_i =
  *            = 4 \phi_i - \| \Nabla \phi_i \|^2 on \partial \Omega
  * To solve this system, we have to construct a matrix that contains the
  * weight of each \epsilon in each of the equations. This is a sparse matrix
  * where each vertex represents a row, and has non-zero values in the
  * columns that correspond to the adjacent vertices
  */
-class MeshMedialPDESolver 
+class MeshMedialPDESolver
 {
 public:
   // Matrix typedefs
@@ -44,12 +45,12 @@ public:
 
   // Set the topology of the mesh. This determines the connectivity of the
   // vertices which, in turn, determines the structure of the sparse matrix
-  // passed to the sparse solver 
-  void SetMeshTopology(MeshLevel *topology);
-  
+  // passed to the sparse solver
+  void SetMeshTopology(MeshLevel *topology, MedialAtom *managedAtoms);
+
   // Set the input data as an array of positions and rho values. Another way
   // to set the input data is to manipulate the values of the atoms directly
-  // The third (optional) parameter is the 'guess' solution, which serves as 
+  // The third (optional) parameter is the 'guess' solution, which serves as
   // the initial solution for Newton iteration
   void SetInputData(const SMLVec3d *X, const double *rho, const double *phi = NULL);
 
@@ -57,7 +58,7 @@ public:
   // terms involved in gradient computation should also be computed
   void SolveEquation(double *xInitSoln = NULL, bool flagGradient = false);
 
-  // Compute the gradient of the solution with respect to some basis. 
+  // Compute the gradient of the solution with respect to some basis.
   void ComputeGradient(vector<MedialAtom *> dAtoms);
 
   // Test the accuracy of partial derivative computations in the gradient code
@@ -110,7 +111,7 @@ private:
 
   // Arrays B and epsilon used in Newton's solver
   vnl_vector<double> xRHS, xEpsilon;
-  
+
   // A pointer to the mesh topology
   MeshLevel *topology;
 
@@ -129,10 +130,10 @@ private:
     // The gradient of the cotangent with respect to each vertex
     SMLVec3d xCotGrad[3][3];
     };
-  
+
   // A structure representing vertex geometry in the mesh (temp)
   struct VertexGeom
-    { 
+    {
     // Area of the triangle fan around the vertex
     double xFanArea;
 
@@ -147,10 +148,9 @@ private:
   TriangleGeom *xTriangleGeom;
   VertexGeom *xVertexGeom;
 
-  // An array of weights used to compute the tangent vectors at each vertex. These correspond 
-  // to the sparse matrix A, i.e., include the neighbors of the vertex and the vertex itself
-  double *xTangentWeights[2];
-  
+  // Scheme for computing tangent vectors
+  MedialAtomLoopScheme xLoopScheme;
+
   // This utility array maps the entries in the nbr sparse array stored in the
   // mesh to elements of the sparse matrix A. This mapping is needed because
   // the entries of array A are sorted and include diagonal entries

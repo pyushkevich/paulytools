@@ -199,6 +199,7 @@ GenericBasisRepresentation2D<NComponents, NOrder, BasisFunctionU, BasisFunctionV
     for(k = 0; k < n; k++) 
       Z[i][k] = fu.Evaluate(uu[k], iu, 0) * fv.Evaluate(vv[k], iv, 0); 
 
+
   // Allocate the matrix A and vector b
 	vnl_matrix<double> A(nUnkowns, nUnkowns);
 	vnl_vector<double> b(nUnkowns);

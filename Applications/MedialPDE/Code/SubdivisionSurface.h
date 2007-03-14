@@ -19,9 +19,9 @@ inline short rol(short x) { return (x + 2) % 3; }
 #define NOID 0xffffffff
 
 /**
- * Subdivision surface representation 
+ * Subdivision surface representation
  */
-class SubdivisionSurface 
+class SubdivisionSurface
 {
 public:
 
@@ -37,14 +37,14 @@ public:
 
   /**
    * Each vertex is associated with a walk. A walk starts at some triangle and
-   * ends at a different triangle. We store the starting and ending points of 
+   * ends at a different triangle. We store the starting and ending points of
    * the walk, as well as the number of steps in the walk
    */
   struct Vertex
   {
     // First triangle in the walk and this vertex's index in it
     size_t t0; short v0;
-    
+
     // Second triangle in the walk and this vertex's index in it
     size_t t1; short v1;
 
@@ -61,10 +61,10 @@ public:
     // Get the valence of the vertex. For internal vertices it is equal to the
     // number of triangles that share the vertex, but for boundary vertices it
     // is equal to 1 plus that (when the mesh has a disk topology)
-    size_t Valence() const { return bnd ? n + 1 : n; } 
-    
+    size_t Valence() const { return bnd ? n + 1 : n; }
+
     // Constructors
-    Vertex(size_t it0, short iv0, size_t it1, short iv1, size_t in, bool ibnd) 
+    Vertex(size_t it0, short iv0, size_t it1, short iv1, size_t in, bool ibnd)
       : t0(it0), v0(iv0), t1(it1), v1(iv1), n(in), bnd(ibnd) {}
     Vertex() : t0(NOID), t1(NOID), v0(-1), v1(-1), n(0), bnd(false) {}
   };
@@ -117,7 +117,7 @@ public:
     // becomes identity and its parent is null
     void SetAsRoot()
       { parent = NULL; weights.Reset(); }
-    
+
     // Constructor
     MeshLevel()
       { parent = NULL; nVertices = 0; }
@@ -126,7 +126,7 @@ public:
   /** Subdivide a mesh level once */
   static void Subdivide(const MeshLevel *src, MeshLevel *dst);
 
-  /** 
+  /**
    * Subdivide a mesh level n times. The intermediate levels will be
    * discarded.
    */
@@ -142,7 +142,7 @@ public:
   static void ApplySubdivision(
     vtkPolyData *src, vtkPolyData *target, MeshLevel &m);
 
-  /** 
+  /**
    * Apply subdivision to arbitrary double data (in strides of nComp
    * components)
    */
@@ -150,7 +150,7 @@ public:
 
   /** Apply subdivision to raw data */
   static void ApplySubdivision(
-    SMLVec3d *xSrc, double *rhoSrc, 
+    SMLVec3d *xSrc, double *rhoSrc,
     SMLVec3d *xTrg, double *rhoTrg, MeshLevel &m);
 
   /** Load a mesh level from a registry */
@@ -192,7 +192,7 @@ class EdgeWalkAroundVertex
 public:
   /** Constructor: takes a vertex in a fully initialized mesh level */
   EdgeWalkAroundVertex(const SubdivisionSurface::MeshLevel *mesh, size_t iVertex)
-    { 
+    {
     this->mesh = mesh;
     this->iVertex = iVertex;
     this->pos = mesh->nbr.GetRowIndex()[iVertex];
@@ -207,7 +207,7 @@ public:
   size_t Valence()
     { return mesh->nbr.GetRowIndex()[iVertex + 1] - mesh->nbr.GetRowIndex()[iVertex]; }
 
-  /** 
+  /**
    * Are we at the end of the walk? The end is reached when you have made a
    * full circle or moved past the end of the mesh. No operations should be
    * performed once you are at the end of the walk
@@ -228,66 +228,66 @@ public:
     { pos = mesh->nbr.GetRowIndex()[iVertex]; }
 
   /** Get the id of the 'fixed' vertex. This is always the same id */
-  size_t FixedVertexId() 
+  size_t FixedVertexId()
     { return iVertex; }
 
   /** Get the moving vertex id */
-  size_t MovingVertexId() 
+  size_t MovingVertexId()
     { return mesh->nbr.GetColIndex()[pos]; }
 
   /** Get the triangle ahead */
-  size_t TriangleAhead() 
+  size_t TriangleAhead()
     { return mesh->nbr.GetSparseData()[pos].tFront; }
 
   /** Get the triangle behind */
-  size_t TriangleBehind() 
+  size_t TriangleBehind()
     { return mesh->nbr.GetSparseData()[pos].tBack; }
 
   /** Get the index of the fixed vertex in the triangle ahead */
-  short FixedVertexIndexInTriangleAhead() 
+  short FixedVertexIndexInTriangleAhead()
     { return mesh->nbr.GetSparseData()[pos].vFront; }
-  
+
   /** Get the index of the fixed vertex in the triangle behind */
-  short FixedVertexIndexInTriangleBehind() 
+  short FixedVertexIndexInTriangleBehind()
     { return mesh->nbr.GetSparseData()[pos].vBack; }
 
   /** Get the index of the moving vertex in the triangle ahead */
-  short MovingVertexIndexInTriangleAhead() 
+  short MovingVertexIndexInTriangleAhead()
     { return ror(FixedVertexIndexInTriangleAhead()); }
 
   /** Get the index of the moving vertex in the triangle behind */
-  short MovingVertexIndexInTriangleBehind() 
+  short MovingVertexIndexInTriangleBehind()
     { return rol(FixedVertexIndexInTriangleBehind()); }
 
   /** Get the index of the face-connected vertex in triangle ahead */
-  short OppositeVertexIndexInTriangleAhead() 
+  short OppositeVertexIndexInTriangleAhead()
     { return rol(FixedVertexIndexInTriangleAhead()); }
 
   /** Get the index of the face-connected vertex in triangle behind */
-  short OppositeVertexIndexInTriangleBehind() 
+  short OppositeVertexIndexInTriangleBehind()
     { return ror(FixedVertexIndexInTriangleBehind()); }
 
   /** Get the id of the face-connected vertex ahead */
   size_t VertexIdAhead()
-    { 
-    if(pos == end - 1) 
+    {
+    if(pos == end - 1)
       if(mesh->nbr.GetSparseData()[pos].tFront == NOID)
         return NOID;
-      else 
+      else
         return mesh->nbr.GetColIndex()[mesh->nbr.GetRowIndex()[iVertex]];
-    else 
+    else
       return mesh->nbr.GetColIndex()[pos + 1];
     }
-    
+
   /** Get the id of the face-connected vertex behind */
   size_t VertexIdBehind()
-    { 
-    if(pos == mesh->nbr.GetRowIndex()[iVertex]) 
+    {
+    if(pos == mesh->nbr.GetRowIndex()[iVertex])
       if(mesh->nbr.GetSparseData()[pos].tBack == NOID)
         return NOID;
-      else 
+      else
         return mesh->nbr.GetColIndex()[end - 1];
-    else 
+    else
       return mesh->nbr.GetColIndex()[pos - 1];
     }
 
@@ -298,14 +298,75 @@ public:
 private:
   // The mesh being iterated around
   const SubdivisionSurface::MeshLevel *mesh;
-  
+
   // The index of the vertex walked around by this iterator
   size_t iVertex;
-  
+
   // The position in the walk, points to the column entry in the mesh's nbr
   // sparse matrix
   size_t pos, end;
 };
+
+/**
+ * A scheme for computing tangent vectors from mesh levels
+ */
+class LoopTangentScheme
+{
+public:
+  typedef SubdivisionSurface::MeshLevel MeshLevel;
+
+  /** Constructor does nothing */
+  LoopTangentScheme();
+  ~LoopTangentScheme();
+
+  /** Pass a mesh to the tangent scheme */
+  void SetMeshLevel(MeshLevel *in_level);
+
+  /** Direct access to the weights. This method returns the contribution
+   * of a neighbor pointed by a walk iterator to the d-tangent at a vertex */
+  double GetNeighborWeight(size_t d, EdgeWalkAroundVertex &walk)
+    {
+    return xNbrTangentWeights[d][walk.GetPositionInMeshSparseArray()];
+    }
+
+  /** Direct access to the weights. This method returns the contribution
+   * of the vertex itself to a d-tangent. This is zero for vertices with 
+   * regular valence */
+  double GetOwnWeight(size_t d, size_t v)
+    {
+    return xVtxTangentWeights[d][v];
+    }
+
+
+  /** Compute the directional derivative of a function F over the mesh
+   * in direction d (0,1) at vertex v */
+  template<class T> T GetPartialDerivative(size_t d, size_t v, const T *F)
+  {
+    size_t *ri = level->nbr.GetRowIndex();
+    size_t *ci = level->nbr.GetColIndex();
+
+    double y = xVtxTangentWeights[d][v] * F[v];
+    for(size_t i = ri[v]; i < ri[v+1]; ++i)
+      y += xNbrTangentWeights[d][i] * F[ci[i]];
+
+    return y;
+  }
+
+protected:
+
+  // Mesh level for which tangents are computed
+  MeshLevel *level;
+
+  // Method to delete internally stored data
+  void Reset();
+
+  // An array of weights used to compute the tangent vectors at each vertex.
+  // These correspond to the sparse matrix A, i.e., include the neighbors of the
+  // vertex and the vertex itself
+  double *xNbrTangentWeights[2];
+  double *xVtxTangentWeights[2];
+};
+
 
 inline ostream &operator << (ostream &out, const SubdivisionSurface::Triangle &t)
 {

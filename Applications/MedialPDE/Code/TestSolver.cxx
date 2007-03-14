@@ -210,6 +210,8 @@ int TestGradientComputation(
       dtq.Update("Atom's Xuu", a0.Xuu, a1.Xuu, a2.Xuu, eps);
       dtq.Update("Atom's Xuv", a0.Xuv, a1.Xuv, a2.Xuv, eps);
       dtq.Update("Atom's Xvv", a0.Xvv, a1.Xvv, a2.Xvv, eps);
+      dtq.Update("Atom's Fu", a0.Fu, a1.Fu, a2.Fu, eps);
+      dtq.Update("Atom's Fv", a0.Fv, a1.Fv, a2.Fv, eps);
 
       // Look at the difference in the specific terms of metric tensor
       for(size_t u = 0; u < 2; u++) for(size_t v = 0; v < 2; v++)
@@ -337,7 +339,8 @@ int TestGradientComputation(
 int TestOptimizerGradientComputation(
   MedialOptimizationProblem &mop, 
   CoefficientMapping &xMapping,
-  GenericMedialModel *xSolver)
+  GenericMedialModel *xSolver,
+  double xStepSize)
 {
   // Set up timers
   CodeTimer tAnalytic, tNumeric;
@@ -352,7 +355,8 @@ int TestOptimizerGradientComputation(
   // detect problems for other P values. So instead, we can move along the
   // gradient a certain direction.
   mop.ComputeGradient(P.data_block(), xGradient.data_block());
-  P += 0.1 * xGradient;
+  cout << "GRADIENT AT 0 " << xGradient << endl;
+  P += xStepSize * xGradient;
 
   // Now we are ready to perform the test.
   mop.PrintReport(cout);

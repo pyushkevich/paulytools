@@ -10,6 +10,8 @@
 #include "MedialAtomGrid.h"
 #include "MedialModelIO.h"
 #include "MedialException.h"
+#include "PDESubdivisionMedialModel.h"
+#include "BruteForceSubdivisionMedialModel.h"
 
 #include "itkImageRegionConstIteratorWithIndex.h"
 #include "itkNearestNeighborInterpolateImageFunction.h"
@@ -75,10 +77,10 @@ void WriteMatrixFile(const vnl_matrix<double> &mat, const char *file)
 
 namespace medialpde {
 
-struct DiscreteAtom 
-{ 
-  double u, v, x, y, z; 
-  unsigned int iu, iv; 
+struct DiscreteAtom
+{
+  double u, v, x, y, z, r;
+  unsigned int iu, iv;
 };
 
 /***************************************************************************
@@ -129,12 +131,12 @@ void MedialPDE::SaveToParameterFile(const char *file)
 
 void MedialPDE::LoadFromParameterFile(const char *file)
 {
-  try 
+  try
     {
     GenericMedialModel *model = MedialModelIO::ReadModel(file);
     this->SetMedialModel(model);
-    } 
-  catch(ModelIOException &exc) 
+    }
+  catch(ModelIOException &exc)
     {
     cerr << "Error reading model: " << exc.what() << endl;
     }
@@ -193,19 +195,19 @@ double ComputeImageMatchGradient(
   // See how much time elapsed for the medial computation
   double tMedial = clock() - tStart;
 
-  // At this point, we have computed the solution at current X and at a set of 
+  // At this point, we have computed the solution at current X and at a set of
   // X + eps positions. We can use this to compute the gradient of each of the
   // terms involved in the optimization
   vnl_vector<double> xGradImage(nCoeff), xGradJacobian(nCoeff);
   double xSolution, xImageTerm, xJacobianTerm;
-  
+
   // Compute the gradient of the image match term
   BoundaryImageMatchTerm termImage(image);
   xImageTerm = termImage.ComputeGradient(S0, SGrad, xEpsilon, xGradJacobian);
 
   // Compute the gradient of the jacobian penalty term
   BoundaryJacobianEnergyTerm termJacobian();
-  xJacobianTerm = termJacobian.ComputeGradient(S0, SGrad, xEpsilon, xGradJacobian); 
+  xJacobianTerm = termJacobian.ComputeGradient(S0, SGrad, xEpsilon, xGradJacobian);
 
   // Finish timing
   double tGradient = clock() - tMedial;
@@ -233,7 +235,7 @@ double MedialPDE::ComputeImageMatch(FloatImage *image)
 
   // Compute the energy
   double xMatch = termImage.ComputeEnergy(&S);
-  
+
   // Print a report
   cout << "REPORT: " << endl;
   termImage.PrintReport(cout);
@@ -260,14 +262,14 @@ double MedialPDE::ComputeBoundaryJacobianPenalty(bool verbose)
   return x;
 }
 
-void GradientDescentOptimization(MedialOptimizationProblem *xProblem, 
+void GradientDescentOptimization(MedialOptimizationProblem *xProblem,
   vnl_vector<double> &xSolution, unsigned int nSteps, double xStep)
 {
   // Create the initial solution
   size_t nCoeff = xSolution.size();
   vnl_vector<double> xGradient(nCoeff, 0.0);
 
-  // Print report information  
+  // Print report information
   // ofstream fdump("conjgrad.txt",ios_base::out);
   // fdump << "CONJUGATE GRADIENT OPTIMIZER DUMP" << endl;
 
@@ -275,14 +277,14 @@ void GradientDescentOptimization(MedialOptimizationProblem *xProblem,
   for(unsigned int p = 0; p < nSteps; p++)
     {
     // Compute the gradient and the image match
-    double xMatch = 
+    double xMatch =
       xProblem->ComputeGradient( xSolution.data_block(), xGradient.data_block());
 
     // Move in the gradient direction
     xSolution -= xStep * xGradient;
 
     cout << "STEP " << p << "\t match " << xMatch << endl;
-    
+
 
     // Report the current state
     // fdump << "STEP " << p << endl;
@@ -336,12 +338,12 @@ public:
       vnl_vector<double> v = vnl_vector<double>(x, n) - xLast;
       cout << "DD !!" << endl;
       double f = problem->ComputePartialDerivative(x, v.data_block(), dfdv);
-      
+
       for(i = 0; i < n; i++) df[i] = 0.0;
       for(size_t i = 0; i < n; i++)
         if(v[i] != 0.0)
           { df[i] = dfdv / v[i]; break; }
-      
+
       return f;
       } */
     }
@@ -350,10 +352,10 @@ public:
       { flagFirstCall = true; }
 
     GSLProblemWrapper(TProblem *problem, size_t n)
-      { 
+      {
       this->problem = problem;
       this->n = n;
-      flagFirstCall = true; 
+      flagFirstCall = true;
       }
 
 private:
@@ -367,9 +369,9 @@ double my_f(const gsl_vector *v, void *params)
 {
   // Get a hold of the problem
   typedef GSLProblemWrapper<MedialOptimizationProblem> ProblemType;
-  ProblemType *mop = 
+  ProblemType *mop =
     static_cast<ProblemType *>(params);
-  
+
   // Run the evaluation
   return mop->Evaluate(v->data);
 }
@@ -378,9 +380,9 @@ void my_df(const gsl_vector *v, void *params, gsl_vector *df)
 {
   // Get a hold of the problem
   typedef GSLProblemWrapper<MedialOptimizationProblem> ProblemType;
-  ProblemType *mop = 
+  ProblemType *mop =
     static_cast<ProblemType *>(params);
-  
+
   // Compute the jet
   mop->ComputeGradient(v->data, df->data);
 }
@@ -389,9 +391,9 @@ void my_fdf(const gsl_vector *v, void *params, double *f, gsl_vector *df)
 {
   // Get a hold of the problem
   typedef GSLProblemWrapper<MedialOptimizationProblem> ProblemType;
-  ProblemType *mop = 
+  ProblemType *mop =
     static_cast<ProblemType *>(params);
-  
+
   // Compute the jet
   *f = mop->ComputeGradient(v->data, df->data);
 }
@@ -420,7 +422,7 @@ void my_calcg(int &n, double *x, int &nf, double *g, int *, double *, void *info
 }
 
 void MedialPDE::ConjugateGradientOptimizationTOMS(
-  MedialOptimizationProblem *xProblem, 
+  MedialOptimizationProblem *xProblem,
   vnl_vector<double> &xSolution, unsigned int nSteps, double xStep)
 {
   int nCoeff = (int) xSolution.size();
@@ -449,7 +451,9 @@ void MedialPDE::ConjugateGradientOptimizationTOMS(
   deflt_(xAlg, iv, liv, lv, v);
   iv[mxiter_ - 1] = nSteps;
   iv[mxfcal_ - 1] = 10 * nSteps;
-  iv[solprt_ - 1] = 0;
+  iv[19 - 1] = 5;
+  iv[22 - 1] = 0;
+  iv[24 - 1] = 0;
 
   // Execute the routine
   sumsl_(
@@ -471,7 +475,7 @@ void MedialPDE::ConjugateGradientOptimizationTOMS(
 
 
 void MedialPDE::ConjugateGradientOptimization(
-  MedialOptimizationProblem *xProblem, 
+  MedialOptimizationProblem *xProblem,
   vnl_vector<double> &xSolution, unsigned int nSteps, double xStep)
 {
   size_t nCoeff = xSolution.size();
@@ -479,7 +483,7 @@ void MedialPDE::ConjugateGradientOptimization(
   // Create a problem wrapper for fast computation of partial derivatives
   typedef GSLProblemWrapper<MedialOptimizationProblem> ProblemType;
   ProblemType my_problem(xProblem, nCoeff);
-  
+
   // Create a GSL function object
   gsl_multimin_function_fdf my_func;
   my_func.f = &my_f;
@@ -493,7 +497,7 @@ void MedialPDE::ConjugateGradientOptimization(
   memcpy(my_start->data, xSolution.data_block(), sizeof(double) * nCoeff);
 
   // Create conjugate gradient minimizer
-  gsl_multimin_fdfminimizer *my_min = 
+  gsl_multimin_fdfminimizer *my_min =
     gsl_multimin_fdfminimizer_alloc( gsl_multimin_fdfminimizer_conjugate_pr, nCoeff);
     // gsl_multimin_fdfminimizer_alloc(gsl_multimin_fdfminimizer_vector_bfgs, nCoeff);
     // gsl_multimin_fdfminimizer_alloc(gsl_multimin_fdfminimizer_steepest_descent, nCoeff);
@@ -538,7 +542,7 @@ void MedialPDE::ConjugateGradientOptimization(
   gsl_vector_free(my_start);
 }
 
-  
+
 /*
   // Construct the conjugate gradient optimizer
   ConjugateGradientMethod xMethod(*xProblem, Vector(nCoeff, xSolution.data_block()));
@@ -554,7 +558,7 @@ void MedialPDE::ConjugateGradientOptimization(
   double xLastMeshDumpValue = xMethod.getBestEverValue();
   if(xMeshDumpImprovementPercentage > 0.0)
     ExportIterationToVTK(0);
-  
+
   for(size_t p = 0; p < nSteps; p++)
     {
     if(xMethod.isFinished())
@@ -571,17 +575,17 @@ void MedialPDE::ConjugateGradientOptimization(
 
     // Dump the mesh
     if(xMeshDumpImprovementPercentage > 0.0)
-      if(xMethod.getBestEverValue() < 
+      if(xMethod.getBestEverValue() <
         (1.0 - xMeshDumpImprovementPercentage) * xLastMeshDumpValue)
         {
         xProblem->evaluate(xMethod.getBestEverX());
         ExportIterationToVTK(p);
-        xLastMeshDumpValue = xMethod.getBestEverValue(); 
+        xLastMeshDumpValue = xMethod.getBestEverValue();
 
         xProblem->PrintReport(cout);
         }
 
-    // Save the file 
+    // Save the file
     //ostringstream oss;
     //oss << "iter_" << p;
     //SaveToParameterFile(oss.str().c_str());
@@ -605,17 +609,17 @@ inline pauly::Vector VectorCast(vnl_vector<double> &Y)
 }
 
 void EvolutionaryOptimization(
-  MedialOptimizationProblem *xProblem, 
-  vnl_vector<double> &xSolution, 
+  MedialOptimizationProblem *xProblem,
+  vnl_vector<double> &xSolution,
   unsigned int nSteps)
 {
   // Create the initial solution
   size_t nCoeff = xSolution.size();
   vnl_vector<double> xSigma(nCoeff, 0.01);
-  
+
   // Create the initial search space
   GaussianSS xSearch(VectorCast(xSolution), VectorCast(xSigma));
-  
+
   // Construct the evolutionary optimizer
   EvolutionaryStrategy xMethod(*xProblem, xSearch, 2, 4, SELECTION_MuPlusLambda);
 
@@ -628,7 +632,7 @@ void EvolutionaryOptimization(
   // Set the delta-sigma vector
   vnl_vector<double> xDeltaSigma(nCoeff, 0.1);
   xMethod.setDeltaSigma(VectorCast(xDeltaSigma));
-  
+
   // Run the optimization
   for(size_t p = 0; p < nSteps; p++)
     {
@@ -653,22 +657,22 @@ void MedialPDE
 
   // Create the coefficient mapping
   CoefficientMapping *xMapping = NULL;
-  
+
   // We might need a PCA as well
   PrincipalComponents *pca = NULL;
 
   // Create an appropriate optimization mapping
-  if(p.xMapping == OptimizationParameters::AFFINE) 
+  if(p.xMapping == OptimizationParameters::AFFINE)
     {
     xMapping = new AffineTransformCoefficientMapping(xMedialModel);
     }
-  else if(p.xMapping == OptimizationParameters::IDENTITY) 
+  else if(p.xMapping == OptimizationParameters::IDENTITY)
     {
     xMapping = new IdentityCoefficientMapping(xMedialModel->GetNumberOfCoefficients());
     }
   else if(p.xMapping == OptimizationParameters::PCA)
     {
-    try 
+    try
       {
       // Read principal components from the file
       vnl_matrix<double> pcaMatrix;
@@ -677,9 +681,9 @@ void MedialPDE
 
       // Create the PCA/Affine optimizer
       xMapping = new PCAPlusAffineCoefficientMapping(xMedialModel, pca, p.nPCAModes);
-      } 
-    catch(...) 
-      {  
+      }
+    catch(...)
+      {
       throw ModelIOException("Unable to read PCA matrix file in optimization parameters");
       }
     }
@@ -690,7 +694,7 @@ void MedialPDE
       throw ModelIOException("No coarse-to-fine settings specified!");
 
     // Create the coarse to fine mask and mapping
-    const CoarseToFineMappingDescriptor *ctfDesc 
+    const CoarseToFineMappingDescriptor *ctfDesc
       = xMedialModel->GetCoarseToFineMappingDescriptor();
     xMapping = new SubsetCoefficientMapping(ctfDesc->GetMask(p.xCTFSettings));
     }
@@ -700,7 +704,7 @@ void MedialPDE
 
   // Save the initial values of the coefficients
   vnl_vector<double> xInitialCoeff = xMedialModel->GetCoefficientArray();
-  
+
   // Create the optimization problem
   MedialOptimizationProblem xProblem(xMedialModel, xMapping);
 
@@ -710,17 +714,18 @@ void MedialPDE
     xTermImage = new ProbabilisticEnergyTerm(image, 24);
   else
     xTermImage = new BoundaryImageMatchTerm(image);
-  
+
   // Create the penalty terms
   BoundaryJacobianEnergyTerm xTermJacobian;
   AtomBadnessTerm xTermBadness;
-  MedialRegularityTerm xTermRegularize(
-    xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
+  MedialRegularityTerm xTermRegularize(xMedialModel);
+  MedialBendingEnergyTerm xTermBending(xMedialModel);
+  MedialAnglesPenaltyTerm xTermAngles(xMedialModel);
   RadiusPenaltyTerm xTermRadius(0.025);
 
   // Add the terms to the problem
   xProblem.AddEnergyTerm(xTermImage, 1.0);
-  
+
   // Add prior terms only for deformable registration
   if(p.xMapping != OptimizationParameters::AFFINE && p.xMapping != OptimizationParameters::PCA)
     {
@@ -743,6 +748,10 @@ void MedialPDE
     if(p.xTermWeights[OptimizationParameters::RADIUS] > 0.0)
       xProblem.AddEnergyTerm(
         &xTermRadius, p.xTermWeights[OptimizationParameters::RADIUS]);
+
+    // Add the angle penalty term
+    // TODO: set it up
+    // xProblem.AddEnergyTerm(&xTermAngles, 0.2);
     }
 
   // Initial solution report
@@ -766,8 +775,99 @@ void MedialPDE
   // Delete the mapping
   delete xMapping;
   delete xTermImage;
-  if(pca) delete pca; 
+  if(pca) delete pca;
 }
+
+
+/******************************************************************************
+ * PROBLEM: FIT PDE-LIKE problem to a given radius field
+ *****************************************************************************/
+void MedialPDE
+::FitPDEModelToRadius(double *rfield)
+{
+  // The coefficient mapping selects only the rho-related components of the 
+  // coefficient vector - the manifold does not deform
+  SubsetCoefficientMapping xCoeffMapping(
+    xMedialModel->GetRadialCoefficientMask());
+
+  // Create the initial solution (all zeros)
+  vnl_vector<double> xSolution(xCoeffMapping.GetNumberOfParameters(), 0.0);
+
+  // Save the initial values of the coefficients
+  vnl_vector<double> xInitialCoeff = xMedialModel->GetCoefficientArray();
+
+  // Create an optimization problem (same problem as always)
+  MedialOptimizationProblem xProblem(xMedialModel, &xCoeffMapping);
+
+  // Create the match term based on the radius field
+  DistanceToRadiusFieldEnergyTerm xTermRadius(xMedialModel, rfield);
+  xProblem.AddEnergyTerm(&xTermRadius, 1.0);
+
+  // Add a penalty for bad atoms
+  AtomBadnessTerm xTermBadness;
+  xProblem.AddEnergyTerm(&xTermBadness, 1.0);
+
+  // Add a penalty for boundary jacobian
+  BoundaryJacobianEnergyTerm xTermJacobian;
+  xProblem.AddEnergyTerm(&xTermJacobian, 1.0);
+
+  // Print the initial solution
+  cout << "INITIAL SOLUTION REPORT: " << endl;
+  xProblem.Evaluate(xSolution.data_block());
+  xProblem.PrintReport(cout);
+
+  // Run the optimization
+  ConjugateGradientOptimizationTOMS(&xProblem, xSolution, 200, 0.001);
+
+  // After optimization, apply the best result
+  xMedialModel->SetCoefficientArray(xCoeffMapping.Apply(xInitialCoeff, xSolution));
+  xMedialModel->ComputeAtoms();
+}
+
+
+
+/******************************************************************************
+ * PROBLEM: Interpolate data under regularity constraints
+ *****************************************************************************/
+void MedialPDE
+::FitPDEModelToPointData(double *x, double *y, double *z)
+{
+  // The coefficient mapping selects only the rho-related components of the 
+  // coefficient vector - the manifold does not deform
+  SubsetCoefficientMapping xCoeffMapping(
+    xMedialModel->GetSpatialCoefficientMask());
+
+  // Create the initial solution (all zeros)
+  vnl_vector<double> xSolution(xCoeffMapping.GetNumberOfParameters(), 0.0);
+
+  // Save the initial values of the coefficients
+  vnl_vector<double> xInitialCoeff = xMedialModel->GetCoefficientArray();
+
+  // Create an optimization problem (same problem as always)
+  MedialOptimizationProblem xProblem(xMedialModel, &xCoeffMapping);
+
+  // Create the match term based on the radius field
+  DistanceToPointSetEnergyTerm xTermDistance(xMedialModel, x, y, z);
+  xProblem.AddEnergyTerm(&xTermDistance, 1.0);
+
+  // Add a penalty for bad atoms
+  MedialRegularityTerm xTermRegularity(xMedialModel);
+  xProblem.AddEnergyTerm(&xTermRegularity, 0.01);
+
+  // Print the initial solution
+  cout << "INITIAL SOLUTION REPORT: " << endl;
+  xProblem.Evaluate(xSolution.data_block());
+  xProblem.PrintReport(cout);
+
+  // Run the optimization
+  ConjugateGradientOptimizationTOMS(&xProblem, xSolution, 100, 0.1);
+
+  // After optimization, apply the best result
+  xMedialModel->SetCoefficientArray(xCoeffMapping.Apply(xInitialCoeff, xSolution));
+  xMedialModel->ComputeAtoms();
+}
+
+
 
 class FirstMomentComputer : public EuclideanFunction
 {
@@ -830,7 +930,7 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
     {
     // Get the volume of this voxel
     if(it.Get() > 0.0)
-      {      
+      {
       // Get the spatial position of the point
       itk::ContinuousIndex<double, 3> iRaw(it.GetIndex());
       itk::Point<double, 3> ptPosition;
@@ -844,14 +944,14 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
       }
     }
 
-  // Compute the actual volume of the image 
-  double xPhysicalVolume = xVolume * 
+  // Compute the actual volume of the image
+  double xPhysicalVolume = xVolume *
     xImage->GetSpacing()[0] * xImage->GetSpacing()[1] * xImage->GetSpacing()[2];
 
   // Scale the mean and covariance by accumulated weights
   xMean = xMean / xVolume;
   xCov = (xCov - xVolume *  outer_product(xMean, xMean)) / xVolume;
- 
+
   // Compute the mean and covariance of the image
   cout << "--- MATCHING BY MOMENTS ---" << endl;
   cout << "Image Volume: " << xPhysicalVolume << endl;
@@ -864,7 +964,7 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
   // Create a solution data object to speed up computations
   SolutionData S0(xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
   S0.UpdateInternalWeights(nCuts);
-  
+
   for(i = 0; i < 3; i++)
     {
     // Compute the first moment in i-th direction
@@ -885,7 +985,7 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
   yVolume = S0.xInternalVolume;
   yMean /= yVolume;
   yCov = (yCov - yVolume * outer_product(yMean, yMean)) / yVolume;
-  
+
   cout << "Model Volume: " << yVolume << endl;
   cout << "Model Mean: " << yMean << endl;
   cout << "Model Covariance: " << endl << yCov << endl;
@@ -927,7 +1027,7 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
     vnl_matrix<double> R = Vx * F * Vy.transpose();
 
     // Rotate the surface by matrix R and shift to yMean
-    xRotatedCoeff[f] = 
+    xRotatedCoeff[f] =
       affDesc->ApplyAffineTransform( xInitCoeff, R, xMean - yMean, yMean);
     xMedialModel->SetCoefficientArray(xRotatedCoeff[f]);
 
@@ -937,7 +1037,7 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
     // Create a solution object and a volume match term
     SolutionData SRot(xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
     double xMatch = tVolumeMatch.ComputeEnergy(&SRot);
-    
+
     // Record the best match ever
     if(f == 0 || xMatch < xBestMatch)
       { xBestMatch = xMatch; iBestSurface = f; }
@@ -974,7 +1074,7 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
   yVolume = S1.xInternalVolume;
   yMean /= yVolume;
   yCov = (yCov - yVolume * outer_product(yMean, yMean)) / yVolume;
-  
+
   cout << "Model Volume: " << yVolume << endl;
   cout << "Model Mean: " << yMean << endl;
   cout << "Model Covariance: " << endl << yCov << endl;
@@ -1019,7 +1119,7 @@ void MedialPDE::SaveBYUMesh(const char *file)
 // This method estimates the parameters of a transform to a set of point pairs
 // using least square fitting
 void LeastSquaresFit(
-  itk::BSplineDeformableTransform<double, 3, 3> *t, 
+  itk::BSplineDeformableTransform<double, 3, 3> *t,
   size_t nx, SMLVec3d *x, SMLVec3d *y)
 {
   // Get the number of parameters
@@ -1035,7 +1135,7 @@ void LeastSquaresFit(
   // Compute the right hand side vectors
   vnl_vector<double> b1(nx), b2(nx), b3(nx);
 
-  
+
   for(p = 0; p < np; p++)
     {
     // Create a basis function
@@ -1061,7 +1161,7 @@ void LeastSquaresFit(
   cout << "  Landmark Points : " << nx << endl;
 
   // Compute the square matrix A
-  vnl_matrix<double> A = 
+  vnl_matrix<double> A =
     Z1 * Z1.transpose() + Z2 * Z2.transpose() + Z3 * Z3.transpose();
   vnl_vector<double> B = Z1 * b1 + Z2 * b2 + Z3 * b3;
 
@@ -1073,7 +1173,7 @@ void LeastSquaresFit(
 	vnl_vector<double> Y = qr.solve(B);
 
   // Set the parameters
-  for(p = 0; p < np; p++) 
+  for(p = 0; p < np; p++)
     p0[p] = Y[p];
 
   t->SetParametersByValue(p0);
@@ -1098,12 +1198,12 @@ void LeastSquaresFit(
 void UpdateRegion(itk::ImageRegion<3> &R, const itk::Index<3> &idx, bool first)
 {
   if(first)
-    { 
-    R.SetIndex(idx); 
-    R.SetSize(0, 1); R.SetSize(1, 1); R.SetSize(2, 1); 
+    {
+    R.SetIndex(idx);
+    R.SetSize(0, 1); R.SetSize(1, 1); R.SetSize(2, 1);
     return;
     }
-  
+
   if(R.IsInside(idx))
     { return; }
 
@@ -1138,17 +1238,17 @@ void MedialPDE::SetPCAMatrix(size_t ncu, size_t ncv, const char *fname)
   // Store the dimensions
   ncuPCA = ncu;
   ncvPCA = ncv;
-  
+
   // Read the matrix
   ReadMatrixFile(mPCAMatrix, fname);
-  cout << "READ PCA MATRIX " << mPCAMatrix.rows() 
+  cout << "READ PCA MATRIX " << mPCAMatrix.rows()
     << " x " << mPCAMatrix.columns() << endl;
 }
 
 void MedialPDE::SampleInterior(
-  const char *file, 
-  double xStep, 
-  double xStart, 
+  const char *file,
+  double xStep,
+  double xStart,
   double xEnd,
   FloatImage *fim)
 {
@@ -1171,7 +1271,12 @@ void MedialPDE::SampleInterior(
       SMLVec3d x = (1.0 - fabs(xi)) * a.X + fabs(xi) * b;
       fout << a.u << " " << a.v << " " << xi << " ";
       fout << x[0] << " " << x[1] << " " << x[2];
-     
+
+      // Write rho and r values
+      fout << " " << a.xLapR;
+      fout << " " << a.R;
+
+      // Write the image value as well
       if(fim) fout << " " << fim->InterpolateNearestNeighbor(x);
       fout << endl;
       }
@@ -1184,11 +1289,11 @@ void MedialPDE::SampleInterior(
 /*
 IMedialCoefficientMask *MedialPDE::CreatePCACoefficientMask(size_t nModes)
 {
-  size_t ncu, ncv; 
+  size_t ncu, ncv;
 
   // Create a PCA mask
   IMedialCoefficientMask *xMask = NULL;
-  
+
   // See if the numbers of coefficients match between current surface and matrix
   xSurface->GetNumberOfCoefficientsUV(ncu, ncv);
   if(ncu == ncuPCA && ncv == ncvPCA)
@@ -1208,10 +1313,10 @@ IMedialCoefficientMask *MedialPDE::CreatePCACoefficientMask(size_t nModes)
     for(size_t i = 0; i < mPCAMatrix.rows(); i++)
       {
       xSource.SetCoefficientArray(mPCAMatrix.get_row(i).data_block());
-      for(size_t icu = 0; icu < ncu; icu++) for(size_t icv = 0; icv < ncv; icv++) 
-        for(size_t iComp = 0; iComp < xSurface->GetNumberOfDimensions(); iComp++) 
+      for(size_t icu = 0; icu < ncu; icu++) for(size_t icv = 0; icv < ncv; icv++)
+        for(size_t iComp = 0; iComp < xSurface->GetNumberOfDimensions(); iComp++)
           {
-          double xVal = (icu >= ncuPCA || icv >= ncvPCA) ? 0.0 : 
+          double xVal = (icu >= ncuPCA || icv >= ncvPCA) ? 0.0 :
             xSource.GetCoefficient(icu, icv, iComp);
           xTarget.SetCoefficient(icu, icv, iComp, xVal);
           }
@@ -1241,7 +1346,7 @@ void MedialPDE::ReleasePCACoefficientMask(IMedialCoefficientMask *xMask)
 void SubdivisionMPDE::SubdivideMeshes(size_t iCoeffSub, size_t iAtomSub)
 {
   // Get the subdivision surface medial model that is currently available
-  SubdivisionMedialModel *smm = dynamic_cast<SubdivisionMedialModel *>(xMedialModel);
+  PDESubdivisionMedialModel *smm = dynamic_cast<PDESubdivisionMedialModel *>(xMedialModel);
   if(!smm)
     throw MedialModelException(
       "SubdivisionMPDE given a cmrep not based on subdivision surfaces");
@@ -1249,12 +1354,14 @@ void SubdivisionMPDE::SubdivideMeshes(size_t iCoeffSub, size_t iAtomSub)
   // Get the coefficient-level mesh
   SubdivisionSurface::MeshLevel mlCoeffOld = smm->GetCoefficientMesh();
   vnl_vector<double> xCoeffOld = smm->GetCoefficientArray();
+  vnl_vector<double> uCoeffOld = smm->GetCoefficientU();
+  vnl_vector<double> vCoeffOld = smm->GetCoefficientV();
 
   SubdivisionSurface::MeshLevel mlCoeffNew;
-  vnl_vector<double> xCoeffNew;
+  vnl_vector<double> xCoeffNew, uCoeffNew, vCoeffNew;
 
   // Select the coefficient mesh
-  if(iCoeffSub > 0) 
+  if(iCoeffSub > 0)
     {
     // Subdivide the coefficient-level mesh as requested
     SubdivisionSurface::RecursiveSubdivide(&mlCoeffOld, &mlCoeffNew, iCoeffSub);
@@ -1264,6 +1371,12 @@ void SubdivisionMPDE::SubdivideMeshes(size_t iCoeffSub, size_t iAtomSub)
     SubdivisionSurface::ApplySubdivision(
       xCoeffOld.data_block(), xCoeffNew.data_block(), 4, mlCoeffNew);
 
+    // Interpolate u and v arrays
+    SubdivisionSurface::ApplySubdivision(
+      uCoeffOld.data_block(), uCoeffNew.data_block(), 4, mlCoeffNew);
+    SubdivisionSurface::ApplySubdivision(
+      vCoeffOld.data_block(), vCoeffNew.data_block(), 4, mlCoeffNew);
+
     // Set the subdivided mesh at the root
     mlCoeffNew.SetAsRoot();
     }
@@ -1272,20 +1385,23 @@ void SubdivisionMPDE::SubdivideMeshes(size_t iCoeffSub, size_t iAtomSub)
     // Use the same mesh as before
     xCoeffNew = xCoeffOld;
     mlCoeffNew = mlCoeffOld;
+    uCoeffNew = uCoeffOld;
+    vCoeffNew = vCoeffOld;
     }
 
   // Create a new mesh where the subdivided data will be stored
-  SubdivisionMedialModel *smmNew = new SubdivisionMedialModel();
+  PDESubdivisionMedialModel *smmNew = new PDESubdivisionMedialModel();
 
   // Set the mesh topology for the new mesh
   smmNew->SetMesh(
-    mlCoeffNew, xCoeffNew, smm->GetSubdivisionLevel() + iAtomSub - iCoeffSub, 0);
+    mlCoeffNew, xCoeffNew, uCoeffNew, vCoeffNew, 
+    smm->GetSubdivisionLevel() + iAtomSub - iCoeffSub, 0);
 
   // Now, we must solve the model. The way we do this depends on whether the
   // atom level has been changed or not. If it has, we will interpolate the
   // phi from the previous level to generate an initialization. Hopefully
   // this will help solve the PDE better...
-  if(iAtomSub > 0) 
+  if(iAtomSub > 0)
     {
     // Get the mesh currently stored in the medial model
     SubdivisionSurface::MeshLevel mCurrentAtomLevel = smm->GetAtomMesh();
@@ -1300,7 +1416,7 @@ void SubdivisionMPDE::SubdivideMeshes(size_t iCoeffSub, size_t iAtomSub)
     // Get the array of phi values for the source
     vnl_vector<double> phiCurrent = smm->GetPhi();
 
-    // Allocate the phi vector for the target 
+    // Allocate the phi vector for the target
     vnl_vector<double> phiNew(mNewAtomLevel.nVertices);
 
     // Subdivide the source into the target
@@ -1329,12 +1445,12 @@ void SubdivisionMPDE::SubdivideMeshes(size_t iCoeffSub, size_t iAtomSub)
  * ----------------
  * This is the code for the rectangular grid-based cm-rep
  **************************************************************************/
-CartesianMPDE::CartesianMPDE(unsigned int nBasesU, unsigned int nBasesV, 
+CartesianMPDE::CartesianMPDE(unsigned int nBasesU, unsigned int nBasesV,
   unsigned int xResU, unsigned int xResV, double xFineScale,
   unsigned int xFineU, unsigned int xFineV)
 {
   // Create a new Cartesian medial model (for now)
-  this->xCartesianMedialModel = 
+  this->xCartesianMedialModel =
     new CartesianMedialModel(xResU, xResV, xFineScale, xFineU, xFineV);
 
   // Associate the model with a Fourier surface
@@ -1360,7 +1476,7 @@ void CartesianMPDE::SetGridSize(
   CartesianMedialModel *cmmnew = new CartesianMedialModel(nu, nv, eFactor, eu, ev);
 
   // Create a new surface
-  size_t ncu, ncv; 
+  size_t ncu, ncv;
   FourierSurface *surfold = dynamic_cast<FourierSurface *>(
     xCartesianMedialModel->GetMedialSurface());
   surfold->GetNumberOfCoefficientsUV(ncu, ncv);
@@ -1371,7 +1487,7 @@ void CartesianMPDE::SetGridSize(
   cmmnew->SetCoefficientArray(xCartesianMedialModel->GetCoefficientArray());
 
   // Solve, potentially using the hint array
-  if(useHint && 
+  if(useHint &&
     xCartesianMedialModel->GetGridU().size() == cmmnew->GetGridU().size() &&
     xCartesianMedialModel->GetGridV().size() == cmmnew->GetGridV().size())
     {
@@ -1410,8 +1526,8 @@ void CartesianMPDE::SetMedialModel(GenericMedialModel *model)
 
 IBasisRepresentation2D *
 CartesianMPDE::GetMedialSurface()
-{ 
-  return xCartesianMedialModel->GetMedialSurface(); 
+{
+  return xCartesianMedialModel->GetMedialSurface();
 }
 
 void CartesianMPDE::SetNumberOfCoefficients(unsigned int m, unsigned int n)
@@ -1422,6 +1538,215 @@ void CartesianMPDE::SetNumberOfCoefficients(unsigned int m, unsigned int n)
   xSurface->SetNumberOfCoefficients(m, n);
   xCartesianMedialModel->AdoptMedialSurface(xSurface);
   xCartesianMedialModel->ComputeAtoms();
+}
+
+vnl_vector<double> GetDoubleVectorInStides(const void *p, size_t n, size_t sz)
+{
+  const char *off = reinterpret_cast<const char *>(p);
+  vnl_vector<double> vec(n, 0.0);
+  for(size_t i = 0; i < n; i++, off+=sz)
+    {
+    vec[i] = *(reinterpret_cast<const double *>(off));
+    }
+  return vec;
+}
+
+void CartesianMPDE::ImportFromPointFile(
+  const char *file, double xConstRho,
+  bool flagFixRegularity, bool flagFitToRadius)
+{
+  vector<ImportAtom> atoms;
+
+  ifstream fin(file, ios_base::in);
+  while(!fin.eof())
+    {
+    ImportAtom atom;
+
+    // Read a line from the file
+    string line;
+    getline(fin, line);
+
+    // Drop comments
+    if(line[0] == '#') continue;
+
+    // Parse the line
+    istringstream iss(line);
+
+    // Read the atom
+    iss >> atom.u; iss >> atom.v; iss >> atom.xi;
+    iss >> atom.x; iss >> atom.y; iss >> atom.z;
+    iss >> atom.rho; iss >> atom.r;
+
+    // Allow rho override
+    if(xConstRho != 0.0)
+      atom.rho = xConstRho;
+
+    if(!iss.fail())
+      atoms.push_back(atom);
+    }
+  fin.close();
+
+  // Do the actual import
+  ImportFromPointData(atoms, flagFixRegularity, flagFitToRadius);
+}
+
+
+void CartesianMPDE::ImportFromPointData(
+  const std::vector<ImportAtom> &atoms,
+  bool flagFixRegularity,
+  bool flagFitToRadius)
+{
+  // Get the number of import atoms
+  size_t k = atoms.size();
+  size_t n = xMedialModel->GetNumberOfAtoms();
+
+  // Mapping from floats to ints, tolerance
+  double scale = 100000000;
+
+  // First, we need to see if the import data matches 1-for-1 the data in
+  // the current model. 
+  bool flagSameGrid = true;
+  
+  // Ok, now we will fit the x, y, z data to get model coefficients
+  typedef vnl_vector<double> Vec;
+  Vec ul = GetDoubleVectorInStides(&atoms[0].u, k, sizeof(ImportAtom));
+  Vec vl = GetDoubleVectorInStides(&atoms[0].v, k, sizeof(ImportAtom));
+  Vec xl = GetDoubleVectorInStides(&atoms[0].x, k, sizeof(ImportAtom));
+  Vec yl = GetDoubleVectorInStides(&atoms[0].y, k, sizeof(ImportAtom));
+  Vec zl = GetDoubleVectorInStides(&atoms[0].z, k, sizeof(ImportAtom));
+  Vec wl = GetDoubleVectorInStides(&atoms[0].rho, k, sizeof(ImportAtom));
+  Vec rl = GetDoubleVectorInStides(&atoms[0].r, k, sizeof(ImportAtom));
+
+  // Get the underlying surface
+  IBasisRepresentation2D *xSurface = xCartesianMedialModel->GetMedialSurface();
+
+  // Perform the fitting on x, y, z and rho
+  xSurface->FitToData(k, 0, ul.data_block(), vl.data_block(), xl.data_block());
+  xSurface->FitToData(k, 1, ul.data_block(), vl.data_block(), yl.data_block());
+  xSurface->FitToData(k, 2, ul.data_block(), vl.data_block(), zl.data_block());
+
+  // The rho will only be fitted if there is no clean-up (regularization),
+  // otherwise, we start with a very small rho and proceed to regularization
+  if(flagFixRegularity)
+    {
+    Vec dummy(k, -0.01);
+    xSurface->FitToData(k, 3, 
+      ul.data_block(), vl.data_block(), dummy.data_block());
+    }
+  else
+    {
+    xSurface->FitToData(k, 3, ul.data_block(), vl.data_block(), wl.data_block());
+    }
+
+  // Compute the atoms, this may produce a bogus model, but that is OK
+  try 
+    {
+    xMedialModel->ComputeAtoms();
+    } 
+  catch(MedialModelException &exc)
+    {
+    cerr << "Exception caught importing medial data" << endl;
+    cerr << "   *** try using smaller rho ***" << endl;
+    return;
+    }
+
+  // Create a mapping from u,v to atom index
+  typedef std::pair<long, long> PairUV;
+  std::map<PairUV, size_t> mapuv;
+  for(size_t i = 0; i < k; i++)
+    {
+    PairUV key;
+    key.first = static_cast<long>(atoms[i].u * scale + 0.5);
+    key.second = static_cast<long>(atoms[i].v * scale + 0.5);
+    mapuv[key] = i;
+    }
+
+  // Parse over all the atoms in the model to see if they all have a 
+  // corresponding import atom
+  MedialIterationContext *xGrid = xCartesianMedialModel->GetIterationContext();
+  MedialAtom *xModelAtoms = xCartesianMedialModel->GetAtomArray();
+  for(MedialAtomIterator it(xGrid); !it.IsAtEnd(); ++it)
+    {
+    MedialAtom &a = xModelAtoms[it.GetIndex()];
+    PairUV key;
+    key.first = static_cast<long>(a.u * scale + 0.5);
+    key.second = static_cast<long>(a.v * scale + 0.5);
+    if(mapuv.find(key) == mapuv.end()) 
+      flagSameGrid = false;
+    }
+
+  // After the trivial fitting, we may want to do a closer fit to the input
+  // data under various regularity constraints, so that we get a decent model
+  if(flagFixRegularity)
+    {
+    // First thing that we need here is the XYZ value for every input point. If
+    // the grid is the same as in the input, we can use the input directly, if 
+    // not, we use the interpolation
+    Vec xt(n, 0.0), yt(n, 0.0), zt(n, 0.0);
+    for(size_t j = 0; j < n; j++)
+      {
+      MedialAtom &a = xModelAtoms[j];
+      if(flagSameGrid)
+        {
+        PairUV key;
+        key.first = static_cast<long>(a.u * scale + 0.5);
+        key.second = static_cast<long>(a.v * scale + 0.5);
+        size_t q = mapuv[key];
+        xt[j] = atoms[q].x; yt[j] = atoms[q].y; zt[j] = atoms[q].z;
+        }
+      else
+        {
+        xSurface->EvaluateDerivative(a.u, a.v, 0, 0, 0, 1, &xt[j]);
+        xSurface->EvaluateDerivative(a.u, a.v, 0, 0, 1, 1, &yt[j]);
+        xSurface->EvaluateDerivative(a.u, a.v, 0, 0, 2, 1, &zt[j]);
+        }
+      }
+
+    // Fit the model to the points
+    FitPDEModelToPointData(xt.data_block(), yt.data_block(), zt.data_block());
+
+    // Now, use the actual rho supplied to us
+    xSurface->FitToData(k, 3, ul.data_block(), vl.data_block(), wl.data_block());
+    xCartesianMedialModel->ComputeAtoms();
+    }
+
+  // Now, the model's XYZ geometry should be pretty reasonable, and we can
+  // focus on getting a nice estimate of the radius field. We need to estimate
+  // an initial radius field
+  if(flagFitToRadius)
+    {
+    // Iniitalize the target radius field
+    Vec rt(n, 0.0);
+
+    if(flagSameGrid)
+      {
+      for(size_t j = 0; j < n; j++)
+        {
+        MedialAtom &a = xModelAtoms[j];
+        rt[j] = atoms[mapuv[make_pair(
+          static_cast<long>(a.u * scale + 0.5),
+          static_cast<long>(a.v * scale + 0.5))]].r;
+        }
+      }
+    else
+      {
+      // We need to fit to the radius field
+      xSurface->FitToData(k, 3, ul.data_block(), vl.data_block(), rl.data_block());
+
+      // Sample the interpolated radius values
+      for(size_t j = 0; j < n; j++)
+        {
+        MedialAtom &a = xModelAtoms[j];
+        xSurface->EvaluateDerivative(a.u, a.v, 0, 0, 3, 1, &rt[j]);
+        }
+
+      // Restore the surface to the rho fit
+      xSurface->FitToData(k, 3, ul.data_block(), vl.data_block(), wl.data_block());
+      }
+
+    // Now solve the optimization problem
+    FitPDEModelToRadius(rt.data_block());
+    }
 }
 
 void CartesianMPDE::LoadFromDiscreteMRep(const char *file, double xRhoInit)
@@ -1439,26 +1764,30 @@ void CartesianMPDE::LoadFromDiscreteMRep(const char *file, double xRhoInit)
 
   // Read atoms
   bool done = false;
-  while(!done)
+  while(!fin.eof())
     {
     DiscreteAtom atom;
 
+    // Read a line from the file
+    string line;
+    getline(fin, line);
+
+    // Parse the line
+    istringstream iss(line);
+
     // Read the atom
-    fin >> atom.iu; fin >> atom.iv; fin >> iend; 
-    fin >> atom.x; fin >> atom.y; fin >> atom.z; 
-    fin >> d; fin >> d; fin >> d; fin >> d; 
-    fin >> d; fin >> d; fin >> d;
+    iss >> atom.iu; iss >> atom.iv; iss >> iend;
+    iss >> atom.x; iss >> atom.y; iss >> atom.z;
+    iss >> atom.r; 
 
-    if(uMax < atom.iu) uMax = atom.iu;
-    if(vMax < atom.iv) vMax = atom.iv;
-
-    if(!fin.good())
-      { done = true; }
-    else
+    if(iss.good())
       {
       xAtoms.push_back(atom);
+      if(uMax < atom.iu) uMax = atom.iu;
+      if(vMax < atom.iv) vMax = atom.iv;
       }
     }
+  fin.close();
 
   // Scale by u and v to unit square
   for(AList::iterator it = xAtoms.begin(); it!=xAtoms.end(); ++it)
@@ -1471,6 +1800,7 @@ void CartesianMPDE::LoadFromDiscreteMRep(const char *file, double xRhoInit)
   double *uu = new double[xAtoms.size()];
   double *vv = new double[xAtoms.size()];
   double *rr = new double[xAtoms.size()];
+  double *rd = new double[xAtoms.size()];
 
   for(unsigned int i = 0; i < xAtoms.size(); i++)
     {
@@ -1479,9 +1809,10 @@ void CartesianMPDE::LoadFromDiscreteMRep(const char *file, double xRhoInit)
     zz[i] = xAtoms[i].z;
     uu[i] = xAtoms[i].u;
     vv[i] = xAtoms[i].v;
+    rd[i] = xAtoms[i].r;
     rr[i] = xRhoInit;
     }
-  
+
   // Get the underlying surface
   IBasisRepresentation2D *xSurface = xCartesianMedialModel->GetMedialSurface();
 
@@ -1490,15 +1821,64 @@ void CartesianMPDE::LoadFromDiscreteMRep(const char *file, double xRhoInit)
   xSurface->FitToData(xAtoms.size(), 1, uu, vv, yy);
   xSurface->FitToData(xAtoms.size(), 2, uu, vv, zz);
 
-  // Fit the rho function to a constant
+  // Fit the rho function to a constant or by default, zero
   xSurface->FitToData(xAtoms.size(), 3, uu, vv, rr);
 
   // Compute the atoms
-  xCartesianMedialModel->ComputeAtoms();
+  try {
+    xCartesianMedialModel->ComputeAtoms();
+    this->SaveToParameterFile("import01.cmrep");
+  }
+  catch(...) {
+    cerr << "initially failed, trying to go on" << endl;
+  }
+
+  // Now, there may be all kinds of folding problems in the data. We want to
+  // correct those problems by fitting the data under regularity constraints
+  size_t n = xCartesianMedialModel->GetNumberOfAtoms();
+  vnl_vector<double> target_x(n), target_y(n), target_z(n);
+  for(size_t i = 0; i < n; i++)
+    {
+    target_x[i] = xCartesianMedialModel->GetAtomArray()[i].X[0];
+    target_y[i] = xCartesianMedialModel->GetAtomArray()[i].X[1];
+    target_z[i] = xCartesianMedialModel->GetAtomArray()[i].X[2];
+    }
+  FitPDEModelToPointData( 
+    target_x.data_block(), target_y.data_block(), target_z.data_block());
+
+  this->SaveToParameterFile("import02.cmrep");
+
+  // If the rho is 0, set it for now to a small constant
+  if(xRhoInit == 0.0)
+    {
+    for(unsigned int i = 0; i < xAtoms.size(); i++)
+      rr[i] = -0.05;
+
+    // Fit the rho function to a constant or by default, zero
+    xSurface->FitToData(xAtoms.size(), 3, uu, vv, rr);
+    xCartesianMedialModel->ComputeAtoms();
+
+    // Fit to the radius values to get the radius field (temporary)
+    xSurface->FitToData(xAtoms.size(), 3, uu, vv, rd);
+    vnl_vector<double> xTargetRadius(xCartesianMedialModel->GetNumberOfAtoms());
+    for(size_t i = 0; i < xTargetRadius.size(); i++)
+      xSurface->EvaluateDerivative(
+        xCartesianMedialModel->GetAtomArray()[i].u,
+        xCartesianMedialModel->GetAtomArray()[i].v,
+        0, 0, 3, 1, &xTargetRadius[i]);
+
+    // Fit back to the rho value
+    xSurface->FitToData(xAtoms.size(), 3, uu, vv, rr);
+
+    // Now solve the optimization problem
+    FitPDEModelToRadius(xTargetRadius.data_block());
+    }
 
   // Clean up
-  delete xx; delete yy; delete zz; delete uu; delete vv; delete rr;
+  delete xx; delete yy; delete zz; delete uu; delete vv; delete rr; delete rd;
 }
+
+
 
 
 void CartesianMPDE::GenerateSampleModel()
@@ -1553,7 +1933,7 @@ SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zS
   // Get the image dimensions
   size_t m = xCartesianMedialModel->GetNumberOfUPoints();
   size_t n = xCartesianMedialModel->GetNumberOfVPoints();
-    
+
   // The image dimensions must match the grid size
   itk::Size<3> szInput = iInput->GetBufferedRegion().GetSize();
   if ( szInput[0] != m || szInput[1] != n || szInput[2] != zSamples * 2 + 1)
@@ -1620,13 +2000,13 @@ SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zS
 
       // Locate the cell that includes this point
       vnl_vector<double> vox = pVoxel.GetVnlVector();
-      size_t iClosest = (size_t) 
+      size_t iClosest = (size_t)
         loc->FindClosestPoint(vox(0), vox(1), vox(2));
 
       // Convert this to a pixel index
       // itOut.Set(xpix[iClosest]);
       itOut.Set(xMax);
-      
+
       }
     }
 
@@ -1646,9 +2026,9 @@ SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zS
 
   SMLVec3d *lSource = new SMLVec3d[nLandmarks];
   SMLVec3d *lTarget = new SMLVec3d[nLandmarks];
-  
+
   // Define the landmarks
-  MedialInternalPointIterator *it = 
+  MedialInternalPointIterator *it =
     xMedialModel->GetAtomGrid()->NewInternalPointIterator(nLMCuts);
   for( size_t i=0 ; !it->IsAtEnd(); ++(*it), ++i)
     {
@@ -1660,12 +2040,12 @@ SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zS
     pt[0] = lSource[i][0]; pt[1] = lSource[i][1]; pt[2] = lSource[i][2];
     iOutput->TransformPhysicalPointToIndex(pt, idx);
     UpdateRegion(xMaskRegion, idx, i==0);
-    
+
     // The target are the positions in cm-rep coordinate system
     MedialAtom &xAtom = xMedialModel->GetAtomArray()[it->GetAtomIndex()];
     lTarget[i][0] = round(xAtom.u * (m - 1));
     lTarget[i][1] = round(xAtom.v * (n - 1));
-    lTarget[i][2] = it->GetBoundarySide() ?  
+    lTarget[i][2] = it->GetBoundarySide() ?
       zSamples - it->GetDepth() : zSamples + it->GetDepth();
     }
 
@@ -1700,8 +2080,8 @@ SampleReferenceFrameImage(FloatImage *imgInput, FloatImage *imgOutput, size_t zS
       iOutput->TransformIndexToPhysicalPoint(itOut.GetIndex(), pVoxel);
 
       // Map this point into the other image space
-      TransformType::OutputPointType pReference = 
-        tps->TransformPoint(pVoxel); 
+      TransformType::OutputPointType pReference =
+        tps->TransformPoint(pVoxel);
 
       // Interpolate the second image at this point
       itOut.Set(imgInput->Interpolate(
@@ -1722,12 +2102,12 @@ SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamples)
   // Get the image dimensions
   size_t m = xCartesianMedialModel->GetNumberOfUPoints();
   size_t n = xCartesianMedialModel->GetNumberOfVPoints();
-    
+
   // Initialize the output region size
   regOutput.SetSize(0, m);
   regOutput.SetSize(1, n);
   regOutput.SetSize(2, zSamples * 2 + 1);
-  
+
   // Continue creating the image
   imgOutSmall->SetRegions(regOutput);
   imgOutSmall->Allocate();
@@ -1771,21 +2151,21 @@ SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamples)
     // Get the i and j coordinates of the atom (using cartesian logic)
     size_t i = xAtom.uIndex;
     size_t j = xAtom.vIndex;
-    size_t k = itPoint.GetBoundarySide() ? 
+    size_t k = itPoint.GetBoundarySide() ?
       zSamples - itPoint.GetDepth() :
        zSamples + itPoint.GetDepth();
 
     // Create an index into the output image
     ImageType::IndexType idxTarget;
-    idxTarget.SetElement(0, i); 
-    idxTarget.SetElement(1, j); 
-    idxTarget.SetElement(2, k); 
+    idxTarget.SetElement(0, i);
+    idxTarget.SetElement(1, j);
+    idxTarget.SetElement(2, k);
 
     // Get the point at which to sample the image
     double tau = itPoint.GetDepth() * 1.0 / itPoint.GetMaxDepth();
-    SMLVec3d Z = 
+    SMLVec3d Z =
       xAtom.X + tau * xAtom.R * xAtom.xBnd[itPoint.GetBoundarySide()].N;
-    
+
     // Create a point and a continuous index
     itk::Point<double, 3> ptZ(Z.data_block());
     itk::ContinuousIndex<double, 3> idxZ;
@@ -1804,7 +2184,7 @@ SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamples)
 
     // Sample the input image
     // float f = imgInput->xImage->Interpolate(Z[0], Z[1], Z[2], 0.0f);
-    imgOutSmall->SetPixel(idxTarget, f); 
+    imgOutSmall->SetPixel(idxTarget, f);
 
     // This is junk!
     SMLVec3d Z1 = Z + 0.5;
@@ -1842,11 +2222,14 @@ SampleImage(FloatImage *fiInput, FloatImage *fiOut, size_t zSamples)
 void MedialPCA::AddSample(MedialPDE *pde)
 {
   // Make sure that the number of coefficients matches
-  if(xModelCoefficients.size()) 
+  if(xModelCoefficients.size())
     assert(xModelCoefficients.back().size() == pde->xMedialModel->GetNumberOfCoefficients());
 
   // Get the coefficients from this medial PDE
   xModelCoefficients.push_back(pde->xMedialModel->GetCoefficientArray());
+
+  // Get the hint array from the medial PDE
+  xHints.push_back(pde->xMedialModel->GetHintArray());
 
   // Make a copy of the intensity values associated with this PDE
   if(pde->flagIntensityPresent)
@@ -1871,7 +2254,7 @@ MedialPCA::~MedialPCA()
   if(xAppearancePCA) delete xAppearancePCA;
 }
 
-void MedialPCA::ComputePCA()
+void MedialPCA::ComputePCA(MedialPDE *mpde)
 {
   // The non-shape information must be cleaned from the data using
   // something like the generalized Procrustes method. We begin by
@@ -1884,50 +2267,51 @@ void MedialPCA::ComputePCA()
   Vec *t = new Vec[nSamples];
   double *s = new double[nSamples];
   size_t i, j;
-  
+
   // Generate same parameters for the boundary-based alignment and PCA
   Mat *Abnd = new Mat[nSamples];
   Mat *Rbnd = new Mat[nSamples];
   Vec *tbnd = new Vec[nSamples];
   double *sbnd = new double[nSamples];
-  
+
   // Populate the input matrices
-  CartesianMedialModel xMedialModel(32, 80);
-  MedialIterationContext *xGrid = xMedialModel.GetIterationContext();
+  GenericMedialModel *xMedialModel = mpde->xMedialModel;
+  MedialIterationContext *xGrid = xMedialModel->GetIterationContext();
 
   for(i = 0; i < nSamples; i++)
     {
     // Solve for this surface using these coefficients
-    xMedialModel.SetCoefficientArray(xModelCoefficients[i]);
-    xMedialModel.Solve();
+    cout << "Compute subject " << i << endl;
+    xMedialModel->SetCoefficientArray(xModelCoefficients[i]);
+    xMedialModel->ComputeAtoms(xHints[i].data_block());
 
     // Initialize the A matrix
-    A[i].set_size(xMedialModel.GetNumberOfAtoms(), 3);
+    A[i].set_size(xMedialModel->GetNumberOfAtoms(), 3);
     R[i].set_size(3,3);
     t[i].set_size(3);
 
     // Parse over all the boundary sites
     for(MedialAtomIterator it(xGrid); !it.IsAtEnd(); ++it)
-      A[i].set_row(it.GetIndex(), xMedialModel.GetAtomArray()[it.GetIndex()].X);
+      A[i].set_row(it.GetIndex(), xMedialModel->GetAtomArray()[it.GetIndex()].X);
 
     // Same for boundary atoms
-    Abnd[i].set_size(xMedialModel.GetNumberOfBoundaryPoints(), 3);
+    Abnd[i].set_size(xMedialModel->GetNumberOfBoundaryPoints(), 3);
     Rbnd[i].set_size(3,3);
     tbnd[i].set_size(3);
 
     for(MedialBoundaryPointIterator bit(xGrid); !bit.IsAtEnd(); ++bit)
-      Abnd[i].set_row(bit.GetIndex(), GetBoundaryPoint(bit, xMedialModel.GetAtomArray()).X);
+      Abnd[i].set_row(bit.GetIndex(), GetBoundaryPoint(bit, xMedialModel->GetAtomArray()).X);
     }
 
   // cout << "Testing Procrustes" << endl;
   // TestProcrustes(A[0]);
-  
+
   // Run the procrustes method
   cout << "Procrustenating..." << endl;
   GeneralizedProcrustesAnalysis(nSamples, A, R, t, s);
 
   // Create an affine mapper
-  const AffineTransformDescriptor *affDesc = xMedialModel.GetAffineTransformDescriptor();
+  const AffineTransformDescriptor *affDesc = xMedialModel->GetAffineTransformDescriptor();
 
   // Rotate each of the models into the common coordinate frame
   for(i = 0; i < nSamples; i++)
@@ -1935,11 +2319,14 @@ void MedialPCA::ComputePCA()
     // Transform the coefficients under the affine transform
     Vec xAlignCoeff = affDesc->ApplyAffineTransform(
       xModelCoefficients[i], s[i] * R[i].transpose(), t[i], Vec(3, 0.0));
-    
+
     // Create a new MedialPDE (?)
-    CartesianMPDE xJunk(8,12,32,80);
-    xJunk.xMedialModel->SetCoefficientArray(xAlignCoeff);
-    xJunk.Solve();
+    // CartesianMPDE xJunk(8,12,32,80);
+    // xJunk.xMedialModel->SetCoefficientArray(xAlignCoeff);
+    // xJunk.Solve();
+    cout << "Compute aligned " << i << endl;
+    xMedialModel->SetCoefficientArray(xAlignCoeff);
+    xMedialModel->ComputeAtoms(xHints[i].data_block());
     }
 
   // Create a principal components object
@@ -1950,7 +2337,7 @@ void MedialPCA::ComputePCA()
   size_t m = xModelCoefficients[0].size();
   size_t n = nSamples;
 
-  // Populate the data matrix 
+  // Populate the data matrix
   xDataShape.set_size(n, m);
   for(i = 0; i < n; i++) for(j = 0; j < m; j++)
     xDataShape[i][j] = xModelCoefficients[i][j];
@@ -1966,7 +2353,7 @@ void MedialPCA::ComputePCA()
     {
     // Create a matrix of appearance values
     typedef FloatImage::WrapperType::ImageType ImageType;
-    ImageType::Pointer imgFirst = 
+    ImageType::Pointer imgFirst =
       xAppearance.front()->xImage->GetInternalImage();
     size_t mpix = imgFirst->GetBufferedRegion().GetNumberOfPixels();
     xDataAppearance.set_size(n, mpix);
@@ -2003,7 +2390,7 @@ void MedialPCA::ComputePCA()
     xBndMat[i][k] = p[0];
     xBndMat[i][k+1] = p[1];
     xBndMat[i][k+2] = p[2];
-    if(j == 0) 
+    if(j == 0)
       cout << p << endl;
     }
 
@@ -2031,7 +2418,7 @@ void MedialPCA::ComputePCA()
       double c = 0.1 * (y - 30);
       Vec z = xPCA->MapToFeatureSpace(i, c);
 
-      cout << "MODE " << i << ", COEFF " << c << ", LAMBDA " << 
+      cout << "MODE " << i << ", COEFF " << c << ", LAMBDA " <<
         xPCA->GetEigenvalue(i) << endl;
 
       MedialPDE xJunk(8,12,32,80);
@@ -2042,7 +2429,7 @@ void MedialPCA::ComputePCA()
 
       ostringstream sJunk1, sJunk2;
       sJunk1 << "/tmp/pcamed_m" << i << "_" << (y / 10) << (y % 10) << ".vtk";
-      sJunk2 << "/tmp/pcabnd_m" << i << "_" << (y / 10) << (y % 10) << ".vtk";    
+      sJunk2 << "/tmp/pcabnd_m" << i << "_" << (y / 10) << (y % 10) << ".vtk";
       xJunk.SaveVTKMesh(sJunk1.str().c_str(), sJunk2.str().c_str());
       }
     }

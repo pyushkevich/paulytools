@@ -141,6 +141,34 @@ public:
   virtual const CoarseToFineMappingDescriptor *
     GetCoarseToFineMappingDescriptor() const = 0;
 
+  /**
+   * Get the mask that selects radial coefficients in the model. For all models
+   * defined so far, this mask selects every fourth component of the coefficient
+   * vector, so we define this function at the top level
+   */
+  virtual vnl_vector<size_t> GetRadialCoefficientMask() 
+    {
+    size_t n = this->GetNumberOfCoefficients();
+    vnl_vector<size_t> mask(n, 0);
+    for(size_t i = 3; i < n; i+=4)
+      mask[i] = 1;
+    return mask;
+    }
+
+  /**
+   * Get the mask that selects radial coefficients in the model. For all models
+   * defined so far, this mask selects every fourth component of the coefficient
+   * vector, so we define this function at the top level
+   */
+  virtual vnl_vector<size_t> GetSpatialCoefficientMask() 
+    {
+    size_t n = this->GetNumberOfCoefficients();
+    vnl_vector<size_t> mask(n, 1);
+    for(size_t i = 3; i < n; i+=4)
+      mask[i] = 0;
+    return mask;
+    }
+
   /** Get the center of rotation for the model */
   virtual SMLVec3d GetCenterOfRotation() 
     { 

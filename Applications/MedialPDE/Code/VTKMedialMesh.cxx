@@ -10,6 +10,16 @@
 #include "ITKImageWrapper.h"
 #include "itkImage.h"
 
+vtkFloatArray *AddMedialScalarField(vtkPolyData *target, GenericMedialModel *model, char *name)
+{
+  vtkFloatArray *array = vtkFloatArray::New();
+  array->SetName(name);
+  array->SetNumberOfComponents(1);
+  array->SetNumberOfTuples(model->GetNumberOfAtoms());
+  target->GetPointData()->AddArray(array);
+  return array;
+}
+
 void ExportMedialMeshToVTK(
   GenericMedialModel *xModel,
   ITKImageWrapper<float> *xImage,
@@ -19,44 +29,30 @@ void ExportMedialMeshToVTK(
   vtkPoints *lPoints = vtkPoints::New();
   lPoints->Allocate(xModel->GetNumberOfAtoms());
   
-  // Allocate the array of normals
-  vtkFloatArray *lNormals = vtkFloatArray::New();
-  lNormals->SetNumberOfComponents(3);
-  lNormals->SetNumberOfTuples(xModel->GetNumberOfAtoms());
-
-  // Allocate the metric tensor array
-  vtkFloatArray *lMetric = vtkFloatArray::New();
-  lMetric->SetName("Covariant Tensor Determinant");
-  lMetric->SetNumberOfComponents(1);
-  lMetric->SetNumberOfTuples(xModel->GetNumberOfAtoms());
-  
-  // Allocate the metric tensor array
-  vtkFloatArray *lRho = vtkFloatArray::New();
-  lRho->SetName("Rho Function");
-  lRho->SetNumberOfComponents(1);
-  lRho->SetNumberOfTuples(xModel->GetNumberOfAtoms());
-  
-  // Allocate the metric tensor array
-  vtkFloatArray *lRadius = vtkFloatArray::New();
-  lRadius->SetName("Radius Function");
-  lRadius->SetNumberOfComponents(1);
-  lRadius->SetNumberOfTuples(xModel->GetNumberOfAtoms());
-
-  // Allocate another dummy array
-  vtkFloatArray *lDummy1 = vtkFloatArray::New();
-  lDummy1->SetName("Dummy1");
-  lDummy1->SetNumberOfComponents(1);
-  lDummy1->SetNumberOfTuples(xModel->GetNumberOfAtoms());
-
   // Allocate the polydata
   vtkPolyData *pMedial = vtkPolyData::New();
   pMedial->Allocate(xModel->GetNumberOfTriangles());
   pMedial->SetPoints(lPoints);
+
+  // Allocate the array of normals
+  vtkFloatArray *lNormals = vtkFloatArray::New();
+  lNormals->SetNumberOfComponents(3);
+  lNormals->SetNumberOfTuples(xModel->GetNumberOfAtoms());
   pMedial->GetPointData()->SetNormals(lNormals);
-  pMedial->GetPointData()->AddArray(lMetric);
-  pMedial->GetPointData()->AddArray(lRho);
-  pMedial->GetPointData()->AddArray(lRadius);
-  pMedial->GetPointData()->AddArray(lDummy1);
+
+  // Allocate the scalar arrays
+  vtkFloatArray *lMetric = AddMedialScalarField(pMedial, xModel, "Covariant Tensor Determinant");
+  vtkFloatArray *lRho = AddMedialScalarField(pMedial, xModel, "Rho Function");
+  vtkFloatArray *lRadius = AddMedialScalarField(pMedial, xModel, "Radius Function");
+  vtkFloatArray *lDummy1 = AddMedialScalarField(pMedial, xModel, "Dummy1");
+  vtkFloatArray *lBending = AddMedialScalarField(pMedial, xModel, "Bending Energy");
+  vtkFloatArray *lRegularity = AddMedialScalarField(pMedial, xModel, "Regularity Penalty");
+  vtkFloatArray *lAngle = AddMedialScalarField(pMedial, xModel, "Metric Angle");
+  vtkFloatArray *lCoordU = AddMedialScalarField(pMedial, xModel, "U Coordinate");
+  vtkFloatArray *lCoordV = AddMedialScalarField(pMedial, xModel, "V Coordinate");
+
+  vtkFloatArray *lContraOffDiag = 
+    AddMedialScalarField(pMedial, xModel, "Off Diagonal Term of Contravariant MT");
 
   // Allocate and add the image intensity array
   bool flagImage = xImage && xImage->IsImageLoaded();
@@ -77,12 +73,35 @@ void ExportMedialMeshToVTK(
   for(MedialAtomIterator it(xGrid); !it.IsAtEnd(); ++it)
     {
     size_t i = it.GetIndex();
-    SMLVec3d X = xAtoms[i].X; SMLVec3d N = xAtoms[i].N;
+    MedialAtom &a = xAtoms[i];
+
+    SMLVec3d X = a.X; SMLVec3d N = a.N;
     lPoints->InsertNextPoint(X[0], X[1], X[2]);
     lNormals->SetTuple3(i, N[0], N[1], N[2]);
-    lMetric->SetTuple1(i, xAtoms[i].G.g);
-    lRadius->SetTuple1(i, xAtoms[i].R);
-    lRho->SetTuple1(i, xAtoms[i].xLapR);
+    lMetric->SetTuple1(i, a.G.g);
+    lRadius->SetTuple1(i, a.R);
+    lRho->SetTuple1(i, a.xLapR);
+
+    lCoordU->SetTuple1(i, a.u);
+    lCoordV->SetTuple1(i, a.v);
+
+    // Set the bending energy
+    lBending->SetTuple1(i,
+      dot_product(a.Xuu, a.Xuu) + dot_product(a.Xvv,a.Xvv) + 2.0 * dot_product(a.Xuv, a.Xuv));
+
+    // Set the regularity energy
+    double reg1 = a.G.xChristoffelSecond[0][0][0] + a.G.xChristoffelSecond[1][0][1];
+    double reg2 = a.G.xChristoffelSecond[0][1][0] + a.G.xChristoffelSecond[1][1][1];
+    double reg = reg1 * reg1 + reg2 * reg2;
+    lRegularity->SetTuple1(i, reg);
+
+    // Set the angle between Xu and Xv
+    double dp = dot_product(a.Xu, a.Xv);
+
+    lAngle->SetTuple1(i,
+      (dp * dp) / (a.Xu.squared_magnitude() * a.Xv.squared_magnitude()));
+    lContraOffDiag->SetTuple1(i, 
+      a.G.xCovariantTensor[0][1] * a.G.xCovariantTensor[0][1] / a.G.g);
 
     // Sample the image along the middle
     if(flagImage)
@@ -94,8 +113,11 @@ void ExportMedialMeshToVTK(
       lImage->SetTuple1(i, xImage->GetInternalImage()->GetPixel(idx));
       }
 
-    int q = (int)(xAtoms[i].u * 64);
-    lDummy1->SetTuple1(i, q % 8 == 0 ? 1 : 0);
+    double du = xAtoms[i].u - 0.25 * floor(4 * xAtoms[i].u + 0.5);
+    double dv = xAtoms[i].v - 0.25 * floor(4 * xAtoms[i].v + 0.5);
+    double del = std::min(du * du, dv * dv);
+    double q = exp(-0.01 * del * del);
+    lDummy1->SetTuple1(i, q);
     }
 
   // Add all the quads
@@ -115,6 +137,8 @@ void ExportMedialMeshToVTK(
   fltWriter->Update();
   fltWriter->Delete();
 
+  lCoordU->Delete();
+  lCoordV->Delete();
   lRho->Delete();
   lRadius->Delete();
   lMetric->Delete();
@@ -122,6 +146,10 @@ void ExportMedialMeshToVTK(
   lPoints->Delete();
   lDummy1->Delete();
   lImage->Delete();
+  lBending->Delete();
+  lRegularity->Delete();
+  lContraOffDiag->Delete();
+  lAngle->Delete();
   pMedial->Delete();
 }
 
