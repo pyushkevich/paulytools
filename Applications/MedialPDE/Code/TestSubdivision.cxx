@@ -9,6 +9,7 @@
 #include "PDESubdivisionMedialModel.h"
 #include "SubdivisionSurfaceMedialIterationContext.h"
 #include "ScriptInterface.h"
+#include "BranchingSubdivisionSurface.h"
 
 #include <string>
 #include <iostream>
@@ -38,9 +39,9 @@ int TestSubdivisionSurface(const char *objMesh)
   cout << " and " << mesh.nVertices << " vertices" << endl;
 
   // Save the input surface for comparison
-  vtkBYUWriter *writer = vtkBYUWriter::New();
+  vtkPolyDataWriter *writer = vtkPolyDataWriter::New();
   writer->SetInput(poly);
-  writer->SetGeometryFileName("byu_input.byu");
+  writer->SetFileName("sub_input.vtk");
   writer->Update();
 
   // Check the mesh after loading
@@ -64,7 +65,7 @@ int TestSubdivisionSurface(const char *objMesh)
 
   // Save the subdivision surface
   writer->SetInput(polysub);
-  writer->SetGeometryFileName("byu_subdivide.byu");
+  writer->SetFileName("sub_subdivide.vtk");
   writer->Update();
 
   // Subdivide the mesh one more time
@@ -81,10 +82,75 @@ int TestSubdivisionSurface(const char *objMesh)
   // Save the subdivision surface
   SubdivisionSurface::ApplySubdivision(poly, polysub, meshresub);
   writer->SetInput(polysub);
-  writer->SetGeometryFileName("byu_resubdivide.byu");
+  writer->SetFileName("sub_resubdivide.vtk");
   writer->Update();
 
 
+
+  return 0;
+}
+
+/**
+ * Test branching subdivision surface
+ */
+int TestBranchingSubdivisionSurface(const char *objMesh)
+{
+  // Read the mesh using one of the VTK readers
+  vtkPolyData *poly = ReadVTKMesh(objMesh);
+
+  // Create a subdivision surface
+  BranchingSubdivisionSurface::MeshLevel mesh;
+  BranchingSubdivisionSurface::ImportLevelFromVTK(poly, mesh);
+
+  // Describe the mesh
+  cout << "Input mesh has " << mesh.triangles.size() << " triangles";
+  cout << " and " << mesh.vertices.size() << " vertices" << endl;
+
+  vtkPolyDataWriter *writer = vtkPolyDataWriter::New();
+  writer->SetInput(poly);
+  writer->SetFileName("branch_input.vtk");
+  writer->Update();
+
+  // Check the mesh after loading
+  if(!BranchingSubdivisionSurface::CheckMeshLevel(mesh))
+    return 1;
+
+  // Subdivide the mesh once
+  BranchingSubdivisionSurface::MeshLevel meshsub;
+  BranchingSubdivisionSurface::Subdivide(&mesh, &meshsub);
+
+  cout << "Subdivided mesh has " << meshsub.triangles.size() << " triangles";
+  cout << " and " << meshsub.vertices.size() << " vertices" << endl;
+
+  // Check the subdivided mesh
+  if(!BranchingSubdivisionSurface::CheckMeshLevel(meshsub))
+    return 1;
+
+  // Compute the subdivision surface
+  vtkPolyData *polysub = vtkPolyData::New();
+  BranchingSubdivisionSurface::ApplySubdivision(poly, polysub, meshsub);
+
+  // Save the subdivision surface
+  writer->SetInput(polysub);
+  writer->SetFileName("branch_subdivide.vtk");
+  writer->Update();
+
+  // Subdivide the mesh one more time
+  BranchingSubdivisionSurface::MeshLevel meshresub;
+  BranchingSubdivisionSurface::Subdivide(&meshsub, &meshresub);
+
+  cout << "Subdivided mesh has " << meshresub.triangles.size() << " triangles";
+  cout << " and " << meshresub.vertices.size() << " vertices" << endl;
+
+  // Check the subdivided mesh
+  if(!BranchingSubdivisionSurface::CheckMeshLevel(meshresub))
+    return 1;
+
+  // Save the subdivision surface
+  BranchingSubdivisionSurface::ApplySubdivision(poly, polysub, meshresub);
+  writer->SetInput(polysub);
+  writer->SetFileName("branch_resubdivide.vtk");
+  writer->Update();
 
   return 0;
 }
@@ -211,6 +277,7 @@ int usage()
   cout << "  tests: " << endl;
   cout << "    SUBSURF1 XX.obj            Test subdivision with OBJ mesh" << endl;
   cout << "    SUBSURF2 XX.obj            Test subdivision PDE" << endl;
+  cout << "    BRANCH1 XX.obj             Test branching subdivision surface" << endl;
   cout << "    SPARSEMAT                  Test sparse matrix routines" << endl;
   cout << "    MODELSUB                   Test model subdivistion" << endl;
   cout << endl;
@@ -225,6 +292,8 @@ int main(int argc, char *argv[])
   // Choose a test depending on the parameters
   if(0 == strcmp(argv[1], "SUBSURF1") && argc > 2)
     return TestSubdivisionSurface(argv[2]);
+  if(0 == strcmp(argv[1], "BRANCH1") && argc > 2)
+    return TestBranchingSubdivisionSurface(argv[2]);
   else if(0 == strcmp(argv[1], "SUBSURF2") && argc > 2)
     return TestSubdivisionPDE(argv[2]);
   else if(0 == strcmp(argv[1], "SPARSEMAT"))

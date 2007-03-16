@@ -364,3 +364,24 @@ SubdivisionMedialModelIO
   points->Delete();
   poly->Delete();
 }
+
+
+vtkPolyData *ReadVTKMesh(const char *fname)
+{
+  string fn(fname);
+  string type("");
+
+  if(fn.find(".vtk") == fn.length() - 4)
+    type = "VTK";
+
+  if(fn.find(".obj") == fn.length() - 4)
+    type = "OBJ";
+
+  if(fn.find(".byu") == fn.length() - 4)
+    type = "BYU";
+
+  if(fn.find(".y") == fn.length() - 2)
+    type = "BYU";
+
+  return SubdivisionMedialModelIO::ReadMesh(fn, type);
+}

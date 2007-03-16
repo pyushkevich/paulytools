@@ -6,6 +6,7 @@
 #include <string>
 #include <list>
 #include <map>
+#include <set>
 
 #ifndef vtkFloatingPointType
 #define vtkFloatingPointType float
@@ -20,27 +21,26 @@ BranchingSubdivisionSurface::Triangle::Triangle()
     vertices[i] = NOID;
     n_nbr[i] = 0;
     i_nbr[i] = 0;
-    nbr = NULL;
-    nedges = NULL;
   }
+  i_nbr[3] = 0;
+  nbr = NULL;
+  nedges = NULL;
 }
 
 BranchingSubdivisionSurface::Triangle::~Triangle()
 {
-  for(size_t i = 0; i < 3; i++)
-  {
-    if(i_nbr[2] > 0)
-      {
-      delete nbr;
-      delete nedges;
-      }
-  }
+  if(i_nbr[3] > 0)
+    {
+    delete nbr;
+    delete nedges;
+    }
 }
 
 void
 BranchingSubdivisionSurface
 ::SetOddVertexWeights(MutableSparseMatrix &W,
-                      const MeshLevel *parent, MeshLevel *child, size_t t, size_t v)
+                      const MeshLevel *parent, MeshLevel *child, 
+                      size_t t, size_t v)
 {
   // Weight constants
   const static double W_INT_EDGE_CONN = 3.0 / 8.0;
@@ -54,51 +54,174 @@ BranchingSubdivisionSurface
   // Get the child vertex index
   size_t ivc = tc.vertices[v];
 
-  // Find out if this is a boundary vertex. Since the child triangle is a center
-  // triangle, we must check if the parent triangle has a neighbor accross edge v
-  if(tp.neighbors[v] != NOID)
+  // Find out if this is a boundary/crease vertex. Since the child triangle 
+  // is a center triangle, we must check if the parent triangle has a 
+  // neighbor accross edge v
+  if(tp.n_nbr[v] == 1)
   {
     // Get the neighbor of the parent triangle
-    const Triangle &topp = parent->triangles[tp.neighbors[v]];
+    const Triangle &topp = parent->triangles[tp.GetNeighbor(v,0)];
 
     // Internal triangle. It's weights are 3/8 for the edge-connected parent
     // vertices and 1/8 for the face-connected vertices
-    W(ivc,tp.vertices[(v+1)%3]) = W_INT_EDGE_CONN;
-    W(ivc,tp.vertices[(v+2)%3]) = W_INT_EDGE_CONN;
+    W(ivc,tp.vertices[ror(v)]) = W_INT_EDGE_CONN;
+    W(ivc,tp.vertices[rol(v)]) = W_INT_EDGE_CONN;
     W(ivc,tp.vertices[v]) = W_INT_FACE_CONN;
-    W(ivc,topp.vertices[tp.nedges[v]]) = W_INT_FACE_CONN;
+    W(ivc,topp.vertices[tp.GetNeighborEdge(v,0)]) = W_INT_FACE_CONN;
   }
   else
   {
     // Only the edge-connected vertices are involved
-    W(ivc,tp.vertices[(v+1)%3]) = W_BND_EDGE_CONN;
-    W(ivc,tp.vertices[(v+2)%3]) = W_BND_EDGE_CONN;
+    W(ivc,tp.vertices[ror(v)]) = W_BND_EDGE_CONN;
+    W(ivc,tp.vertices[rol(v)]) = W_BND_EDGE_CONN;
   }
 }
 
-inline bool NeighborPairPredicate (
-  const pair<size_t, BranchingSubdivisionSurface::NeighborInfo> &p1,
-  const pair<size_t, BranchingSubdivisionSurface::NeighborInfo> &p2)
+inline bool WalkStepPredicate (
+  const BranchingSubdivisionSurface::WalkStep &p1,
+  const BranchingSubdivisionSurface::WalkStep &p2)
 {
-  return p1.first < p2.first;
+  return p1.iMoving < p2.iMoving;
 }
+
+
+void BranchingSubdivisionSurface
+::RecursiveBuildWalkForward(
+  MeshLevel *mesh, VertexWalk &walk, vnl_matrix<int> &visited, Wing w)
+{
+  // Mark this triangle as visited
+  visited[w.t][w.vCenter] = 1;
+
+  // Get the reference to the current triangle
+  Triangle &T = mesh->triangles[w.t];
+
+  // Create a new step structure that will be appended to the walk. 
+  // By default, the wings in the step are initialized to NOID
+  WalkStep step;
+
+  // Populate information about the back wing (simply by inversion of the 
+  // moving and opposite vertex indices in the front wing of the last step)
+  step.back.t = w.t;
+  step.back.vCenter = w.vCenter;
+  step.back.vMoving = w.vOpposite;
+  step.back.vOpposite = w.vMoving;
+
+  // Set the iMoving vertex for this step
+  step.iMoving = T.vertices[step.back.vMoving];
+
+  // Check if it is possible to continue walking forward (i.e., the edge ahead
+  // is an interior edge, there is only one neighbor triangle)
+  if(T.n_nbr[w.vMoving] == 1)
+    {
+    // Fill out the front step data structure
+    step.front.t = T.GetNeighbor(w.vMoving, 0);
+    step.front.vOpposite = T.GetNeighborEdge(w.vMoving, 0);
+
+    // Get a handle to the triangle ahead
+    Triangle &TF = mesh->triangles[step.front.t];
+
+    // Fill out the other two indices by searching for the vertex number
+    if(TF.vertices[ror(step.front.vOpposite)] == T.vertices[w.vCenter])
+      {
+      step.front.vCenter = ror(step.front.vOpposite);
+      step.front.vMoving = rol(step.front.vOpposite);
+      }
+    else
+      {
+      step.front.vCenter = rol(step.front.vOpposite);
+      step.front.vMoving = ror(step.front.vOpposite);
+      }
+    }
+
+  // Add the step to the walk
+  walk.push_back(step);
+
+  // printf("FWK APPENDING iM=%d, front=(%d,%d,%d,%d), back=(%d,%d,%d,%d)\n",
+  //   step.iMoving, 
+  //   step.front.t, step.front.vCenter, step.front.vMoving, step.front.vOpposite,
+  //   step.back.t, step.back.vCenter, step.back.vMoving, step.back.vOpposite);
+
+  // Proceed to the next step if it's possible
+  if(step.front.t != NOID && !visited[step.front.t][step.front.vCenter])
+    RecursiveBuildWalkForward(mesh, walk, visited, step.front);
+}
+
+
+void BranchingSubdivisionSurface
+::RecursiveBuildWalkBackward(
+  MeshLevel *mesh, VertexWalk &walk, vnl_matrix<int> &visited, Wing w)
+{
+  // Mark this triangle as visited
+  visited[w.t][w.vCenter] = 1;
+
+  // Get the reference to the current triangle
+  Triangle &T = mesh->triangles[w.t];
+
+  // Create a new step structure that will be appended to the walk. 
+  // By default, the wings in the step are initialized to NOID
+  WalkStep step;
+
+  // Populate information about the back wing (simply by inversion of the 
+  // moving and opposite vertex indices in the front wing of the last step)
+  step.front.t = w.t;
+  step.front.vCenter = w.vCenter;
+  step.front.vMoving = w.vOpposite;
+  step.front.vOpposite = w.vMoving;
+
+  // Set the iMoving vertex for this step
+  step.iMoving = T.vertices[step.front.vMoving];
+
+  // Check if it is possible to continue walking forward (i.e., the edge ahead
+  // is an interior edge, there is only one neighbor triangle)
+  if(T.n_nbr[w.vMoving] == 1)
+    {
+    // Fill out the front step data structure
+    step.back.t = T.GetNeighbor(w.vMoving, 0);
+    step.back.vOpposite = T.GetNeighborEdge(w.vMoving, 0);
+
+    // Get a handle to the triangle ahead
+    Triangle &TF = mesh->triangles[step.back.t];
+
+    // Fill out the other two indices by searching for the vertex number
+    if(TF.vertices[ror(step.back.vOpposite)] == T.vertices[w.vCenter])
+      {
+      step.back.vCenter = ror(step.back.vOpposite);
+      step.back.vMoving = rol(step.back.vOpposite);
+      }
+    else
+      {
+      step.back.vCenter = rol(step.back.vOpposite);
+      step.back.vMoving = ror(step.back.vOpposite);
+      }
+    }
+
+  // Add the step to the walk
+  walk.push_front(step);
+
+  // printf("BWK APPENDING iM=%d, front=(%d,%d,%d,%d), back=(%d,%d,%d,%d)\n",
+  //   step.iMoving, 
+  //   step.front.t, step.front.vCenter, step.front.vMoving, step.front.vOpposite,
+  //   step.back.t, step.back.vCenter, step.back.vMoving, step.back.vOpposite);
+
+  // Proceed to the next step if it's possible
+  if(step.back.t != NOID && !visited[step.back.t][step.back.vCenter])
+    RecursiveBuildWalkBackward(mesh, walk, visited, step.back);
+}
+
 
 void BranchingSubdivisionSurface
 ::ComputeWalks(MeshLevel *mesh)
 {
-  size_t t = 0, v = 0;
+  size_t t = 0, v = 0, i = 0;
 
-  // Empty the list of walks
-  walks.clear();
+  // Empty the list of walks at each vertex
+  for(i = 0; i < mesh->vertices.size(); i++)
+    mesh->vertices[i].walks.clear();
 
   // Create a flag array indicating which vertices in which triangles have
   // already been visited.
-  size_t **flagVisit = new size_t*[mesh->nTriangles];
-  for(t = 0; t < mesh->nTriangles; t++)
-    {
-    flagVisit[t] = new size_t[3];
-    flagVisit[t][0] = flagVisit[t][1] = flagVisit[t][2] = 0;
-    }
+  vnl_matrix<int> flagVisit(mesh->triangles.size(), 3);
+  flagVisit.fill(0);
 
   // Loop over all triangles, all vertices
   for(t = 0; t < mesh->triangles.size(); t++) for(v = 0; v < 3; v++)
@@ -107,7 +230,76 @@ void BranchingSubdivisionSurface
     if(flagVisit[t][v] > 0) continue; 
 
     // Initialize a walk that we will fill in
-    CompleteWalk walk;
+    BranchingSubdivisionSurface::VertexWalk walk;
+
+    // This is the index of the current vertex
+    size_t ivtx = mesh->triangles[t].vertices[v];
+
+    // Create wings for the forward and reverse walks
+    Wing wForward(t, v, ror(v), rol(v)), wBackward(t, v, rol(v), ror(v));
+
+    // printf("*** WALK AROUND VERTEX %d (t = %d, v = %d) ***\n",
+    //   ivtx, t, v);
+
+    // Build up a walk in the forward direction
+    RecursiveBuildWalkForward(mesh, walk, flagVisit, wForward);
+
+    // Check if the walk is a loop (last step's front.t is not NOID)
+    if(walk.back().front.t != NOID)
+      {
+      // Sort the walk so it starts with the smallest vertex index
+      rotate(walk.begin(),
+        min_element(walk.begin(), walk.end(), &WalkStepPredicate),
+        walk.end());
+      }
+    else
+      {
+      // Perform a backwards walk
+      RecursiveBuildWalkBackward(mesh, walk, flagVisit, wBackward);
+      }
+
+    // Now, assign this walk to the vertex
+    mesh->vertices[ivtx].walks.push_back(walk);
+
+    /*
+    // Report the walk
+    printf("FINAL WALK AROUND VERTEX %d\n", ivtx);
+    VertexWalk::iterator itw = walk.begin();
+    for(; itw != walk.end(); ++itw)
+      {
+      printf("Moving: %d, TFront: %d, VFront %d, TBack: %d, VBack: %d\n",
+        itw->iMoving, 
+        itw->front.t, itw->front.vMoving, 
+        itw->back.t, itw->back.vMoving);
+      }
+    cout << endl;
+    */
+
+    }
+}
+
+/* 
+void BranchingSubdivisionSurface
+::ComputeWalks(MeshLevel *mesh)
+{
+  size_t t = 0, v = 0, i = 0;
+
+  // Empty the list of walks at each vertex
+  for(i = 0; i < mesh->vertices.size(); i++)
+    mesh->vertices[i].walks.clear();
+
+  // Create a flag array indicating which vertices in which triangles have
+  // already been visited.
+  vnl_matrix<int> flagVisit(mesh->triangles.size(), 3, 0);
+
+  // Loop over all triangles, all vertices
+  for(t = 0; t < mesh->triangles.size(); t++) for(v = 0; v < 3; v++)
+    {
+    // If the triangle/vertex has been visited it can't be in a walk
+    if(flagVisit[t][v] > 0) continue; 
+
+    // Initialize a walk that we will fill in
+    BranchingSubdivisionSurface::VertexWalk walk;
 
     // This is the index of the current vertex
     size_t ivtx = mesh->triangles[t].vertices[v];
@@ -119,7 +311,9 @@ void BranchingSubdivisionSurface
     size_t tLoop = t;
 
     // Walk until reaching a non-internal edge
-    // cout << "Walk around vtx. " << ivtx << endl;
+    printf("WALK AROUND vertex %d in T[%d], whose index is %d\n",
+      v, t, ivtx);
+
     do
       {
       // Get a reference to the current triangle
@@ -137,17 +331,16 @@ void BranchingSubdivisionSurface
         }
       else
         {
-        tNext = T.nbr[T.i_nbr[ror(vWalk)]];
-        vNext = ror(T.nedges[T.i_nbr[ror(vWalk)]]);
+        tNext = T.GetNeighbor(ror(vWalk), 0);
+        vNext = ror(T.GetNeighborEdge(ror(vWalk), 0));
         }
 
       // Put the current edge in the triangle into the list
-      // cout << "Fwd walk: visiting vtx. " << T.vertices[rol(vWalk)] <<
-      //    "; behind: (" << tWalk << "," << vWalk <<
-      //    "); ahead: (" << tNext << "," << vNext << ")" <<  endl;
-      walk.push_back(make_pair( 
-          T.vertices[rol(vWalk)],
-          NeighborInfo(tNext, vNext, tWalk, vWalk)));
+      cout << "Fwd walk: visiting vtx. " << T.vertices[rol(vWalk)] <<
+          "; behind: (" << tWalk << "," << vWalk <<
+          "); ahead: (" << tNext << "," << vNext << ")" <<  endl;
+      walk.push_back(
+        WalkStep(T.vertices[rol(vWalk)], tNext, vNext, tWalk, vWalk));
 
 
       // walks[ivtx].push_back( make_pair(
@@ -184,17 +377,16 @@ void BranchingSubdivisionSurface
           }
         else
           {
-          tNext = T.nbr[T.i_nbr[rol(vWalk)]];
-          vNext = rol(T.nedges[T.i_nbr[rol(vWalk)]]);
+          tNext = T.GetNeighbor(rol(vWalk),0);
+          vNext = rol(T.GetNeighborEdge(rol(vWalk),0));
           }
 
         // Put the current edge in the triangle into the list
-        // cout << "Rev walk: visiting vtx. " << T.vertices[ror(vWalk)] <<
-        //   "; behind: (" << tNext << "," << vNext <<
-        //   "); ahead: (" << tWalk << "," << vWalk << ")" << endl;
-        walk.push_front(make_pair( 
-            T.vertices[ror(vWalk)],
-            NeighborInfo(tWalk, vWalk, tNext, vNext)));
+        cout << "Rev walk: visiting vtx. " << T.vertices[ror(vWalk)] <<
+           "; behind: (" << tNext << "," << vNext <<
+           "); ahead: (" << tWalk << "," << vWalk << ")" << endl;
+        walk.push_front(
+          WalkStep(T.vertices[ror(vWalk)], tWalk, vWalk, tNext, vNext));
 
         // walks[ivtx].push_front( make_pair(
         //    T.vertices[ror(vWalk)],
@@ -210,19 +402,27 @@ void BranchingSubdivisionSurface
       // Rotate the walk so that the smallest member is the first element
       // (for consistency with MMA code)
       rotate(walk.begin(),
-        min_element(walk.begin(), walk.end(), &NeighborPairPredicate),
+        min_element(walk.begin(), walk.end(), &WalkStepPredicate),
         walk.end());
       }
 
     // Now, assign this walk to the vertex
-    walks[ivtx].push_back(walk);
+    mesh->vertices[ivtx].walks.push_back(walk);
+
+    // Report the walk
+    printf("FINAL WALK AROUND VERTEX %d\n", ivtx);
+    VertexWalk::iterator itw = walk.begin();
+    for(; itw != walk.end(); ++itw)
+      {
+      printf("Moving: %d, TFront: %d, VFront %d, TBack: %d, VBack: %d\n",
+        itw->iMoving, itw->tFront, itw->vFront, itw->tBack, itw->vBack);
+      }
+    cout << endl;
     }
 
-  // Clear memory
-  for(t = 0; t < mesh->nTriangles; t++)
-    delete flagVisit[t];
-  delete flagVisit;
+  cout << "Walk Done\n";
 }
+*/
 
 /**
  * This method should be called for child-level triangles whose index in the
@@ -243,33 +443,104 @@ void BranchingSubdivisionSurface
   size_t tp = t / 4;
   size_t ivp = parent->triangles[tp].vertices[v];
 
-  // Get the vertex object for this vertex
-  EdgeWalkAroundVertex it(parent, ivp);
-  if(it.IsOpen())
-  {
+  // Find all edge-connected, crease-connected and sheet-connected vertices
+  std::set<size_t> cEdge, cSeam, cSheet;
+  typedef std::set<size_t>::iterator SetIt;
+
+  // printf("*** SETTING WEIGHTS FOR EVEN VERTEX %d ***\n", ivc);
+
+  // Go through all the walks for this vertex in the parent mesh, in order to
+  // collect edge-connected, seam-connected and sheet-connected neighbors.
+  for(size_t i = 0; i < parent->vertices[ivp].walks.size(); i++)
+    {
+    for(BranchingEdgeWalkAroundVertex it(parent, ivp, i); !it.IsAtEnd(); ++it)
+      {
+      size_t ivn = it.MovingVertexId();
+      size_t mult = it.GetEdgeMultiplicity();
+      if(mult == 1)
+        {
+        // printf("Adding boundary-edge (%d %d)\n", ivc, ivn);
+        cEdge.insert(ivn);
+        }
+      else if(mult == 2)
+        {
+        // printf("Adding sheet-edge (%d %d)\n", ivc, ivn);
+        cSheet.insert(ivn);
+        }
+      else if(mult == 3)
+        {
+        // printf("Adding seam-edge (%d %d)\n", ivc, ivn);
+        cSeam.insert(ivn);
+        }
+      else
+        throw "Wrong multiplicity for an edge";
+      }    
+    }
+
+  // The vertex is internal
+  if(cEdge.size() == 0 && cSeam.size() == 0)
+    {
+    // Get the number of neighbor vertices
+    int n = cSheet.size();
+
+    // Compute the beta constant
+    double beta = (n > 3) ? 3.0 / (8.0 * n) : 3.0 / 16.0;
+
+    // Assign beta to each of the edge-adjacent vertices
+    for(SetIt it = cSheet.begin(); it != cSheet.end(); ++it)
+      W(ivc, *it) = beta;
+
+    // Assign the balance to the coincident vertex
+    W(ivc, ivp) = 1.0 - n * beta;
+    }
+
+  // The vertex lies on the edge
+  else if(cEdge.size() == 2 && cSeam.size() == 0)
+    {
     // Add the point itself
     W(ivc, ivp) = W_BND_SELF;
 
     // Add the starting point
-    W(ivc, it.MovingVertexId()) = W_BND_EDGE_CONN;
+    for(SetIt it = cEdge.begin(); it != cEdge.end(); ++it)
+      W(ivc, *it) = W_BND_EDGE_CONN;
+    }
 
-    // Get the ending point
-    it.GoToLastEdge();
-    W(ivc, it.MovingVertexId()) = W_BND_EDGE_CONN;
-  }
-  else
-  {
+  // The vertex is on the seam
+  else if(cEdge.size() == 0 && cSeam.size() == 2)
+    {
+    // Add the point itself
+    W(ivc, ivp) = W_BND_SELF;
+
+    // Add the starting point
+    for(SetIt it = cSeam.begin(); it != cSeam.end(); ++it)
+      W(ivc, *it) = W_BND_EDGE_CONN;
+    }
+
+  // The vertex is an edge-seam vertex
+  else if(cSeam.size() == 1 && cEdge.size() == 1)
+    {
+    // Treat the seam vertex as an internal vertex, and ignore the edge vertex
+    int n = cSheet.size() + cSeam.size();
+
     // Compute the beta constant
-    int n = it.Valence();
     double beta = (n > 3) ? 3.0 / (8.0 * n) : 3.0 / 16.0;
 
     // Assign beta to each of the edge-adjacent vertices
-    for( ; !it.IsAtEnd(); ++it)
-      W(ivc, it.MovingVertexId()) = beta;
+    for(SetIt it = cSheet.begin(); it != cSheet.end(); ++it)
+      W(ivc, *it) = beta;
+
+    // Assign beta to the seam vertex
+    W(ivc, *cSeam.begin()) = beta;
 
     // Assign the balance to the coincident vertex
     W(ivc, ivp) = 1.0 - n * beta;
-  }
+    }
+
+  // The remaining possibilities are 'weird'. We keep the vertex in its place
+  else
+    {
+    W(ivc, ivp) = 1.0;
+    }
 }
 
 void
@@ -279,12 +550,16 @@ BranchingSubdivisionSurface
 {
   Triangle &T = mesh->triangles[t];
 
+  // printf("RecursiveAssignVertexLabel: t = %d, v = %d, id = %d\n",t,v,id);
+
   // If the vertex has a label assigned, leave it alone
   if(T.vertices[v] != NOID)
     return;
     
   // Assign the label to the vertex
   mesh->triangles[t].vertices[v] = id;
+
+  // printf("ASSIGNED!\n");
 
   // Visit the vertex in all neighboring triangles across both edges
   for(size_t q = 1; q <= 2; q++)
@@ -295,8 +570,8 @@ BranchingSubdivisionSurface
     // Repeat for all adjacent triangles across that edge
     for(size_t i = 0; i < T.n_nbr[w]; i++)
       RecursiveAssignVertexLabel(mesh, 
-        T.nbr[T.i_nbr[w] + i], 
-        (T.nedges[T.i_nbr[w] + i] + q) % 3, id);
+        T.GetNeighbor(w, i), 
+        (T.GetNeighborEdge(w, i) + q) % 3, id);
     }
 }
 
@@ -310,25 +585,71 @@ void BranchingSubdivisionSurface::Subdivide(const MeshLevel *parent, MeshLevel *
   // Connect the child to the parent
   child->parent = parent;
 
-  // Initialize the number of vertices in the new mesh
-  child->nVertices = 0;
+  // Reset the child mesh
+  child->vertices.clear();
+  child->triangles.clear();
+
+  // Create a list of unique edges in the parent mesh. Since each edge is
+  // subdivided, the edges can be used to assign indices to newly inserted
+  // vertices.
+  map<ImportEdge, size_t> edgemap;
+  for(i = 0; i < ntParent; i++) for(j = 0; j < 3; j++)
+    {
+    // Create an edge representation
+    ImportEdge ie(
+      parent->triangles[i].vertices[j],
+      parent->triangles[i].vertices[ror(j)]);
+
+    // Check if the edge is already present and if it's not assign it an
+    // index and store in the map
+    if(edgemap.find(ie) == edgemap.end())
+      {
+      // printf("Odd vertex %d is on edge (%d %d)\n",
+      //   edgemap.size() + parent->vertices.size(), 
+      //   ie.first, ie.second);
+      edgemap.insert(make_pair(ie, edgemap.size()));
+      }
+    }
+
+  // Allocate the triangles in the child mesh
+  child->triangles.resize(ntChild);
+
+  // Allocate the vertices. The numbering scheme is such that a child's 
+  // even vertex is the same as the number of the corresponding vertex in
+  // the parent.
+  child->vertices.resize(parent->vertices.size() + edgemap.size());
 
   // Subdivide each triangle into four
-  child->triangles.resize(ntChild);
   for (i = 0; i < ntParent; i++)
-  {
-    // Get pointers to the four ctren
+    {
+    // Get pointers to the four children
     const Triangle &pt = parent->triangles[i];
     Triangle *ct[4] = {
                         &child->triangles[4*i], &child->triangles[4*i+1],
                         &child->triangles[4*i+2], &child->triangles[4*i+3]};
 
+    // Get the indices in the child mesh for the three odd vetices that will
+    // be inserted opposite to the three vertices in the parent triangle
+    size_t iodd[3];
+    for (j = 0; j < 3; j++)
+      {
+      ImportEdge ie(pt.vertices[ror(j)], pt.vertices[rol(j)]);
+      iodd[j] = parent->vertices.size() + edgemap[ie];
+      }
+
     // Set the neighbor information for the three outer children of this
     // parent triangle
     for (j = 0; j < 3; j++)
       {
+      // Assign a vertex number to the even vertex in the child
+      ct[j]->vertices[j] = pt.vertices[j];
+
+      // Assign vertex numbers to the odd vertices in the child
+      ct[j]->vertices[ror(j)] = iodd[rol(j)];
+      ct[j]->vertices[rol(j)] = iodd[ror(j)];
+
       // Count the number of neighbors and allocate data structures
-      n_total = pt.n_nbr[(j+1)%3] + pt.n_nbr[(j+2)%3] + 1;
+      size_t n_total = pt.n_nbr[ror(j)] + pt.n_nbr[rol(j)] + 1;
       ct[j]->nbr = new size_t[n_total];
       ct[j]->nedges = new short[n_total];
 
@@ -346,17 +667,19 @@ void BranchingSubdivisionSurface::Subdivide(const MeshLevel *parent, MeshLevel *
         else
           {
           ct[j]->n_nbr[k] = pt.n_nbr[k];
-          for (a = 0; a < ct[j]->n_nbr[k]; a++)
+          for (size_t a = 0; a < ct[j]->n_nbr[k]; a++)
             {
             // This is the parent's neighbor across the edge 'k'
-            nbr_p = pt.nbr[pt.i_nbr[k]+a];
+            size_t nbr_p = pt.GetNeighbor(k, a); 
 
             // This is the index of the vertex opposite edge 'k' in nbr_p
-            q = pt.nedges[pt.i_nbr[k]+a];
+            short q = pt.GetNeighborEdge(k, a);
 
-            // This is the index of the parent neighbor's child adjacent to 
-            // the child 'j' across the edge 'k'
-            idx_c = (q + k - j) % 3;
+            // Get a handle to the neighboring triangle
+            const Triangle &ptn = parent->triangles[nbr_p];
+
+            // Figure out what is the index of pt's vertex j in triangle ptn
+            short idx_c = (ptn.vertices[ror(q)] == pt.vertices[j]) ? ror(q) : rol(q);
 
             // Set the actual neigbor index
             ct[j]->nbr[ipos] = nbr_p * 4 + idx_c;
@@ -364,52 +687,37 @@ void BranchingSubdivisionSurface::Subdivide(const MeshLevel *parent, MeshLevel *
             ipos++;
             }
           }
-        ct[j]->i_nbr[k] = ipos;
+        ct[j]->i_nbr[k+1] = ipos;
         }
       }
 
-    // Now set the neighbor info for the internal triangle
+    // Now set the vertex / neighbor info for the internal triangle
     ct[3]->nbr = new size_t[3];
     ct[3]->nedges = new short[3];
     for (k = 0; k < 3; k++)
       {
+      // Set neighbor info
       ct[3]->n_nbr[k] = 1;
-      ct[3]->i_nbr[k] = k+1;
+      ct[3]->i_nbr[k+1] = k+1;
       ct[3]->nbr[k] = 4 * i + k;
       ct[3]->nedges[k] = k;
+
+      // Set vertex info
+      ct[3]->vertices[k] = iodd[k];
       }
-  }
+    }
 
-  // Compute the number of edges in the pt graph. Assumes that each
-  // triangle has at most 3 neighbors
-  size_t neParent = 0;
+  // Compute the weights of the child vertices wrt parent vertices
+  MutableSparseMatrix W(child->vertices.size(), parent->vertices.size());
+
+  // Assign weights to the even and odd vertices
   for(i = 0; i < ntParent; i++) for(j = 0; j < 3; j++)
-    neParent += 12 / (parent->triangles[i].n_nbr[j] + 1);
-  neParent /= 12;
-
-  // Assign vertex ids and weights. Under this scheme, the vertex ids
-  // of the pt and ct should match (for even vertices) and odd
-  // vertices appear at the end of the list
-
-  // Create a mutable sparse matrix representation for the weights
-  MutableSparseMatrix W(parent->nVertices + neParent, parent->nVertices);
-
-  // Visit each of the even vertices, assigning it an id and weights
-  for(i = 0; i < ntParent; i++) for(j = 0; j < 3; j++)
-    if (child->triangles[4 * i + j].vertices[j] == NOID)
-      {
-        RecursiveAssignVertexLabel(child, 4*i+j, j, parent->triangles[i].vertices[j]);
-        SetEvenVertexWeights(W, parent, child, 4*i+j, j);
-      }
-
-  // Visit each of the odd vertices, assigning it an id, and weights
-  child->nVertices = parent->nVertices;
-  for(i = 0; i < ntParent; i++) for(j = 0; j < 3; j++)
-      if (child->triangles[4 * i + 3].vertices[j] == NOID)
-      {
-        RecursiveAssignVertexLabel(child, 4*i+3, j, child->nVertices++);
-        SetOddVertexWeights(W, parent, child, 4*i+3, j);
-      }
+    {
+    if(W.empty_row(child->triangles[4 * i + j].vertices[j]))
+      SetEvenVertexWeights(W, parent, child, 4*i+j, j);
+    if(W.empty_row(child->triangles[4 * i + 3].vertices[j]))
+      SetOddVertexWeights(W, parent, child, 4*i+3, j);
+    }
 
   // Copy the sparse matrix into immutable form
   child->weights.SetFromVNL(W);
@@ -476,25 +784,29 @@ void BranchingSubdivisionSurface::ExportLevelToVTK(MeshLevel &src, vtkPolyData *
 
 void BranchingSubdivisionSurface::ImportLevelFromVTK(vtkPolyData *mesh, MeshLevel &dest)
 {
-  size_t i, j, k;
+  size_t i, k;
+  short j;
 
   // Prepare the mesh
   mesh->BuildCells();
 
-  // Typedefs
-  typedef pair<size_t, size_t> HalfEdge;
-  typedef pair<size_t, short> TriangleRep;
-  typedef map<HalfEdge, TriangleRep> TriangleMap;
+  // A representation of a triangle at an edge (triangle index, edge 
+  // index in triangle)
+  typedef std::pair<size_t, short> TRep;
+
+  // A container associating edges with triangles
+  typedef std::multimap<ImportEdge, TRep> EdgeMap;
+
+  // An edge map for accumulating neighborhood info
+  EdgeMap edges;
 
   // Get the number of triangles in the mesh
   size_t nTriangles = mesh->GetNumberOfCells();
   dest.triangles.resize(nTriangles);
 
   // Set the number of vertices in the mesh
-  dest.nVertices = mesh->GetNumberOfPoints();
-
-  // Initialize the triangle map
-  TriangleMap tmap;
+  size_t nVertices = mesh->GetNumberOfPoints();
+  dest.vertices.resize(nVertices);
 
   // For each triangle, compute the neighbor. This can be done by first enumerating
   // all the edges in the mesh. For each edge there will be one or two triangles
@@ -507,42 +819,101 @@ void BranchingSubdivisionSurface::ImportLevelFromVTK(vtkPolyData *mesh, MeshLeve
     // If the number of points is not 3, return with an exception
     if(npts != 3) throw string("Mesh contains cells other than triangles");
 
-    // Associate each half-edge with a triangle
+    // Associate each edge with a triangle
     for(j = 0; j < 3; j++)
     {
       // Set the vertices in each triangle
       dest.triangles[i].vertices[j] = pts[j];
 
-      // Create the key and value
-      HalfEdge he(pts[(j+1) % 3], pts[(j+2) % 3]);
-      TriangleRep trep(i, (short) j);
+      // Create a structure representing the edge opposite to vertex j
+      ImportEdge edge(pts[ror(j)], pts[rol(j)]);
 
-      // Insert the half-edge and check for uniqueness
-      pair<TriangleMap::iterator, bool> rc = tmap.insert(make_pair(he, trep));
-      if(!rc.second)
-        throw string("Half-edge appears twice in the mesh, that is illegal!");
+      // Associate the edge with a t-rep
+      edges.insert(make_pair(edge, TRep(i, j)));
     }
   }
 
-  // Take a pass through all the half-edges. For each, set the corresponding triangle's
-  // neighbor and neighbor index
-  for(TriangleMap::iterator it = tmap.begin(); it != tmap.end(); ++it)
-  {
-    TriangleRep &trep = it->second;
-    HalfEdge opposite(it->first.second, it->first.first);
-    TriangleMap::iterator itopp = tmap.find(opposite);
-    if(itopp != tmap.end())
+  // Take a second pass through the triangles, this time assign all the neighbor info
+  for(i = 0; i < nTriangles; i++)
     {
-      dest.triangles[trep.first].neighbors[trep.second] = itopp->second.first;
-      dest.triangles[trep.first].nedges[trep.second] = itopp->second.second;
-    }
-  }
+    // Get a shorthand for the triangle
+    Triangle &T = dest.triangles[i];
 
+    // First, how many total neighbors are there
+    size_t ntotal = 0;
+
+    // The first value in neighbor array index is always 0
+    T.i_nbr[0] = 0;
+
+    // First pass sets up array indices 
+    for(j = 0; j < 3; j++)
+      {
+      // Get the current edge
+      ImportEdge edge(T.vertices[ror(j)], T.vertices[rol(j)]);
+
+      // Set the number of neighbors
+      T.n_nbr[j] = edges.count(edge) - 1; 
+
+      // Increment total number of neighbors
+      ntotal += T.n_nbr[j];
+
+      // Set the neighbor array index
+      T.i_nbr[j+1] = ntotal;
+      }
+
+    // Allocate the nedge, nbr structures
+    T.nbr = new size_t[ntotal];
+    T.nedges = new short[ntotal];
+
+    // Now, populate the arrays
+    for(j = 0; j < 3; j++)
+      {
+      // Get the current edge
+      ImportEdge edge(T.vertices[ror(j)], T.vertices[rol(j)]);
+
+      // Loop over all triangles associated with that edge
+      size_t a = 0;
+      EdgeMap::iterator it;
+      for(it = edges.lower_bound(edge); it != edges.upper_bound(edge); ++it)
+        {
+        // Check if it's the same triangle
+        if(it->second.first == i) continue;
+        
+        // Set the neighbor and index values
+        T.nbr[ T.i_nbr[j] + a ] = it->second.first;
+        T.nedges[ T.i_nbr[j] + a ] = it->second.second;
+        a++;
+        }
+      }
+    }
+  
   // Set the mesh's parent to NULL
   dest.parent = NULL;
 
   // Finally, compute the walks in this mesh
   ComputeWalks(&dest);
+}
+
+void BranchingSubdivisionSurface
+::DumpTriangles(MeshLevel &m)
+{
+  size_t i,a;
+  short j;
+
+  for(i = 0; i < m.triangles.size(); i++)
+    {
+    Triangle &t = m.triangles[i];
+    for(j = 0; j < 3; j++)
+      {
+      printf("T[%d]\'s vertex %d is %d\n", i, j, t.vertices[j]);
+      printf("T[%d] has %d neighbors across edge %d\n", i, t.n_nbr[j], j);
+      for(a = 0; a < t.n_nbr[j]; a++)
+        {
+        printf("T[%d]'s neighbor %d across edge %d is T[%d] (reciprocal edge %d)\n",
+          i, a, j, t.GetNeighbor(j, a), t.GetNeighborEdge(j, a));
+        }
+      }
+    }
 }
 
 void BranchingSubdivisionSurface
@@ -555,7 +926,7 @@ void BranchingSubdivisionSurface
   vtkCellArray *tcells = vtkCellArray::New();
 
   // Add the points to the output mesh
-  for(i = 0; i < m.nVertices; i++)
+  for(i = 0; i < m.vertices.size(); i++)
   {
     // Output point
     vnl_vector_fixed<vtkFloatingPointType, 3> p(0.0);
@@ -596,7 +967,7 @@ void BranchingSubdivisionSurface
   size_t i, j, k;
 
   // Add the points to the output mesh
-  for(i = 0; i < m.nVertices; i++)
+  for(i = 0; i < m.vertices.size(); i++)
   {
     // Output point
     xTrg[i].fill(0.0); rhoTrg[i] = 0;
@@ -617,13 +988,13 @@ void BranchingSubdivisionSurface
   typedef ImmutableSparseMatrix<double>::RowIterator IteratorType;
 
   // Get the total number of values
-  size_t n = nComp * m.nVertices;
+  size_t n = nComp * m.vertices.size();
 
   // Set the target array to zero
   std::fill_n(xdst, n, 0.0);
 
   // Iterate over the output vertices
-  for(size_t iv = 0; iv < m.nVertices; iv++)
+  for(size_t iv = 0; iv < m.vertices.size(); iv++)
   {
     size_t i = iv * nComp;
 
@@ -643,30 +1014,72 @@ void BranchingSubdivisionSurface
 bool BranchingSubdivisionSurface::CheckMeshLevel (MeshLevel &mesh)
 {
   // Check the following rules for all triangles in the mesh
-  // 1. T[T[i].nbr[j]].nbr[T[i].ne[j]] == i for all i, j    (i am my neighbors neighbor)
-  // 2. T[T[i].nbr[j]].ne[T[i].ne[j]] == j for all i, j    (i am my neighbors neighbor)
-  // 3. T[i].v[j] == T[T[i].nbr[j+k]].v[T[i].ne[j+k]+k] for all i, j, k=(1, 2),
-  // with modulo 3 addition
+  // 1. I am one of the neighbors of each of my neighbor triangles
+  // 2. The indexes of an edge shared by two neighboring triangles are correct
   size_t nerr = 0;
   for(size_t i = 0; i < mesh.triangles.size(); i++)
-  {
-    Triangle &t = mesh.triangles[i];
-    for(size_t j = 0; j < 3; j++)
     {
-      if(t.neighbors[j] != NOID)
+    // This is the triangle we want to test
+    Triangle &t = mesh.triangles[i];
+
+    // Loop over its vertices
+    for(size_t j = 0; j < 3; j++)
       {
-        Triangle &tn = mesh.triangles[t.neighbors[j]];
-        if(tn.neighbors[t.nedges[j]] != i)
+      // Repeat for each of the neighbor triangles
+      for(size_t a = 0; a < t.n_nbr[j]; a++)
         {
-          cout << "Error " << nerr++ <<
-          " Rule 1 violated for i = " << i << " and j = " << j << endl;
-        }
-        if(tn.nedges[t.nedges[j]] != j)
-        {
-          cout << "Error " << nerr++ <<
-          " Rule 2 violated for i = " << i << " and j = " << j << endl;
+        // Get the neighbor triangle index
+        size_t in = t.GetNeighbor(j, a);
+
+        // Get the index of shared edge with t in the neighbor triangle
+        short jn = t.GetNeighborEdge(j, a);
+
+        // Get the shorthand to the neighbor triangle
+        Triangle &tn = mesh.triangles[in];
+
+        // Check the number of edges across the shared edge is correct
+        if(tn.n_nbr[jn] != t.n_nbr[j])
+          {
+          printf("Error %d: T[%d].n_nbr[%d] != T[%d].n_nbr[%d]\n",
+            nerr++, i, j, in, jn); 
+          }
+
+        // Check that one of the neighbors of tn across jn is t
+        size_t tCount = 0;
+        for(size_t an = 0; an < tn.n_nbr[jn]; an++)
+          {
+          if(tn.GetNeighbor(jn, an) == i)
+            {
+            // Record that t has been found
+            tCount++;
+
+            // Check that the index matches
+            if(j != tn.GetNeighborEdge(jn, an))
+              {
+              printf("Error %d: T[%d].nedge[%d,%d] != T[%d].nedge[%d,%d]\n",
+                nerr++, i, j, a, in, jn, an); 
+              }
+            }
+          }
+
+        // Check that the count is 1
+        if(tCount == 0)
+          {
+          printf("Error %d: T[%d] is not a neighbor of its neighbor T[%d]\n",
+            nerr++, i, in); 
+          }
+        else if(tCount > 1)
+          {
+          printf("Error %d: T[%d] appears %d times as a neighbor of its neighbor T[%d]\n",
+            nerr++, i, tCount, in); 
+          }
         }
       }
+    }
+
+  // Check 
+         
+/* (old rule 3)
       for(size_t k = 1; k < 3; k++)
       {
         if(t.neighbors[(j+k) % 3] != NOID)
@@ -678,9 +1091,7 @@ bool BranchingSubdivisionSurface::CheckMeshLevel (MeshLevel &mesh)
             " Rule 3 violated for i = " << i << ", j = " << j << " and k = " << k << endl;
           }
         }
-      }
-    }
-  }
+      } */
 
   return (nerr == 0);
 }
@@ -689,6 +1100,8 @@ bool BranchingSubdivisionSurface::CheckMeshLevel (MeshLevel &mesh)
 /******************************************************************
  CODE FOR THE LOOP TANGENT SCHEME
  *****************************************************************/
+
+#ifdef COMMENTOUT
 
 LoopTangentScheme::LoopTangentScheme()
 {
@@ -737,7 +1150,7 @@ void LoopTangentScheme::SetMeshLevel(MeshLevel *in_level)
   for(size_t i = 0; i < level->nVertices; i++)
   {
     // Create an iterator around the vertex
-    EdgeWalkAroundVertex it(level, i);
+    BranchingEdgeWalkAroundVertex it(level, i);
 
     // Get the valence of the vertex
     size_t n = it.Valence();
@@ -803,8 +1216,5 @@ void LoopTangentScheme::SetMeshLevel(MeshLevel *in_level)
   }
 }
 
+#endif // COMMENTOUT
 
-
-// We need to instantiate sparse matrix of NeighborInfo objects
-#include "SparseMatrix.txx"
-template class ImmutableSparseArray<BranchingSubdivisionSurface::NeighborInfo>;

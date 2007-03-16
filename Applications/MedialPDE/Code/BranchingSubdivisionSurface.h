@@ -2,9 +2,12 @@
 #define __BranchingSubdivisionSurface_h_
 
 #include <vector>
+#include <set>
+#include <map>
 #include "smlmath.h"
 #include "Registry.h"
 #include "SparseMatrix.h"
+#include "SubdivisionSurface.h"
 
 class vtkPolyData;
 
@@ -12,8 +15,8 @@ using namespace std;
 
 // Useful global-level inline routines.
 // TODO: are there faster ops for this?
-inline short ror(short x) { return (x + 1) % 3; }
-inline short rol(short x) { return (x + 2) % 3; }
+// inline short ror(short x) { return (x + 1) % 3; }
+// inline short rol(short x) { return (x + 2) % 3; }
 
 // Constant used for unreasonable size_t objects
 #define NOID 0xffffffff
@@ -25,6 +28,13 @@ class BranchingSubdivisionSurface
 {
 public:
 
+  /**
+   * This class represents a triangle and its relationship with its
+   * neighbors. A triangle has three edges, and across each of the 
+   * edges, it may be adjacent to 0, 1 or 2 other triangles. This
+   * structure provides inline routines to access the neighboring
+   * triangles.
+   */
   struct Triangle
   {
     // Indices of the three vertices
@@ -34,13 +44,24 @@ public:
     size_t n_nbr[3];
 
     // Starting index into the neighbor triangle array for each edge
-    size_t i_nbr[3];
+    size_t i_nbr[4];
 
     // List of neighbors, indexed by i_nbr
     size_t *nbr;
 
     // The index of the shared edge in each of the neighbors
     short *nedges;
+
+    // Get the neighboring triangle across edge iEdge. Since there may
+    // be multiple neighboring triangles across this edge, this method
+    // takes a second parameter jNbr that selects the right one
+    size_t GetNeighbor(short iEdge, size_t jNbr) const
+      { return nbr[i_nbr[iEdge] + jNbr]; }
+
+    // Get the index of the vertex iEdge in the triangle returned by
+    // the GetNeighbor(iEdge, jNbr) method
+    short GetNeighborEdge(short iEdge, size_t jNbr) const
+      { return nedges[i_nbr[iEdge] + jNbr]; }
 
     // Initializes to dummy values
     Triangle();
@@ -68,15 +89,67 @@ public:
   };
 
   /**
+   * This structure describes a triangle on the side of an edge. It is 
+   * called a 'wing' based on the 'winged edge' concept. However, I don't
+   * really remember how winged edges work, so I just made it up on the fly.
+   * You can say that I 'winged' it. :)
+   */
+  struct Wing
+    {
+    // The triangle index of this wing, or NOID to represent a wing that does
+    // not exist.
+    size_t t;
+
+    // The indices of the three vertices in this triangle in relation to the 
+    // edge in question. 
+    short vCenter, vMoving, vOpposite;
+
+    // Default constructor
+    Wing() : t(NOID), vCenter(-1), vMoving(-1), vOpposite(-1) {}
+
+    // Constructor
+    Wing(size_t in_t, short in_vCenter, short in_vMoving, short in_vOpposite)
+      : t(in_t), vCenter(in_vCenter), vMoving(in_vMoving), vOpposite(in_vOpposite) {}
+    };
+
+  /**
+   * This structure describes a step in a walk around a vertex. It 
+   * describes the edge from the fixed vertex to the moving vertex 
+   * and the two faces that share it. One of the faces is 'front', 
+   * i.e., will be visited next, and the other is 'back', i.e., was
+   * just visited.
+   */
+  struct WalkStep
+    {
+    // The index of the moving vertex
+    size_t iMoving;
+
+    // A step in the walk consists of two wings on the sides of the edge.
+    Wing front, back;
+
+    // Constructor
+    WalkStep(size_t in_moving, Wing in_front, Wing in_back) 
+      : iMoving(in_moving), front(in_front), back(in_back) {}
+
+    // Default constructor
+    WalkStep() { iMoving = NOID; }
+  };
+
+  /**
+   * A walk is simply a chain of walk steps
+   */
+  typedef std::list<WalkStep> VertexWalk;
+
+  /**
    * Each vertex is associated with one or more walks.
    */
   struct Vertex
-  {
+    {
     // First triangle in the walk and this vertex's index in it
-    size_t n_walks;
-
-    // The array of walks (there are at most three walks at a vertex)
-    Walk walks[4];
+    std::vector<VertexWalk> walks;
+/*     
+    // The valence of the the vertex
+    size_t valence;
 
     // Whether the vertex is on the boundary.
     bool bnd;
@@ -93,41 +166,32 @@ public:
     // Is this an internal vertex
     bool IsInternal() const { return !bnd && !seam; }
 
-    // Get the valence of the vertex. For internal vertices it is equal to the
-    // number of triangles that share the vertex, but for boundary vertices it
-    // is equal to 1 plus that (when the mesh has a disk topology)
-    size_t Valence() const { return bnd ? n + 1 : n; }
+    // Get the valence of the vertex. For internal vertices it is equal 
+    // to the number of triangles that share the vertex, but for boundary 
+    // vertices it is equal to 1 plus that (when the mesh has a 
+    // disk topology)
+    size_t Valence() const { return valence; }
 
     // Constructors
-    Vertex(size_t it0, short iv0, size_t it1, short iv1, size_t in, bool ibnd)
-      : t0(it0), v0(iv0), t1(it1), v1(iv1), n(in), bnd(ibnd) {}
-    Vertex() : t0(NOID), t1(NOID), v0(-1), v1(-1), n(0), bnd(false) {}
+    Vertex() : bnd(false), seam(false), valence(0) {};  */
   };
 
-  // Information describing vertex neighborhood relationship
-  struct NeighborInfo
+  /** This structure is used to represent edges during VTK import */
+  struct ImportEdge : public std::pair<size_t, size_t>
   {
-    // Triangle in front and behind
-    size_t tFront, tBack;
+    typedef std::pair<size_t, size_t> Superclass;
 
-    // Index of the vertex relative to these triangles
-    short vFront, vBack;
-
-    // Constructor and destructor
-    NeighborInfo() : tFront(NOID), tBack(NOID), vFront(-1), vBack(-1) {}
-    NeighborInfo(size_t tf, short vf, size_t tb, short vb)
-      : tFront(tf), vFront(vf), tBack(tb), vBack(vb) {}
+    ImportEdge(size_t v1, size_t v2) : 
+      Superclass(std::min(v1,v2), std::max(v1,v2)) {};
   };
 
   struct MeshLevel
   {
-    typedef vector<Triangle>::iterator TriangleIt;
-
     // List of triangles in this mesh level
     vector<Triangle> triangles;
 
-    // Number of vertices at this mesh level
-    size_t nVertices;
+    // List of vertices at the mesh level
+    vector<Vertex> vertices;
 
     // Parent mesh level
     const MeshLevel *parent;
@@ -135,25 +199,15 @@ public:
     // Sparse matrix mapping the mesh level to the parent level
     ImmutableSparseMatrix<double> weights;
 
-    // This represents a step in a walk
-    typedef std::pair<size_t, NeighborInfo> WalkEntry;
-
-    // This is a 'complete' walk, including all the steps in it
-    typedef std::list<WalkEntry> CompleteWalk;
-
-    // This is a list of walks, associated with each vertex
-    typedef std::vector<CompleteWalk> VertexWalks;
-
-    // This is a list of all the walks for all vertices
-    typedef std::vector<VertexWalks> walks(mesh->nVertices);
-
     // Return the valence of a vertex
+    /*
     size_t GetVertexValence(size_t ivtx)
-      { return nbr.GetRowIndex()[ivtx+1] - nbr.GetRowIndex()[ivtx]; }
+      { return vertices[ivtx].Valence(); } */
 
     // Check if the vertex is on the boundary
+    /*
     bool IsVertexInternal(size_t ivtx)
-      { return nbr.GetSparseData()[nbr.GetRowIndex()[ivtx]].tBack != NOID; }
+      { return vertices[ivtx].IsInternal(); } */
 
     // Set the mesh level as the 'root'. This means that its weight matrix
     // becomes identity and its parent is null
@@ -162,7 +216,7 @@ public:
 
     // Constructor
     MeshLevel()
-      { parent = NULL; nVertices = 0; }
+      { parent = NULL; }
   };
 
   /** Subdivide a mesh level once */
@@ -201,6 +255,9 @@ public:
   /** Test the correctness of a mesh level */
   static bool CheckMeshLevel(MeshLevel &mesh);
 
+  /** Dump mesh structure */
+  static void DumpTriangles(MeshLevel &mesh);
+
 private:
   // Mutable sparse matrix
   typedef vnl_sparse_matrix<double> MutableSparseMatrix;
@@ -216,6 +273,13 @@ private:
   static void SetOddVertexWeights(MutableSparseMatrix &W,
     const MeshLevel *parent, MeshLevel *child, size_t t, size_t v);
 
+  // Recursive methods used for building up a walk around a vertex
+  static void RecursiveBuildWalkForward(
+    MeshLevel *mesh, VertexWalk &walk, vnl_matrix<int> &visited, Wing w);
+
+  static void RecursiveBuildWalkBackward(
+    MeshLevel *mesh, VertexWalk &walk, vnl_matrix<int> &visited, Wing w);
+
   // Compute the walks in a mesh level. This associates each vertex with a
   // triangle, which makes subsequent processing a lot easier
   static void ComputeWalks(MeshLevel *mesh);
@@ -224,15 +288,15 @@ private:
 
 
 
-class EdgeWalkAroundVertex
+class BranchingEdgeWalkAroundVertex
 {
 public:
 
   /** Constructor: takes a vertex in a fully initialized mesh level */
-  EdgeWalkAroundVertex(
+  BranchingEdgeWalkAroundVertex(
     const BranchingSubdivisionSurface::MeshLevel *mesh, 
     size_t iVertex, size_t iWalk)
-    : walk(mesh->walks[iVertex][iWalk])
+    : walk(mesh->vertices[iVertex].walks[iWalk])
     {
     // Store the input
     this->mesh = mesh;
@@ -245,9 +309,7 @@ public:
 
   /** Check if this walk is closed or open (boundary vertex) */
   bool IsOpen()
-    { 
-    return walk.back().tFront == NOID;
-    }
+    { return walk.back().front.t == NOID; }
 
   /**
    * Are we at the end of the walk? The end is reached when you have made a
@@ -258,8 +320,8 @@ public:
     { return it == walk.end(); }
 
   /** Increment operator */
-  EdgeWalkAroundVertex &operator++ ()
-    { it++; }
+  BranchingEdgeWalkAroundVertex &operator++ ()
+    { it++; return *this; }
 
   /** Go to the last edge in the walk (next step puts you at end) */
   void GoToLastEdge()
@@ -275,78 +337,106 @@ public:
 
   /** Get the moving vertex id */
   size_t MovingVertexId()
-    { return it->first; }
+    { return it->iMoving; }
 
   /** Get the triangle ahead */
   size_t TriangleAhead()
-    { return it->second.tFront; }
+    { return it->front.t; }
 
   /** Get the triangle behind */
   size_t TriangleBehind()
-    { return it->second.tBack; }
+    { return it->back.t; }
 
   /** Get the index of the fixed vertex in the triangle ahead */
   short FixedVertexIndexInTriangleAhead()
-    { return it->second.vFront; }
+    { return it->front.vCenter; }
 
   /** Get the index of the fixed vertex in the triangle behind */
   short FixedVertexIndexInTriangleBehind()
-    { return it->second.vBack; }
+    { return it->back.vCenter; }
 
   /** Get the index of the moving vertex in the triangle ahead */
   short MovingVertexIndexInTriangleAhead()
-    { return ror(FixedVertexIndexInTriangleAhead()); }
+    { return it->front.vMoving; }
 
   /** Get the index of the moving vertex in the triangle behind */
   short MovingVertexIndexInTriangleBehind()
-    { return rol(FixedVertexIndexInTriangleBehind()); }
+    { return it->back.vMoving; }
 
   /** Get the index of the face-connected vertex in triangle ahead */
   short OppositeVertexIndexInTriangleAhead()
-    { return rol(FixedVertexIndexInTriangleAhead()); }
+    { return it->front.vOpposite; }
 
   /** Get the index of the face-connected vertex in triangle behind */
   short OppositeVertexIndexInTriangleBehind()
-    { return ror(FixedVertexIndexInTriangleBehind()); }
+    { return it->back.vOpposite; }
 
   /** Get the id of the face-connected vertex ahead */
   size_t VertexIdAhead()
     {
-    itNext = it; itNext++;
+    // Never call this if the walk is at its end
+    assert(it != walk.end());
+
+    // Get the pointer to the next triangle
+    WalkIterator itNext = it; itNext++;
+
+    // Get the vertex
     if(itNext == walk.end())
       {
-      if(it->second.tFront == NOID) return NOID;
-      else return walk.begin()->first;
+      if(it->front.t == NOID) return NOID;
+      else return walk.begin()->iMoving;
       }
-    else return itNext->first;
+    else return itNext->iMoving;
     }
 
   /** Get the id of the face-connected vertex behind */
   size_t VertexIdBehind()
     {
-    itNext = it; itNext--;
-    if(itNext == walk.rend())
+    if(it == walk.begin())
       {
-      if(it->second.tBack == NOID) return NOID;
-      else return walk.rbegin()->first;
+      if(it->back.t == NOID) return NOID;
+      else return walk.back().iMoving;
       }
-    else return itNext->first;
+    
+    // Go back one step
+    WalkIterator itPrev = it; itPrev--;
+    return itPrev->iMoving;
+    }
+
+  /** 
+   * Get the multiplicity of the egde between the fixed vertex and the moving
+   * vertex. Multiplicity is the number of triangles that share the edge
+   */
+  size_t GetEdgeMultiplicity()
+    {
+    // One of the triangles must be valid
+    assert((it->front.t != NOID) || (it->back.t != NOID));
+
+    if(it->front.t != NOID)
+      return 1 + mesh->triangles[it->front.t].n_nbr[it->front.vOpposite];
+    else
+      return 1 + mesh->triangles[it->back.t].n_nbr[it->back.vOpposite];
     }
 
 private:
+  // Some typedefs
+  typedef BranchingSubdivisionSurface::VertexWalk WalkType;
+  typedef WalkType::const_iterator WalkIterator;
+
   // The mesh being iterated around
   const BranchingSubdivisionSurface::MeshLevel *mesh;
 
-  // The index of the vertex walked around by this iterator
-  size_t iVertex, iWalk;
-
   // The current state of the walk is defined by these variables
-  MeshLevel::CompleteWalk &walk;
+  const WalkType &walk;
 
   // An iterator into the walk (which is a list)
-  typedef MeshLevel::CompleteWalk::iterator WalkIterator;
   WalkIterator it;
+
+  // The index of the vertex walked around by this iterator
+  size_t iVertex, iWalk;
 };
+
+#ifdef COMMENTOUT
 
 /**
  * A scheme for computing tangent vectors from mesh levels
@@ -365,7 +455,7 @@ public:
 
   /** Direct access to the weights. This method returns the contribution
    * of a neighbor pointed by a walk iterator to the d-tangent at a vertex */
-  double GetNeighborWeight(size_t d, EdgeWalkAroundVertex &walk)
+  double GetNeighborWeight(size_t d, BranchingEdgeWalkAroundVertex &walk)
     {
     return xNbrTangentWeights[d][walk.GetPositionInMeshSparseArray()];
     }
@@ -408,12 +498,26 @@ protected:
   double *xVtxTangentWeights[2];
 };
 
+#endif //COMMENTOUT
 
 inline ostream &operator << (ostream &out, const BranchingSubdivisionSurface::Triangle &t)
 {
-  out << "[V=(" << t.vertices[0] << "," << t.vertices[1] << "," << t.vertices[2] << ")";
-  out << " N=(" << t.neighbors[0] << "," << t.neighbors[1] << "," << t.neighbors[2] << ")";
-  out << " NE=(" << t.nedges[0] << "," << t.nedges[1] << "," << t.nedges[2] << ")]";
+  // Vertices
+  out << "[V=(" << t.vertices[0] << "," << t.vertices[1] 
+    << "," << t.vertices[2] << ")";
+
+  // Neighbors
+  for(size_t i = 0; i < 3; i++)
+    {
+    out << " N[" << i << "]={";
+    for(size_t j = 0; j < t.n_nbr[i]; j++)
+      {
+      out << "(" << t.nbr[t.i_nbr[i] + j];
+      out << "," << t.nedges[t.i_nbr[i] + j];
+      out << ")";
+      }
+    cout << "} ";
+    }
 }
 
 #endif
