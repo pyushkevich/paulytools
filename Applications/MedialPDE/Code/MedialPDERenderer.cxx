@@ -192,17 +192,22 @@ PDESplineRenderer
   for(size_t i = 0; i < solver->GetNumberOfAtoms(); i++)
     {
     glBegin(GL_LINES);
+
+    // Draw the triangle normal
     if(mp[i].flagCrest)
       {
       if(mp[i].xGradR.magnitude() != 1.0)
         {
-        if(mp[i].xGradR.magnitude() < 1.0)
-          glColor3d(1, 0, 0);
+        double xAngle = dot_product(mp[i].xGradR.normalize(), mp[i].Xu.normalize());
+        if(xAngle < 0.0)
+          glColor3d(1+xAngle, 1+xAngle, 1);
         else
-          glColor3d(1, 1, 0);
+          glColor3d(1, 1-xAngle, 1-xAngle);
+        cout << i << " : " << xAngle << endl;
 
         glVertex3dv(mp[i].X.data_block());
-        glVertex3dv((mp[i].X - mp[i].xGradR).data_block());
+        glVertex3dv((mp[i].X - mp[i].xGradR.normalize()).data_block());
+        // glVertex3dv((mp[i].X + vnl_cross_3d(mp[i].Xu,mp[i].Xv)).data_block());
         }
       }
     glEnd();

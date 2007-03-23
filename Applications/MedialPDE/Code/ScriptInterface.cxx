@@ -698,6 +698,26 @@ void MedialPDE
       = xMedialModel->GetCoarseToFineMappingDescriptor();
     xMapping = new SubsetCoefficientMapping(ctfDesc->GetMask(p.xCTFSettings));
     }
+  else if(p.xMapping == OptimizationParameters::RADIUS_SUBSET)
+    {
+    // Create a coarse to fine mask for the radius
+    vnl_vector<size_t> mask = xMedialModel->GetRadialCoefficientMask();
+
+    // Create a mapping
+    xMapping = new SubsetCoefficientMapping(mask);
+    }
+  else if(p.xMapping == OptimizationParameters::POSITION_SUBSET)
+    {
+    // Create a coarse to fine mask for the radius
+    vnl_vector<size_t> mask = xMedialModel->GetSpatialCoefficientMask();
+
+    // Create a mapping
+    xMapping = new SubsetCoefficientMapping(mask);
+    }
+  else
+    {
+    throw ModelIOException("Unknown coefficient mapping specified");
+    }
 
   // Create the initial solution (all zeros)
   vnl_vector<double> xSolution(xMapping->GetNumberOfParameters(), 0.0);

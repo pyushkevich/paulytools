@@ -1870,11 +1870,12 @@ MedialOptimizationProblem
 void MedialOptimizationProblem::PrintReport(ostream &sout)
 {
   sout << "Optimization Summary: " << endl;
-  sout << "  energy value   :  " << xLastSolutionValue << endl; 
-  sout << "  evaluation cost: " << this->getEvaluationCost() << endl;
-  sout << "  solver time : " << xSolveTimer.Read() << endl;
-  sout << "  solver gradient time : " << xSolveGradTimer.Read() << endl;
-  sout << "  weights time : " << xWeightsTimer.Read() << endl;
+  sout << "  # variables           : " << xLastEvalPoint.size() << endl; 
+  sout << "  energy value          : " << xLastSolutionValue << endl; 
+  sout << "  evaluation cost       : " << this->getEvaluationCost() << endl;
+  sout << "  solver time           : " << xSolveTimer.Read() << endl;
+  sout << "  solver gradient time  : " << xSolveGradTimer.Read() << endl;
+  sout << "  weights time          : " << xWeightsTimer.Read() << endl;
   sout << "  weights gradient time : " << xWeightsGradTimer.Read() << endl;
   sout << "Per-Term Report:" << endl;
 

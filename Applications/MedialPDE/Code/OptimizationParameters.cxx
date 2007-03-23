@@ -12,6 +12,8 @@ OptimizationParameters
   xMappingRegMap.AddPair(COARSE_TO_FINE, "CoarseFine");
   xMappingRegMap.AddPair(IDENTITY, "Identity");
   xMappingRegMap.AddPair(PCA, "PCA");
+  xMappingRegMap.AddPair(RADIUS_SUBSET, "RadiusSubset");
+  xMappingRegMap.AddPair(POSITION_SUBSET, "PositionSubset");
 
   xImageMatchRegMap.AddPair(VOLUME, "VolumeOverlap");
   xImageMatchRegMap.AddPair(BOUNDARY, "BoundaryIntegral");

@@ -8,7 +8,7 @@ class CoarseToFineSettings;
 class OptimizationParameters {
 public:
   enum Optimizer{ CONJGRAD, GRADIENT, EVOLUTION };
-  enum Mapping { AFFINE, COARSE_TO_FINE, IDENTITY, PCA }; 
+  enum Mapping { AFFINE, COARSE_TO_FINE, IDENTITY, PCA, RADIUS_SUBSET, POSITION_SUBSET }; 
   enum ImageMatch { VOLUME, BOUNDARY };
   enum PenaltyTerm { 
     BOUNDARY_JACOBIAN = 0, MEDIAL_REGULARITY, ATOM_BADNESS, 
