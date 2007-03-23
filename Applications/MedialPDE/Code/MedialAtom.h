@@ -41,12 +41,12 @@ struct MedialAtom
   double aelt;
 
   // The normal vector and the Riemannian gradient of R on the surface
-  SMLVec3d N, xGradR, xGradPhi;
+  SMLVec3d N, xGradR; //, xGradPhi;
 
   // The Riemannian laplacian of R
   double xLapR;
 
-  // The badness of the atom; the term sqrt(1-xGradRMagSqr)
+  // The magnitude of gradR and the term sqrt(1-xGradRMagSqr)
   double xGradRMagSqr, xNormalFactor;
 
   // Whether this is a 'crest' atom, and whether it's valid at all
@@ -74,6 +74,7 @@ struct MedialAtom
     double x1_2R, Ru, Rv, x1_2F, Ru_R, Rv_R, Ru_2F, Rv_2F;
     double g1iRi, g2iRi;
     SMLVec3d N_2g, N_2nt, Xu_aelt, Xv_aelt;
+    double inv_mag_gradR;
   };
 
   /** 

@@ -77,6 +77,7 @@ SET(PDE_LIBS
   ${LAPACK_OR_MKL_LIBS}
   ${GSL_LIBRARY} ${GSL_CBLAS_LIBRARY}
   toms611
+  tensolve
   )
 
 # Create a common library

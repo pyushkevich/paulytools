@@ -170,6 +170,11 @@ private:
 
   // Pardiso solver
   UnsymmetricRealPARDISO xPardiso;
+
+  // LM optimizer callbacks
+  static void ComputeLMResidual(void *handle, int n, double *x, double *fx);
+  static void ComputeLMJacobian(void *handle, int n, double *x, SparseMat &J);
+
 };
 
 

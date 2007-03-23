@@ -8,6 +8,7 @@
 #include "ScriptInterface.h"
 #include "CoefficientMapping.h"
 #include <optima.h>
+#include "Registry.h"
 
 using medialpde::FloatImage;
 
@@ -130,7 +131,44 @@ private:
   double xEpsilon;
 };
 
+/** 
+ * Accumulator for statistics in energy terms
+ */
+class StatisticsAccumulator
+{
+public:
+  StatisticsAccumulator() { Reset(); }
 
+  void Reset()
+    { n = 0; xMin = xMax = xSum = xSumSq = 0.0; }
+
+  void Update(double x)
+    {
+    // Update Min and Max
+    if(n == 0)
+      { xMin = xMax = x; }
+    else
+      { xMin = std::min(xMin, x); xMax = std::max(xMax, x); }
+
+    // Update the rest
+    xSum += x;
+    xSumSq += x * x;
+    n++;
+    }
+
+  double GetMin() const { return xMin; }
+  double GetMax() const { return xMax; }
+  double GetMaxAbs() const { return std::max(fabs(xMin), fabs(xMax)); }
+  double GetMean() const { return xSum / n; }
+  double GetVariance() const { return (xSumSq - xSum * xSum / n) / (n-1); }
+  double GetStdDev() const { return sqrt(GetVariance()); }
+  double GetSum() const { return xSum; }
+  size_t GetCount() const { return n; }
+
+private:
+  size_t n;
+  double xMin, xMax, xSum, xSumSq;
+};
 
 class EnergyTerm 
 {
@@ -278,6 +316,7 @@ private:
 class BoundaryJacobianEnergyTerm : public EnergyTerm
 {
 public:
+
   // Compute the energy
   double ComputeEnergy(SolutionDataBase *data);
 
@@ -289,12 +328,14 @@ public:
     SolutionData *S, PartialDerivativeSolutionData *dS);
 
   // Get the worst Jacobian
-  double GetMinJacobian() { return xMinJacobian; }
+  double GetMinJacobian() { return saJacobian.GetMin(); }
   
 private:
   // Maximum and minimum values of the Jacobian encountered during
   // optimization
-  double xMinJacobian, xMaxJacobian, xAvgJacobian, xTotalPenalty;
+  StatisticsAccumulator saJacobian, saPenalty;
+
+  // double xMinJacobian, xMaxJacobian, xAvgJacobian, xTotalPenalty;
 
   // In addition to the total values, we keep track of per-quad values
   // computed in the course of calculating the penalty. This allows us
@@ -314,6 +355,9 @@ private:
   /** The derivative of the penalty function */
   double PenaltyFunctionDerivative(double x, double a, double b)
     { return exp(x - b) - a * exp (-a * x); }
+
+  // Constants used in the penalty computation
+  const static double xPenaltyA, xPenaltyB;
 };
 
 
@@ -368,6 +412,31 @@ private:
   double xMinBadness, xAvgBadness, xTotalPenalty;
   size_t nBadAtoms, nAtoms;
 };
+
+/**
+ * Term that penalizes |GradR| <> 1 on the boundary
+ */
+class BoundaryGradRPenaltyTerm : public EnergyTerm
+{
+public:
+  // Compute the penalty
+  double ComputeEnergy(SolutionDataBase *data);
+
+  // Describe the terms of the penalty
+  void PrintReport(ostream &sout);
+
+  // Compute the partial derivative
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
+
+private:
+  // Accumulators for display and statistics calculation
+  StatisticsAccumulator saGradR, saPenalty;
+
+  // Scaling factor used to derive the penalty (why?)
+  const static double xScale;
+};
+
 
 /**
  * This term is used to fit phi to an existing radius field. The fitting

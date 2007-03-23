@@ -1,0 +1,7 @@
+Grid.Model.Atom.SubdivisionLevel = 2
+Grid.Model.Coefficient.FileName = gr1a_gimpel_CN_snap_left_49pt_brute.obj
+Grid.Model.Coefficient.FileType = OBJ
+Grid.Model.SolverType = BruteForce
+Grid.Model.Coefficient.ConstantRadius.Inside = 1.0
+Grid.Model.Coefficient.ConstantRadius.Boundary = 0.8
+Grid.Type = LoopSubdivision

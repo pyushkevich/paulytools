@@ -305,3 +305,63 @@ ImmutableSparseArray<TVal>
   this->xColIndex = xColIndex;
   this->xSparseValues = data;
 }
+
+template<class TVal>
+void
+ImmutableSparseMatrix<TVal>
+::InitializeATA(Self &ATA, const Self &A)
+{
+  // Here we are going to cheat and use vnl matrices
+  vnl_sparse_matrix<TVal> T(A.nColumns, A.nColumns);
+
+  // Set the values of the sparse matrix. We only set the values in the upper triangle
+  for(size_t i = 0; i < A.nRows; i++)
+    {
+    // Set all the diagonal entries to 1
+    T(i, i) = 1;
+
+    for(size_t j1 = A.xRowIndex[i]; j1 < A.xRowIndex[i+1]; j1++)
+      {
+      for(size_t j2 = j1; j2 < A.xRowIndex[i+1]; j2++)
+        {
+        size_t p = A.xColIndex[j1];
+        size_t q = A.xColIndex[j2];
+        T(p, q) = 1;
+        }
+      }
+    }
+
+  // Create an immutable sparse matrix from this
+  ATA.SetFromVNL(T);
+}
+
+template<class TVal>
+void
+ImmutableSparseMatrix<TVal>
+::ComputeATA(Self &ATA, const Self &A)
+{
+  // Clear the values in the output matrix. 
+  ATA.Fill(0);
+
+  // Set the values of the sparse matrix. We only set the values in the upper triangle
+  for(size_t i = 0; i < A.nRows; i++)
+    {
+    // First-level loop
+    for(size_t j1 = A.xRowIndex[i]; j1 < A.xRowIndex[i+1]; j1++)
+      {
+      // The first column index
+      size_t p = A.xColIndex[j1];
+      size_t j2 = j1;
+
+      // Second-level loop
+      for(size_t z = ATA.xRowIndex[p]; z < ATA.xRowIndex[p+1]; z++)
+        {
+        if(ATA.xColIndex[z] == A.xColIndex[j2])
+          {
+          ATA.xSparseValues[z] += A.xSparseValues[j1] * A.xSparseValues[j2];
+          j2++;
+          }
+        }
+      }
+    }
+}

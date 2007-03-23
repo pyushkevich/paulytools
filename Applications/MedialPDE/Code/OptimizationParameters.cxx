@@ -17,6 +17,7 @@ OptimizationParameters
   xImageMatchRegMap.AddPair(BOUNDARY, "BoundaryIntegral");
 
   xPenaltyTermRegMap.AddPair(BOUNDARY_JACOBIAN, "BoundaryJacobianEnergyTerm");
+  xPenaltyTermRegMap.AddPair(BOUNDARY_GRAD_R, "BoundaryGradRPenaltyTerm");
   xPenaltyTermRegMap.AddPair(MEDIAL_REGULARITY, "MedialRegularityTerm");
   xPenaltyTermRegMap.AddPair(ATOM_BADNESS, "AtomBadnessTerm");
   xPenaltyTermRegMap.AddPair(RADIUS, "RadiusPenaltyTerm");
@@ -51,6 +52,7 @@ OptimizationParameters
 
   // Read the weights of the different terms in the optimization
   xTermWeights[BOUNDARY_JACOBIAN] = R[xPenaltyTermRegMap(BOUNDARY_JACOBIAN)][0.5];
+  xTermWeights[BOUNDARY_GRAD_R] = R[xPenaltyTermRegMap(BOUNDARY_GRAD_R)][0.0];
   xTermWeights[MEDIAL_REGULARITY] = R[xPenaltyTermRegMap(MEDIAL_REGULARITY)][1.0];
   xTermWeights[ATOM_BADNESS] = R[xPenaltyTermRegMap(ATOM_BADNESS)][0.01];
   xTermWeights[RADIUS] = R[xPenaltyTermRegMap(RADIUS)][0.1];

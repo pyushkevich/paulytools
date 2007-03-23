@@ -773,6 +773,7 @@ int TestDerivativesWithImage(const char *fnMPDE)
   vt.push_back(new MedialAnglesPenaltyTerm(model));
   vt.push_back(new MedialRegularityTerm(model));
   vt.push_back(new BoundaryJacobianEnergyTerm());
+  vt.push_back(new BoundaryGradRPenaltyTerm());
 
   // Create an array of masks
   vector<CoefficientMapping *> vm;
@@ -790,13 +791,13 @@ int TestDerivativesWithImage(const char *fnMPDE)
     "MedialAnglesPenaltyTerm",
     "MedialRegularityTerm",
     "BoundaryJacobianEnergyTerm", 
-  };
+    "BoundaryGradRPenaltyTerm" };
   char *nm[] = {
     "RadialOnlyCoefficientMapping",
     "IdentityCoefficientMapping",
     "AffineTransformCoefficientMapping" };
 
-  double stepsize[] = {0.1, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.1, 0.1};
+  double stepsize[] = {0.1, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
 
   // Loop over both options
   size_t i, j;

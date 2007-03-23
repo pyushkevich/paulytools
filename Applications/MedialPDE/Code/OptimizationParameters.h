@@ -10,7 +10,9 @@ public:
   enum Optimizer{ CONJGRAD, GRADIENT, EVOLUTION };
   enum Mapping { AFFINE, COARSE_TO_FINE, IDENTITY, PCA }; 
   enum ImageMatch { VOLUME, BOUNDARY };
-  enum PenaltyTerm { BOUNDARY_JACOBIAN = 0, MEDIAL_REGULARITY, ATOM_BADNESS, RADIUS, NTERMS };
+  enum PenaltyTerm { 
+    BOUNDARY_JACOBIAN = 0, MEDIAL_REGULARITY, ATOM_BADNESS, 
+    BOUNDARY_GRAD_R, RADIUS, NTERMS };
   enum CTFSettings { COSINE_BASIS_PDE, LOOP_SUBDIVISION_PDE, NONE };
 
   /** Optimizer type */

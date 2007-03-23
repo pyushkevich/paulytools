@@ -118,6 +118,10 @@ public:
   // Reset the matrix (clear all data, revert to initialized state)
   void Reset();
 
+  // Set all the values in the matrix to some value
+  void Fill(const TVal &value)
+    { for(size_t i = 0; i < nSparseEntries; i++) xSparseValues[i] = value; }
+
   // A copy operator that actually copies the data
   Self & operator = (const Self &src);
 
@@ -154,6 +158,14 @@ public:
 
   // Compute the matrix product c = A^t * b
   Vec MultiplyTransposeByVector(const Vec &b);
+
+  // This method initializes the matrix A^t A (it simply creates the 
+  // structure of the matrix for future fast computations)
+  static void InitializeATA(Self &ATA, const Self &A);
+
+  // This matrix computes the product ATA. The matrix ATA should be
+  // initialized before calling this method
+  static void ComputeATA(Self &ATA, const Self &A);
 
   // Print to the standard stream
   void PrintSelf(std::ostream &out) const;

@@ -504,11 +504,16 @@ inline double ComputeJacobian(const SMLVec3d &Xu, const SMLVec3d &Xv,
       dot_product(Xu,Xv) * dot_product(Xu,Xv) );
 }
 
+const double BoundaryJacobianEnergyTerm::xPenaltyA = 10;
+const double BoundaryJacobianEnergyTerm::xPenaltyB = 400;
+
 double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
 {
   // Place to store the Jacobian
-  xTotalPenalty = 0.0;
-  xMaxJacobian = 1.0, xMinJacobian = 1.0, xAvgJacobian = 0.0;
+  saJacobian.Reset();
+
+  // Reset the penalty accumulator
+  saPenalty.Reset();
 
   // Reset the TriangleEntry vector
   if(xTriangleEntries.size() != S->xAtomGrid->GetNumberOfTriangles())
@@ -541,26 +546,19 @@ double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
       // Compute the Jacobian
       eit->J[z] = dot_product(eit->NY[z], eit->NX) / eit->gX2;
 
-      // Store the smallest and largest Jacobian values
-      if(eit->J[z] < xMinJacobian) xMinJacobian = eit->J[z];
-      if(eit->J[z] > xMaxJacobian) xMaxJacobian = eit->J[z];
-
       // Add to the average Jacobian
-      xAvgJacobian += eit->J[z];
-
+      saJacobian.Update(eit->J[z]);
+      
       // Compute the penalty terms
       // return exp(-a * x) + exp(x - b); 
-      eit->PenA[z] = exp(-10 * eit->J[z]);
-      eit->PenB[z] = exp(eit->J[z] - 400);
-      xTotalPenalty += eit->PenA[z] + eit->PenB[z];
+      eit->PenA[z] = exp(-xPenaltyA * eit->J[z]);
+      eit->PenB[z] = exp(eit->J[z] - xPenaltyB);
+      saPenalty.Update(eit->PenA[z] + eit->PenB[z]);
       }
     }
 
-  // Scale the average jacobian
-  xAvgJacobian /= S->xAtomGrid->GetNumberOfBoundaryTriangles();
-
   // Return the total value
-  return xTotalPenalty;
+  return saPenalty.GetSum();
 }
 
 double BoundaryJacobianEnergyTerm
@@ -607,7 +605,7 @@ double BoundaryJacobianEnergyTerm
 
       // Compute the penalty terms
       dTotalPenalty += 
-        (-10 * eit->PenA[z] + eit->PenB[z]) * dJ;
+        (-xPenaltyA * eit->PenA[z] + eit->PenB[z]) * dJ;
       }
     }
 
@@ -621,10 +619,10 @@ BoundaryJacobianEnergyTerm
 ::PrintReport(ostream &sout)
 {
   sout << "  Boundary Jacobian Term " << endl;
-  sout << "    total match  : " << xTotalPenalty << endl;
-  sout << "    min jacobian : " << xMinJacobian << endl;  
-  sout << "    max jacobian : " << xMaxJacobian << endl;  
-  sout << "    avg jacobian : " << xAvgJacobian << endl;  
+  sout << "    total penalty  : " << saPenalty.GetSum() << endl;
+  sout << "    min jacobian   : " << saJacobian.GetMin() << endl;  
+  sout << "    max jacobian   : " << saJacobian.GetMax() << endl;  
+  sout << "    avg jacobian   : " << saJacobian.GetMean() << endl;  
 }
 
 /* 
@@ -858,6 +856,78 @@ void CrestLaplacianEnergyTerm::PrintReport(ostream &sout)
 }
 
 /*********************************************************************************
+ * BoundaryGradRPenaltyTerm
+ ********************************************************************************/
+const double BoundaryGradRPenaltyTerm::xScale = 10.0;
+
+double 
+BoundaryGradRPenaltyTerm
+::ComputeEnergy(SolutionDataBase *S)
+{
+  // Reset the stats arrays
+  saGradR.Reset();
+  saPenalty.Reset();
+  
+  // Iterate over all crest atoms
+  for(size_t i = 0; i < S->xAtomGrid->GetNumberOfAtoms(); i++)
+    {
+    if(S->xAtoms[i].flagCrest)
+      {
+      // Get the badness of the atom. At boundary atoms, the badness
+      // is a function of how far |gradR| is from zero. We can set the
+      // penalty to have the form alpha * (1 - |gradR|^2)^2
+      double devn = (1.0 - S->xAtoms[i].xGradRMagSqr);
+      double penalty = (xScale * devn * devn);
+
+      // Register the gradR
+      saGradR.Update(S->xAtoms[i].xGradRMagSqr);
+      saPenalty.Update(penalty); 
+      }
+    }
+
+  // Return the mean penalty
+  return saPenalty.GetMean();
+}  
+
+double 
+BoundaryGradRPenaltyTerm::
+ComputePartialDerivative(
+  SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  // Initialize the accumulators
+  double dTotalPenalty = 0.0;
+  
+  // Iterate over all crest atoms
+  size_t nAtoms = S->xAtomGrid->GetNumberOfAtoms();
+  for(size_t i = 0; i < nAtoms; i++)
+    {
+    if(S->xAtoms[i].flagCrest)
+      {
+      double devn = (1.0 - S->xAtoms[i].xGradRMagSqr);
+      double ddevn = - dS->xAtoms[i].xGradRMagSqr;
+      double d_penalty = 2 * xScale * devn * ddevn; 
+      dTotalPenalty += d_penalty;
+      }
+    }
+
+  // dTotalPenalty /= nAtoms;
+  return dTotalPenalty / saPenalty.GetCount();
+}
+
+void BoundaryGradRPenaltyTerm::PrintReport(ostream &sout)
+{
+  sout << "  Boundary |gradR|^2 Penalty: " << endl;
+  sout << "    number of atoms          : " << saGradR.GetCount() << endl; 
+  sout << "    range of |gradR|^2       : " <<
+    saGradR.GetMin() << " to " << saGradR.GetMax() << endl;
+  sout << "    mean (std) of |gradR|^2  : " <<
+    saGradR.GetMean() << " (" << saGradR.GetStdDev() << ")" << endl;
+  sout << "    total penalty            : " << saPenalty.GetMean() << endl;
+}
+
+
+
+/*********************************************************************************
  * Atom Badness Penalty term
  ********************************************************************************/
 double AtomBadnessTerm::ComputeEnergy(SolutionDataBase *S)
@@ -870,7 +940,7 @@ double AtomBadnessTerm::ComputeEnergy(SolutionDataBase *S)
   //   -  Boundary atom has |gradR| < 1 - eps2
 
   // Initialize the penalty array
-  size_t nAtoms = S->xAtomGrid->GetNumberOfAtoms();
+  nAtoms = S->xAtomGrid->GetNumberOfAtoms();
   xPenalty.set_size(nAtoms);
   
   // Initialize the accumulators
@@ -889,10 +959,21 @@ double AtomBadnessTerm::ComputeEnergy(SolutionDataBase *S)
       xTotalPenalty += xPenalty[i];
       xMinBadness = std::min(badness, xMinBadness);
       }
+
+    // Penalize boundary atoms where gradR is far from 1
+    else
+      {
+      // Get the badmess of the atom. At boundary atoms, the badness
+      // is a function of how far |gradR| is from zero. We can set the
+      // penalty to have the form alpha * (1 - |gradR|^2)^2
+      double devn = (1.0 - S->xAtoms[i].xGradRMagSqr);
+      xPenalty[i] = (10 * devn * devn);
+      xTotalPenalty += xPenalty[i];
+      }
     }
 
   // Finish up
-  xTotalPenalty /= nAtoms;
+  // xTotalPenalty /= nAtoms;
 
   // Return the total penalty
   return xTotalPenalty;
@@ -905,7 +986,7 @@ double AtomBadnessTerm::ComputePartialDerivative(
   double dTotalPenalty = 0.0;
   
   // Iterate over all crest atoms
-  size_t nAtoms = S->xAtomGrid->GetNumberOfAtoms();
+  nAtoms = S->xAtomGrid->GetNumberOfAtoms();
   for(size_t i = 0; i < nAtoms; i++)
     {
     if(!S->xAtoms[i].flagCrest)
@@ -914,10 +995,16 @@ double AtomBadnessTerm::ComputePartialDerivative(
       double d_penalty = xPenalty[i] * (-100 * d_badness);
       dTotalPenalty += d_penalty;
       }
+    else
+      {
+      double devn = (1.0 - S->xAtoms[i].xGradRMagSqr);
+      double ddevn = - dS->xAtoms[i].xGradRMagSqr;
+      double d_penalty = 2 * 10 * devn * ddevn; 
+      dTotalPenalty += d_penalty;
+      }
     }
 
-    dTotalPenalty /= nAtoms;
-
+  // dTotalPenalty /= nAtoms;
   return dTotalPenalty;
 }
 
@@ -1768,7 +1855,7 @@ MedialOptimizationProblem
 
   // cout << " [[" << (clock() - t00) / CLOCKS_PER_SEC << " s]] " << flush;
 
-  cout << endl;
+  // cout << endl;
 
   // Store the information about the gradient
   xLastGradPoint = vnl_vector<double>(xEvalPoint, nCoeff);

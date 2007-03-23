@@ -192,8 +192,8 @@ SubdivisionMedialModelIO
   vtkPolyData *poly = ReadMesh(fnMesh, sMeshType);
 
   // Read the number of subdivisions to apply to the data
-  size_t nSubs = R["Grid.Model.Atom.SubdivisionLevel"][0];
-  if(nSubs == 0)
+  int nSubs = R["Grid.Model.Atom.SubdivisionLevel"][-1];
+  if(nSubs == -1)
     throw ModelIOException("Missing SubdivisionLevel in model file");
 
   // Generate a mesh level from the model
@@ -208,16 +208,23 @@ SubdivisionMedialModelIO
   // Get the texture arrays
   vtkDataArray *uv = poly->GetPointData()->GetTCoords();
 
-  // Make sure arrays exist
-  if(!uv) throw ModelIOException("Missing UV arrays in VTK/OBJ mesh");
-
   // Read the coordinates and u,v from the mesh
   for(i = 0; i < mesh.nVertices; i++)
     {
     for(size_t d = 0; d < 3; d++)
       C[i * 4 + d] = poly->GetPoint(i)[d];
-    u[i] = uv->GetTuple(i)[0];
-    v[i] = uv->GetTuple(i)[1];
+
+    // If the u, v arrays are not present, we use x, y coordinates as u, v
+    if(uv)
+      {
+      u[i] = uv->GetTuple(i)[0];
+      v[i] = uv->GetTuple(i)[1];
+      }
+    else
+      {
+      u[i] = C[i * 4];
+      v[i] = C[i * 4 + 1];
+      }
     }
 
   // Get the model subtype
@@ -233,22 +240,54 @@ SubdivisionMedialModelIO
     // Copy to the coefficient vector
     for(i = 0; i < mesh.nVertices; i++)
       C[4 * i + 3] = daRho ? daRho->GetTuple1(i) : xDefaultRho;
-    
+
     // Create the medial model
     PDESubdivisionMedialModel *smm = new PDESubdivisionMedialModel();
     smm->SetMesh(mesh, C, u, v, nSubs, 0);
-    smm->ComputeAtoms();
+
+    // Read the Phi vector (solution)
+    bool got_phi = R["Grid.PhiAvailable"][false];
+    if(got_phi)
+      {
+      Registry &F = R.Folder("Grid.Phi");
+      vnl_vector<double> phi(smm->GetNumberOfAtoms(), 0.0);
+
+      for(i = 0; i < phi.size(); i++)
+        phi[i] = F.Entry(F.Key("Element[%d]",i))[0.0];
+
+      smm->ComputeAtoms(phi.data_block());
+      }
+    else
+      {
+      smm->ComputeAtoms();
+      }
+
+    // Return the model
     return smm;
   }
   else if(subtype == "BruteForce")
   {
     // Get the default radius value (really?)
-    double xDefaultRad = R["Grid.Model.Coefficient.ConstantRadius"][1.0];
+    double xDefaultInsideRad = R["Grid.Model.Coefficient.ConstantRadius.Inside"][1.0];
+    double xDefaultBndRad = R["Grid.Model.Coefficient.ConstantRadius.Boundary"][0.5];
     vtkDataArray *daRad = poly->GetPointData()->GetScalars("Radius");
 
     // Copy to the coefficient vector
     for(i = 0; i < mesh.nVertices; i++)
-      C[4 * i + 3] = daRad ? daRad->GetTuple1(i) : xDefaultRad;
+      {
+      if(daRad)
+        {
+        C[4 * i + 3] = daRad->GetTuple1(i);
+        }
+      else 
+        {
+        EdgeWalkAroundVertex walk(&mesh, i);
+        if(walk.IsOpen())
+          C[4 * i + 3] = xDefaultBndRad;
+        else
+          C[4 * i + 3] = xDefaultInsideRad;
+        }
+      }
 
     // Create the medial model
     BruteForceSubdivisionMedialModel *smm = new BruteForceSubdivisionMedialModel();
@@ -273,18 +312,18 @@ SubdivisionMedialModelIO
   // extension. So basically, we need to strip the extension on the file
   std::string fnreg(file);
   std::string fnbase = itksys::SystemTools::GetFilenameWithoutLastExtension(fnreg);
-  std::string fnmesh = fnbase + ".vtk";
+  std::string fnpath = itksys::SystemTools::GetFilenamePath(fnreg);
+  std::string fnmesh = fnpath + "/" + fnbase + ".vtk";
 
   // Create a registry to save the data
   Registry R;
 
   // Save the model file information
-  R["Grid.Type"] << "LoopSubdivision";
   R["Grid.Model.Coefficient.FileName"] << fnmesh;
   R["Grid.Model.Coefficient.FileType"] << "VTK";
 
-  // Save the subdivision level info
-  R["Grid.Model.Atom.SubdivisionLevel"] << model->GetSubdivisionLevel();
+  // Write the model-specific registry info
+  model->WriteToRegistry(R);
 
   // Save the registry
   R.WriteToFile(file);
@@ -318,9 +357,6 @@ SubdivisionMedialModelIO
 
   if(mpde)
   {
-    // Set the model subtype
-    R["Grid.Model.SolverType"] << "PDE";
-
     // Allocate the array for rho
     xAux->SetName("Rho");
 
@@ -333,9 +369,6 @@ SubdivisionMedialModelIO
   }
   else if(mbf)
   {
-    // Set the model subtype
-    R["Grid.Model.SolverType"] << "BruteForce";
-
     // Allocate the array for rho
     xAux->SetName("Radius");
 

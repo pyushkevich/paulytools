@@ -160,6 +160,8 @@ int TestBranchingSubdivisionSurface(const char *objMesh)
  */
 int TestSparseMatrix()
 {
+  int rc = 0;
+
   // Create a sparse matrix with random elements
   size_t i, j, k, N1 = 5, N2 = 4, N3 = 6;
   typedef vnl_sparse_matrix<int> Mutable;
@@ -195,16 +197,55 @@ int TestSparseMatrix()
   cout << "D is " << DI << endl;
 
   // Compare CI and DI
-  return CI == DI ? 0 : 1;
+  int rcMult = (CI == DI) ? 0 : 1;
+  if(rcMult)
+    { cout << "Sparse Matrix Multiplication Error" << endl; }
+
+  // Create a matrix for sparse ATA calculation
+  size_t M1 = 6, M2 = 7;
+  Mutable AA_sparse(M1, M2);
+  vnl_matrix<int> AA(M1, M2);
+  for(i = 0; i < M1; i++) for(j = 0; j < M2; j++)
+    if(rnd.lrand32(0, 4) == 0)
+      AA_sparse(i,j) = AA(i,j) = rnd.lrand32(0,18) - 9;
+
+  // Try the computation for ATA
+  Immutable AAA;
+  AAA.SetFromVNL(AA_sparse);
+
+  Immutable ATA1;
+  Immutable::InitializeATA(ATA1, AAA);
+  Immutable::ComputeATA(ATA1, AAA);
+
+  // Compute ATA directly
+  vnl_matrix<int> ATA2 = AA.transpose() * AA;
+
+  // Print the results
+  cout << "ATA1 is " << endl << ATA1 << endl;
+  cout << "ATA2 is " << endl << ATA2 << endl;
+
+  // Check for correctness
+  bool flagATACorrect = true;
+  for(size_t i = 0; i < ATA1.GetNumberOfRows(); i++)
+    {
+    for(Immutable::RowIterator r = ATA1.Row(i); !r.IsAtEnd(); ++r)
+      {
+      if(ATA2(i, r.Column()) != r.Value())
+        flagATACorrect = false;
+      }
+    }
+
+  int rcATA = (flagATACorrect) ? 0 : 1;
+  if(rcATA)
+    { cout << "Sparse Matrix ATA Error" << endl; }
+
+  return rcMult + rcATA;
 }
 
 int TestSubdivisionPDE(const char *objMesh)
 {
   // Read the input mesh
-  vtkOBJReader *reader = vtkOBJReader::New();
-  reader->SetFileName(objMesh);
-  reader->Update();
-  vtkPolyData *poly = reader->GetOutput();
+  vtkPolyData *poly = ReadVTKMesh(objMesh);
 
   // Create a subdivision surface
   SubdivisionSurface::MeshLevel mesh;
@@ -219,16 +260,27 @@ int TestSubdivisionPDE(const char *objMesh)
   // Get the texture arrays
   vtkDataArray *uv = poly->GetPointData()->GetTCoords();
 
-  // Make sure arrays exist
-  if(!uv) throw ModelIOException("Missing UV arrays in VTK/OBJ mesh");
-
   // Read the coordinates and u,v from the mesh
   for(size_t i = 0; i < mesh.nVertices; i++)
     {
+    // Set the coordinate value
     for(size_t d = 0; d < 3; d++)
       xCtl[i * 4 + d] = poly->GetPoint(i)[d];
-    u[i] = uv->GetTuple(i)[0];
-    v[i] = uv->GetTuple(i)[1];
+
+    // Set the rho value
+    xCtl[i * 4 + 3] = -0.25;
+
+    // Set U and V
+    if(uv)
+      {
+      u[i] = uv->GetTuple(i)[0];
+      v[i] = uv->GetTuple(i)[1];
+      }
+    else
+      {
+      u[i] = xCtl[i * 4];
+      v[i] = xCtl[i * 4 + 1];
+      }
     }
 
   // Create the medial model

@@ -54,22 +54,6 @@ public:
    */
   void WriteToRegistry(Registry &folder);
 
-  /** Get the vector of phi-values for this model (equal to xAtoms.F) */
-  Vec GetPhi() const 
-    { 
-    Vec phi(this->GetNumberOfAtoms());
-    for(size_t i = 0; i < phi.size(); i++)
-      phi[i] = xAtoms[i].F;
-    return phi;
-    }
-
-  /** Set the vector of phi-values for the model */
-  void SetPhi(const Vec &phi)
-    {
-    for(size_t i = 0; i < phi.size(); i++)
-      xAtoms[i].F = phi[i];
-    }
-
 private:
   // Vector typedef
   typedef vnl_vector<double> Vec;

@@ -85,6 +85,24 @@ SubdivisionMedialModel
   xCTFDescriptor = SubdivisionSurfaceCoarseToFineMappingDescriptor(mlCoefficient.nVertices);
 }
 
+void
+SubdivisionMedialModel::
+WriteToRegistry(Registry &R)
+{
+  // Mesh type
+  R["Grid.Type"] << "LoopSubdivision";
+
+  // Save the subdivision level info
+  R["Grid.Model.Atom.SubdivisionLevel"] << GetSubdivisionLevel();
+
+}
+
+void
+SubdivisionMedialModel::
+ReadFromRegistry(Registry &R)
+{
+}
+
 const CoarseToFineMappingDescriptor *
 SubdivisionMedialModel
 ::GetCoarseToFineMappingDescriptor() const

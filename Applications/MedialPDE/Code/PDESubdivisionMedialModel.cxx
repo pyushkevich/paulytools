@@ -93,3 +93,25 @@ PDESubdivisionMedialModel
 {
   xSolver.ComputeGradient(dAtoms);
 }
+
+
+void
+PDESubdivisionMedialModel::
+WriteToRegistry(Registry &R)
+{
+  SubdivisionMedialModel::WriteToRegistry(R);
+
+  // Set the model subtype
+  R["Grid.Model.SolverType"] << "PDE";
+
+  // Save the values of R computed at the atom level
+  Vec phi = GetPhi();
+  R["Grid.PhiAvailable"] << true;
+  R.Folder("Grid.Phi").PutArray(phi.size(), phi.data_block());
+}
+
+void
+PDESubdivisionMedialModel::
+ReadFromRegistry(Registry &R)
+{
+}

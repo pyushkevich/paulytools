@@ -451,7 +451,7 @@ void MedialPDE::ConjugateGradientOptimizationTOMS(
   deflt_(xAlg, iv, liv, lv, v);
   iv[mxiter_ - 1] = nSteps;
   iv[mxfcal_ - 1] = 10 * nSteps;
-  iv[19 - 1] = 5;
+  iv[19 - 1] = 1;
   iv[22 - 1] = 0;
   iv[24 - 1] = 0;
 
@@ -718,6 +718,7 @@ void MedialPDE
   // Create the penalty terms
   BoundaryJacobianEnergyTerm xTermJacobian;
   AtomBadnessTerm xTermBadness;
+  BoundaryGradRPenaltyTerm xTermGradR;
   MedialRegularityTerm xTermRegularize(xMedialModel);
   MedialBendingEnergyTerm xTermBending(xMedialModel);
   MedialAnglesPenaltyTerm xTermAngles(xMedialModel);
@@ -738,6 +739,11 @@ void MedialPDE
     if(p.xTermWeights[OptimizationParameters::ATOM_BADNESS] > 0.0)
       xProblem.AddEnergyTerm(
         &xTermBadness, p.xTermWeights[OptimizationParameters::ATOM_BADNESS]);
+
+    // Add the atom badness term
+    if(p.xTermWeights[OptimizationParameters::BOUNDARY_GRAD_R] > 0.0)
+      xProblem.AddEnergyTerm(
+        &xTermGradR, p.xTermWeights[OptimizationParameters::BOUNDARY_GRAD_R]);
 
     // Add the regularization term
     if(p.xTermWeights[OptimizationParameters::MEDIAL_REGULARITY] > 0.0)
@@ -1346,7 +1352,7 @@ void MedialPDE::ReleasePCACoefficientMask(IMedialCoefficientMask *xMask)
 void SubdivisionMPDE::SubdivideMeshes(size_t iCoeffSub, size_t iAtomSub)
 {
   // Get the subdivision surface medial model that is currently available
-  PDESubdivisionMedialModel *smm = dynamic_cast<PDESubdivisionMedialModel *>(xMedialModel);
+  SubdivisionMedialModel *smm = dynamic_cast<SubdivisionMedialModel *>(xMedialModel);
   if(!smm)
     throw MedialModelException(
       "SubdivisionMPDE given a cmrep not based on subdivision surfaces");
@@ -1372,10 +1378,12 @@ void SubdivisionMPDE::SubdivideMeshes(size_t iCoeffSub, size_t iAtomSub)
       xCoeffOld.data_block(), xCoeffNew.data_block(), 4, mlCoeffNew);
 
     // Interpolate u and v arrays
+    uCoeffNew.set_size(mlCoeffNew.nVertices);
+    vCoeffNew.set_size(mlCoeffNew.nVertices);
     SubdivisionSurface::ApplySubdivision(
-      uCoeffOld.data_block(), uCoeffNew.data_block(), 4, mlCoeffNew);
+      uCoeffOld.data_block(), uCoeffNew.data_block(), 1, mlCoeffNew);
     SubdivisionSurface::ApplySubdivision(
-      vCoeffOld.data_block(), vCoeffNew.data_block(), 4, mlCoeffNew);
+      vCoeffOld.data_block(), vCoeffNew.data_block(), 1, mlCoeffNew);
 
     // Set the subdivided mesh at the root
     mlCoeffNew.SetAsRoot();
@@ -1390,7 +1398,11 @@ void SubdivisionMPDE::SubdivideMeshes(size_t iCoeffSub, size_t iAtomSub)
     }
 
   // Create a new mesh where the subdivided data will be stored
-  PDESubdivisionMedialModel *smmNew = new PDESubdivisionMedialModel();
+  SubdivisionMedialModel *smmNew = NULL;
+  if(dynamic_cast<PDESubdivisionMedialModel *>(smm))
+    smmNew = new PDESubdivisionMedialModel();
+  else if (dynamic_cast<BruteForceSubdivisionMedialModel *>(smm))
+    smmNew = new BruteForceSubdivisionMedialModel();
 
   // Set the mesh topology for the new mesh
   smmNew->SetMesh(

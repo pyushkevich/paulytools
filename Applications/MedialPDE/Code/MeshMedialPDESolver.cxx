@@ -9,6 +9,159 @@
 
 using namespace std;
 
+void tensolve_mpde_solve(MeshMedialPDESolver *solver, double *x);
+
+double levenberg_marquardt(
+  void *handle,
+  int n,
+  double *x_init,
+  double *f_init,
+  ImmutableSparseMatrix<double> &J,
+  void (*fnResidual)(void *, int n, double *x, double *fx),
+  void (*fnJacobian)(void *, int n, double *x, ImmutableSparseMatrix<double> &J),
+  double *x_out,
+  int n_iter = 100,
+  double eps1 = 1.0e-8,
+  double eps2 = 1.0e-8,
+  double tau = 1.0e-3)
+{
+  // Typedefs 
+  typedef vnl_vector<double> Vec;
+  typedef ImmutableSparseMatrix<double> SMat;
+  
+  // Initial solution and updating solution
+  Vec x(x_init, n);
+
+  // Function value vector
+  Vec fx(f_init, n);
+
+  // Squared norm of fx
+  double normsq_fx = fx.squared_magnitude();
+
+  // Initial parameters
+  size_t i, j, k = 0;
+  double nu = 2;
+
+  // Initialize and compute the matrix A
+  SMat A;
+  SMat::InitializeATA(A, J);
+  SMat::ComputeATA(A, J);
+
+  // We also need a pair of offset row and column arrays for calling pardiso
+  vnl_vector<int> xPardisoRowIndex(n + 1);
+  vnl_vector<int> xPardisoColIndex(A.GetNumberOfSparseValues());
+  for(i = 0; i < xPardisoRowIndex.size(); i++)
+    xPardisoRowIndex[i] = 1 + A.GetRowIndex()[i];
+  for(i = 0; i < xPardisoColIndex.size(); i++)
+    xPardisoColIndex[i] = 1 + A.GetColIndex()[i];
+
+  // Initialize the PARDISO interface
+  SymmetricPositiveDefiniteRealPARDISO pardiso;
+  pardiso.SymbolicFactorization(
+    n, xPardisoRowIndex.data_block(), xPardisoColIndex.data_block(), A.GetSparseData());
+
+  // Compute the vector g
+  Vec minus_g = -J.MultiplyTransposeByVector(fx);
+
+  // Vector representing the LM step
+  Vec h(n, 0.0);
+
+  // Set found to false
+  bool found = false;
+
+  // Set mu
+  double maxA = 0;
+  for(i = 0; i < A.GetNumberOfSparseValues(); i++)
+    if(maxA < A.GetSparseData()[i])
+      maxA = A.GetSparseData()[i];
+  double mu = tau * maxA;
+
+  // Iterate
+  while(!found && k++ < n_iter)
+    {
+    // Let A = J' * J + mu I
+    for(i = 0; i < n; i++)
+      A.GetSparseData()[A.GetRowIndex()[i]] += mu;
+   
+    // Solve the linear system (J' * J + mu I) x = -g
+    pardiso.NumericFactorization(A.GetSparseData());
+    pardiso.Solve(minus_g.data_block(), h.data_block());
+
+    // Compute the norm of x and h
+    double norm_h = h.magnitude();
+    double norm_x = x.magnitude();
+
+    // Report the solution
+    /*
+    printf(
+      "   -> LM Iter: %3d    F = %8.4e    fmax = %8.4e    mu = %8.4e    "
+      "|h| = %8.4e    |x| = %8.4e\n",
+      k, normsq_fx / 2, fx.inf_norm(), mu, norm_h, norm_x); 
+    */
+    cout << "." << flush;
+   
+
+    // Check for convergence
+    if(norm_h <= eps2 * (norm_x + eps2)) found = true;
+    else
+      {
+      // Update the x vector
+      Vec xnew = x + h;
+
+      // Compute the new function value
+      Vec fxnew(n, 0.0); 
+      fnResidual(handle, n, xnew.data_block(), fxnew.data_block());
+
+      // Compute J . h + fx
+      Vec q = fx + J.MultiplyByVector(h);
+      
+      // Compute rho
+      double normsq_fxnew = fxnew.squared_magnitude();
+      double normsq_q = q.squared_magnitude();
+      double rho = (normsq_fx - normsq_fxnew) / (normsq_fx - normsq_q);
+
+      // Step update (or not)
+      if(rho > 0)
+        {
+        // Accept the new step
+        x = xnew;
+        fx = fxnew;
+        normsq_fx = normsq_fxnew;
+
+        // Recompute the Jacobian
+        fnJacobian(handle, n, x.data_block(), J);
+
+        // Recompute A
+        SMat::ComputeATA(A, J);
+
+        // Recompute g
+        minus_g = -J.MultiplyTransposeByVector(fx);
+
+        // Get the infinity norm of g
+        double norminf_g = minus_g.inf_norm();
+        found = (norminf_g <= eps1);
+
+        // Recompute mu
+        double tmp = 2.0 * rho - 1.0;
+        mu *= std::max(1.0 / 3.0, 1.0 - tmp * tmp * tmp);
+        nu = 2;
+        }
+      else
+        {
+        mu *= nu;
+        nu *= 2.0;
+        }
+      } // If convergence
+    } // iteration loop
+
+  printf("* %8.4e\n", normsq_fx / 2);
+
+  // Copy the solution to x out
+  x.copy_out(x_out);
+
+  return normsq_fx / 2;
+}
+
 #define SE(x) if(x != NULL) {delete x; x = NULL; }
 
 template <class T>
@@ -17,6 +170,20 @@ void reset_ptr(T* &x)
   if(x != NULL)
     { delete x; x = NULL; }
 }
+
+/* 
+void
+MeshMedialPDESolver
+::LMSolve()
+{
+  // Solves the equation using LM method
+  int k = 0;
+  double nu = 2;
+
+  // The initial solution
+  vnl_vector<double> x0 = xSoln;
+}
+*/
 
 void 
 MeshMedialPDESolver
@@ -288,9 +455,9 @@ MeshMedialPDESolver
     MedialAtom &a = xAtoms[i];
 
     // Clear the tangent for this vertex
-    a.Xu = xLoopScheme.TangentX(0, i, xAtoms);
-    a.Xv = xLoopScheme.TangentX(1, i, xAtoms);
-
+    a.Xu = xLoopScheme.Xu(i, xAtoms);
+    a.Xv = xLoopScheme.Xv(i, xAtoms);
+    
     // Set the one get of the geometry descriptor
     a.G.SetOneJet(a.X.data_block(), a.Xu.data_block(), a.Xv.data_block());
 
@@ -571,11 +738,17 @@ MeshMedialPDESolver
 }
 */
 
+/*
+ NEWTON METHOD
+
+
 void
 MeshMedialPDESolver
 ::SolveEquation(double *xInitSoln, bool flagGradient)
 {
   size_t i;
+
+  cout << "MeshMedialPDESolver::SolveEquation()" << endl;
 
   // Compute the mesh geometry
   ComputeMeshGeometry(flagGradient);
@@ -585,6 +758,7 @@ MeshMedialPDESolver
   vnl_vector<double> xSoln(topology->nVertices);
   for(i = 0; i < topology->nVertices; i++)
     xSoln[i] = xInitSoln == NULL ? xAtoms[i].F : xInitSoln[i];
+  vnl_vector<double> xStartingSoln = xSoln;
 
   // Flag indicating that Newton's method converged (without tricks)
   bool flagConverge = false;
@@ -597,6 +771,9 @@ MeshMedialPDESolver
 
     // Now, fill in the right hand side 
     double xStartingRHS = FillNewtonRHS(xSoln.data_block());
+
+    printf("Iteration: %3d\t Max RHS: %g\t Max PHI: %g\n", 
+      i, xRHS.inf_norm(), xSoln.inf_norm());
 
     // If the right hand side is close enough to zero, we can exit
     if(xRHS.inf_norm() < 1.0e-10) 
@@ -620,16 +797,36 @@ MeshMedialPDESolver
     // Add epsilon to the current guess
     xSoln += xEpsilon;
     }
-
-  // If the iteration failed to converge, we may need to backtrack
+  
+  // If the system fails to converge, use the SVD-based method, which works
+  // with ill-conditioned Jacobians
   if(!flagConverge)
     {
+    // Revert to the starting point
+    xSoln = xStartingSoln;
+
+    // Do a loop
+    for(i = 0; i < 20; i++)
+      {
+      // Compute the Jacobian matrix and the right hand side
+      FillNewtonMatrix(xSoln.data_block(), false);
+
+      // Now, fill in the right hand side 
+      FillNewtonRHS(xSoln.data_block());
+
+      // Compute the SVD of the Jacobian matrix
+
+      }
+
+
+
     cout << "{Conv. Fail. " << xRHS.inf_norm() << "}" << endl;
+
     throw MedialModelException("Convergence Failure");
     }
 
   // If Newton fails to converge revert to gradient descent
-  /*
+#ifdef GARBAGE  
   if(xPostSolveRHS > 1e-10) 
     {
     cout << "REVERTING TO GRADIENT DESCENT" << endl;
@@ -666,11 +863,84 @@ MeshMedialPDESolver
     // Get the best solution
     xSoln.copy_in(gsl_multimin_fdfminimizer_x(my_min)->data);
     }
-  */
+#endif GARBAGE
 
   // Compute the medial atoms
   ComputeMedialAtoms(xSoln.data_block());
 }
+
+*/
+
+void
+MeshMedialPDESolver
+::SolveEquation(double *xInitSoln, bool flagGradient)
+{
+  size_t i;
+
+  // cout << "MeshMedialPDESolver::SolveEquation()" << endl;
+
+  // Compute the mesh geometry
+  ComputeMeshGeometry(flagGradient);
+
+  // Set the solution to the current values of phi (or to the initial solution
+  // passed in to the method)
+  vnl_vector<double> xSoln(topology->nVertices);
+  for(i = 0; i < topology->nVertices; i++)
+    xSoln[i] = xInitSoln == NULL ? xAtoms[i].F : xInitSoln[i];
+  vnl_vector<double> xStartingSoln = xSoln;
+
+  // Initialize the Jacobian and the function value
+  FillNewtonMatrix(xSoln.data_block(), true);
+  FillNewtonRHS(xSoln.data_block());
+  Vec fx = -xRHS;
+
+  // Set up the LM optimization
+  double fval = levenberg_marquardt(
+    this,
+    xSoln.size(),
+    xSoln.data_block(),
+    fx.data_block(),
+    A,
+    &MeshMedialPDESolver::ComputeLMResidual,
+    &MeshMedialPDESolver::ComputeLMJacobian,
+    xSoln.data_block(),
+    600);
+
+  if(fval > 1.0e-8)
+    throw MedialModelException("Bad solution");
+
+  // Compute the medial atoms
+  ComputeMedialAtoms(xSoln.data_block());
+}
+
+void
+MeshMedialPDESolver
+::ComputeLMResidual(void *handle, int n, double *x, double *fx)
+{
+  // Get a pointer to the working object
+  MeshMedialPDESolver *self = reinterpret_cast<MeshMedialPDESolver *>(handle);
+
+  // Compute the right hand side
+  self->FillNewtonRHS(x);
+
+  // Return the residual
+  Vec vfx = -self->xRHS;
+  vfx.copy_out(fx);
+}
+
+void
+MeshMedialPDESolver
+::ComputeLMJacobian(void *handle, int n, double *x, SparseMat &J)
+{
+  // Compute the Jacobian
+  MeshMedialPDESolver *self = reinterpret_cast<MeshMedialPDESolver *>(handle);
+
+  // Compute the Jacobian
+  self->FillNewtonMatrix(x, false);
+
+  // Nothing else to do, J already points to the Jacobian
+}
+
 
 double
 MeshMedialPDESolver::gsl_f(const gsl_vector *x, void *params)
@@ -831,6 +1101,13 @@ MeshMedialPDESolver
   vnl_vector<double> rhs(topology->nVertices, 0.0);
   vnl_vector<double> soln(topology->nVertices, 0.0);
 
+  // We must initialize pardiso
+  xPardiso.SymbolicFactorization(
+    topology->nVertices, xPardisoRowIndex, xPardisoColIndex, A.GetSparseData());
+
+  // In the subsequent iterations, only do the numeric factorization and solve
+  xPardiso.NumericFactorization(A.GetSparseData());
+
   // Precompute common terms for atom derivatives
   MedialAtom::DerivativeTerms *dt = new MedialAtom::DerivativeTerms[topology->nVertices];
   for(i = 0; i < topology->nVertices; i++)
@@ -864,8 +1141,8 @@ MeshMedialPDESolver
       da.F = soln[i];
       da.Fu = xLoopScheme.GetPartialDerivative(0, i, soln.data_block());
       da.Fv = xLoopScheme.GetPartialDerivative(1, i, soln.data_block());
-      da.Xu = xLoopScheme.TangentX(0, i, dAtoms);
-      da.Xv = xLoopScheme.TangentX(1, i, dAtoms);
+      da.Xu = xLoopScheme.Xu(i, dAtoms);
+      da.Xv = xLoopScheme.Xv(i, dAtoms);
       da.Xuu = da.Xuv = da.Xvv = SMLVec3d(0.0); 
 
       // Compute the metric tensor derivatives of the atom
@@ -1052,3 +1329,184 @@ MeshMedialPDESolver
 
   return flagSuccess ? 0 : -1;
 }
+
+
+
+/**************************************************************************
+ * CODE FOR SOLVING THE PDE USING TENSOLVE METHOD
+ *************************************************************************/
+#ifdef GARBAGE
+
+extern "C" 
+{
+  void tsneci_(
+    int &maxm,int &maxn,int &maxp,double *x0,int &m,int &n,double *typx,double *typf,int &itnlim,
+    int &jacflg, double &gradtl, double &steptl, double &ftol,int &method,int &global,
+     double &stepmx, double &dlt,int &ipr,double *wrkunc,int &lunc,double *wrknem,int &lnem,
+    double *wrknen,int &lnen,int *wrkn,int &lin,
+    void (*tensolve_mpde_residual)(double *, double *, int &, int &),
+    void (*tensolve_mpde_jacobian)(double *, double *, int &, int &, int &),
+    int &msg, double *xp,double *fp,double *gp,int &termcd);
+
+};
+
+// A global variable pointing to the problem to be solved by the tensolve
+// algorithm
+MeshMedialPDESolver *tensolve_mpde_problem = NULL;
+
+// Method that computes the residual of the tensolve problem
+
+void tensolve_mpde_residual(
+  double *x,
+  double *f,
+  int &m,
+  int &n)
+{
+  cout << "." << flush;
+  // Get a handle to the current problem
+  MeshMedialPDESolver *mpde = tensolve_mpde_problem;
+
+  // Evaluate the solution at point x (x == phi)
+  double F = mpde->FillNewtonRHS(x);
+
+  // Copy the values into the vector f
+  for(size_t i = 0; i < m; i++)
+    f[i] = -mpde->xRHS[i];
+}
+
+// Method that computes the Jacobian of the tensolve problem
+void tensolve_mpde_jacobian(
+  double *x,
+  double *J,
+  int &maxm,
+  int &m,
+  int &n)
+{
+  cout << "JAC" << endl;
+  // Get a handle to the current problem
+  MeshMedialPDESolver *mpde = tensolve_mpde_problem;
+
+  // Evaluate the solution at point x (x == phi)
+  mpde->FillNewtonRHS(x);
+  mpde->FillNewtonMatrix(x, false);
+
+  // Initialize the Jacobian to zeros
+  for(size_t q = 0; q < m * n; q++)
+    J[q] = 0.0;
+
+  // Copy the values into the output Jacobian matrix
+  MeshMedialPDESolver::SparseMat &A = mpde->A;
+  for(size_t i = 0; i < A.GetNumberOfRows(); i++)
+    {
+    for(size_t j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
+      {
+      // Get the column number and the Jacobian value
+      size_t k = A.GetColIndex()[j];
+      double jval = A.GetSparseData()[j];
+
+      // Compute the Fortran index. Fortran arrays are column major. Than
+      // means, the index is the (column number) * (# rows) + (row number)
+      // The Jacobian is M x N (M is the number of equations, N unknowns),
+      // so the entry j must be inserted into row i, column k
+      size_t idx = k * maxm + i;
+
+      /*
+      vnl_vector<double> xx(x, n);
+      vnl_vector<double> x1 = xx, x2 = xx;
+      double eps = 1.0e-6;
+      x1[k] += eps; x2[k] -= eps;
+      mpde->FillNewtonRHS(x1.data_block());
+      double f1 = -mpde->xRHS[i];
+      mpde->FillNewtonRHS(x2.data_block());
+      double f2 = -mpde->xRHS[i];
+
+      double jfd = (f1 - f2) / (2 * eps);
+
+      
+      if(abs(jfd - jval) > eps)
+        printf("Jac[i][k] = %g\t, FDJ = %g\n", jval, jfd);
+      */
+
+      
+      
+
+      // Set the Jacobian value
+      J[idx] = jval;
+      }
+    }
+}
+
+// Method that executes the tensolve algorithm to solve the MPDE
+void tensolve_mpde_solve(MeshMedialPDESolver *solver, double *x)
+{
+  // Store the problem
+  tensolve_mpde_problem = solver;
+
+  // Initialize all the parameters of the tensolve call
+  int m = solver->A.GetNumberOfRows();
+  int n = solver->A.GetNumberOfColumns();
+  int maxm = m + n + 2;
+  int maxn = n + 2;
+  int maxp = (int)ceil(sqrt(n));
+  double *x0 = new double[n];
+  double *typx  = new double[n];
+  double *typf = new double[m];
+  int itnlim = 0;
+  int jacflg = 1;
+  double gradtl = -1;
+  double steptl = -1;
+  double ftol = -1;
+  int method = 1;
+  int global = 1;
+  double stepmx = -1;
+  double dlt = -1.0;
+  int ipr = 6;
+  int lunc = (int)(2 * ceil(sqrt(n)) + 4);
+  double *wrkunc = new double[lunc * maxp];
+  int lnem = (int)(n + 2 * ceil(sqrt(n))+11);
+  double *wrknem = new double[lnem * maxm];
+  int lnen = (int)(2 * ceil(sqrt(n)) + 9);
+  double *wrknen = new double[lnen * maxn];
+  int lin = 3;
+  int *iwrkn = new int[lin * maxn];
+  int msg = 0;
+  double *xp = new double[n];
+  double *fp = new double[m];
+  double *gp = new double[n];
+  int termcd = 0;
+
+  // Initialize the x0 vector and the scales vector
+  for(size_t i = 0; i < n; i++)
+    {
+    x0[i] = x[i];
+    typx[i] = 1.0;
+    }
+
+  for(size_t j = 0; j < m; j++)
+    {
+    typf[j] = 1.0;
+    }
+
+  // Call the TENSOLVE routine
+  tsneci_(maxm,maxn,maxp,x0,m,n,typx,typf,itnlim,
+     jacflg,gradtl,steptl,ftol,method,global,
+     stepmx,dlt,ipr,wrkunc,lunc,wrknem,lnem,
+     wrknen,lnen,iwrkn,lin,
+     &tensolve_mpde_residual,
+     &tensolve_mpde_jacobian,
+     msg, xp,fp,gp,termcd);
+
+  // Clear memory
+  delete wrkunc;
+  delete wrknem;
+  delete wrknen;
+  delete iwrkn;
+  delete xp;
+  delete fp;
+  delete gp;
+  delete x0;
+  delete typx;
+  delete typf;
+}
+
+#endif // GARBAGE

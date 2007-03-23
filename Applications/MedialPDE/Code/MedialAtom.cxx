@@ -20,37 +20,61 @@ bool MedialAtom::ComputeBoundaryAtoms(bool flagEdgeAtom)
   double (*G2)[2] = G.xContravariantTensor;
   double Cu = (Fu * G2[0][0] + Fv * G2[0][1]);
   double Cv = (Fu * G2[0][1] + Fv * G2[1][1]);
-  xGradPhi = Xu * Cu + Xv * Cv;
+  SMLVec3d xGradPhi = Xu * Cu + Xv * Cv;
 
   // Compute the radius of the atom
   R = sqrt(F);
 
-  // Compute the Riemannian gradients of Phi and R
+  // Compute the Riemannian gradient of R
   xGradR = 0.5 * xGradPhi / R;
+
+  // Compute the gradient magnitude of R
+  xGradRMagSqr = 0.25 * (Fu * Cu + Fv * Cv) / F;
 
   // Split depending on whether this is an end atom
   if(flagEdgeAtom)
     {
     // We are at a crest, valid atom
-    flagValid = true; flagCrest = true;
+    flagCrest = true;
 
     // There is a zero badness value
-    xGradRMagSqr = 1.0;
+    // xGradRMagSqr = 1.0;
     xNormalFactor = 0.0;
 
-    // Simpler geometry, save a square root!
-    xBnd[0].N = xBnd[1].N = -xGradR;
-    xBnd[0].X = xBnd[1].X = X - xGradR * R;
+    // Make grad-R have unit length
+    // xGradR = xGradPhi / xGradPhi.magnitude(); 
 
+    // If the magnitude of gradR is zero, we are in real trouble
+    if(xGradRMagSqr == 0.0)
+      {
+      flagValid = false;
+      xBnd[0].X = xBnd[1].X = X;
+      xBnd[0].N = -N;
+      xBnd[1].N = N;
+      }
+    else
+      {
+      flagValid = true;
+
+      // Use a different computation for the boundary atoms. This
+      // should be a correct computation if |gradR|==1 but it will
+      // different for brute force models where gradR may not be 1
+      // on the boundary
+      xBnd[0].N = xBnd[1].N = - xGradR / sqrt(xGradRMagSqr);
+      xBnd[0].X = xBnd[1].X = X + R * xBnd[0].N;
+      }
     }
   else
     {
     // Otherwise, we have a normal atom
     flagCrest = false;
 
+    // Compute the Riemannian gradient of R
+    xGradR = 0.5 * xGradPhi / R;
+
     // Compute the gradient magnitude of R
-    // xGradRMagSqr = 0.25 * (Fu * Cu + Fv * Cv) / F;
-    xGradRMagSqr = xGradR.squared_magnitude();
+    xGradRMagSqr = 0.25 * (Fu * Cu + Fv * Cv) / F;
+    // xGradRMagSqr = xGradR.squared_magnitude();
 
     // Check if this is greater than one - should never be very close either
     if(xGradRMagSqr > 1.0)
@@ -112,6 +136,9 @@ MedialAtom
 
   // Compute the plus-minus term
   dt.N_2nt = 0.5 * N / xNormalFactor;
+
+  // Compute the inverse magnitude of grad R
+  dt.inv_mag_gradR = (flagValid) ?  1.0 / xGradR.magnitude() : 0.0;
 }
 
 // Compute directional derivative of the contravariant tensor given the
@@ -175,6 +202,8 @@ MedialAtom::ComputeBoundaryAtomDerivatives(
   double P = H * dt.x1_2R;
   double Pu = Hu * dt.x1_2R - H * dt.Ru_2F;
   double Pv = Hv * dt.x1_2R - H * dt.Rv_2F;
+
+  dAtom.R = P; 
   
   // This is the derivative of the normal vector
   dAtom.N =  vnl_cross_3d(dt.Xu_aelt, Yv);
@@ -191,38 +220,65 @@ MedialAtom::ComputeBoundaryAtomDerivatives(
   vmuladd(dAtom.xGradR, Yu, dt.g1iRi);
   vmuladd(dAtom.xGradR, Yv, dt.g2iRi);
 
-  // Address the edge case first
-  if(flagCrest) 
-    {
-    // The normal term vanishes
-    dAtom.xBnd[0].N = dAtom.xBnd[1].N = - dAtom.xGradR;
-    dAtom.xBnd[1].X = dAtom.xBnd[0].X = 
-      Y + R * dAtom.xBnd[0].N + P * xBnd[0].N;
-    dAtom.xGradRMagSqr = 0.0;
-    dAtom.xNormalFactor = 0.0;
-    return;
-    }
-
   // Compute the derivative of grad R . grad R
   dAtom.xGradRMagSqr = z1iRi * dt.Ru + z2iRi * dt.Rv 
     + 2.0 * (dt.g1iRi * Pu + dt.g2iRi * Pv);
 
-  // Compute the plus-minus term
-  SMLVec3d dNormalTerm;
-  vmulset(dNormalTerm, dAtom.N, xNormalFactor);
-  vmuladd(dNormalTerm, dt.N_2nt, -dAtom.xGradRMagSqr);
-  
-  // Compute the boundary atom normals
-  dAtom.xBnd[0].N = dAtom.xBnd[1].N = - dAtom.xGradR;
-  dAtom.xBnd[0].N -= dNormalTerm;
-  dAtom.xBnd[1].N += dNormalTerm;
+  // Address the edge case first
+  if(flagCrest) 
+    {
+    dAtom.xNormalFactor = 0.0;
+    if(flagValid)
+      {
+      // Compute (gradR / |gradR|)'
+      vmulset(dAtom.xBnd[0].N, dAtom.xGradR, -dt.inv_mag_gradR);
+      vmuladd(dAtom.xBnd[0].N, xBnd[0].N, 
+        - dot_product(dAtom.xBnd[0].N, xBnd[0].N));
+      dAtom.xBnd[1].N = dAtom.xBnd[0].N;
 
-  // Compute the boundary atoms
-  dAtom.xBnd[0].X = dAtom.xBnd[1].X = Y;
-  vmuladd(dAtom.xBnd[0].X, dAtom.xBnd[0].N, R);
-  vmuladd(dAtom.xBnd[0].X, xBnd[0].N, P);
-  vmuladd(dAtom.xBnd[1].X, dAtom.xBnd[1].N, R);
-  vmuladd(dAtom.xBnd[1].X, xBnd[1].N, P);
+      // Compute the boundary atoms
+      dAtom.xBnd[1].X = dAtom.xBnd[0].X = 
+        Y + R * dAtom.xBnd[0].N + P * xBnd[0].N;
+
+      // The normal term vanishes
+      // dAtom.xBnd[0].N = dAtom.xBnd[1].N = - dAtom.xGradR;
+      // dAtom.xGradRMagSqr = 0.0;
+      }
+    else
+      {
+      dAtom.xBnd[0].X = dAtom.xBnd[1].X = dAtom.X;
+      dAtom.xBnd[0].N = -dAtom.N;
+      dAtom.xBnd[1].N = dAtom.N;
+      }
+    }
+  else
+    {
+    if(flagValid)
+      {
+      // Compute the plus-minus term
+      SMLVec3d dNormalTerm;
+      vmulset(dNormalTerm, dAtom.N, xNormalFactor);
+      vmuladd(dNormalTerm, dt.N_2nt, -dAtom.xGradRMagSqr);
+
+      // Compute the boundary atom normals
+      dAtom.xBnd[0].N = dAtom.xBnd[1].N = - dAtom.xGradR;
+      dAtom.xBnd[0].N -= dNormalTerm;
+      dAtom.xBnd[1].N += dNormalTerm;
+
+      // Compute the boundary atoms
+      dAtom.xBnd[0].X = dAtom.xBnd[1].X = Y;
+      vmuladd(dAtom.xBnd[0].X, dAtom.xBnd[0].N, R);
+      vmuladd(dAtom.xBnd[0].X, xBnd[0].N, P);
+      vmuladd(dAtom.xBnd[1].X, dAtom.xBnd[1].N, R);
+      vmuladd(dAtom.xBnd[1].X, xBnd[1].N, P);
+      }
+    else
+      {
+      dAtom.xBnd[0].X = dAtom.xBnd[1].X = dAtom.X;
+      dAtom.xBnd[0].N = -dAtom.N;
+      dAtom.xBnd[1].N = dAtom.N;
+      }
+    }
 }
 
 
@@ -260,7 +316,7 @@ void AddScaleMedialAtoms(
 
   C.N = A.N + p * B.N;
   C.xGradR = A.xGradR + p * B.xGradR;
-  C.xGradPhi = A.xGradPhi + p * B.xGradPhi;
+  // C.xGradPhi = A.xGradPhi + p * B.xGradPhi;
   C.xGradRMagSqr = A.xGradRMagSqr + p * B.xGradRMagSqr;
   C.xNormalFactor = A.xNormalFactor + p * B.xNormalFactor;
 
@@ -326,7 +382,7 @@ void MedialAtomCentralDifference(
 
   C.N = p * (A.N - B.N);
   C.xGradR = p * (A.xGradR - B.xGradR);
-  C.xGradPhi = p * (A.xGradPhi - B.xGradPhi);
+  // C.xGradPhi = p * (A.xGradPhi - B.xGradPhi);
   C.xGradRMagSqr = p * (A.xGradRMagSqr - B.xGradRMagSqr);
   C.xNormalFactor = p * (A.xNormalFactor - B.xNormalFactor);
 

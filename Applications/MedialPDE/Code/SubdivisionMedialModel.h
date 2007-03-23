@@ -24,7 +24,7 @@ public:
    * coefficients, but it is possible to request that the input mesh first be
    * subdivided and the nodes of that mesh be used as coefficients
    */
-  void SetMesh(
+  virtual void SetMesh(
     const MeshLevel &mesh, 
     const Vec &C, const Vec &u, const Vec &v,
     size_t nAtomSubs, size_t nCoeffSubs);
@@ -56,12 +56,12 @@ public:
   /**
    * Load a medial model from the Registry.
    */
-  void ReadFromRegistry(Registry &folder);
+  virtual void ReadFromRegistry(Registry &folder);
 
   /**
    * Save the model to registry folder
    */
-  void WriteToRegistry(Registry &folder);
+  virtual void WriteToRegistry(Registry &folder);
 
   /**
    * Get the subdivision level
@@ -91,6 +91,22 @@ public:
   /** Get a pointer to the atom mesh stored in this model */
   const MeshLevel &GetAtomMesh() const
     { return mlAtom; }
+
+  /** Get the vector of phi-values for this model (equal to xAtoms.F) */
+  Vec GetPhi() const 
+    { 
+    Vec phi(this->GetNumberOfAtoms());
+    for(size_t i = 0; i < phi.size(); i++)
+      phi[i] = xAtoms[i].F;
+    return phi;
+    }
+
+  /** Set the vector of phi-values for the model */
+  void SetPhi(const Vec &phi)
+    {
+    for(size_t i = 0; i < phi.size(); i++)
+      xAtoms[i].F = phi[i];
+    }
 
 protected:
   // Vector typedef
