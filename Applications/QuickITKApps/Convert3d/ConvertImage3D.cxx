@@ -2,31 +2,32 @@
 #define ITK_MANUAL_INSTANTIATION 1
 
 // ITK includes
-#include "itkImage.h"
+#include "itkAntiAliasBinaryImageFilter.h"
+#include "itkBinaryThresholdImageFilter.h"
+#include "itkBSplineInterpolateImageFunction.h"
+#include "itkByteSwapper.h"
+#include "itkComplexToImaginaryImageFilter.h"
+#include "itkComplexToRealImageFilter.h"
+#include "itkDiscreteGaussianImageFilter.h"
+#include "itkExtractImageFilter.h"
+#include "itkIdentityTransform.h"
 #include "itkImageFileReader.h"
 #include "itkImageFileWriter.h"
-#include "itkImageRegionIterator.h"
-#include "itkExtractImageFilter.h"
-#include "itkByteSwapper.h"
-#include "itkMetaDataObject.h"
-#include "itkIOCommon.h"
-#include "itkIdentityTransform.h"
-#include "itkResampleImageFilter.h"
-#include "itkNearestNeighborInterpolateImageFunction.h"
-#include "itkBSplineInterpolateImageFunction.h"
-#include "itkLinearInterpolateImageFunction.h" 
-#include "itkAntiAliasBinaryImageFilter.h"
-#include "itkDiscreteGaussianImageFilter.h"
-#include "itkShiftScaleImageFilter.h"
-#include "itkBinaryThresholdImageFilter.h"
-#include "itkVoxBoCUBImageIOFactory.h"
-#include "itkPovRayDF3ImageIOFactory.h"
+#include "itkImage.h"
 #include "itkImageRegionConstIteratorWithIndex.h"
+#include "itkImageRegionIterator.h"
 #include "itkImageRegionIteratorWithIndex.h"
-
+#include "itkIOCommon.h"
+#include "itkLinearInterpolateImageFunction.h" 
+#include "itkMetaDataObject.h"
+#include "itkNearestNeighborInterpolateImageFunction.h"
+#include "itkPovRayDF3ImageIOFactory.h"
+#include "itkResampleImageFilter.h"
+#include <itkSegmentationLevelSetImageFilter.h>
+#include "itkShiftScaleImageFilter.h"
+#include <itksys/SystemTools.hxx>
 #include "itkVnlFFTRealToComplexConjugateImageFilter.h"
-#include "itkComplexToRealImageFilter.h"
-#include "itkComplexToImaginaryImageFilter.h"
+#include "itkVoxBoCUBImageIOFactory.h"
 
 #include <iostream>
 #include <cctype>
@@ -61,11 +62,12 @@ private:
   
   // Internal functions
   void ReadImage(const char *file);
-  void WriteImage(const char *file);
+  void WriteImage(const char *file, bool force);
   void AntiAliasImage(double iso);
   void CopyImage();
   void ComputeFFT();
   void ComputeOverlaps(double value);
+  void LevelSetSegmentation(int nIter);
   void SampleImage(const RealVector &x);
   void ScaleShiftImage(double a, double b);
   void PrintImageInfo(bool flagFullInfo);
@@ -110,6 +112,9 @@ private:
   // Root mean square error for anti-aliasing algorithm
   double m_AntiAliasRMS;
 
+  // Level set algorithm parameters
+  double m_LevSetCurvature, m_LevSetAdvection;
+
   // Verbose output stream
   std::ostringstream devnull;
   std::ostream *verbose;
@@ -128,6 +133,9 @@ ImageConverter<TPixel,VDim>
   m_FlagSPM = false;
   m_AntiAliasRMS = 0.07;
   m_Iterations = 0;
+
+  m_LevSetCurvature = 0.2;
+  m_LevSetAdvection = 0.0;
 }
 
 template<class TPixel, unsigned int VDim>
@@ -175,7 +183,25 @@ ImageConverter<TPixel, VDim>
 
   else if(cmd == "-iterations")
     { m_Iterations = static_cast<size_t>(atoi(argv[1])); return 1; }
+
+  else if(cmd == "-levelset")
+    {
+    int nIter = atoi(argv[1]);
+    LevelSetSegmentation(nIter);
+    return 1;
+    }
+
+  else if(cmd == "-levelset-curvature")
+    {
+    m_LevSetCurvature = atof(argv[1]);
+    return 1;
+    }
   
+  else if(cmd == "-levelset-advection")
+    {
+    m_LevSetAdvection = atof(argv[1]);
+    return 1;
+    }
 
   else if(cmd == "-noround")
     { m_RoundFactor = 0.0; return 0; }
@@ -183,6 +209,14 @@ ImageConverter<TPixel, VDim>
   // Enable SPM extensions
   else if(cmd == "-nospm")
     { m_FlagSPM = false; return 0; }
+
+  // Overwrite / Output command - save the image without checking if
+  // it already exists.
+  else if(cmd == "-o")
+    {
+    WriteImage(argv[1], true);
+    return 1;
+    }
 
   else if(cmd == "-overlap")
     {
@@ -212,7 +246,8 @@ ImageConverter<TPixel, VDim>
     return vReplace.size();
     }
 
-  // Resample command
+  // Resample command. Retain the bounding box of the image
+  // while changing voxel size
   else if(cmd == "-resample")
     return ProcessResampleCommand(argc-1, argv+1);
 
@@ -350,7 +385,8 @@ ImageConverter<TPixel, VDim>
       if(i != argc-1)
         ReadImage(argv[i]);
       else
-        WriteImage(argv[i]);
+        // Write the image, but in safe mode
+        WriteImage(argv[i], false);
       }
     }
 }
@@ -421,11 +457,19 @@ ImageConverter<TPixel, VDim>
   }
 }
 
+
 template<class TPixel, unsigned int VDim>
 void
 ImageConverter<TPixel, VDim>
-::WriteImage(const char *file)
+::WriteImage(const char *file, bool force)
 {
+  // Unless in 'force' mode, check if the image already exists
+  if(!force && itksys::SystemTools::FileExists(file))
+    {
+    cerr << "File " << file << " already exists. Use -o option to override!" << endl;
+    throw -1;
+    }
+
   if(m_TypeId == "char" || m_TypeId == "byte")
     TemplatedWriteImage<char>(file, m_RoundFactor);
   if(m_TypeId == "uchar" || m_TypeId == "ubyte")
@@ -1054,6 +1098,139 @@ ImageConverter<TPixel, VDim>
 
   // Report what the filter is doing
   *verbose << "  Replacements Made: " << nReps << endl;
+}
+
+template<class TImageType, class TFeatureImageType = TImageType>
+class MyLevelSetFunction :
+  public itk::SegmentationLevelSetFunction<TImageType, TFeatureImageType>
+{
+public:
+  // All the regular filter stuff
+  typedef MyLevelSetFunction Self;
+  typedef itk::SegmentationLevelSetFunction<
+    TImageType, TFeatureImageType> Superclass;
+  typedef itk::SmartPointer<Self> Pointer;
+  typedef itk::SmartPointer<const Self> ConstPointer;
+
+  // The input/output image types
+  typedef TImageType InputImageType;
+
+  // New pointer
+  itkNewMacro(Self);
+
+protected:
+
+  MyLevelSetFunction() {};
+  ~MyLevelSetFunction() {};
+
+  virtual void PrintSelf(std::ostream &os, itk::Indent indent) const
+    { os << indent << "MyLevelSetFunction"; }
+
+private:
+
+};
+
+
+template<class TInputImage,
+         class TFeatureImage,
+         class TOuputPixelType = double>
+class MyLevelSetFilter :
+  public itk::SegmentationLevelSetImageFilter<
+    TInputImage, TFeatureImage, TOuputPixelType>
+{
+public:
+  // All the regular filter stuff
+  typedef MyLevelSetFilter Self;
+  typedef itk::SegmentationLevelSetImageFilter<
+    TInputImage, TFeatureImage, TOuputPixelType> Superclass;
+  typedef itk::SmartPointer<Self> Pointer;
+  typedef itk::SmartPointer<const Self> ConstPointer;
+
+  // Some typedefs of image types
+  typedef typename Superclass::InputImageType InputImageType;
+  typedef typename Superclass::OutputImageType OutputImageType;
+  typedef typename Superclass::FeatureImageType FeatureImageType;
+
+  // Input pixel values
+  typedef typename InputImageType::PixelType InputPixelType;
+
+  // Standard ITK Macros
+  itkTypeMacro(MyLevelSetFilter, itk::SegmentationLevelSetFilter);
+  itkNewMacro(Self);
+
+protected:
+  MyLevelSetFilter() {};
+  ~MyLevelSetFilter() {};
+
+  virtual void PrintSelf(std::ostream &os, itk::Indent indent) const
+    { os << indent << "MyLevelSetFilter"; }
+
+private:
+
+  // Unimplemented copy stuff
+  MyLevelSetFilter(const Self &s);
+  void operator=(const Self &s);
+};
+
+/**
+ * Performs SNAP-like level set segmentation. The image stack must have to images. The one
+ * at the top of the stack is the initial segmentation and the next one on the stack is 
+ * the speed image. The user is responsible for computing the speed image
+ */
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
+::LevelSetSegmentation(int nIter)
+{
+  // Check input availability
+  if(m_ImageStack.size() < 2)
+    {
+    cerr << "Level set segmentation requires two images on the stack!" << endl;
+    throw -1;
+    }
+
+  // Get the last two images
+  ImagePointer i1 = m_ImageStack[m_ImageStack.size() - 1];
+  ImagePointer i2 = m_ImageStack[m_ImageStack.size() - 2];
+
+  // Report what the filter is doing
+  *verbose << "Running level set segmentation (";
+  *verbose << "#" << m_ImageStack.size() - 1 << " is speed, ";
+  *verbose << "#" << m_ImageStack.size() << " is init)" << endl;
+
+  // Create a segmentation filter
+  typedef MyLevelSetFilter<ImageType, ImageType, TPixel> SegFilter;
+  typename SegFilter::Pointer fltSegment = SegFilter::New();
+
+  // Set up the radius
+  itk::Size<3> rad = {{1, 1, 1}};
+
+  // Create the function
+  typedef MyLevelSetFunction<ImageType> SegFunction;
+  typename SegFunction::Pointer fnSegment = SegFunction::New();
+  fnSegment->SetCurvatureWeight(m_LevSetCurvature);
+  fnSegment->SetAdvectionWeight(m_LevSetAdvection);
+  fnSegment->SetPropagationWeight(1.0);
+  fnSegment->Initialize(rad);
+  fnSegment->SetSpeedImage(i2);
+
+  // Set the inputs to the segmentation filter
+  fltSegment->SetSegmentationFunction(fnSegment);
+  fltSegment->SetInput(i1);
+  fltSegment->SetFeatureImage(i2);
+  fltSegment->SetNumberOfLayers(3);
+  fltSegment->SetIsoSurfaceValue(0.0);
+  fltSegment->SetNumberOfIterations(nIter);
+
+  // Execute the filter
+  fltSegment->Update();
+
+  // Take the output
+  m_ImageStack.pop_back();
+  m_ImageStack.pop_back();
+  m_ImageStack.push_back(fltSegment->GetOutput());
+
+  *verbose << "Level set done" << endl;
 }
 
 template<class TPixel, unsigned int VDim>

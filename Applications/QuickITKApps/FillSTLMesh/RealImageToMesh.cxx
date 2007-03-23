@@ -46,6 +46,20 @@ int main(int argc, char *argv[])
   fltReader->Update();
   ImageType::Pointer imgInput = fltReader->GetOutput();
 
+  // Get the range of the input image
+  float imax = imgInput->GetBufferPointer()[0];
+  float imin = imax;
+  for(size_t i = 0; i < imgInput->GetBufferedRegion().GetNumberOfPixels(); i++)
+    {
+    float x = imgInput->GetBufferPointer()[i];
+    imax = std::max(imax, x);
+    imin = std::min(imin, x);
+    }
+
+  float cut = imin + (imax - imin) * atof(argv[3]);
+  cout << "Image Range: [" << imin << ", " << imax << "]" << endl;
+  cout << "Taking level set at " << cut << endl;
+
   // Create an importer and an exporter in VTK
   typedef itk::VTKImageExport<ImageType> ExporterType;
   ExporterType::Pointer fltExport = ExporterType::New();
@@ -60,7 +74,7 @@ int main(int argc, char *argv[])
   fltMarching->ComputeGradientsOff();
   fltMarching->ComputeNormalsOn();
   fltMarching->SetNumberOfContours(1);
-  fltMarching->SetValue(0,atof(argv[3]));
+  fltMarching->SetValue(0,cut);
   fltMarching->Update();
   vtkPolyData *meshCubes = fltMarching->GetOutput();
 

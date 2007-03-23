@@ -12,6 +12,7 @@
 #include "itkNearestNeighborInterpolateImageFunction.h"
 #include "itkBSplineInterpolateImageFunction.h"
 #include "itkLinearInterpolateImageFunction.h" 
+#include "itkVectorLinearInterpolateImageFunction.h" 
 #include "itkAntiAliasBinaryImageFilter.h"
 #include "itkDiscreteGaussianImageFilter.h"
 #include "itkShiftScaleImageFilter.h"
@@ -24,11 +25,13 @@
 #include "itkVnlFFTRealToComplexConjugateImageFilter.h"
 #include "itkComplexToRealImageFilter.h"
 #include "itkComplexToImaginaryImageFilter.h"
+#include <itkSegmentationLevelSetImageFilter.h>
 
 #include <string>
 
 typedef itk::Image<double, 3> DoubleImage;
 typedef itk::Image<std::complex<double>, 3> ComplexImage;
+typedef itk::Image<itk::FixedArray<double, 3>, 3> VectorImage;
 
 // Double image stuff
 template class itk::Image<double, 3>;
@@ -44,6 +47,9 @@ template class itk::ExtractImageFilter<DoubleImage, DoubleImage>;
 template class itk::FixedArray<double,3>;
 template class itk::Array2D<double>;
 template class itk::LinearInterpolateImageFunction<DoubleImage, double>;
+template class itk::LinearInterpolateImageFunction<DoubleImage, float>;
+template class itk::VectorLinearInterpolateImageFunction<VectorImage, double>;
+template class itk::VectorLinearInterpolateImageFunction<VectorImage, float>;
 template class itk::NearestNeighborInterpolateImageFunction<DoubleImage>;
 template class itk::BSplineInterpolateImageFunction<DoubleImage>;
 template class itk::MetaDataObject<std::string>;
@@ -52,6 +58,8 @@ template class itk::BinaryThresholdImageFilter<DoubleImage, DoubleImage>;
 template class itk::ImageRegionIteratorWithIndex<DoubleImage>;
 template class itk::ImageRegionConstIteratorWithIndex<DoubleImage>;
 template class itk::Array<double>;
+template class itk::SegmentationLevelSetImageFilter<DoubleImage, DoubleImage, double>;
+template class itk::SegmentationLevelSetFunction<DoubleImage, DoubleImage>;
 
 // All the junk we need for complex
 template class itk::VnlFFTRealToComplexConjugateImageFilter<double, 3>;
