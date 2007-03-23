@@ -99,10 +99,12 @@ BruteForceSubdivisionMedialModel
 ::PrepareAtomsForVariationalDerivative(
   const Vec &xVariation, MedialAtom *dAtoms) const
 {
+  size_t i;
+
   // This method must compute the terms in the derivative atoms that will not
   // change as the coefficients themselves change. This simply means setting
   // the values of R and X.
-  for(size_t i = 0; i < mlAtom.nVertices; i++)
+  for(i = 0; i < mlAtom.nVertices; i++)
     {
     // Set up i-th atom
     MedialAtom &da = dAtoms[i]; da.X.fill(0.0); da.R = 0.0;
@@ -115,6 +117,54 @@ BruteForceSubdivisionMedialModel
       da.X += w * xVariation.extract(3, j);
       da.R += w * xVariation[j+3];
       }
+
+    // Check if we are affected by the variation
+    da.user_data = 0;
+    if(da.X.squared_magnitude() > 0.0) da.user_data = 1;
+    if(da.R != 0.0) da.user_data = 1;
+    }
+
+  // We can also precompute the partials of X
+  for(i = 0; i < mlAtom.nVertices; i++) 
+    {
+    MedialAtom &da = dAtoms[i];
+
+    // Set the values of Xu and Xv
+    da.Xu = xLoopScheme.Xu(i, dAtoms);
+    da.Xv = xLoopScheme.Xv(i, dAtoms);
+
+    // Also compute Ru and Rv (although atoms don't have a place to stick this)
+    da.Ru = xLoopScheme.Ru(i, dAtoms);
+    da.Rv = xLoopScheme.Rv(i, dAtoms);
+
+    // Check if we are affected by the variation
+    if(da.Xu.squared_magnitude() > 0.0) da.user_data = 1;
+    if(da.Xv.squared_magnitude() > 0.0) da.user_data = 1;
+    if(da.Ru != 0.0) da.user_data = 1;
+    if(da.Rv != 0.0) da.user_data = 1;
+    }
+
+  // Compute second derivatives
+  for(i = 0; i < mlAtom.nVertices; i++) 
+    {
+    MedialAtom &da = dAtoms[i];
+
+    // Compute the last set of derivatives
+    da.Xuu = xLoopScheme.Xuu(i, dAtoms);
+    da.Xuv = xLoopScheme.Xuv(i, dAtoms);
+    da.Xvv = xLoopScheme.Xvv(i, dAtoms);
+
+    // Check if we are affected by the variation
+    if(da.Xuu.squared_magnitude() > 0.0) da.user_data = 1;
+    if(da.Xuv.squared_magnitude() > 0.0) da.user_data = 1;
+    if(da.Xvv.squared_magnitude() > 0.0) da.user_data = 1;
+    }
+
+  // Set the derivative atoms unaffected by the computation to zeros
+  for(i = 0; i < mlAtom.nVertices; i++) 
+    {
+    if(dAtoms[i].user_data == 0)
+      dAtoms[i].SetAllDerivativeTermsToZero();
     }
 }
 
@@ -136,43 +186,31 @@ BruteForceSubdivisionMedialModel
     // Get the derivative atoms for this variation
     MedialAtom *dAtoms = xVariations[q];
 
+    // Compute F at each atom
+    for(i = 0; i < mlAtom.nVertices; i++) 
+      if(dAtoms[i].user_data)
+        dAtoms[i].F = 2.0 * dAtoms[i].R * xAtoms[i].R;
+
     // Compute dF/dv for each atom
     for(i = 0; i < mlAtom.nVertices; i++) 
       {
-      // Get the current atom and the derivative (which we are computing)
-      MedialAtom &a = xAtoms[i];
-      MedialAtom &da = dAtoms[i];
+      // Only consider atoms affected by the variation
+      if(dAtoms[i].user_data)
+        {
+        // Get the current atom and the derivative (which we are computing)
+        MedialAtom &a = xAtoms[i];
+        MedialAtom &da = dAtoms[i];
 
-      // Set dF/dv = d(R^2)/dv = 2R dR/dV
-      da.F = 2.0 * da.R * a.R;
-      }
-
-    // Compute the derivatives of Fu and Fv
-    for(i = 0; i < mlAtom.nVertices; i++) 
-      {
-      MedialAtom &da = dAtoms[i];
+        // Set Fu and Fv
+        da.Fu = xLoopScheme.Fu(i, dAtoms);
+        da.Fv = xLoopScheme.Fv(i, dAtoms);
       
-      // Set the values of Fu and Fv
-      da.Fu = xLoopScheme.Fu(i, dAtoms);
-      da.Fv = xLoopScheme.Fv(i, dAtoms);
-      da.Xu = xLoopScheme.Xu(i, dAtoms);
-      da.Xv = xLoopScheme.Xv(i, dAtoms);
-      }
+        // Compute the metric tensor derivatives of the atom
+        xAtoms[i].ComputeMetricTensorDerivatives(da);
 
-    // Compute second derivatives
-    for(i = 0; i < mlAtom.nVertices; i++) 
-      {
-      MedialAtom &da = dAtoms[i];
-
-      da.Xuu = xLoopScheme.Xuu(i, dAtoms);
-      da.Xuv = xLoopScheme.Xuv(i, dAtoms);
-      da.Xvv = xLoopScheme.Xvv(i, dAtoms);
-
-      // Compute the metric tensor derivatives of the atom
-      xAtoms[i].ComputeMetricTensorDerivatives(da);
-
-      // Compute the derivatives of the boundary nodes
-      xAtoms[i].ComputeBoundaryAtomDerivatives(da, dt[i]);
+        // Compute the derivatives of the boundary nodes
+        xAtoms[i].ComputeBoundaryAtomDerivatives(da, dt[i]);
+        }
       }
     }
 

@@ -174,23 +174,30 @@ class MedialAtomLoopScheme : public LoopTangentScheme
 public:
 
   // Helper methods to get all the partials given a list of atoms
-  SMLVec3d Xu(size_t v, MedialAtom *a) { return TangentX(0, v, a); }
-  SMLVec3d Xv(size_t v, MedialAtom *a) { return TangentX(1, v, a); }
-  SMLVec3d Xuu(size_t v, MedialAtom *a) { return TangentXu(0, v, a); }
-  SMLVec3d Xuv(size_t v, MedialAtom *a) { return TangentXv(0, v, a); }
-  SMLVec3d Xvu(size_t v, MedialAtom *a) { return TangentXu(1, v, a); }
-  SMLVec3d Xvv(size_t v, MedialAtom *a) { return TangentXv(1, v, a); }
+  SMLVec3d Xu(size_t v, MedialAtom *a) const { return TangentX(0, v, a); }
+  SMLVec3d Xv(size_t v, MedialAtom *a) const { return TangentX(1, v, a); }
+  SMLVec3d Xuu(size_t v, MedialAtom *a) const { return TangentXu(0, v, a); }
+  SMLVec3d Xuv(size_t v, MedialAtom *a) const { return TangentXv(0, v, a); }
+  SMLVec3d Xvu(size_t v, MedialAtom *a) const { return TangentXu(1, v, a); }
+  SMLVec3d Xvv(size_t v, MedialAtom *a) const { return TangentXv(1, v, a); }
 
-  double Fu(size_t v, MedialAtom *a) { return PartialF(0, v, a); }
-  double Fv(size_t v, MedialAtom *a) { return PartialF(1, v, a); }
-  double Fuu(size_t v, MedialAtom *a) { return PartialFu(0, v, a); }
-  double Fuv(size_t v, MedialAtom *a) { return PartialFv(0, v, a); }
-  double Fvu(size_t v, MedialAtom *a) { return PartialFu(1, v, a); }
-  double Fvv(size_t v, MedialAtom *a) { return PartialFv(1, v, a); }
+  double Fu(size_t v, MedialAtom *a) const { return PartialF(0, v, a); }
+  double Fv(size_t v, MedialAtom *a) const { return PartialF(1, v, a); }
+  double Fuu(size_t v, MedialAtom *a) const { return PartialFu(0, v, a); }
+  double Fuv(size_t v, MedialAtom *a) const { return PartialFv(0, v, a); }
+  double Fvu(size_t v, MedialAtom *a) const { return PartialFu(1, v, a); }
+  double Fvv(size_t v, MedialAtom *a) const { return PartialFv(1, v, a); }
+
+  double Ru(size_t v, MedialAtom *a) const { return PartialR(0, v, a); }
+  double Rv(size_t v, MedialAtom *a) const { return PartialR(1, v, a); }
+  double Ruu(size_t v, MedialAtom *a) const { return PartialRu(0, v, a); }
+  double Ruv(size_t v, MedialAtom *a) const { return PartialRv(0, v, a); }
+  double Rvu(size_t v, MedialAtom *a) const { return PartialRu(1, v, a); }
+  double Rvv(size_t v, MedialAtom *a) const { return PartialRv(1, v, a); }
 
 private:
 
-  SMLVec3d TangentX(size_t d, size_t v, MedialAtom *atoms)
+  SMLVec3d TangentX(size_t d, size_t v, MedialAtom *atoms) const
     {
     size_t *ri = level->nbr.GetRowIndex();
     size_t *ci = level->nbr.GetColIndex();
@@ -205,7 +212,7 @@ private:
   /**
    * This method is used to compute second order partials Xuu and Xvu
    */
-  SMLVec3d TangentXu(size_t d, size_t v, MedialAtom *atoms)
+  SMLVec3d TangentXu(size_t d, size_t v, MedialAtom *atoms) const
     {
     size_t *ri = level->nbr.GetRowIndex();
     size_t *ci = level->nbr.GetColIndex();
@@ -220,7 +227,7 @@ private:
   /**
    * This method is used to compute second order partials Xuv and Xvv
    */
-  SMLVec3d TangentXv(size_t d, size_t v, MedialAtom *atoms)
+  SMLVec3d TangentXv(size_t d, size_t v, MedialAtom *atoms) const
     {
     size_t *ri = level->nbr.GetRowIndex();
     size_t *ci = level->nbr.GetColIndex();
@@ -232,7 +239,7 @@ private:
     return y;
     } 
 
-  double PartialF(size_t d, size_t v, MedialAtom *atoms)
+  double PartialF(size_t d, size_t v, MedialAtom *atoms) const
     {
     size_t *ri = level->nbr.GetRowIndex();
     size_t *ci = level->nbr.GetColIndex();
@@ -244,7 +251,7 @@ private:
     return y;
     }
 
-  double PartialFv(size_t d, size_t v, MedialAtom *atoms)
+  double PartialFv(size_t d, size_t v, MedialAtom *atoms) const
     {
     size_t *ri = level->nbr.GetRowIndex();
     size_t *ci = level->nbr.GetColIndex();
@@ -256,7 +263,7 @@ private:
     return y;
     }
 
-  double PartialFu(size_t d, size_t v, MedialAtom *atoms)
+  double PartialFu(size_t d, size_t v, MedialAtom *atoms) const
     {
     size_t *ri = level->nbr.GetRowIndex();
     size_t *ci = level->nbr.GetColIndex();
@@ -264,6 +271,42 @@ private:
     double y = xVtxTangentWeights[d][v] * atoms[v].Fu;
     for(size_t i = ri[v]; i < ri[v+1]; ++i)
       y += xNbrTangentWeights[d][i] * atoms[ci[i]].Fu;
+
+    return y;
+    }
+
+  double PartialR(size_t d, size_t v, MedialAtom *atoms) const
+    {
+    size_t *ri = level->nbr.GetRowIndex();
+    size_t *ci = level->nbr.GetColIndex();
+
+    double y = xVtxTangentWeights[d][v] * atoms[v].R;
+    for(size_t i = ri[v]; i < ri[v+1]; ++i)
+      y += xNbrTangentWeights[d][i] * atoms[ci[i]].R;
+
+    return y;
+    }
+
+  double PartialRv(size_t d, size_t v, MedialAtom *atoms) const
+    {
+    size_t *ri = level->nbr.GetRowIndex();
+    size_t *ci = level->nbr.GetColIndex();
+
+    double y = xVtxTangentWeights[d][v] * atoms[v].Rv;
+    for(size_t i = ri[v]; i < ri[v+1]; ++i)
+      y += xNbrTangentWeights[d][i] * atoms[ci[i]].Rv;
+
+    return y;
+    }
+
+  double PartialRu(size_t d, size_t v, MedialAtom *atoms) const
+    {
+    size_t *ri = level->nbr.GetRowIndex();
+    size_t *ci = level->nbr.GetColIndex();
+
+    double y = xVtxTangentWeights[d][v] * atoms[v].Ru;
+    for(size_t i = ri[v]; i < ri[v+1]; ++i)
+      y += xNbrTangentWeights[d][i] * atoms[ci[i]].Ru;
 
     return y;
     }

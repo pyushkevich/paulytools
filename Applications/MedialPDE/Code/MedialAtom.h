@@ -35,7 +35,7 @@ struct MedialAtom
   double F, Fu, Fv;
 
   // The radius function and its partial derivatives
-  double R; //, Ru, Rv, Ruu, Ruv, Rvv;
+  double R, Ru, Rv; 
 
   // Area element = sqrt(g)
   double aelt;
@@ -51,6 +51,9 @@ struct MedialAtom
 
   // Whether this is a 'crest' atom, and whether it's valid at all
   bool flagCrest, flagValid;
+
+  // A 'user' int that can be used to flag atoms
+  int user_data;
 
   // The two associated boundary 'atoms'
   BoundaryAtom xBnd[2];
@@ -96,6 +99,12 @@ struct MedialAtom
    * the terms of the 'derivative' Atom passed in as the parameter
    */
   void ComputeBoundaryAtomDerivatives(MedialAtom &dAtom, const DerivativeTerms &dt) const;
+
+  /**
+   * Set all the derivative terms in the atom to equal zero. This is useful when the
+   * atom is unaffected by some variation
+   */
+  void SetAllDerivativeTermsToZero();
 };
 
 /**

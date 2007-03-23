@@ -2,6 +2,37 @@
 
 void
 MedialAtom
+::SetAllDerivativeTermsToZero()
+{
+  X.fill(0.0); Xu.fill(0.0); Xv.fill(0.0); Xuu.fill(0.0); Xuv.fill(0.0); Xvv.fill(0.0);
+  F = 0.0; Fu = 0.0; Fv = 0.0; R = 0.0; Ru = 0.0; Rv = 0.0;
+
+  G.g = G.gInv = 0.0;
+  for(size_t a1 = 0; a1 < 2; a1++)
+    for(size_t a2 = 0; a2 < 2; a2++)
+      {
+      G.xCovariantTensor[a1][a2] = 0.0;
+      G.xContravariantTensor[a1][a2] = 0.0;
+      for(size_t a3 = 0; a3 < 2; a3++)
+        {
+        G.xChristoffelFirst[a1][a2][a3] = 0.0;
+        G.xChristoffelSecond[a1][a2][a3] = 0.0;
+        }
+      }
+
+  aelt = 0.0;
+
+  N.fill(0.0);
+  xGradR.fill(0.0);
+  xLapR = 0.0;
+  xGradRMagSqr = 0.0; xNormalFactor = 0.0;
+
+  xBnd[0].X.fill(0.0); xBnd[0].N.fill(0.0);
+  xBnd[1].X.fill(0.0); xBnd[1].N.fill(0.0);
+}
+
+void
+MedialAtom
 ::ComputeDifferentialGeometry()
 {
   G.SetTwoJet( X.data_block(), Xu.data_block(), Xv.data_block(),
@@ -304,8 +335,8 @@ void AddScaleMedialAtoms(
   C.Xvv = A.Xvv + p * B.Xvv;
 
   C.R = A.R + p * B.R;
-  // C.Ru = A.Ru + p * B.Ru;
-  // C.Rv = A.Rv + p * B.Rv;
+  C.Ru = A.Ru + p * B.Ru;
+  C.Rv = A.Rv + p * B.Rv;
   // C.Ruu = A.Ruu + p * B.Ruu;
   // C.Ruv = A.Ruv + p * B.Ruv;
   // C.Rvv = A.Rvv + p * B.Rvv;
@@ -370,8 +401,8 @@ void MedialAtomCentralDifference(
   C.Xvv = p * (A.Xvv - B.Xvv);
 
   C.R = p * (A.R - B.R);
-  // C.Ru = A.Ru + p * B.Ru;
-  // C.Rv = A.Rv + p * B.Rv;
+  C.Ru = p * (A.Ru - B.Ru);
+  C.Rv = p * (A.Rv - B.Rv);
   // C.Ruu = A.Ruu + p * B.Ruu;
   // C.Ruv = A.Ruv + p * B.Ruv;
   // C.Rvv = A.Rvv + p * B.Rvv;

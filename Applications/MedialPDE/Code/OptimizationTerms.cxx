@@ -505,7 +505,7 @@ inline double ComputeJacobian(const SMLVec3d &Xu, const SMLVec3d &Xv,
 }
 
 const double BoundaryJacobianEnergyTerm::xPenaltyA = 10;
-const double BoundaryJacobianEnergyTerm::xPenaltyB = 400;
+const double BoundaryJacobianEnergyTerm::xPenaltyB = 100;
 
 double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
 {
@@ -1890,4 +1890,3 @@ void MedialOptimizationProblem::PrintReport(ostream &sout)
     sout << "  Gradient time: " << xGradTimers[iTerm].Read() << endl;
     }
 }
-
