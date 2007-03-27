@@ -208,7 +208,7 @@ ImmutableSparseArray<TVal>::operator= (const ImmutableSparseArray<TVal> &src)
 template<class TVal>
 typename ImmutableSparseMatrix<TVal>::Vec 
 ImmutableSparseMatrix<TVal>
-::MultiplyTransposeByVector(const Vec &b)
+::MultiplyTransposeByVector(const Vec &b) const
 {
   // Make sure the dimensions match
   assert(b.size() == this->nRows);
@@ -227,7 +227,7 @@ ImmutableSparseMatrix<TVal>
 template<class TVal>
 typename ImmutableSparseMatrix<TVal>::Vec 
 ImmutableSparseMatrix<TVal>
-::MultiplyByVector(const Vec &b)
+::MultiplyByVector(const Vec &b) const
 {
   // Make sure the dimensions match
   assert(b.size() == this->nColumns);
@@ -313,6 +313,7 @@ ImmutableSparseMatrix<TVal>
 {
   // Here we are going to cheat and use vnl matrices
   vnl_sparse_matrix<TVal> T(A.nColumns, A.nColumns);
+  printf("Mat [%d, %d]\n", A.nColumns, A.nColumns);
 
   // Set the values of the sparse matrix. We only set the values in the upper triangle
   for(size_t i = 0; i < A.nRows; i++)
@@ -320,12 +321,15 @@ ImmutableSparseMatrix<TVal>
     // Set all the diagonal entries to 1
     T(i, i) = 1;
 
+    // printf("i = %d of %d\n",i,A.nRows);
     for(size_t j1 = A.xRowIndex[i]; j1 < A.xRowIndex[i+1]; j1++)
       {
       for(size_t j2 = j1; j2 < A.xRowIndex[i+1]; j2++)
         {
+        // printf("j1 = %d, j2 = %d\n", j1, j2);
         size_t p = A.xColIndex[j1];
         size_t q = A.xColIndex[j2];
+        // printf("T(%d,%d) = 1\n", p, q);
         T(p, q) = 1;
         }
       }
@@ -364,4 +368,50 @@ ImmutableSparseMatrix<TVal>
         }
       }
     }
+}
+
+template<class TVal>
+vnl_matrix<TVal>
+ImmutableSparseMatrix<TVal>
+::GetDenseMatrix() const
+{
+  // Create matrix
+  vnl_matrix<TVal> A(this->nRows, this->nColumns);
+
+  // Copy values
+  for(size_t i = 0; i < this->nRows; i++) 
+    for(size_t j = this->xRowIndex[i]; j < this->xRowIndex[i+1]; j++)
+      A(i, this->xColIndex[j]) = this->xSparseValues[j];
+    
+  return A;
+}
+
+template<class TVal>
+void
+ImmutableSparseMatrix<TVal>
+::SetIdentity(size_t n)
+{
+  // Reset the array
+  this->Reset();
+
+  if(n > 0)
+    {
+    // Set the row and column numbers
+    this->nRows = this->nColumns = this->nSparseEntries = n;
+
+    // Set the row index
+    this->xRowIndex = new size_t[n+1];
+    for(size_t i = 0; i <= n; i++)
+      this->xRowIndex[i] = i;
+
+    // Set the column and sparse array indices
+    this->xColIndex = new size_t[n];
+    this->xSparseValues = new TVal[n];
+    for(size_t j = 0; j < n; j++)
+      {
+      this->xColIndex[j] = j;
+      this->xSparseValues[j] = 1;
+      }
+    }
+  std::cout << "Set Identity to " << n << std::endl;
 }

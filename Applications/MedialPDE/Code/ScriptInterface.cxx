@@ -28,6 +28,7 @@
 
 
 #include <vnl/algo/vnl_qr.h>
+#include <vnl/algo/vnl_svd.h>
 #include <vnl/vnl_random.h>
 
 
@@ -1470,6 +1471,133 @@ void SubdivisionMPDE::SubdivideMeshes(size_t iCoeffSub, size_t iAtomSub)
 
   // Set the new mesh to replace the old mesh
   this->SetMedialModel(smmNew);
+}
+
+void SubdivisionMPDE::BruteForceToPDE()
+{
+  // Get the brute force model, or throw exception
+  BruteForceSubdivisionMedialModel *brute = 
+    dynamic_cast<BruteForceSubdivisionMedialModel *>(xMedialModel);
+  if(!brute)
+    throw MedialModelException(
+      "SubdivisionMPDE given a cmrep not based on subdivision surfaces");
+
+  // Get coefficient arrays from the brute force model
+  vnl_vector<double> C = brute->GetCoefficientArray();
+  vnl_vector<double> u = brute->GetCoefficientU();
+  vnl_vector<double> v = brute->GetCoefficientV();
+
+  // Subdivide to get the atom-level coefficients
+  vnl_vector<double> Ca(4 * brute->GetNumberOfAtoms());
+  vnl_vector<double> ua(brute->GetNumberOfAtoms());
+  vnl_vector<double> va(brute->GetNumberOfAtoms());
+  for(size_t a = 0; a < brute->GetNumberOfAtoms(); a++)
+    {
+    Ca[4 * a] = brute->GetAtomArray()[a].X(0);
+    Ca[4 * a + 1] = brute->GetAtomArray()[a].X(1);
+    Ca[4 * a + 2] = brute->GetAtomArray()[a].X(2);
+    Ca[4 * a + 3] = 0.0;
+    ua[a] = brute->GetAtomArray()[a].u;
+    va[a] = brute->GetAtomArray()[a].v;
+    }
+  
+  // Clear the rho values
+  for(size_t i = 0; i < C.size(); i+=4)
+    C[i + 3] = 0.0;
+
+  // Create a PDE model with the same mesh levels
+  PDESubdivisionMedialModel *pde = new PDESubdivisionMedialModel();
+  // pde->SetMesh(brute->GetCoefficientMesh(), C, u, v, 
+  //  brute->GetSubdivisionLevel(), 0);
+  cout << "START HERE" << endl;
+  pde->SetMesh(brute->GetAtomMesh(), Ca, ua, va, 0, 0);
+  cout << "GOT HERE" << endl;
+
+  vnl_vector<double> hint(brute->GetAtomMesh().nVertices, 0.0);
+  try { pde->ComputeAtoms(hint.data_block()); } catch(...) {}
+
+  // Compute the Laplace-Beltrami operator, using the current phi values
+  vnl_vector<double> rho_atom = 
+    pde->GetSolver()->ComputeLBO(brute->GetPhi().data_block());
+  vnl_vector<double> rho_ctl;
+
+  // If there is subdivision in the model, we have to do a least square fit
+  // to determine the rho values in the control-level mesh
+  if(pde->GetSubdivisionLevel() > 0)
+    {
+    // Perform a least squares fit in order to get the control point rho
+    // this involves solving the system W'Wx = W'y
+    vnl_matrix<double> W = brute->GetAtomMesh().weights.GetDenseMatrix();
+    vnl_matrix<double> WT = W.transpose();
+
+    // Now we are going to set the columns in WT that correspond to boundary 
+    // vertices to zeros. This corresponds to solving the least square problem
+    // |JWx - Jy|^2, where J is a selection matrix (an identity matrix missing
+    // the rows we don't want to fit). The solution is W'J'JWx = W'J'Jy, so
+    // the matrix WT below is actually W'J'J. 
+    for(size_t i = 0; i < WT.cols(); i++)
+      if(!pde->GetAtomMesh().IsVertexInternal(i))
+        WT.set_column(i, 0.0);
+
+    // Solve the system for rho
+    rho_ctl = vnl_qr<double>(WT * W).solve(WT * rho_atom);
+    }
+  else
+    {
+    // If no subdivision, the control-level rho is the same as the atom-level
+    rho_ctl = rho_atom;
+    }
+  
+  /*
+  // Perform a least squares fit in order to get the control point rho
+  // this involves solving the system W'Wx = W'y
+  const ImmutableSparseMatrix<double> &W = brute->GetAtomMesh().weights;
+
+  // Perform the ATA computation
+  ImmutableSparseMatrix<double> WTW;
+  ImmutableSparseMatrix<double>::InitializeATA(WTW, W);
+  ImmutableSparseMatrix<double>::ComputeATA(WTW, W);
+
+  // Compute W'y
+  vnl_vector<double> WTy = W.MultiplyTransposeByVector(rho);
+
+  // Solution vector
+  vnl_vector<double> rho_ctl(brute->GetCoefficientMesh().nVertices, 0.0);
+
+  // Solve the sparse system using Pardiso
+  SymmetricPositiveDefiniteRealPARDISO solver;
+  solver.SymbolicFactorization(WTW);
+  solver.NumericFactorization(WTW);
+  solver.Solve(WTy.data_block(), rho_ctl.data_block());
+  */
+
+  // Assign the rho values to the PDE model
+  for(size_t i = 0; i < rho_ctl.size(); i++)
+    C[4 * i + 3] = rho_ctl[i];
+  pde->SetCoefficientArray(C);
+
+  // Try solving the PDE problem
+  try
+    { pde->ComputeAtoms(brute->GetPhi().data_block()); }
+  catch(MedialModelException &exc)
+    { cout << "PDE failed: " << exc.what() << endl; }
+
+  // Compare the rho in the atoms to actual rho
+  double diff = 0.0; size_t ndiff = 0;
+  for(size_t q = 0; q < pde->GetNumberOfAtoms(); q++)
+    {
+    if(pde->GetAtomMesh().IsVertexInternal(q))
+      {
+      double d = pde->GetAtomArray()[q].xLapR - rho_atom[q];
+      diff += d * d;
+      ndiff++;
+      }
+    }
+  cout << "Mean squared difference in rho = " << diff / ndiff << endl;
+
+  // Replace the brute force problem with the pde problem
+  delete xMedialModel;
+  xMedialModel = pde;
 }
 
 /***************************************************************************

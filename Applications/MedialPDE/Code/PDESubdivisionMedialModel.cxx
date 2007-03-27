@@ -46,9 +46,11 @@ PDESubdivisionMedialModel
     }
 
   // If the initial solution is specified, take the F values from it
-  if(xHint != NULL)
+  if(xHint != NULL) 
+    {
     for(i = 0; i < mlAtom.nVertices; i++)
       xAtoms[i].F = xHint[i];
+    }
 
   // Now have the solver solve the equation
   xSolver.SolveEquation(NULL, true);

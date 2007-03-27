@@ -313,7 +313,7 @@ SubdivisionMedialModelIO
   std::string fnreg(file);
   std::string fnbase = itksys::SystemTools::GetFilenameWithoutLastExtension(fnreg);
   std::string fnpath = itksys::SystemTools::GetFilenamePath(fnreg);
-  std::string fnmesh = fnpath + "/" + fnbase + ".vtk";
+  std::string fnmesh = fnbase + ".vtk";
 
   // Create a registry to save the data
   Registry R;
@@ -384,10 +384,14 @@ SubdivisionMedialModelIO
   // Populate the cells
   SubdivisionSurface::ExportLevelToVTK(model->mlCoefficient, poly);
 
+  // Get a full output filename
+  string fn_full_mesh = 
+    itksys::SystemTools::CollapseFullPath(fnmesh.c_str(), fnpath.c_str());
+
   // Save the model
   vtkPolyDataWriter *writer = vtkPolyDataWriter::New();
   writer->SetInput(poly);
-  writer->SetFileName(fnmesh.c_str());
+  writer->SetFileName(fn_full_mesh.c_str());
   writer->SetFileTypeToBinary();
   writer->Update();
 

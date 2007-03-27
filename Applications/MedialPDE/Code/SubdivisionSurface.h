@@ -110,13 +110,13 @@ public:
       { return nbr.GetRowIndex()[ivtx+1] - nbr.GetRowIndex()[ivtx]; }
 
     // Check if the vertex is on the boundary
-    bool IsVertexInternal(size_t ivtx)
+    bool IsVertexInternal(size_t ivtx) const
       { return nbr.GetSparseData()[nbr.GetRowIndex()[ivtx]].tBack != NOID; }
 
     // Set the mesh level as the 'root'. This means that its weight matrix
     // becomes identity and its parent is null
     void SetAsRoot()
-      { parent = NULL; weights.Reset(); }
+      { parent = NULL; weights.SetIdentity(nVertices); }
 
     // Constructor
     MeshLevel()

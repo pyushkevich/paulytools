@@ -324,7 +324,19 @@ RecursiveSubdivide(const MeshLevel *src, MeshLevel *dst, size_t n)
 {
   // N has to be greater than 1
   if(n == 0)
-  { *dst = *src; return; }
+  { 
+    // Set the source to have the same structure as the destination
+    *dst = *src; 
+
+    // Make the destination be its own root
+    cout << "Calling SetAsRoot in RecursiveSubdivide()" << endl;
+    dst->SetAsRoot();
+    cout << "DST-WGT: " << dst->weights << endl << endl;
+
+    // Done
+    return; 
+  }
+  
   else if(n == 1)
   { Subdivide(src, dst); return; }
 

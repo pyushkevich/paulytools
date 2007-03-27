@@ -381,6 +381,13 @@ public:
    */
   void SubdivideMeshes(size_t iCoeffSub, size_t iAtomSub);
 
+  /**
+   * Convert a Brute Force cm-rep to a PDE one. The radius function is used
+   * as the initial guess for the PDE solution, and the LBO of the radius 
+   * function from the brute force model is used to initialize rho.
+   */
+  void BruteForceToPDE();
+
 private:
 
 };

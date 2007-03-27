@@ -77,6 +77,9 @@ public:
   static void gsl_df(const gsl_vector *v, void *params, gsl_vector *df);
   static void gsl_fdf(const gsl_vector *v, void *params, double *f, gsl_vector *df);
 
+  // This method computes the LBO at each internal node. 
+  vnl_vector<double> ComputeLBO(const double *phi);
+
 private:
 
   // This method resets all the pointers associated with a mesh

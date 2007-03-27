@@ -7,6 +7,7 @@
 #ifndef __SparseMatrix_h_
 #define __SparseMatrix_h_
 
+#include <vnl/vnl_matrix.h>
 #include <vnl/vnl_sparse_matrix.h>
 #include <iostream>
 #include <list>
@@ -46,10 +47,13 @@ public:
   void SetArrays(size_t rows, size_t cols, size_t *xRowIndex, size_t *xColIndex, TVal *data);
 
   // Pointers to the data stored inside the matrix
-  size_t *GetRowIndex() const { return xRowIndex; }
-  size_t *GetColIndex() const { return xColIndex; }
-  const TVal *GetSparseData() const { return xSparseValues; }
+  size_t *GetRowIndex() { return xRowIndex; }
+  size_t *GetColIndex() { return xColIndex; }
   TVal *GetSparseData() { return xSparseValues; }
+
+  const size_t *GetRowIndex() const { return xRowIndex; }
+  const size_t *GetColIndex() const { return xColIndex; }
+  const TVal *GetSparseData() const { return xSparseValues; }
 
   class ConstRowIterator {
   public:
@@ -109,11 +113,11 @@ public:
     { return xSparseValues[xRowIndex[iRow] + iNZInRow]; }
 
   // Get the number of sparse values
-  size_t GetNumberOfSparseValues() { return nSparseEntries; }
+  size_t GetNumberOfSparseValues() const { return nSparseEntries; }
 
   // Get the number of rows and columns
-  size_t GetNumberOfRows() { return nRows; }
-  size_t GetNumberOfColumns() { return nColumns; }  
+  size_t GetNumberOfRows() const { return nRows; }
+  size_t GetNumberOfColumns() const { return nColumns; }  
 
   // Reset the matrix (clear all data, revert to initialized state)
   void Reset();
@@ -150,14 +154,20 @@ public:
   // Compare two matrices
   bool operator == (const Self &B);
 
+  // Get a regular VNL matrix
+  vnl_matrix<TVal> GetDenseMatrix() const;
+
+  // Set the matrix to identity
+  void SetIdentity(size_t n);
+
   // Compute the matrix product C = A * B
   static void Multiply(Self &C, const Self &A, const Self &B);
 
   // Compute the matrix product c = A^t * b
-  Vec MultiplyByVector(const Vec &b);
+  Vec MultiplyByVector(const Vec &b) const;
 
   // Compute the matrix product c = A^t * b
-  Vec MultiplyTransposeByVector(const Vec &b);
+  Vec MultiplyTransposeByVector(const Vec &b) const;
 
   // This method initializes the matrix A^t A (it simply creates the 
   // structure of the matrix for future fast computations)

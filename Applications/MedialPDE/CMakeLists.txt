@@ -77,7 +77,6 @@ SET(PDE_LIBS
   ${LAPACK_OR_MKL_LIBS}
   ${GSL_LIBRARY} ${GSL_CBLAS_LIBRARY}
   toms611
-  tensolve
   )
 
 # Create a common library
@@ -143,6 +142,7 @@ ADD_TEST(TestBranchingSubdivision testsub BRANCH1 ${MPDE_TEST_BRANCH})
 # Copy the script files
 SET(SCRIPT_FILES
   cmrep_align_moments.py
+  cmrep_brute2pde.py
   cmrep_build_images.py
   cmrep_cartesian_import.py
   cmrep_common.py

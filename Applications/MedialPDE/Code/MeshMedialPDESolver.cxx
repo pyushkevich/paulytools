@@ -22,7 +22,7 @@ double levenberg_marquardt(
   double *x_out,
   int n_iter = 100,
   double eps1 = 1.0e-8,
-  double eps2 = 1.0e-8,
+  double eps2 = 1.0e-12,
   double tau = 1.0e-3)
 {
   // Typedefs 
@@ -74,6 +74,7 @@ double levenberg_marquardt(
   for(i = 0; i < A.GetNumberOfSparseValues(); i++)
     if(maxA < A.GetSparseData()[i])
       maxA = A.GetSparseData()[i];
+  printf("Max(A) = %g, mu = %g\n", maxA, tau * maxA);
   double mu = tau * maxA;
 
   // Iterate
@@ -92,13 +93,14 @@ double levenberg_marquardt(
     double norm_x = x.magnitude();
 
     // Report the solution
-    /*
-    printf(
-      "   -> LM Iter: %3d    F = %8.4e    fmax = %8.4e    mu = %8.4e    "
-      "|h| = %8.4e    |x| = %8.4e\n",
-      k, normsq_fx / 2, fx.inf_norm(), mu, norm_h, norm_x); 
-    */
-    cout << "." << flush;
+    bool verbose = true;
+    if(verbose)
+      printf(
+        "   -> LM Iter: %3d    F = %8.4e    fmax = %8.4e    mu = %8.4e    "
+        "|h| = %8.4e    |x| = %8.4e\n",
+        k, normsq_fx / 2, fx.inf_norm(), mu, norm_h, norm_x); 
+    else
+      cout << "." << flush;
    
 
     // Check for convergence
@@ -613,6 +615,34 @@ MeshMedialPDESolver
   return xRHS.squared_magnitude();
 }
 
+vnl_vector<double>
+MeshMedialPDESolver
+::ComputeLBO(const double *phi)
+{
+  // Compute the RHS
+  ComputeMeshGeometry(false);
+  FillNewtonMatrix(phi, true);
+
+  // Return the LBO
+  vnl_vector<double> lbo(topology->nVertices, 0.0);
+
+  // Compute the lbo at internal vertices
+  for(size_t i = 0; i < topology->nVertices; i++)
+    {
+    if(topology->IsVertexInternal(i))
+      {
+      // To compute the laplacian of phi, simply use the weights in the corresponding
+      // row of sparse matrix A.
+      for(size_t j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
+        {
+        lbo[i] += A.GetSparseData()[j] * phi[A.GetColIndex()[j]];
+        }
+      }
+    }
+
+  return lbo;
+}
+
 void
 MeshMedialPDESolver
 ::ComputeMedialAtoms(const double *soln)
@@ -886,10 +916,13 @@ MeshMedialPDESolver
   // passed in to the method)
   vnl_vector<double> xSoln(topology->nVertices);
   for(i = 0; i < topology->nVertices; i++)
-    xSoln[i] = xInitSoln == NULL ? xAtoms[i].F : xInitSoln[i];
+    {
+    xSoln[i] = ((xInitSoln == NULL) ? xAtoms[i].F : xInitSoln[i]);
+    }
   vnl_vector<double> xStartingSoln = xSoln;
 
   // Initialize the Jacobian and the function value
+  cout << "Solving: PHI = " << xSoln << endl << endl;
   FillNewtonMatrix(xSoln.data_block(), true);
   FillNewtonRHS(xSoln.data_block());
   Vec fx = -xRHS;
@@ -904,7 +937,7 @@ MeshMedialPDESolver
     &MeshMedialPDESolver::ComputeLMResidual,
     &MeshMedialPDESolver::ComputeLMJacobian,
     xSoln.data_block(),
-    600);
+    6000);
 
   if(fval > 1.0e-8)
     throw MedialModelException("Bad solution");
