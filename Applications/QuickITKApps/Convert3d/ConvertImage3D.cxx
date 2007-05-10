@@ -186,6 +186,7 @@ ImageConverter<TPixel, VDim>
     // Get the probe point
     RealVector x = ReadRealVector(argv[1]);
     SampleImage(x);
+    return 1;
     }
 
   else if(cmd == "-info")
