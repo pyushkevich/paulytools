@@ -34,8 +34,20 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <cstdlib>
+
 
 using namespace std;
+
+// Helper function: read a double, throw exception if unreadable
+double myatof(char *str)
+{
+  char *end = 0;
+  double d = strtod(str, &end);
+  if(*end != 0)
+    throw "strtod conversion failed";
+  return d;
+};
 
 template<class TPixel, unsigned int VDim>
 class ImageConverter
@@ -49,6 +61,8 @@ private:
   typedef itk::Image<TPixel, VDim> ImageType;
   typedef typename ImageType::Pointer ImagePointer;
   typedef typename ImageType::SizeType SizeType;
+  typedef typename ImageType::IndexType IndexType;
+  typedef typename ImageType::RegionType RegionType;
   typedef vnl_vector_fixed<double, VDim> RealVector;
   typedef vnl_vector_fixed<int, VDim> IntegerVector;
 
@@ -67,6 +81,7 @@ private:
   void CopyImage();
   void ComputeFFT();
   void ComputeOverlaps(double value);
+  void ExtractRegion(RegionType bbox);
   void LevelSetSegmentation(int nIter);
   void SampleImage(const RealVector &x);
   void ScaleShiftImage(double a, double b);
@@ -80,6 +95,7 @@ private:
 
   // Read vectors, etc from command line
   SizeType ReadSizeVector(char *vec);
+  IndexType ReadIndexVector(char *vec);
   RealVector ReadRealVector(char *vec);
 
   // Get bounding box of an image
@@ -230,8 +246,13 @@ ImageConverter<TPixel, VDim>
     vector<double> vReplace;
 
     // Read a list of numbers from the command line
-    for(int i = 1; (i < argc) && (argv[i][0] != '-'); i++)
-      vReplace.push_back(atof(argv[i]));
+    for(int i = 1; i < argc; i++)
+      {
+      try 
+        { vReplace.push_back(myatof(argv[i])); }
+      catch(...)
+        { break; }
+      }
 
     // Make sure the number of replacement rules is even
     if(vReplace.size() % 2 == 1)
@@ -285,6 +306,18 @@ ImageConverter<TPixel, VDim>
     {
     ComputeFFT();
     return 0;
+    }
+
+  else if (cmd == "-region")
+    {
+    // Get the position and index for the region
+    RegionType bbox;
+    bbox.SetIndex(ReadIndexVector(argv[1]));
+    bbox.SetSize(ReadSizeVector(argv[2]));
+
+    *verbose << "Extracting Subregion in #" << m_ImageStack.size() << endl;
+    this->ExtractRegion(bbox);
+    return 2;
     }
 
   else if(cmd == "-shift")
@@ -650,6 +683,55 @@ ImageConverter<TPixel, VDim>
   return sz;
 }
 
+
+template<class TPixel, unsigned int VDim>
+typename ImageConverter<TPixel, VDim>::ImageType::IndexType
+ImageConverter<TPixel, VDim>
+::ReadIndexVector(char *vec)
+{
+  string vecbk = vec;
+  size_t i;
+
+  typename ImageType::IndexType idx;
+
+  // Check if the string ends with %
+  if(str_ends_with(vec, "%"))
+    {
+    // Read floating point size
+    RealVector factor;
+    char *tok = strtok(vec, "x%");
+    for(i = 0; i < VDim && tok != NULL; i++)
+      {
+      factor[i] = atof(tok);
+      tok = strtok(NULL, "x%");
+      } 
+
+    if(i == 1)
+      factor.fill(factor[0]);
+
+    // Get the size of the image in voxels
+    for(size_t i = 0; i < VDim; i++)
+      idx[i] = (long)(m_ImageStack.back()->GetBufferedRegion().GetSize(i) * 0.01 * factor[i] + 0.5);
+    }
+  else
+    {
+    // Find all the 'x' in the string
+    char *tok = strtok(vec, "x");
+    for(size_t i = 0; i < VDim; i++)
+      {
+      if(tok == NULL)
+        { cerr << "Invalid size specification: " << vecbk << endl; throw -1; }      
+      int x = atoi(tok);
+      if(x <= 0)
+        { cerr << "Non-positive size specification: " << vecbk << endl; throw -1; }      
+      idx[i] = (long)(x);
+      tok = strtok(NULL, "x");
+      } 
+    }
+
+  return idx;
+}
+
 template<class TPixel, unsigned int VDim>
 int
 ImageConverter<TPixel, VDim>
@@ -878,6 +960,49 @@ void ExpandRegion(itk::ImageRegion<VDim> &region, const itk::Index<VDim> &idx)
 template<class TPixel, unsigned int VDim>
 void
 ImageConverter<TPixel, VDim>
+::ExtractRegion(RegionType bbox)
+{
+  // Get the input image
+  ImagePointer input = m_ImageStack.back();
+
+  // Make sure the bounding box is within the contents of the image
+  bbox.Crop(input->GetBufferedRegion());
+
+  // Report the bounding box size
+  *verbose << "  Extracting bounding box " << bbox.GetIndex() << " " << bbox.GetSize() << endl;
+
+  // Chop off the region
+  typedef itk::ExtractImageFilter<ImageType, ImageType> TrimFilter;
+  typename TrimFilter::Pointer fltTrim = TrimFilter::New();
+  fltTrim->SetInput(input);
+  fltTrim->SetExtractionRegion(bbox);
+  fltTrim->Update();
+
+  // Unfortunately we have to adjust the index and size of the trimmed region
+  RealVector bb0, bb1;
+  GetBoundingBox(fltTrim->GetOutput(), bb0, bb1);
+  typename ImageType::RegionType outreg;
+  outreg.SetSize(fltTrim->GetOutput()->GetBufferedRegion().GetSize());
+  fltTrim->GetOutput()->SetRegions(outreg);
+
+  // We also need to adjust the origin
+  RealVector origin;
+  for(size_t i = 0; i < VDim; i++)
+    {
+    origin[i] = 
+      input->GetOrigin()[i] + outreg.GetSize(i) * input->GetSpacing()[i];
+    }
+  *verbose << "  Setting origin to " << origin << endl;
+  fltTrim->GetOutput()->SetOrigin(origin.data_block());
+
+  // Update the image stack
+  m_ImageStack.pop_back();
+  m_ImageStack.push_back(fltTrim->GetOutput());
+}
+
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
 ::TrimImage(const RealVector &margin)
 {
   // Get the input image
@@ -902,30 +1027,8 @@ ImageConverter<TPixel, VDim>
     radius[i] = (int) ceil(margin[i] / input->GetSpacing()[i]);
   bbox.PadByRadius(radius);
 
-  // Make sure the bounding box is within the contents of the image
-  bbox.Crop(input->GetBufferedRegion());
-
-  // Report the bounding box size
-  *verbose << "  Extracting bounding box " << bbox.GetIndex() << " " << bbox.GetSize() << endl;
-
-  // Chop off the region
-  typedef itk::ExtractImageFilter<ImageType, ImageType> TrimFilter;
-  typename TrimFilter::Pointer fltTrim = TrimFilter::New();
-  fltTrim->SetInput(input);
-  fltTrim->SetExtractionRegion(bbox);
-  fltTrim->Update();
-
-  // Unfortunately we have to adjust the index and origin of the trimmed region
-  RealVector bb0, bb1;
-  GetBoundingBox(fltTrim->GetOutput(), bb0, bb1);
-  typename ImageType::RegionType outreg;
-  outreg.SetSize(fltTrim->GetOutput()->GetBufferedRegion().GetSize());
-  fltTrim->GetOutput()->SetRegions(outreg);
-  fltTrim->GetOutput()->SetOrigin(bb0.data_block());
-
-  // Update the image stack
-  m_ImageStack.pop_back();
-  m_ImageStack.push_back(fltTrim->GetOutput());
+  // Use the extract region code for the rest
+  this->ExtractRegion(bbox);
 }
 
 template<class TPixel, unsigned int VDim>
@@ -1087,7 +1190,10 @@ ImageConverter<TPixel, VDim>
     for(size_t k = 0; k < xRule.size(); k += 2)
       {
       double u = xRule[k], v = xRule[k+1];
-      if((val == 0 && u == 0) || fabs(2*(val-u)/(val+u)) < epsilon)
+      if(
+        (vnl_math_isnan(val) && vnl_math_isnan(u)) ||
+        (val == u) ||
+        fabs(2*(val-u)/(val+u)) < epsilon)
         {
         it.Set(v);
         nReps++;
@@ -1384,7 +1490,8 @@ int main(int argc, char *argv[])
   if(argc == 1)
     {
     cerr << "PICSL convert3d tool" << endl;
-    cerr << "usage: http://milesdavis.uphs.upenn.edu/mediawiki-1.4.10/index.php?title=Convert3D_Command_Line" << endl;
+    cerr << "For documentation and usage examples, see" << endl;
+    cerr << "    http://alliance.seas.upenn.edu/~pauly2/wiki/index.php?n=Main.Convert3DTool" << endl;
     return -1;
     }
 
@@ -1394,11 +1501,24 @@ int main(int argc, char *argv[])
 
 
   // Create the converter and run it
-  try {
+  try 
+    {
     ImageConverter<double, 3> convert;
     convert.ProcessCommandLine(argc, argv);
     return 0;
-  }
-  catch (...) { return -1; }
+    }
+  catch (itk::ExceptionObject &exc)
+    {
+    cerr << "Exception caught during ITK image processing" << endl;
+    cerr << "Exception message: " << endl;
+    cerr << exc.what() << endl;
+    return -1;
+    }
+  catch (...) 
+    { 
+    cerr << "Unknown exception caught by convert3d" << endl;
+    return -1; 
+    }
+
 }
 
