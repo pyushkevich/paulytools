@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <set>
 
 #include <vtkCellArray.h>
 #include <vtkPolyData.h>
@@ -40,7 +41,8 @@ int usage()
   cout << "usage: " << endl;
   cout << "   dumpmeshpoints [options] <input.byu|input.vtk> " << endl;
   cout << "options: " << endl;
-  cout << "   -a NAME          Dump the contents of array name as a column" << endl;
+  cout << "   -a NAME   Dump the contents of array name as a column" << endl;
+  cout << "   -e        Dump the edges in the mesh" << endl;
   return -1;
 }
 
@@ -64,6 +66,39 @@ int main(int argc, char **argv)
       else
         cerr << "No array by name " << argv[i] << " found in the mesh" << endl;
       }
+    else if(0 == strcmp(argv[i], "-e"))
+      {
+      // Get the edge filename
+      string fnEdge = argv[++i];
+
+      // Get all the edges in the mesh
+      typedef std::pair<int, int> Edge;
+      std::set<Edge> eset;
+
+      // Go through the cells and count all edges
+      p1->BuildCells();
+      p1->BuildLinks();
+      for(vtkIdType id = 0; id < p1->GetNumberOfCells(); id++)
+        {
+        vtkIdList *nbr = vtkIdList::New();
+        p1->GetCellPoints(id, nbr);
+        for(size_t j = 0; j < nbr->GetNumberOfIds(); j++)
+          {
+          vtkIdType q1 = nbr->GetId(j);
+          vtkIdType q2 = nbr->GetId((j + 1) % nbr->GetNumberOfIds());
+          eset.insert(make_pair(std::min(q1, q2), std::max(q1,q2)));
+          }
+        nbr->Delete();
+        }
+
+      // Save all the edges
+      cout << eset.size() << endl;
+      for(std::set<Edge>::const_iterator it = eset.begin(); it!=eset.end(); ++it)
+        {
+        cout << it->first << " " << it->second << endl;
+        }
+      }
+
     }
 
   // Get the points from the mesh

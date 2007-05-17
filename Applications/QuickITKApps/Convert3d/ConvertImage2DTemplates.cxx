@@ -1,2 +1,2 @@
-#define C3D_VDIM 3
+#define C3D_VDIM 2
 #include "ConvertImageNDTemplates.h"

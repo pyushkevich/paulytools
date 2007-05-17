@@ -1,43 +1,4 @@
-// We define manual instantiation to speed up compilation
-#define ITK_MANUAL_INSTANTIATION 1
-
-// ITK includes
-#include "itkAntiAliasBinaryImageFilter.h"
-#include "itkBinaryThresholdImageFilter.h"
-#include "itkBSplineInterpolateImageFunction.h"
-#include "itkByteSwapper.h"
-#include "itkComplexToImaginaryImageFilter.h"
-#include "itkComplexToRealImageFilter.h"
-#include "itkDiscreteGaussianImageFilter.h"
-#include "itkExtractImageFilter.h"
-#include "itkIdentityTransform.h"
-#include "itkImageFileReader.h"
-#include "itkImageFileWriter.h"
-#include "itkImage.h"
-#include "itkImageRegionConstIteratorWithIndex.h"
-#include "itkImageRegionIterator.h"
-#include "itkImageRegionIteratorWithIndex.h"
-#include "itkIOCommon.h"
-#include "itkLinearInterpolateImageFunction.h" 
-#include "itkMetaDataObject.h"
-#include "itkNearestNeighborInterpolateImageFunction.h"
-#include "itkPovRayDF3ImageIOFactory.h"
-#include "itkResampleImageFilter.h"
-#include <itkSegmentationLevelSetImageFilter.h>
-#include "itkShiftScaleImageFilter.h"
-#include <itksys/SystemTools.hxx>
-#include "itkVnlFFTRealToComplexConjugateImageFilter.h"
-#include "itkVoxBoCUBImageIOFactory.h"
-
-#include <iostream>
-#include <cctype>
-#include <string>
-#include <vector>
-#include <algorithm>
-#include <cstdlib>
-
-
-using namespace std;
+#include "ConvertImage3D.h"
 
 // Helper function: read a double, throw exception if unreadable
 double myatof(char *str)
@@ -49,92 +10,6 @@ double myatof(char *str)
   return d;
 };
 
-template<class TPixel, unsigned int VDim>
-class ImageConverter
-{
-public:
-  ImageConverter();
-  int ProcessCommandLine(int argc, char *argv[]);
-
-private:
-  // Image typedef
-  typedef itk::Image<TPixel, VDim> ImageType;
-  typedef typename ImageType::Pointer ImagePointer;
-  typedef typename ImageType::SizeType SizeType;
-  typedef typename ImageType::IndexType IndexType;
-  typedef typename ImageType::RegionType RegionType;
-  typedef vnl_vector_fixed<double, VDim> RealVector;
-  typedef vnl_vector_fixed<int, VDim> IntegerVector;
-
-  // Complex stuff
-  typedef std::complex<TPixel> ComplexPixel;
-  typedef itk::Image<ComplexPixel, VDim> ComplexImageType;
-
-  // Iterators
-  typedef itk::ImageRegionIteratorWithIndex<ImageType> Iterator;
-  typedef itk::ImageRegionConstIteratorWithIndex<ImageType> ConstIterator;
-  
-  // Internal functions
-  void ReadImage(const char *file);
-  void WriteImage(const char *file, bool force);
-  void AntiAliasImage(double iso);
-  void CopyImage();
-  void ComputeFFT();
-  void ComputeOverlaps(double value);
-  void ExtractRegion(RegionType bbox);
-  void LevelSetSegmentation(int nIter);
-  void SampleImage(const RealVector &x);
-  void ScaleShiftImage(double a, double b);
-  void PrintImageInfo(bool flagFullInfo);
-  void ReplaceIntensities(vector<double> &rules);
-  void ThresholdImage(double u1, double u2, double vIn, double vOut);
-  void TrimImage(const RealVector &margin);
-  int ProcessCommand(int argc, char *argv[]);
-  int ProcessResampleCommand(int argc, char *argv[]);
-  int ProcessSmoothCommand(int argc, char *argv[]);
-
-  // Read vectors, etc from command line
-  SizeType ReadSizeVector(char *vec);
-  IndexType ReadIndexVector(char *vec);
-  RealVector ReadRealVector(char *vec);
-
-  // Get bounding box of an image
-  void GetBoundingBox(ImageType *image, RealVector &bb0, RealVector &bb1);
-
-  // Templated write function
-  template<class TOutPixel> void TemplatedWriteImage(const char *file, double xRoundFactor);
-
-  // Stack of images from the command line
-  vector<ImagePointer> m_ImageStack;
-
-  // Typeid of the image to be saved
-  string m_TypeId;
-
-  // Interpolation type
-  string m_Interpolation;
-
-  // Background intensity
-  double m_Background;
-
-  // Rounding factor (not used for float and double) is 0.5 unless -noround was specified
-  double m_RoundFactor;
-
-  // Whether SPM extensions are used
-  bool m_FlagSPM;
-
-  // Number of iterations for various algorithms
-  size_t m_Iterations;
-
-  // Root mean square error for anti-aliasing algorithm
-  double m_AntiAliasRMS;
-
-  // Level set algorithm parameters
-  double m_LevSetCurvature, m_LevSetAdvection;
-
-  // Verbose output stream
-  std::ostringstream devnull;
-  std::ostream *verbose;
-};
 
 template<class TPixel, unsigned int VDim>
 ImageConverter<TPixel,VDim>
@@ -178,6 +53,12 @@ ImageConverter<TPixel, VDim>
   else if(cmd == "-binarize")
     {
     ThresholdImage(m_Background, m_Background, 0.0, 1.0);
+    return 0;
+    }
+
+  else if(cmd == "-connected-components" || cmd == "-connected" || cmd == "-comp")
+    {
+    ConnectedComponents();
     return 0;
     }
 
@@ -400,28 +281,55 @@ int
 ImageConverter<TPixel, VDim>
 ::ProcessCommandLine(int argc, char *argv[])
 {
-  // The last parameter in the command line is the output file
-  string fnOutput = argv[argc-1];
-  
-  // Command line processing
-  for(size_t i = 1; i < argc; ++i)
+  // Check the number of arguments
+  if(argc == 1)
     {
-    string cmd = argv[i];
-    if(cmd[0] == '-')
+    cerr << "PICSL convert3d tool" << endl;
+    cerr << "For documentation and usage examples, see" << endl;
+    cerr << "    http://alliance.seas.upenn.edu/~pauly2/wiki/index.php" 
+      << "?n=Main.Convert3DTool" << endl;
+    return -1;
+    }
+
+  // Try processing command line
+  try 
+    {
+    // The last parameter in the command line is the output file
+    string fnOutput = argv[argc-1];
+
+    // Command line processing
+    for(size_t i = 1; i < argc; ++i)
       {
-      // A command has been supplied
-      i += ProcessCommand(argc-(i+1), argv+i);
-      }
-    else
-      {
-      // An image file name has been provided. If this image is followed by commands
-      // read it and push in the pipeline.
-      if(i != argc-1)
-        ReadImage(argv[i]);
+      string cmd = argv[i];
+      if(cmd[0] == '-')
+        {
+        // A command has been supplied
+        i += ProcessCommand(argc-(i+1), argv+i);
+        }
       else
-        // Write the image, but in safe mode
-        WriteImage(argv[i], false);
+        {
+        // An image file name has been provided. If this image is followed by commands
+        // read it and push in the pipeline.
+        if(i != argc-1)
+          ReadImage(argv[i]);
+        else
+          // Write the image, but in safe mode
+          WriteImage(argv[i], false);
+        }
       }
+    return 0;
+    }
+  catch (itk::ExceptionObject &exc)
+    {
+    cerr << "Exception caught during ITK image processing" << endl;
+    cerr << "Exception message: " << endl;
+    cerr << exc.what() << endl;
+    return -1;
+    }
+  catch (...) 
+    { 
+    cerr << "Unknown exception caught by convert3d" << endl;
+    return -1; 
     }
 }
 
@@ -991,7 +899,7 @@ ImageConverter<TPixel, VDim>
   for(size_t i = 0; i < VDim; i++)
     {
     origin[i] = 
-      input->GetOrigin()[i] + outreg.GetSize(i) * input->GetSpacing()[i];
+      input->GetOrigin()[i] + bbox.GetIndex(i) * input->GetSpacing()[i];
     }
   *verbose << "  Setting origin to " << origin << endl;
   fltTrim->GetOutput()->SetOrigin(origin.data_block());
@@ -1011,7 +919,7 @@ ImageConverter<TPixel, VDim>
 
   // Debugging info
   *verbose << "Trimming #" << m_ImageStack.size() << endl;
-  *verbose << "  Wrapping non-background voxels with margin of " << margin << " voxels." << endl;
+  *verbose << "  Wrapping non-background voxels with margin of " << margin << " mm." << endl;
 
   // Initialize the bounding box
   typename ImageType::RegionType bbox;
@@ -1310,7 +1218,7 @@ ImageConverter<TPixel, VDim>
   typename SegFilter::Pointer fltSegment = SegFilter::New();
 
   // Set up the radius
-  itk::Size<3> rad = {{1, 1, 1}};
+  itk::Size<VDim> rad; rad.Fill(1);
 
   // Create the function
   typedef MyLevelSetFunction<ImageType> SegFunction;
@@ -1351,6 +1259,64 @@ ImageConverter<TPixel, VDim>
     bb1[i] = bb0[i] + image->GetSpacing()[i] * image->GetBufferedRegion().GetSize()[i];
     }
 }
+
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
+::ConnectedComponents()
+{
+  // The image is assumed to be binary. If background is non-zero, call binarize
+  // to map the background to zero
+  if(m_Background != 0.0)
+    ThresholdImage(m_Background, m_Background, 0.0, 1.0);
+
+  // Get the last image on the stack
+  ImagePointer image = m_ImageStack.back();
+
+  // Integer image typedef
+  typedef itk::Image<int, VDim> IntImageType;
+  
+  // Construct the connected components filter
+  typedef itk::ConnectedComponentImageFilter<ImageType, IntImageType> CCFilter;
+
+  // Relabel the components
+  typedef itk::RelabelComponentImageFilter<IntImageType, IntImageType> RCFilter;
+
+  // Describe what we are doing
+  *verbose << "Computing connected components of #" << m_ImageStack.size() << endl;
+  *verbose << "  Calling ConnectedComponentImageFilter" << endl;
+
+  // Plug in the filter's components
+  typename CCFilter::Pointer fltConnect = CCFilter::New();
+  fltConnect->SetInput(image);
+  fltConnect->SetFullyConnected(false);
+  fltConnect->Update();
+
+  // Describe what we are doing
+  *verbose << "  Calling RelabelComponentImageFilter" << endl;
+
+  // Relabel and order components
+  typename RCFilter::Pointer fltRelabel = RCFilter::New();
+  fltRelabel->SetInput(fltConnect->GetOutput());
+  fltRelabel->Update();
+
+  // Print the statistics about the connected components
+  cout << "  There are " << 
+    fltRelabel->GetNumberOfObjects() << " connected components." << endl;
+  cout << "  Largest component has " << 
+    fltRelabel->GetSizeOfObjectInPixels(1) << " pixels." << endl;
+
+  // We have to convert the image back to the native type
+  typedef itk::CastImageFilter<IntImageType, ImageType> CastFilter;
+  typename CastFilter::Pointer fltCast = CastFilter::New();
+  fltCast->SetInput(fltRelabel->GetOutput());
+  fltCast->Update();
+
+  // Store the output
+  m_ImageStack.pop_back();
+  m_ImageStack.push_back(fltCast->GetOutput());
+}
+
 
 template<class TPixel, unsigned int VDim>
 void
@@ -1484,42 +1450,6 @@ ImageConverter<TPixel, VDim>
     }
 }
 
-
-  
-int main(int argc, char *argv[])
-{
-  if(argc == 1)
-    {
-    cerr << "PICSL convert3d tool" << endl;
-    cerr << "For documentation and usage examples, see" << endl;
-    cerr << "    http://alliance.seas.upenn.edu/~pauly2/wiki/index.php?n=Main.Convert3DTool" << endl;
-    return -1;
-    }
-
-  // Load the ITK factories
-  itk::ObjectFactoryBase::RegisterFactory(itk::VoxBoCUBImageIOFactory::New());
-  itk::ObjectFactoryBase::RegisterFactory(itk::PovRayDF3ImageIOFactory::New());
-
-
-  // Create the converter and run it
-  try 
-    {
-    ImageConverter<double, 3> convert;
-    convert.ProcessCommandLine(argc, argv);
-    return 0;
-    }
-  catch (itk::ExceptionObject &exc)
-    {
-    cerr << "Exception caught during ITK image processing" << endl;
-    cerr << "Exception message: " << endl;
-    cerr << exc.what() << endl;
-    return -1;
-    }
-  catch (...) 
-    { 
-    cerr << "Unknown exception caught by convert3d" << endl;
-    return -1; 
-    }
-
-}
-
+template class ImageConverter<double, 2>;
+template class ImageConverter<double, 3>;
+ 

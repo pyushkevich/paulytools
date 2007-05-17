@@ -43,6 +43,15 @@ public:
     vtkPolyData *mesh, vtkIdType x1, vtkIdType x2) const = 0;
 };
 
+class UnitLengthMeshEdgeWeightFunction : public MeshEdgeWeightFunction
+{
+public:
+  virtual double GetEdgeWeight(
+    vtkPolyData *mesh, vtkIdType x1, vtkIdType x2) const
+    { return 1.0; }
+};
+
+
 class EuclideanDistanceMeshEdgeWeightFunction : public MeshEdgeWeightFunction
 {
 public:

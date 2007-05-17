@@ -46,7 +46,7 @@ TARGET_LINK_LIBRARIES(braintracer
   vtkGraphics 
   vtkHybrid
   vtkRendering
-  vtkPatented
+  #  vtkPatented
   ${FLTK_LIBRARY}
 )
 

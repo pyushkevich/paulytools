@@ -38,6 +38,7 @@ SET(COMMON_LIBS
   vtkIO 
   vtkGraphics 
   vtkHybrid
+  vtkPatented
   vtkRendering
 )
 

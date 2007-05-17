@@ -336,7 +336,7 @@ protected:
   int IsPixelAVertex( const NeighborhoodIterator &it, int index )
     {
     // Get the position of the vertex in image coordinates
-    WeightFunctorType::Point xVertex;
+    typename WeightFunctorType::Point xVertex;
     it.GetImagePointer()->TransformIndexToPhysicalPoint(
       it.GetIndex(index), xVertex);
 
@@ -345,10 +345,10 @@ protected:
     }
 
   /** Get the weight associated with a vertex (internal method) */
-  int GetVertexWeight( const NeighborhoodIterator &it, int index )
+  TWeight GetVertexWeight( const NeighborhoodIterator &it, int index )
     {
     // Get the position of the vertex in image coordinates
-    WeightFunctorType::Point xVertex;
+    typename WeightFunctorType::Point xVertex;
     it.GetImagePointer()->TransformIndexToPhysicalPoint(
       it.GetIndex(index), xVertex);
 
@@ -357,10 +357,10 @@ protected:
     }
 
   /** Get the weight associated with an edge (internal method) */
-  int GetEdgeWeight( const NeighborhoodIterator &it, int i1, int i2 )
+  TWeight GetEdgeWeight( const NeighborhoodIterator &it, int i1, int i2 )
     {
     // Get the position of the vertex in image coordinates
-    WeightFunctorType::Point xVertex1, xVertex2;
+    typename WeightFunctorType::Point xVertex1, xVertex2;
     it.GetImagePointer()->TransformIndexToPhysicalPoint( it.GetIndex(i1), xVertex1);
     it.GetImagePointer()->TransformIndexToPhysicalPoint( it.GetIndex(i2), xVertex2);
 
