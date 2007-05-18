@@ -67,6 +67,7 @@ int main(int argc, char **argv)
       imgBin->FillBuffer(0);
       imgBin->SetOrigin(imgInput->GetOrigin());
       imgBin->SetSpacing(imgInput->GetSpacing());
+      cout << "MY PORIGIN IS " << imgBin->GetOrigin() << endl;
       
       IteratorType itSource(imgInput,imgInput->GetBufferedRegion());
       BinIteratorType itTarget(imgBin,imgBin->GetBufferedRegion());
@@ -79,7 +80,7 @@ int main(int argc, char **argv)
         }
 
       ostringstream fn;
-      fn << argv[2] << "." << (i / 100) << ((i % 100) / 10) << (i % 10) << ".img";
+      fn << argv[2] << "." << (i / 100) << ((i % 100) / 10) << (i % 10) << ".vtk";
       cout << "Writing " << fn.str().c_str() << endl;
 
       typedef itk::ImageFileWriter<BinImageType> WriterType;

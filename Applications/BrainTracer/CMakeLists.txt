@@ -4,6 +4,10 @@ INCLUDE_DIRECTORIES(
   ${TRACER_SOURCE_DIR}/Code
 )
 
+# Create the GUI cource
+SET(TRACER_FLUIDS Code/TracerUserInterface.fl)
+FLTK_WRAP_UI(braintracer ${TRACER_FLUIDS})
+
 # Tracer application GUI
 SET(TRACER_SRCS
   Code/BinaryHeap.h
@@ -28,6 +32,7 @@ SET(TRACER_SRCS
   Code/VTKMeshVoronoiDiagram.cxx
   Code/VTKMeshVoronoiDiagram.h
   Code/VTKMeshHalfEdgeWrapper.h
+  ${braintracer_FLTK_UI_SRCS}
 )
 
 ADD_EXECUTABLE(braintracer ${TRACER_SRCS})
@@ -49,10 +54,6 @@ TARGET_LINK_LIBRARIES(braintracer
   #  vtkPatented
   ${FLTK_LIBRARY}
 )
-
-# Create the GUI cource
-SET(TRACER_FLUIDS Code/TracerUserInterface.fl)
-FLTK_WRAP_UI(braintracer ${TRACER_FLUIDS})
 
 # Set up the Windows install script
 CONFIGURE_FILE(

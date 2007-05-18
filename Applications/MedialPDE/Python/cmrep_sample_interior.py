@@ -35,7 +35,9 @@ cmrep = MedialPDE(args[0])
 
 # See if the image has been supplied
 if options.image:
-  image = FloatImage(options.image)
+  image = FloatImage();
+  image.LoadFromFile(options.image);
+  image.SetOutsideValue(0.0);
   cmrep.SampleInterior(args[1], xiStep, xiStart, xiEnd, image);
 else:
   cmrep.SampleInterior(args[1], xiStep, xiStart, xiEnd);
