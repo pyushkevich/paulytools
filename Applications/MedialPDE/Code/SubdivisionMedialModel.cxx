@@ -56,10 +56,8 @@ SubdivisionMedialModel
   mlCoefficient.SetAsRoot();
 
   // Subdivide the coefficient-level mesh up to the atom-level mesh
-  cout << "Enter  SubdivisionSurface::RecursiveSubdivide" << endl;
   SubdivisionSurface::RecursiveSubdivide(
     &mlCoefficient, &mlAtom, nAtomSubs - nCoeffSubs);
-  cout << "Got past SubdivisionSurface::RecursiveSubdivide" << endl;
 
   // Apply the subdivision to the u and v coordinates
   uAtom.set_size(mlAtom.nVertices); vAtom.set_size(mlAtom.nVertices);

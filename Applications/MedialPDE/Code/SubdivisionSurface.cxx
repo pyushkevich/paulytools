@@ -329,9 +329,7 @@ RecursiveSubdivide(const MeshLevel *src, MeshLevel *dst, size_t n)
     *dst = *src; 
 
     // Make the destination be its own root
-    cout << "Calling SetAsRoot in RecursiveSubdivide()" << endl;
     dst->SetAsRoot();
-    cout << "DST-WGT: " << dst->weights << endl << endl;
 
     // Done
     return; 

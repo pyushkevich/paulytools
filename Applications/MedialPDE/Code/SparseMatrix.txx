@@ -413,5 +413,4 @@ ImmutableSparseMatrix<TVal>
       this->xSparseValues[j] = 1;
       }
     }
-  std::cout << "Set Identity to " << n << std::endl;
 }
