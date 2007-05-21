@@ -29,6 +29,8 @@ int main(int argc, char *argv[])
 
   // Load the mesh
   vtkPolyData *xMesh = ReadVTKData(argv[1]);
+  xMesh->BuildCells();
+  xMesh->BuildLinks();
   
   // Compute all the edges
   typedef ImmutableSparseArray<double> ImmutableArr;
@@ -54,7 +56,7 @@ int main(int argc, char *argv[])
 
       // Compute the distance
       vnl_vector<double> x1(xMesh->GetPoint(iTail), 3);
-      vnl_vector<double> x2(xMesh->GetPoint(iTail), 3);
+      vnl_vector<double> x2(xMesh->GetPoint(iHead), 3);
       double dist = (x1 - x2).magnitude();
 
       // Add the edge to the list
@@ -93,6 +95,12 @@ int main(int argc, char *argv[])
       double d = xDist[xLandmarks[j]];
       mDist[i][j] = d * d;
       }
+
+    cout << ".";
+    if( ((i+1) % 64) == 0 || i + 1 == n )
+      cout << " n = " << i+1 << endl;
+    else
+      cout << flush;
     }
 
   // Save the distance matrix
