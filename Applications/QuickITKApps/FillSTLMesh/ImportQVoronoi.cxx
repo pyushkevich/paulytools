@@ -551,9 +551,33 @@ int main(int argc, char *argv[])
   fltClean->SetInput(poly);
   fltClean->Update();
 
+  // The output from the next branch
+  vtkPolyData *polySave = fltClean->GetOutput();
+
+  // Compute the connected components
+  if(nComp > 0)
+    {
+    vtkPolyDataConnectivityFilter *fltConnect = vtkPolyDataConnectivityFilter::New();
+    fltConnect->SetInput(fltClean->GetOutput());
+
+    if(nComp == 1)
+      fltConnect->SetExtractionModeToLargestRegion();
+    else 
+      {
+      fltConnect->SetExractionModeToSelectedRegions();
+      fltConnect->InitializeSelectedRegionList();
+      for(size_t rr = 0; rr < nComp; rr++)
+        fltConnect->AddSelectedRegion(rr);
+      }
+
+    fltConnect->ScalarConnectivityOff();
+    fltConnect->Update();
+    polySave = fltConnect->GetOutput();
+    }
+
   // Convert the cell data to point data
   vtkCellDataToPointData *c2p = vtkCellDataToPointData::New();
-  c2p->SetInput(fltClean->GetOutput());
+  c2p->SetInput(polySave);
   c2p->PassCellDataOn();
   c2p->Update();
     
