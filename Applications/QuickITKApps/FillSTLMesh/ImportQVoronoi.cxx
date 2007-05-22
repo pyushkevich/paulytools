@@ -24,6 +24,7 @@
 #include <vtkCellLocator.h>
 #include <vtkDoubleArray.h>
 #include <vtkCleanPolyData.h>
+#include <vtkPolyDataConnectivityFilter.h>
 
 #include <itkImageFileReader.h>
 #include <itkLinearInterpolateImageFunction.h>
@@ -564,10 +565,10 @@ int main(int argc, char *argv[])
       fltConnect->SetExtractionModeToLargestRegion();
     else 
       {
-      fltConnect->SetExractionModeToSelectedRegions();
-      fltConnect->InitializeSelectedRegionList();
+      fltConnect->SetExtractionModeToSpecifiedRegions();
+      fltConnect->InitializeSpecifiedRegionList();
       for(size_t rr = 0; rr < nComp; rr++)
-        fltConnect->AddSelectedRegion(rr);
+        fltConnect->AddSpecifiedRegion(rr);
       }
 
     fltConnect->ScalarConnectivityOff();
