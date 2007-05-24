@@ -32,6 +32,8 @@
 #include "itkRelabelComponentImageFilter.h"
 #include "itkCastImageFilter.h"
 #include <itkSegmentationLevelSetImageFilter.h>
+#include "itkAddImageFilter.h"
+#include "itkMultiplyImageFilter.h"
 
 #include <string>
 
@@ -69,6 +71,19 @@ template class itk::SegmentationLevelSetImageFilter<DoubleImage, DoubleImage, do
 template class itk::SegmentationLevelSetFunction<DoubleImage, DoubleImage>;
 template class itk::ConnectedComponentImageFilter<DoubleImage, IntImage>;
 template class itk::RelabelComponentImageFilter<IntImage, IntImage>;
+template class itk::UnaryFunctorImageFilter<IntImage, DoubleImage, 
+  itk::Functor::Cast<int, double> >;
+template class itk::UnaryFunctorImageFilter<ComplexImage, DoubleImage, 
+  itk::Function::ComplexToImaginary<std::complex<double>, double> >;
+template class itk::UnaryFunctorImageFilter<ComplexImage, DoubleImage, 
+  itk::Function::ComplexToReal<std::complex<double>, double> >;
+template class itk::SparseFieldLevelSetImageFilter<DoubleImage, DoubleImage>;
+template class itk::AddImageFilter<DoubleImage, DoubleImage, DoubleImage>;
+template class itk::MultiplyImageFilter<DoubleImage, DoubleImage, DoubleImage>;
+template class itk::BinaryFunctorImageFilter<DoubleImage, DoubleImage, DoubleImage,
+  itk::Functor::Add2<double,double,double> >;
+template class itk::BinaryFunctorImageFilter<DoubleImage, DoubleImage, DoubleImage,
+  itk::Function::Mult<double,double,double> >;
 
 // All the junk we need for complex
 template class itk::VnlFFTRealToComplexConjugateImageFilter<double, C3D_VDIM>;

@@ -37,10 +37,23 @@ ImageConverter<TPixel, VDim>
   // Get the first command
   string cmd = argv[0];
 
+  // Binary arithmetic commands
+  if(cmd == "-multiply" || cmd == "-times")
+    {
+    MultiplyImages();
+    return 0;
+    }
+
+  else if(cmd == "-add")
+    {
+    AddImages();
+    return 0;
+    }
+
   // Anti-alias a binary image, turning it into a smoother floating point image;
   // the argument is the iso-surface value
   // This command is affected by -iterations and -rms flags
-  if(cmd == "-antialias" || cmd == "-alias")
+  else if(cmd == "-antialias" || cmd == "-alias")
     {
     AntiAliasImage(atof(argv[1]));
     return 1;
@@ -67,6 +80,22 @@ ImageConverter<TPixel, VDim>
     // Get the probe point
     RealVector x = ReadRealVector(argv[1]);
     SampleImage(x);
+    return 1;
+    }
+
+  else if(cmd == "-pixel")
+    {
+    // Get a pixel value - no interpolation
+    typename RegionType::IndexType idx = ReadIndexVector(argv[1]);
+    try 
+      {
+      double pix = m_ImageStack.back()->GetPixel(idx);
+      cout << "Pixel " << idx << " has value " << pix << endl;
+      }
+    catch(...)
+      {
+      cerr << "Error: pixel " << idx << " can not be examined!" << endl;
+      }
     return 1;
     }
 
@@ -970,6 +999,73 @@ ImageConverter<TPixel, VDim>
   m_ImageStack.pop_back();
   m_ImageStack.push_back(filter->GetOutput());
 }
+
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
+::MultiplyImages()
+{
+  // Check input availability
+  if(m_ImageStack.size() < 2)
+    {
+    cerr << "Binary operations require two images on the stack" << endl;
+    throw -1;
+    }
+
+  // Get the last two images
+  ImagePointer i1 = m_ImageStack[m_ImageStack.size() - 1];
+  ImagePointer i2 = m_ImageStack[m_ImageStack.size() - 2];
+
+  // Write something
+  *verbose << "Multiplying #" << m_ImageStack.size() - 1 
+    << " by #" << m_ImageStack.size() << endl;
+
+  // Perform the multiplication
+  typedef itk::MultiplyImageFilter<ImageType, ImageType, ImageType> FilterType;
+  typename FilterType::Pointer flt = FilterType::New();
+  flt->SetInput1(i1);
+  flt->SetInput2(i1);
+  flt->Update();
+
+  // Replace the images with the product
+  m_ImageStack.pop_back();
+  m_ImageStack.pop_back();
+  m_ImageStack.push_back(flt->GetOutput());
+}
+
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
+::AddImages()
+{
+  // Check input availability
+  if(m_ImageStack.size() < 2)
+    {
+    cerr << "Binary operations require two images on the stack" << endl;
+    throw -1;
+    }
+
+  // Get the last two images
+  ImagePointer i1 = m_ImageStack[m_ImageStack.size() - 1];
+  ImagePointer i2 = m_ImageStack[m_ImageStack.size() - 2];
+
+  // Write something
+  *verbose << "Multiplying #" << m_ImageStack.size() - 1 
+    << " by #" << m_ImageStack.size() << endl;
+
+  // Perform the multiplication
+  typedef itk::AddImageFilter<ImageType, ImageType, ImageType> FilterType;
+  typename FilterType::Pointer flt = FilterType::New();
+  flt->SetInput1(i1);
+  flt->SetInput2(i1);
+  flt->Update();
+
+  // Replace the images with the product
+  m_ImageStack.pop_back();
+  m_ImageStack.pop_back();
+  m_ImageStack.push_back(flt->GetOutput());
+}
+
 
 template<class TPixel, unsigned int VDim>
 void

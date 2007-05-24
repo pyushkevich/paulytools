@@ -5,6 +5,7 @@
 #define ITK_MANUAL_INSTANTIATION 1
 
 // ITK includes
+#include "itkAddImageFilter.h"
 #include "itkAntiAliasBinaryImageFilter.h"
 #include "itkBinaryThresholdImageFilter.h"
 #include "itkBSplineInterpolateImageFunction.h"
@@ -25,6 +26,7 @@
 #include "itkIOCommon.h"
 #include "itkLinearInterpolateImageFunction.h" 
 #include "itkMetaDataObject.h"
+#include "itkMultiplyImageFilter.h"
 #include "itkNearestNeighborInterpolateImageFunction.h"
 #include "itkPovRayDF3ImageIOFactory.h"
 #include "itkRelabelComponentImageFilter.h"
@@ -73,12 +75,14 @@ private:
   void ReadImage(const char *file);
   void WriteImage(const char *file, bool force);
   void AntiAliasImage(double iso);
+  void AddImages();
   void CopyImage();
   void ComputeFFT();
   void ComputeOverlaps(double value);
   void ConnectedComponents();
   void ExtractRegion(RegionType bbox);
   void LevelSetSegmentation(int nIter);
+  void MultiplyImages();
   void SampleImage(const RealVector &x);
   void ScaleShiftImage(double a, double b);
   void PrintImageInfo(bool flagFullInfo);
