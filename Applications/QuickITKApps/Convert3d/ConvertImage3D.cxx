@@ -1024,7 +1024,7 @@ ImageConverter<TPixel, VDim>
   typedef itk::MultiplyImageFilter<ImageType, ImageType, ImageType> FilterType;
   typename FilterType::Pointer flt = FilterType::New();
   flt->SetInput1(i1);
-  flt->SetInput2(i1);
+  flt->SetInput2(i2);
   flt->Update();
 
   // Replace the images with the product
@@ -1057,7 +1057,7 @@ ImageConverter<TPixel, VDim>
   typedef itk::AddImageFilter<ImageType, ImageType, ImageType> FilterType;
   typename FilterType::Pointer flt = FilterType::New();
   flt->SetInput1(i1);
-  flt->SetInput2(i1);
+  flt->SetInput2(i2);
   flt->Update();
 
   // Replace the images with the product
