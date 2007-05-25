@@ -660,8 +660,6 @@ ImageConverter<TPixel, VDim>
       if(tok == NULL)
         { cerr << "Invalid size specification: " << vecbk << endl; throw -1; }      
       int x = atoi(tok);
-      if(x <= 0)
-        { cerr << "Non-positive size specification: " << vecbk << endl; throw -1; }      
       idx[i] = (long)(x);
       tok = strtok(NULL, "x");
       } 
