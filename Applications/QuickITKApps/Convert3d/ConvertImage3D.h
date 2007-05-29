@@ -32,6 +32,7 @@
 #include "itkRelabelComponentImageFilter.h"
 #include "itkResampleImageFilter.h"
 #include <itkSegmentationLevelSetImageFilter.h>
+#include "itkSignedDanielssonDistanceMapImageFilter.h"
 #include "itkShiftScaleImageFilter.h"
 #include <itksys/SystemTools.hxx>
 #include "itkVnlFFTRealToComplexConjugateImageFilter.h"
@@ -80,6 +81,7 @@ private:
   void ComputeFFT();
   void ComputeOverlaps(double value);
   void ConnectedComponents();
+  void SignedDistanceTransform();
   void ExtractRegion(RegionType bbox);
   void LevelSetSegmentation(int nIter);
   void MultiplyImages();

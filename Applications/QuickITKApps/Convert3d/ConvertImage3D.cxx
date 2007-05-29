@@ -213,6 +213,12 @@ ImageConverter<TPixel, VDim>
     }
   */
 
+  else if(cmd == "-signed-distance-transform" || cmd == "-sdt")
+    {
+    SignedDistanceTransform();
+    return 0;
+    }
+
   else if(cmd == "-fft")
     {
     ComputeFFT();
@@ -1409,6 +1415,37 @@ ImageConverter<TPixel, VDim>
   // Store the output
   m_ImageStack.pop_back();
   m_ImageStack.push_back(fltCast->GetOutput());
+}
+
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
+::SignedDistanceTransform()
+{
+  // The image is assumed to be binary. If background is non-zero, call binarize
+  // to map the background to zero
+  if(m_Background != 0.0)
+    ThresholdImage(m_Background, m_Background, 0.0, 1.0);
+
+  // Get the last image on the stack
+  ImagePointer image = m_ImageStack.back();
+
+  // Construct the connected components filter
+  typedef itk::SignedDanielssonDistanceMapImageFilter<ImageType, ImageType> Filter;
+
+  // Describe what we are doing
+  *verbose << "Computing signed distance function of #" << m_ImageStack.size() << endl;
+
+  // Plug in the filter's components
+  typename Filter::Pointer flt = Filter::New();
+  flt->SetInput(image);
+  flt->SetUseImageSpacing(true);
+  flt->SquaredDistanceOff();
+  flt->Update();
+
+  // Store the output
+  m_ImageStack.pop_back();
+  m_ImageStack.push_back(flt->GetOutput());
 }
 
 
