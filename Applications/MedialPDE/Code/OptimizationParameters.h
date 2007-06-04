@@ -12,7 +12,7 @@ public:
   enum ImageMatch { VOLUME, BOUNDARY };
   enum PenaltyTerm { 
     BOUNDARY_JACOBIAN = 0, MEDIAL_REGULARITY, ATOM_BADNESS, 
-    BOUNDARY_GRAD_R, RADIUS, NTERMS };
+    BOUNDARY_GRAD_R, RADIUS, MEDIAL_CURVATURE,  NTERMS };
   enum CTFSettings { COSINE_BASIS_PDE, LOOP_SUBDIVISION_PDE, NONE };
 
   /** Optimizer type */

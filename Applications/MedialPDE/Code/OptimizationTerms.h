@@ -170,6 +170,14 @@ private:
   double xMin, xMax, xSum, xSumSq;
 };
 
+inline ostream & operator << (ostream &sout, const StatisticsAccumulator &S)
+{
+  sout << "mean(sd): " << S.GetMean() << "(" << S.GetStdDev() << "); ";
+  sout << "range: " << S.GetMin() << " to " << S.GetMax() << "; ";
+  sout << "n: " << S.GetCount() << ";";
+  return sout;
+}
+
 class EnergyTerm 
 {
 public:
@@ -307,7 +315,7 @@ private:
   double *xImageVal;
 
   // Scaled normal vectors along the boundary
-  SMLVec3d *xBndNrm;
+  SMLVec3d *xImageGrad;
 
   // Cached Terms for reporting match details
   double xObjectIntegral, xRatio;
@@ -435,6 +443,37 @@ private:
 
   // Scaling factor used to derive the penalty (why?)
   const static double xScale;
+};
+
+
+/**
+ * Term that penalizes excessive curvature of the medial axis. This
+ * penalty has the form r^2 * (kappa1^2 + kappa2^2). Thus it penalizes
+ * situations where one of the radii of curvature is excessively greater
+ * than the radius of the medial model. Of course the model can avoid 
+ * this penalty by pushing the radius to zero, so this penalty should
+ * always be used in conjunction with a radius penalty.
+ */
+class MedialCurvaturePenalty : public EnergyTerm
+{
+public:
+  // Compute the penalty
+  double ComputeEnergy(SolutionDataBase *data);
+
+  // Describe the terms of the penalty
+  void PrintReport(ostream &sout);
+
+  // Compute the partial derivative
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
+
+private:
+  // Accumulators for display and statistics calculation
+  StatisticsAccumulator 
+    saMeanCurv, saGaussCurv, saSumSqKappa, saRad, saFeature, saPenalty;
+
+  // Parameters of the penalty, which is of the form pow(f/scale, power)
+  const static double xScale, xPower;
 };
 
 

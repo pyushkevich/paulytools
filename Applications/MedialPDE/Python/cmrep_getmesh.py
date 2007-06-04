@@ -13,9 +13,16 @@ parser = OptionParser(
 (options,args) = parser.parse_args()
 
 # Check that the parameters are accurate
-if(len(args) <> 3):
+if(len(args) == 2) :
+  fnMed = args[1] + ".med.vtk";
+  fnBnd = args[1] + ".bnd.vtk";
+elif len(args) == 3 :
+  fnMed = args[1];
+  fnBnd = args[2];
+else :
   parser.error("incorrect number of positional arguments")
 
 # Load the cm-rep and save the mesh
+print "Saving mesh to " + fnMed + " and " + fnBnd;
 cmrep = MedialPDE(args[0])
-cmrep.SaveVTKMesh(args[1], args[2])
+cmrep.SaveVTKMesh(fnMed, fnBnd)

@@ -382,6 +382,9 @@ void
 CartesianMedialModel
 ::ReconstructAtoms(const Mat &ySolution)
 {
+  // Keep track of bad atoms
+  size_t nBadsF = 0, nBadsGradR = 0;
+
   // Keep track of invalid atoms
   bool flagAllAtomsValid = true;
   
@@ -407,17 +410,26 @@ CartesianMedialModel
       xAtom.ComputeBoundaryAtoms(xSites[iLocal]->IsBorderSite());
 
       // Report bad atoms
+      if(!xAtom.flagValid) nBadsGradR++;
+
+      /*
       if(!xAtom.flagValid)
         cout << "Invalid atom at " << xAtom.u << ", " << xAtom.v <<
           "(1 - |gradR|^2 = " << 1.0 - xAtom.xGradRMagSqr << ")" << endl;
+          */
       }
     else
       {
       // What are we supposed to do?
+      nBadsF++;
+
+      /* 
       cout << "Negative F at " << xAtom.u << ", " << xAtom.v << 
         " ( F = " << ySolution[i][j] << ")" << endl;
+        */
       xAtom.R = xAtom.F = xAtom.Fu = xAtom.Fv = 0.0;
       xAtom.flagValid = false;
+      
       }
 
 
@@ -427,7 +439,12 @@ CartesianMedialModel
 
   // Return value: whether all atoms are valid
   if(!flagAllAtomsValid)
-    throw MedialModelException("Invalid atoms encountered in reconstructed Cartesian MPDE");
+    {
+    std::ostringstream oss;
+    oss << "Invalid atoms (" << nBadsF << " with negative F, " 
+      << nBadsGradR << " with |GradR| > 1)";
+    throw MedialModelException(oss.str().c_str());
+    }
 }
 
 double ArrayMinMax(double *array, size_t n, double &xMin, double &xMax)
@@ -784,8 +801,27 @@ CartesianMedialModel
       xAtoms[i].F = 0.0;
     }
 
+  // Check for consistency in the atoms
+  double xSumPhi = 0.0;
+  for(size_t i = 0; i < nSites; i++)
+    xSumPhi += xAtoms[i].F;
+  cout << "READING; SubPhi = " << xSumPhi << endl;
+  cout << xAtoms[123].F << endl;
+  cout << xAtoms[352].F << endl;
+
+  cout << "UGRID " << uGrid << endl;
+  cout << "VGRID " << vGrid << endl;
+
   // Solve the PDE
-  this->ComputeAtoms();
+  vnl_vector<double> hint = this->GetHintArray();
+  try
+    {
+    this->ComputeAtoms();
+    }
+  catch(...)
+    {
+    cout << "EXCPETION" << endl;
+    }
 }
 
 void CartesianMedialModel
@@ -812,5 +848,11 @@ void CartesianMedialModel
   // Store the fourier coefficient information
   R["SurfaceModel"] << "Fourier";
   xSurface->SaveToRegistry(R.Folder("Fourier"));
+  
+  // Check for consistency in the atoms
+  double xSumPhi = 0.0;
+  for(size_t i = 0; i < nSites; i++)
+    xSumPhi += xAtoms[i].F;
+  cout << "WRITING; SubPhi = " << xSumPhi << endl;
 }
 

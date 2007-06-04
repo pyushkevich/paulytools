@@ -20,6 +20,16 @@ vtkFloatArray *AddMedialScalarField(vtkPolyData *target, GenericMedialModel *mod
   return array;
 }
 
+vtkFloatArray *AddMedialVectorField(vtkPolyData *target, GenericMedialModel *model, char *name)
+{
+  vtkFloatArray *array = vtkFloatArray::New();
+  array->SetName(name);
+  array->SetNumberOfComponents(3);
+  array->SetNumberOfTuples(model->GetNumberOfAtoms());
+  target->GetPointData()->AddArray(array);
+  return array;
+}
+
 void ExportMedialMeshToVTK(
   GenericMedialModel *xModel,
   ITKImageWrapper<float> *xImage,
@@ -50,6 +60,13 @@ void ExportMedialMeshToVTK(
   vtkFloatArray *lAngle = AddMedialScalarField(pMedial, xModel, "Metric Angle");
   vtkFloatArray *lCoordU = AddMedialScalarField(pMedial, xModel, "U Coordinate");
   vtkFloatArray *lCoordV = AddMedialScalarField(pMedial, xModel, "V Coordinate");
+  vtkFloatArray *lMeanCurv = AddMedialScalarField(pMedial, xModel, "Mean Curvature");
+  vtkFloatArray *lGaussCurv = AddMedialScalarField(pMedial, xModel, "Gauss Curvature");
+  vtkFloatArray *lKappa1 = AddMedialScalarField(pMedial, xModel, "Kappa1");
+  vtkFloatArray *lKappa2 = AddMedialScalarField(pMedial, xModel, "Kappa2");
+  vtkFloatArray *lNormal = AddMedialVectorField(pMedial, xModel, "Atom Normal");
+  vtkFloatArray *lStretch = AddMedialScalarField(pMedial, xModel, "Stretch Norm");
+  vtkFloatArray *lCurvPen = AddMedialScalarField(pMedial, xModel, "Curvature Penalty Feature");
 
   vtkFloatArray *lContraOffDiag = 
     AddMedialScalarField(pMedial, xModel, "Off Diagonal Term of Contravariant MT");
@@ -84,6 +101,26 @@ void ExportMedialMeshToVTK(
 
     lCoordU->SetTuple1(i, a.u);
     lCoordV->SetTuple1(i, a.v);
+
+    lMeanCurv->SetTuple1(i, a.xMeanCurv);
+    lGaussCurv->SetTuple1(i, a.xGaussCurv);
+    lKappa1->SetTuple1(i, a.xMeanCurv - sqrt( a.xMeanCurv *  a.xMeanCurv -  a.xGaussCurv));
+    lKappa2->SetTuple1(i, a.xMeanCurv + sqrt( a.xMeanCurv *  a.xMeanCurv -  a.xGaussCurv));
+
+    lNormal->SetTuple3(i, a.N(0), a.N(1), a.N(2));
+
+    // Compute the stretch ???
+    vnl_matrix<double> J(3,2);
+    J.set_column(0, a.Xu);
+    J.set_column(1, a.Xv);
+    vnl_svd<double> svd(J);
+    double v1 = svd.W()(0,0);
+    double v2 = svd.W()(1,1);
+    lStretch->SetTuple1(i, sqrt(v1*v1 + v2*v2));
+
+    // Compute sum of the squares of principal curvatures
+    double k2 = 4 * a.xMeanCurv * a.xMeanCurv - 2 * a.xGaussCurv;
+    lCurvPen->SetTuple1(i, k2);
 
     // Set the bending energy
     lBending->SetTuple1(i,
@@ -150,6 +187,8 @@ void ExportMedialMeshToVTK(
   lRegularity->Delete();
   lContraOffDiag->Delete();
   lAngle->Delete();
+  lMeanCurv->Delete();
+  lGaussCurv->Delete();
   pMedial->Delete();
 }
 

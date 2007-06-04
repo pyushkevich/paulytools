@@ -764,12 +764,13 @@ int TestDerivativesWithImage(const char *fnMPDE)
 
   // Create an array of image match terms
   vector<EnergyTerm *> vt;
+  vt.push_back(new MedialCurvaturePenalty());
+  vt.push_back(new ProbabilisticEnergyTerm(&img, 4));
   vt.push_back(new MedialBendingEnergyTerm(model));
   vt.push_back(new DistanceToPointSetEnergyTerm(
       model, px.data_block(), py.data_block(), pz.data_block()));
   vt.push_back(new BoundaryImageMatchTerm(&img));
   vt.push_back(new DistanceToRadiusFieldEnergyTerm(model, rad.data_block()));
-  vt.push_back(new ProbabilisticEnergyTerm(&img, 4));
   vt.push_back(new MedialAnglesPenaltyTerm(model));
   vt.push_back(new MedialRegularityTerm(model));
   vt.push_back(new BoundaryJacobianEnergyTerm());
@@ -783,11 +784,12 @@ int TestDerivativesWithImage(const char *fnMPDE)
 
   // Create labels
   char *nt[] = {
+    "MedialCurvaturePenalty",
+    "ProbabilisticEnergyTerm",
     "MedialBendingEnergyTerm",
     "DistanceToPointSetEnergyTerm",
     "BoundaryImageMatchTerm",
     "DistanceToRadiusFieldEnergyTerm",
-    "ProbabilisticEnergyTerm",
     "MedialAnglesPenaltyTerm",
     "MedialRegularityTerm",
     "BoundaryJacobianEnergyTerm", 
@@ -797,7 +799,7 @@ int TestDerivativesWithImage(const char *fnMPDE)
     "IdentityCoefficientMapping",
     "AffineTransformCoefficientMapping" };
 
-  double stepsize[] = {0.1, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
+  double stepsize[] = {0.001, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
 
   // Loop over both options
   size_t i, j;

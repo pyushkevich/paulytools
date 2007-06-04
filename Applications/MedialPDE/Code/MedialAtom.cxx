@@ -1,5 +1,11 @@
 #include "MedialAtom.h"
 
+MedialAtom
+::MedialAtom()
+{
+  this->SetAllDerivativeTermsToZero();
+}
+
 void
 MedialAtom
 ::SetAllDerivativeTermsToZero()
@@ -29,6 +35,8 @@ MedialAtom
 
   xBnd[0].X.fill(0.0); xBnd[0].N.fill(0.0);
   xBnd[1].X.fill(0.0); xBnd[1].N.fill(0.0);
+
+  xMeanCurv = xGaussCurv = 0.0;
 }
 
 void
@@ -355,6 +363,10 @@ void AddScaleMedialAtoms(
   C.G.g = A.G.g + p * B.G.g;
   C.G.gInv = A.G.gInv + p * B.G.gInv;
 
+  // Curvatures
+  C.xMeanCurv = A.xMeanCurv + p * B.xMeanCurv;
+  C.xGaussCurv = A.xGaussCurv + p * B.xGaussCurv;
+
   for(size_t i=0; i<2; i++) for(size_t j=0; j<2; j++)
     {
     C.G.xContravariantTensor[i][j] = 
@@ -420,6 +432,10 @@ void MedialAtomCentralDifference(
   // The differential geometry is also added and scaled 
   C.G.g = p * (A.G.g - B.G.g);
   C.G.gInv = p * (A.G.gInv - B.G.gInv);
+
+  // Gaussian
+  C.xMeanCurv = p * (A.xMeanCurv - B.xMeanCurv);
+  C.xGaussCurv = p * (A.xGaussCurv - B.xGaussCurv);
 
   for(size_t i=0; i<2; i++) for(size_t j=0; j<2; j++)
     {

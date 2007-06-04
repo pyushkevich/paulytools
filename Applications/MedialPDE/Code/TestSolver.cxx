@@ -214,6 +214,7 @@ int TestGradientComputation(
       dtq.Update("Atom's R", a0.R, a1.R, a2.R, eps);
       dtq.Update("Atom's Fu", a0.Fu, a1.Fu, a2.Fu, eps);
       dtq.Update("Atom's Fv", a0.Fv, a1.Fv, a2.Fv, eps);
+      dtq.Update("Atom's N", a0.N, a1.N, a2.N, eps);
 
       // Look at the difference in the specific terms of metric tensor
       for(size_t u = 0; u < 2; u++) for(size_t v = 0; v < 2; v++)
@@ -238,6 +239,12 @@ int TestGradientComputation(
 
       // Look at the gradR difference
       dtq.Update("Grad R", a0.xGradR, a1.xGradR, a2.xGradR, eps);
+
+      // Mean and Gaussian curvature
+      dtq.Update("Medial mean curvature", 
+        a0.xMeanCurv, a1.xMeanCurv, a2.xMeanCurv, eps);
+      dtq.Update("Medial Gaussian curvature", 
+        a0.xGaussCurv, a1.xGaussCurv, a2.xGaussCurv, eps);
 
       // Take the largest difference in boundary derivs
       // for(unsigned int k = 0; k < 2; k++)

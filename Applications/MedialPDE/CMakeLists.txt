@@ -117,6 +117,7 @@ SET(MPDE_TEST_PCA ${MPDE_TESTDATA_DIR}/shapemat.mat)
 # SET(MPDE_TEST_OBJMESH ${MPDE_TESTDATA_DIR}/triangle_mesh.obj)
 SET(MPDE_TEST_OBJMESH ${MPDE_TESTDATA_DIR}/gr1a_gimpel_CN_snap_left_49pt.obj)
 SET(MPDE_TEST_SUBMREP ${MPDE_TESTDATA_DIR}/gr1a_gimpel_CN_snap_left_49pt.cmrep)
+SET(MPDE_TEST_BRUTE ${MPDE_TESTDATA_DIR}/gr1a_gimpel_CN_snap_left_49pt_brute.cmrep)
 SET(MPDE_TEST_BRANCH ${MPDE_TESTDATA_DIR}/tiny_branch.obj)
 
 # Test various derivative computations
@@ -136,6 +137,8 @@ ADD_TEST(TestSubSurfDerivativesWithImage testpde DERIV2 ${MPDE_TEST_SUBMREP})
 ADD_TEST(TestWedgeVolume testpde WEDGE)
 ADD_TEST(TestModelSubdivision testsub MODELSUB ${MPDE_TEST_SUBMREP})
 ADD_TEST(TestBranchingSubdivision testsub BRANCH1 ${MPDE_TEST_BRANCH})
+ADD_TEST(TestBruteSubModelDerivativesNoImage testpde DERIV1 ${MPDE_TEST_BRUTE})
+ADD_TEST(TestBruteSubModelDerivativesWithImage testpde DERIV2 ${MPDE_TEST_BRUTE})
 
 
 

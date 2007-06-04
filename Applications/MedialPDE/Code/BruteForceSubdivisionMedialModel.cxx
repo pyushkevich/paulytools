@@ -76,14 +76,25 @@ BruteForceSubdivisionMedialModel
     {
     // Set up i-th atom
     MedialAtom &a = xAtoms[i];
-    
-    // Compute partial derivatives
-    a.Xuu = xLoopScheme.Xuu(i, xAtoms);
-    a.Xuv = xLoopScheme.Xuv(i, xAtoms);
-    a.Xvv = xLoopScheme.Xvv(i, xAtoms);
 
-    // Compute the differential geometry
-    a.ComputeDifferentialGeometry();
+    // The second order derivatives are set to zero
+    a.Xuu.fill(0.0); a.Xuv.fill(0.0); a.Xvv.fill(0.0);
+    
+    // Compute the derivatives of the normal vector
+    SMLVec3d Nu = xLoopScheme.Nu(i, xAtoms);
+    SMLVec3d Nv = xLoopScheme.Nv(i, xAtoms);
+
+    // Compute the principal curvatures
+    double ee = - dot_product(Nv, a.Xv);
+    double ff = -0.5 * (dot_product(Nu, a.Xv) + dot_product(Nv, a.Xu));
+    double gg = - dot_product(Nu, a.Xu);
+    a.xMeanCurv = 0.5 * (
+      ee * a.G.xContravariantTensor[0][0] +
+      2 * ff * a.G.xContravariantTensor[1][0] + 
+      gg * a.G.xContravariantTensor[1][1]);
+    a.xGaussCurv = (ee * gg - ff * ff) * a.G.gInv;
+    a.Xuu = Nu;
+    a.Xvv = Nv;
     }
 }
 
@@ -101,30 +112,55 @@ BruteForceSubdivisionMedialModel
 {
   size_t i;
 
-  // This method must compute the terms in the derivative atoms that will not
-  // change as the coefficients themselves change. This simply means setting
-  // the values of R and X.
+  // First, we must label the dependency structure. To begin with, for each atom
+  // we must mark whether is is affected by the variation or not. At the same time
+  // we can compute the derivative of X and R with respect to the variation 
   for(i = 0; i < mlAtom.nVertices; i++)
     {
     // Set up i-th atom
     MedialAtom &da = dAtoms[i]; da.X.fill(0.0); da.R = 0.0;
 
+    // Initialize the user_data flag to indicate no dependence on the variation
+    da.user_data = 0;
+
     // Compute the weighted sum of the coefficients
     ImmutableSparseMatrix<double>::ConstRowIterator it = mlAtom.weights.Row(i);
     for( ; !it.IsAtEnd(); ++it)
       {
-      size_t j = it.Column() << 2; double w = it.Value();
-      da.X += w * xVariation.extract(3, j);
-      da.R += w * xVariation[j+3];
-      }
+      size_t j = it.Column() << 2; 
+      double w = it.Value();
 
-    // Check if we are affected by the variation
-    da.user_data = 0;
-    if(da.X.squared_magnitude() > 0.0) da.user_data = 1;
-    if(da.R != 0.0) da.user_data = 1;
+      SMLVec3d dXdVar = w * xVariation.extract(3, j);
+      double dRdVar = w * xVariation[j+3];
+
+      da.X += dXdVar;
+      da.R += dRdVar;
+
+      // Check if there is a dependency
+      if(dXdVar.squared_magnitude() > 0.0 || dRdVar != 0.0)
+        da.user_data = 1;
+      }
     }
 
-  // We can also precompute the partials of X
+  // Propagate the dependency flag (user_data) to the 2-nd ring of neighbors. This
+  // is because the neighbors are used in the computation of Xu and Xv
+  for(size_t level = 0; level < 2; level++)
+    {
+    for(i = 0; i < mlAtom.nVertices; i++)
+      {
+      if(dAtoms[i].user_data == 1)
+        {
+        // Create a walk around the vertex
+        EdgeWalkAroundVertex it(&mlAtom, i);
+
+        // Flag all neighbors
+        for(; !it.IsAtEnd(); ++it)
+          dAtoms[it.MovingVertexId()].user_data = 1;
+        }
+      }
+    }
+
+  // Next, precompute the first partial derivatives of X and R
   for(i = 0; i < mlAtom.nVertices; i++) 
     {
     MedialAtom &da = dAtoms[i];
@@ -137,27 +173,9 @@ BruteForceSubdivisionMedialModel
     da.Ru = xLoopScheme.Ru(i, dAtoms);
     da.Rv = xLoopScheme.Rv(i, dAtoms);
 
-    // Check if we are affected by the variation
-    if(da.Xu.squared_magnitude() > 0.0) da.user_data = 1;
-    if(da.Xv.squared_magnitude() > 0.0) da.user_data = 1;
-    if(da.Ru != 0.0) da.user_data = 1;
-    if(da.Rv != 0.0) da.user_data = 1;
-    }
 
-  // Compute second derivatives
-  for(i = 0; i < mlAtom.nVertices; i++) 
-    {
-    MedialAtom &da = dAtoms[i];
-
-    // Compute the last set of derivatives
-    da.Xuu = xLoopScheme.Xuu(i, dAtoms);
-    da.Xuv = xLoopScheme.Xuv(i, dAtoms);
-    da.Xvv = xLoopScheme.Xvv(i, dAtoms);
-
-    // Check if we are affected by the variation
-    if(da.Xuu.squared_magnitude() > 0.0) da.user_data = 1;
-    if(da.Xuv.squared_magnitude() > 0.0) da.user_data = 1;
-    if(da.Xvv.squared_magnitude() > 0.0) da.user_data = 1;
+    // The second order derivatives are set to zero
+    da.Xuu.fill(0.0); da.Xuv.fill(0.0); da.Xvv.fill(0.0);
     }
 
   // Set the derivative atoms unaffected by the computation to zeros
@@ -210,6 +228,54 @@ BruteForceSubdivisionMedialModel
 
         // Compute the derivatives of the boundary nodes
         xAtoms[i].ComputeBoundaryAtomDerivatives(da, dt[i]);
+        }
+      }
+
+    // Comput the curvatures
+    for(i = 0; i < mlAtom.nVertices; i++) 
+      {
+      // Only consider atoms affected by the variation
+      if(dAtoms[i].user_data)
+        {
+        // Get the current atom and the derivative (which we are computing)
+        MedialAtom &a = xAtoms[i];
+        MedialAtom &da = dAtoms[i];
+
+        // Compute the derivative of mean and gauss curvatures
+        SMLVec3d Nu = xLoopScheme.Nu(i, xAtoms);
+        SMLVec3d Nv = xLoopScheme.Nv(i, xAtoms);
+        SMLVec3d dNu = xLoopScheme.Nu(i, dAtoms);
+        SMLVec3d dNv = xLoopScheme.Nv(i, dAtoms);
+
+        // TODO: this should be precomputed, figure out a memory-sane solution
+        double ee = - dot_product(Nv, a.Xv);
+        double ff = -0.5 * (dot_product(Nu, a.Xv) + dot_product(Nv, a.Xu));
+        double gg = - dot_product(Nu, a.Xu);
+
+        // Compute the derivatives of 2nd fundamental form
+        double dee = - (dot_product(dNv, a.Xv) + dot_product(Nv, da.Xv));
+        double dff = -0.5 * 
+          ( dot_product(dNv, a.Xu) + dot_product(Nv, da.Xu) + 
+            dot_product(dNu, a.Xv) + dot_product(Nu, da.Xv) );
+        double dgg = - (dot_product(dNu, a.Xu) + dot_product(Nu, da.Xu));
+
+        // Compute the derivatives of the mean curvature
+        da.xMeanCurv = 0.5 * (
+          dee * a.G.xContravariantTensor[0][0] + 
+          ee * da.G.xContravariantTensor[0][0] +
+          2 * (
+            dff * a.G.xContravariantTensor[1][0] +
+            ff * da.G.xContravariantTensor[1][0] ) +
+          dgg * a.G.xContravariantTensor[1][1] + 
+          gg * da.G.xContravariantTensor[1][1]);
+
+        // Compute the derivatives of the Gauss curvature
+        da.xGaussCurv = 
+          ( (dee * gg + ee * dgg - 2 * ff * dff) * a.G.g - 
+            (ee * gg - ff * ff) * da.G.g ) / (a.G.g * a.G.g);
+
+        da.Xuu = dNu;
+        da.Xvv = dNv;
         }
       }
     }

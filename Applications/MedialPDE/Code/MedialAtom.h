@@ -40,6 +40,9 @@ struct MedialAtom
   // Area element = sqrt(g)
   double aelt;
 
+  // Gaussian and mean curvature
+  double xMeanCurv, xGaussCurv;
+
   // The normal vector and the Riemannian gradient of R on the surface
   SMLVec3d N, xGradR; //, xGradPhi;
 
@@ -105,6 +108,8 @@ struct MedialAtom
    * atom is unaffected by some variation
    */
   void SetAllDerivativeTermsToZero();
+
+  MedialAtom();
 };
 
 /**

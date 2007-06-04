@@ -408,7 +408,11 @@ void my_calcf(int &n, double *x, int &nf, double &f, int *dummy1, double *dummy2
   // Try to evaluate at this point, and if we fail return 0 in nf (request
   // smaller step from the solver, this is a nice feature of toms611)
   try { f = mop->Evaluate(x); }
-  catch(...) { nf = 0; }
+  catch(MedialModelException &exc) 
+    {
+    cout << " [BAD SOLN (calcf) " << exc.what() << "]" << endl;
+    nf = 0; 
+    }
 }
 
 void my_calcg(int &n, double *x, int &nf, double *g, int *, double *, void *info)
@@ -419,7 +423,11 @@ void my_calcg(int &n, double *x, int &nf, double *g, int *, double *, void *info
   // Try to evaluate at this point, and if we fail return 0 in nf (request
   // smaller step from the solver, this is a nice feature of toms611)
   try { mop->ComputeGradient(x, g); }
-  catch(...) { nf = 0; }
+  catch(MedialModelException &exc) 
+    {
+    cout << " [BAD SOLN (calcg) " << exc.what() << "]" << endl;
+    nf = 0; 
+    }
 }
 
 void MedialPDE::ConjugateGradientOptimizationTOMS(
@@ -732,7 +740,7 @@ void MedialPDE
   // Create an image match term and a jacobian term
   EnergyTerm *xTermImage = NULL;
   if(p.xImageMatch == OptimizationParameters::VOLUME)
-    xTermImage = new ProbabilisticEnergyTerm(image, 24);
+    xTermImage = new ProbabilisticEnergyTerm(image, 8);
   else
     xTermImage = new BoundaryImageMatchTerm(image);
 
@@ -743,6 +751,7 @@ void MedialPDE
   MedialRegularityTerm xTermRegularize(xMedialModel);
   MedialBendingEnergyTerm xTermBending(xMedialModel);
   MedialAnglesPenaltyTerm xTermAngles(xMedialModel);
+  MedialCurvaturePenalty xTermCurvature;
   RadiusPenaltyTerm xTermRadius(0.025);
 
   // Add the terms to the problem
@@ -771,6 +780,11 @@ void MedialPDE
       xProblem.AddEnergyTerm(
         &xTermRegularize, p.xTermWeights[OptimizationParameters::MEDIAL_REGULARITY]);
 
+    // Add the curvature term
+    if(p.xTermWeights[OptimizationParameters::MEDIAL_CURVATURE] > 0.0)
+      xProblem.AddEnergyTerm(
+        &xTermCurvature, p.xTermWeights[OptimizationParameters::MEDIAL_CURVATURE]);
+
     // Add the radius penalty term
     if(p.xTermWeights[OptimizationParameters::RADIUS] > 0.0)
       xProblem.AddEnergyTerm(
@@ -797,7 +811,17 @@ void MedialPDE
 
   // After optimization, apply the best result
   xMedialModel->SetCoefficientArray(xMapping->Apply(xInitialCoeff, xSolution));
-  xMedialModel->ComputeAtoms();
+  cout << "COMPUTING FINAL ATOMS " << endl;
+  try
+    {
+    xMedialModel->ComputeAtoms();
+    cout << "Phi[" << 123 << "] = " << xMedialModel->GetHintArray()[123] << endl;
+    cout << "Phi[" << 312 << "] = " << xMedialModel->GetHintArray()[312] << endl;
+    }
+  catch(MedialModelException &exc)
+    {
+    cout << "CAUGHT EXCEPTION: " << exc.what() << endl;
+    }
 
   // Delete the mapping
   delete xMapping;

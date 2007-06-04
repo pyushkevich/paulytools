@@ -745,6 +745,60 @@ double ProbabilisticEnergyTerm::BeginGradientComputation(SolutionData *S)
   FloatImageEuclideanFunctionAdapter fImage(xImage);
 
   // Compute boundary weights
+  S->UpdateInternalWeights(nCuts);
+
+  // Precompute the image and its gradient at each sample point
+  xImageVal = new double[S->xAtomGrid->GetNumberOfInternalPoints(nCuts)];
+  xImageGrad = new SMLVec3d[S->xAtomGrid->GetNumberOfInternalPoints(nCuts)];
+
+  // Iterate over all the points inside the object and take the image value
+  for(MedialInternalPointIterator it(S->xAtomGrid, nCuts); !it.IsAtEnd(); ++it)
+    {
+    size_t i = it.GetIndex();
+    SMLVec3d x = S->xInternalPoints[i];
+    xImageVal[i] = fImage.Evaluate(x);
+    fImage.ComputeGradient(x, xImageGrad[i]);
+    }
+
+  // Finally, compute the actual volume overlap measure
+  return ComputeEnergy(S);
+}
+
+double ProbabilisticEnergyTerm::ComputePartialDerivative(
+  SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  // Main thing to compute is the derivative of the intersect region
+  double dObjectIntegral = 0.0;
+
+  // Update the internal weights
+  dS->UpdateInternalWeights(nCuts);
+
+  // Iterate over the points, computing the integral
+  for(MedialInternalPointIterator it(S->xAtomGrid, nCuts); !it.IsAtEnd(); ++it)
+    {
+    size_t i = it.GetIndex();
+    dObjectIntegral += 
+      dS->xInternalWeights[i] * xImageVal[i] +
+      S->xInternalWeights[i] * dot_product(dS->xInternalPoints[i], xImageGrad[i]);
+    }
+
+  // Take the derivative of the relative overlap measure
+  return - dObjectIntegral / xImageIntegral;
+}
+
+void ProbabilisticEnergyTerm::EndGradientComputation()
+{
+  delete xImageGrad;
+  delete xImageVal;
+}
+
+/*
+double ProbabilisticEnergyTerm::BeginGradientComputation(SolutionData *S)
+{
+  // FloatImageTestFunction fImage;
+  FloatImageEuclideanFunctionAdapter fImage(xImage);
+
+  // Compute boundary weights
   S->UpdateBoundaryWeights();
 
   // double xVolume = 0.0;
@@ -795,6 +849,7 @@ void ProbabilisticEnergyTerm::EndGradientComputation()
   delete xBndNrm;
   delete xImageVal;
 }
+*/
 
 void ProbabilisticEnergyTerm::PrintReport(ostream &sout)
 {
@@ -1165,6 +1220,92 @@ void MedialAnglesPenaltyTerm::PrintReport(ostream &sout)
   sout << "    total penalty            : " << xTotalPenalty << endl;
 }
 
+
+/*********************************************************************************
+ * Medial Curvature Penalty Term
+ ********************************************************************************/
+const double MedialCurvaturePenalty::xPower = 5;
+const double MedialCurvaturePenalty::xScale = 2;
+
+double
+MedialCurvaturePenalty
+::ComputeEnergy(SolutionDataBase *S)
+{
+  // Reset the accumulators
+  saMeanCurv.Reset();
+  saGaussCurv.Reset();
+  saPenalty.Reset();
+  saSumSqKappa.Reset();
+  saFeature.Reset();
+  saRad.Reset();
+
+  // Iterate over all atoms
+  for(MedialAtomIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
+    {
+    MedialAtom &a = S->xAtoms[it.GetIndex()];
+    saMeanCurv.Update(a.xMeanCurv);
+    saGaussCurv.Update(a.xGaussCurv);
+    saRad.Update(a.R);
+
+    // Compute sum of the squares of principal curvatures
+    double k2 = 4 * a.xMeanCurv * a.xMeanCurv - 2 * a.xGaussCurv;
+    saSumSqKappa.Update(k2);
+
+    // Compute the feature that gets penalized
+    double f = k2;
+    saFeature.Update(f);
+
+    // Compute the penalty. The penalty should be such that the 
+    double p = pow(f / xScale, xPower);
+    saPenalty.Update(p);
+    }
+
+  // Return the sum of the penalty terms
+  return saPenalty.GetSum();
+}
+
+double 
+MedialCurvaturePenalty
+::ComputePartialDerivative(
+  SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  double dTotalPenalty = 0.0;
+
+  // Iterate over all atoms
+  for(MedialAtomIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
+    {
+    MedialAtom &a = S->xAtoms[it.GetIndex()];
+    MedialAtom &da = dS->xAtoms[it.GetIndex()];
+
+    // Compute sum of the squares of principal curvatures
+    double k2 = 4 * a.xMeanCurv * a.xMeanCurv - 2 * a.xGaussCurv;
+    double dk2 = 8 * a.xMeanCurv * da.xMeanCurv - 
+      4 * a.xGaussCurv * da.xGaussCurv;
+
+    // Compute the feature that gets penalized
+    double f = k2;
+    double df = dk2;
+
+    // Compute the penalty. The penalty should be such that the 
+    double p = pow(f / xScale, xPower);
+    double dp = xPower * pow(f / xScale, xPower-1) * df / xScale;
+    dTotalPenalty += dp;
+    }
+
+  return dTotalPenalty;
+}
+
+void MedialCurvaturePenalty
+::PrintReport(ostream &sout)
+{
+  sout << "  Medial Curvature Penalty: " << endl;
+  sout << "    mean curvature stats: " << saMeanCurv << endl;
+  sout << "    gaussuan curv. stats: " << saGaussCurv << endl;
+  sout << "    sum sqr. kappa stats: " << saSumSqKappa << endl;
+  sout << "    radius stats: " << saRad << endl;
+  sout << "    feautre stats: " << saFeature << endl;
+  sout << "    total penalty: " << saPenalty.GetSum() << endl;
+}
 
 /*********************************************************************************
  * Bending Energy Term
