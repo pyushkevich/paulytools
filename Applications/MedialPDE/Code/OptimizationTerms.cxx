@@ -668,6 +668,8 @@ BoundaryJacobianEnergyTerm
   sout << "    min jacobian   : " << saJacobian.GetMin() << endl;  
   sout << "    max jacobian   : " << saJacobian.GetMax() << endl;  
   sout << "    avg jacobian   : " << saJacobian.GetMean() << endl;  
+  sout << "    left penalty   : " << xPenaltyA << endl;
+  sout << "    right penalty  : " << xPenaltyB << endl;
 }
 
 /* 
@@ -1665,7 +1667,7 @@ DistanceToRadiusFieldEnergyTerm
     xTotalDiff += delta * delta * weight;
     xTotalArea += weight;
     }
-  xTotalMatch = sqrt(xTotalDiff / xTotalArea);
+  xTotalMatch = xTotalDiff / xTotalArea;
   return xTotalMatch;
 }
 
@@ -1688,7 +1690,9 @@ DistanceToRadiusFieldEnergyTerm
     dTotalArea += d_weight;
     }
 
-  double dTotalMatch = (dTotalDiff - dTotalArea * xTotalMatch * xTotalMatch) / (2 * xTotalArea * xTotalMatch);
+  double dTotalMatch =( dTotalDiff - xTotalMatch * dTotalArea) / xTotalArea;
+    
+    (dTotalDiff - dTotalArea * xTotalMatch * xTotalMatch) / (2 * xTotalArea * xTotalMatch);
   return dTotalMatch;
 }
 

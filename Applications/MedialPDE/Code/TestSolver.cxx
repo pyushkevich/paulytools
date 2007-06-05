@@ -376,10 +376,10 @@ int TestOptimizerGradientComputation(
   tAnalytic.Stop();
   
   // Keep track of the maximum error value
-  double xMaxError = 0.0;
+  double xMaxError = 0.0, xMaxRelError = 0.0;
   
   // Compute the numeric gradient of the objective function
-  double eps = 0.01;
+  double eps = 0.0001;
   for(size_t i = 0; i < nParams; i++)
     {
     // Get the current value of the coefficient
@@ -403,16 +403,18 @@ int TestOptimizerGradientComputation(
     // Print the derivative
     double dNumeric = 0.5 * (f1 - f2) / eps;
     double xDifference = fabs(xGradient[i] - dNumeric);
-    cout << "Derivatives wrt. " << i << ". Numeric = " << dNumeric 
-      << ";   Analytic = " << xGradient[i] 
-      << ";   Difference = " << xDifference << endl;
+    double xRelError = xDifference / (0.5 * (fabs(dNumeric) + fabs(xGradient[i])) + eps);
+    printf("D[x_%04d](f):  AN = %+6E   CD = %+6E   AE = %+6E   RE = %+6E\n",
+      i, dNumeric, xGradient[i], xDifference, xRelError);
 
     // Update the max error tracker
     UpdateMax(xDifference, xMaxError);
+    UpdateMax(xRelError, xMaxRelError);
     }
 
   // Report difference in time
-  cout << "Maximal Error : " << xMaxError << endl;
+  cout << "Maximal Absolute Error : " << xMaxError << endl;
+  cout << "Maximal Relative Error : " << xMaxRelError << endl;
   cout << (xMaxError > eps ? "TEST FAILED" : "TEST PASSED") << endl;
   cout << "Central difference computed in " << tNumeric.Read() << " sec." << endl;
   cout << "Analytic gradient computed in  " << tAnalytic.Read() << " sec." << endl; 
