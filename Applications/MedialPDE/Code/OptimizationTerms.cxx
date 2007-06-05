@@ -504,8 +504,8 @@ inline double ComputeJacobian(const SMLVec3d &Xu, const SMLVec3d &Xv,
       dot_product(Xu,Xv) * dot_product(Xu,Xv) );
 }
 
-const double BoundaryJacobianEnergyTerm::xPenaltyA = 10;
-const double BoundaryJacobianEnergyTerm::xPenaltyB = 20;
+const double BoundaryJacobianEnergyTerm::xDefaultPenaltyA = 10;
+const double BoundaryJacobianEnergyTerm::xDefaultPenaltyB = 20;
 
 double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
 {

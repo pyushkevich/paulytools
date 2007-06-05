@@ -770,8 +770,11 @@ void MedialPDE
     {
     // Add the boundary Jacobian term
     if(p.xTermWeights[OptimizationParameters::BOUNDARY_JACOBIAN] > 0.0)
+      {
+      xTermJacobian.SetParameters(p.xTermParameters[OptimizationParameters::BOUNDARY_JACOBIAN]);
       xProblem.AddEnergyTerm(
         &xTermJacobian, p.xTermWeights[OptimizationParameters::BOUNDARY_JACOBIAN]);
+      }
 
     // Add the atom badness term
     if(p.xTermWeights[OptimizationParameters::ATOM_BADNESS] > 0.0)

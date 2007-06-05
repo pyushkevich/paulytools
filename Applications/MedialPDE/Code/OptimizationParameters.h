@@ -34,7 +34,10 @@ public:
   size_t nPCAModes;
 
   /** Weights of the various penalty terms */
-  std::map<PenaltyTerm, double> xTermWeights;
+  std::map<PenaltyTerm, double> xTermWeights, xTermDefaultWeights;
+
+  /** Parameters associated with the weights */
+  std::map<PenaltyTerm, Registry> xTermParameters;
 
   /** Constructor */
   OptimizationParameters();

@@ -198,6 +198,9 @@ public:
 
   // Print a verbose report
   virtual void PrintReport(ostream &sout) = 0;
+
+  // Pass in parameters using a registry object
+  virtual void SetParameters(Registry &r) {}
 };
 
 /**
@@ -338,6 +341,13 @@ public:
   // Get the worst Jacobian
   double GetMinJacobian() { return saJacobian.GetMin(); }
   
+  /** Pass in parameters from a registry */
+  void SetParameters(Registry &R)
+    {
+    xPenaltyA = R["PenaltyA"][xDefaultPenaltyA];
+    xPenaltyB = R["PenaltyB"][xDefaultPenaltyB];
+    }
+
 private:
   // Maximum and minimum values of the Jacobian encountered during
   // optimization
@@ -365,7 +375,8 @@ private:
     { return exp(x - b) - a * exp (-a * x); }
 
   // Constants used in the penalty computation
-  const static double xPenaltyA, xPenaltyB;
+  double xPenaltyA, xPenaltyB;
+  const static double xDefaultPenaltyA, xDefaultPenaltyB;
 };
 
 

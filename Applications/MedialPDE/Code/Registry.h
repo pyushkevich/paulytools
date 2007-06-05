@@ -196,6 +196,9 @@ public:
   /** Get a reference to a folder inside this registry, creating it if necessary */
   Registry &Folder(const StringType &key);
 
+  /** Check whether there is a folder by a name or not */
+  bool IsFolder(const StringType &key);
+
   /** A helper method to convert a printf-style expression to a key */
   static StringType Key(const char *key,...);
 

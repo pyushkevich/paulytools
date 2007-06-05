@@ -364,6 +364,26 @@ Registry
   return *m_FolderMap[key];
 }
 
+bool
+Registry
+::IsFolder(const string &key)
+{
+  // Find the first separator in the key string
+  StringType::size_type iDot = key.find_first_of('.');
+
+  // Recurse on the immideate folder
+  if(iDot != key.npos) 
+    {
+    StringType child = key.substr(0,iDot);
+    StringType childKey = key.substr(iDot+1);
+    return Folder(child).IsFolder(childKey);
+    }
+
+  // Get the folder, adding if necessary
+  FolderIterator it = m_FolderMap.find(key);
+  return (it != m_FolderMap.end());
+}
+
 Registry
 ::Registry()
 {

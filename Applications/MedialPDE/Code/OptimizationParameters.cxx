@@ -31,6 +31,15 @@ OptimizationParameters
   xCTFSettingsRegMap.AddPair(LOOP_SUBDIVISION_PDE, "LoopSubdivisionPDE");
   xCTFSettingsRegMap.AddPair(NONE, "NONE");
 
+  // Set the default weights for the terms
+  xTermDefaultWeights[BOUNDARY_JACOBIAN] = 0.5;
+  xTermDefaultWeights[BOUNDARY_GRAD_R] = 0.0;
+  xTermDefaultWeights[MEDIAL_REGULARITY] = 1.0;
+  xTermDefaultWeights[MEDIAL_CURVATURE] = 0.0;
+  xTermDefaultWeights[ATOM_BADNESS] = 0.01;
+  xTermDefaultWeights[RADIUS] = 0.1;
+  xTermDefaultWeights[MEDIAL_ANGLES] = 0.0;
+
   // Clear the settings pointer
   xCTFSettings = NULL;
 
@@ -55,14 +64,32 @@ OptimizationParameters
   xImageMatch = R["ImageMatch"].GetEnum(xImageMatchRegMap, VOLUME);
   xMapping = R["Mapping"].GetEnum(xMappingRegMap, IDENTITY);
 
-  // Read the weights of the different terms in the optimization
-  xTermWeights[BOUNDARY_JACOBIAN] = R[xPenaltyTermRegMap(BOUNDARY_JACOBIAN)][0.5];
-  xTermWeights[BOUNDARY_GRAD_R] = R[xPenaltyTermRegMap(BOUNDARY_GRAD_R)][0.0];
-  xTermWeights[MEDIAL_REGULARITY] = R[xPenaltyTermRegMap(MEDIAL_REGULARITY)][1.0];
-  xTermWeights[MEDIAL_CURVATURE] = R[xPenaltyTermRegMap(MEDIAL_CURVATURE)][0.0];
-  xTermWeights[ATOM_BADNESS] = R[xPenaltyTermRegMap(ATOM_BADNESS)][0.01];
-  xTermWeights[RADIUS] = R[xPenaltyTermRegMap(RADIUS)][0.1];
-  xTermWeights[MEDIAL_ANGLES] = R[xPenaltyTermRegMap(MEDIAL_ANGLES)][0.0];
+  // Read the parameters of different methods
+  for(size_t i = 0; i < NTERMS; i++)
+    {
+    // The current penalty term
+    PenaltyTerm pt = static_cast<PenaltyTerm>(BOUNDARY_JACOBIAN + i);
+
+    // Check if the term is a registry folder
+    if(R.IsFolder(xPenaltyTermRegMap(pt)))
+      {
+      // New way of specifying parameters (Folder.Weight for weights, 
+      // Folder.ParamName for various parameters)
+      xTermWeights[pt] =
+        R[xPenaltyTermRegMap(pt)+".Weight"][xTermDefaultWeights[pt]];
+      xTermParameters[pt] = R.Folder(xPenaltyTermRegMap(pt));
+      }
+    else
+      {
+      // Old way of specifying stuff, where there was only a weight given
+      // for each penalty term
+      xTermWeights[pt] = 
+        R[xPenaltyTermRegMap(pt)][xTermDefaultWeights[pt]];
+      }
+
+
+
+    }
 
   // Read the coarse-to-fine specification
   if(xCTFSettings != NULL) delete xCTFSettings;
