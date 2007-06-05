@@ -533,8 +533,6 @@ private:
 
 
 
-
-
 /**
  * Penalty for small values of the radius (phi / scale)^-8
  */
@@ -689,6 +687,9 @@ private:
   // The array of derivative atoms
   // MedialAtom *dAtoms;
   vector<MedialAtom *> dAtomArray;
+
+  // Statistics for learning scaling params
+  vnl_vector<double> xGradSum, xGradSumSqr;
 };
 
 #endif

@@ -17,6 +17,7 @@ OptimizationParameters
 
   xImageMatchRegMap.AddPair(VOLUME, "VolumeOverlap");
   xImageMatchRegMap.AddPair(BOUNDARY, "BoundaryIntegral");
+  xImageMatchRegMap.AddPair(RADIUS_VALUES, "CurrentRadius");
 
   xPenaltyTermRegMap.AddPair(BOUNDARY_JACOBIAN, "BoundaryJacobianEnergyTerm");
   xPenaltyTermRegMap.AddPair(BOUNDARY_GRAD_R, "BoundaryGradRPenaltyTerm");

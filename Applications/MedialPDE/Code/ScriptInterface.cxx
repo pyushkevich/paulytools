@@ -741,8 +741,16 @@ void MedialPDE
   EnergyTerm *xTermImage = NULL;
   if(p.xImageMatch == OptimizationParameters::VOLUME)
     xTermImage = new ProbabilisticEnergyTerm(image, 8);
-  else
+  else if(p.xImageMatch == OptimizationParameters::BOUNDARY)
     xTermImage = new BoundaryImageMatchTerm(image);
+  else if(p.xImageMatch == OptimizationParameters::RADIUS_VALUES)
+    {
+    vnl_vector<double> xRadius(xMedialModel->GetNumberOfAtoms());
+    for(size_t i = 0; i < xRadius.size(); i++)
+      xRadius[i] = xMedialModel->GetAtomArray()[i].R;
+    xTermImage = new DistanceToRadiusFieldEnergyTerm(xMedialModel, xRadius.data_block());
+    }
+  else throw MedialModelException("Unknown energy term specified");
 
   // Create the penalty terms
   BoundaryJacobianEnergyTerm xTermJacobian;

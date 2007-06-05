@@ -1657,6 +1657,100 @@ DistanceToPointSetEnergyTerm
 
 
 
+/*********************************************************************************
+ * FIT TO INTERNAL POINTS ENERGY TERM
+ ********************************************************************************/
+/* 
+InternalPointDeformationEnergyTerm
+::InternalPointDeformationEnergyTerm(GenericMedialModel *model, int nCuts)
+{
+  // Initialize the array of current point values. 
+  this->nCuts = nCuts;
+  nInternalPoints = model->GetAtomIndex()->GetNumberOfInternalPoints(nCuts);
+  xInternalPoints = new SMLVec3d[nInternalPoints];
+  ComputeMedialInternalPoints(
+    model->GetAtomIndex(), model->GetAtomArray(), nCuts, xInternalPoints);
+}
+
+InternalPointDeformationEnergyTerm
+::~InternalPointDeformationEnergyTerm()
+{
+  delete xInternalPoints;
+}
+
+double
+InternalPointDeformationEnergyTerm
+::ComputeEnergy(SolutionDataBase *S)
+{
+  // Accumulators
+  xTotalVolume = 0.0;
+  xSqrDistIntegral = 0.0;
+
+  // Update the internal points in S
+  S->UpdateInternalWeights(nCuts);
+
+  // Integrate the total deformation
+  for(size_t i = 0; i < nInternalPoints; i++)
+    {
+    // Get the total deformation
+    SMLVec3d delta = S->xInternalPoints[i] - xInternalPoints[i];
+
+    // Get the weight of the deformation
+    double w = S->xInternalWeights[i];
+
+    // Integrate squared deformation over the volume
+    xTotalVolume += w;
+    xSqrDistIntegral += w * delta.squared_magnitude();
+    }
+
+  // Compute the match
+  xTotalMatch = xSqrDistIntegral / xTotalVolume;
+  return xTotalMatch;
+}
+
+double
+InternalPointDeformationEnergyTerm
+::ComputePartialDerivative(
+  SolutionData *S,
+  PartialDerivativeSolutionData *dS)
+{
+  double dSqrDistIntegral = 0.0;
+  double dTotalVolume = 0.0;
+
+  // Update the internal weights
+  dS->UpdateInternalWeights(nCuts);
+
+  // Integrate the total deformation
+  for(size_t i = 0; i < nInternalPoints; i++)
+    {
+    // Get the total deformation
+    SMLVec3d delta = S->xInternalPoints[i] - xInternalPoints[i];
+    SMLVec3d ddelta = dS->xInternalPoints[i];
+
+    // Get the weight of the deformation
+    double w = S->xInternalWeights[i];
+    double dw = dS->xInternalWeights[i];
+
+    // Integrate squared deformation over the volume
+    dTotalVolume += dw;
+    dSqrDistIntegral += 
+      dw * delta.squared_magnitude() + 
+      2 * w * dot_product(delta, ddelta);
+    }
+
+  double dTotalMatch = (dSqrDistIntegral - dTotalVolume * xTotalMatch) / xTotalVolume;
+  return dTotalMatch;
+}
+
+void
+InternalPointDeformationEnergyTerm
+::PrintReport(ostream &sout)
+{
+  sout << "  InternalPointDeformationEnergyTerm:" << endl;
+  sout << "    Mean squared distance     : " << xTotalMatch << endl;
+}
+*/
+
 
 /*********************************************************************************
  * MEDIAL OPTIMIZATION PROBLEM
@@ -1700,6 +1794,10 @@ MedialOptimizationProblem
     // Save the atoms
     dAtomArray.push_back(a);
     }
+
+  // Initialize the statistical arrays
+  xGradSum.set_size(nCoeff);
+  xGradSumSqr.set_size(nCoeff);
 }
 
 MedialOptimizationProblem
@@ -2002,6 +2100,9 @@ MedialOptimizationProblem
   xLastGradient = vnl_vector<double>(xGradient, nCoeff);
   xLastGradHint = xMedialModel->GetHintArray();
   flagGradientComputed = true;
+
+
+  
 
   // Return the solution value
   return xLastSolutionValue;
