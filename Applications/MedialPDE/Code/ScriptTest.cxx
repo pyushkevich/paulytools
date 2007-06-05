@@ -735,7 +735,7 @@ void MakeFlatTemplate(FourierSurface *xSurface)
   delete u; delete v; delete x; delete y; delete z; delete rho;
 }
 
-int TestDerivativesWithImage(const char *fnMPDE)
+int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img)
 {
   // Return Code
   int iReturn = 0;
@@ -746,7 +746,10 @@ int TestDerivativesWithImage(const char *fnMPDE)
   // Define a test image (this in not a real thing)
   GenericMedialModel *model = mp.GetMedialModel();
   SMLVec3d C = model->GetCenterOfRotation();
-  TestFloatImage img( C, 7.0, 4.0 );
+  TestFloatImage testimg( C, 7.0, 4.0 );
+
+  if(img == NULL)
+    img = &testimg;
 
   // Define a test point set and a test radius function for computation
   vnl_vector<double> px(model->GetNumberOfAtoms(), 0.0);
@@ -766,11 +769,11 @@ int TestDerivativesWithImage(const char *fnMPDE)
   vector<EnergyTerm *> vt;
   vt.push_back(new BoundaryJacobianEnergyTerm());
   vt.push_back(new MedialCurvaturePenalty());
-  vt.push_back(new ProbabilisticEnergyTerm(&img, 4));
+  vt.push_back(new ProbabilisticEnergyTerm(img, 4));
   vt.push_back(new MedialBendingEnergyTerm(model));
   vt.push_back(new DistanceToPointSetEnergyTerm(
       model, px.data_block(), py.data_block(), pz.data_block()));
-  vt.push_back(new BoundaryImageMatchTerm(&img));
+  vt.push_back(new BoundaryImageMatchTerm(img));
   vt.push_back(new DistanceToRadiusFieldEnergyTerm(model, rad.data_block()));
   vt.push_back(new MedialAnglesPenaltyTerm(model));
   vt.push_back(new MedialRegularityTerm(model));
@@ -925,7 +928,16 @@ int main(int argc, char *argv[])
   if(0 == strcmp(argv[1], "DERIV1") && argc > 2)
     return TestDerivativesNoImage(argv[2]);
   else if(0 == strcmp(argv[1], "DERIV2") && argc > 2)
-    return TestDerivativesWithImage(argv[2]);
+    {
+    FloatImage *image = NULL;
+    if(argc > 4)
+      {
+      image = new FloatImage();
+      image->LoadFromPath(argv[3], argv[4]);
+      }
+
+    return TestDerivativesWithImage(argv[2],image);
+    }
   else if(0 == strcmp(argv[1], "DERIV3") && argc > 2)
     return TestBasisFunctionVariation(argv[2]);
   else if(0 == strcmp(argv[1], "DERIV4") && argc > 2)
