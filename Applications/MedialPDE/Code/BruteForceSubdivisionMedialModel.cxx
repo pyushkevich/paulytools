@@ -69,6 +69,44 @@ BruteForceSubdivisionMedialModel
 
     // Compute all the components of the atoms
     a.ComputeBoundaryAtoms(!mlAtom.IsVertexInternal(i));
+
+    // Compute some form of strain tensor. Loop over all neighbors
+    /*
+    SMLVec3d XU, XV; XU.fill(0); XV.fill(0);
+    EdgeWalkAroundVertex it(&mlAtom, i);
+
+    // Flag all neighbors
+    for(; !it.IsAtEnd(); ++it)
+      {
+      MedialAtom &aj = xAtoms[it.MovingVertexId()];
+      XU += (aj.X - a.X) / (aj.u - a.u);
+      XV += (aj.X - a.X) / (aj.v - a.v);
+      }
+
+    double E = dot_product(XU, XU);
+    double F = dot_product(XU, XV);
+    double G = dot_product(XV, XV);
+    a.G.xChristoffelSecond[0][0][0] = E + G;
+    */
+    
+
+    // Compute the Riemannian gradient of the parameterization (for stretch tensors)
+    /*
+    double udu = xLoopScheme.Uu(i, xAtoms);
+    double udv = xLoopScheme.Uv(i, xAtoms);
+    double vdu = xLoopScheme.Vu(i, xAtoms);
+    double vdv = xLoopScheme.Vv(i, xAtoms);
+    double xMagGradU = 
+      udu * udu * a.G.xContravariantTensor[0][0] + 
+      2 * udu * udv * a.G.xContravariantTensor[0][1] + 
+      udv * udv * a.G.xContravariantTensor[1][1];
+    double xMagGradV = 
+      vdu * vdu * a.G.xContravariantTensor[0][0] + 
+      2 * vdu * vdv * a.G.xContravariantTensor[0][1] + 
+      vdv * vdv * a.G.xContravariantTensor[1][1];
+    double xStretch = xMagGradV + xMagGradU;
+    a.G.xChristoffelSecond[0][0][0] = xStretch;
+    */
     }
 
   // On the third pass, we compute the second order partial derivatives

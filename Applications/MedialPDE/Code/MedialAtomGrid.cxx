@@ -5,29 +5,6 @@
  * CELL VOLUME AND DERIVATIVE COMPUTATION
  ****************************************************************************/
 
-inline double ScalarTripleProduct(
-  const SMLVec3d &A, const SMLVec3d &B, const SMLVec3d &C)
-{
-  return
-    A[0] * (B[1] * C[2] - B[2] * C[1]) + 
-    A[1] * (B[2] * C[0] - B[0] * C[2]) + 
-    A[2] * (B[0] * C[1] - B[1] * C[0]);
-}
-
-inline double ScalarTripleProductDerivative(
-  const SMLVec3d &A, const SMLVec3d &B, const SMLVec3d &C,
-  const SMLVec3d &DA, const SMLVec3d &DB, const SMLVec3d &DC)
-{
-  return
-    DA[0] * (B[1] * C[2] - B[2] * C[1]) + 
-    DA[1] * (B[2] * C[0] - B[0] * C[2]) + 
-    DA[2] * (B[0] * C[1] - B[1] * C[0]) +
-    A[0] * (DB[1] * C[2] - DB[2] * C[1] + B[1] * DC[2] - B[2] * DC[1]) + 
-    A[1] * (DB[2] * C[0] - DB[0] * C[2] + B[2] * DC[0] - B[0] * DC[2]) + 
-    A[2] * (DB[0] * C[1] - DB[1] * C[0] + B[0] * DC[1] - B[1] * DC[0]);
-}
-
-
 // This returns 6 x the volume of the tetrahedron
 inline double TetrahedronVolume(
   const SMLVec3d &X1, const SMLVec3d &X2, const SMLVec3d &X3, const SMLVec3d X4)

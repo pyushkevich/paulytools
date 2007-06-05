@@ -1,6 +1,7 @@
 #include "ShortestPath.h"
 #include "ReadWriteVTK.h"
 #include "VTKMeshShortestDistance.h"
+#include <vtkCleanPolyData.h>
 #include "SparseMatrix.h"
 #include <iostream>
 #include <algorithm>
@@ -28,7 +29,17 @@ int main(int argc, char *argv[])
     return usage();
 
   // Load the mesh
-  vtkPolyData *xMesh = ReadVTKData(argv[1]);
+  vtkPolyData *xMeshRaw = ReadVTKData(argv[1]);
+
+  // Convert the mesh to triangles
+  vtkTriangleFilter *fltTri = vtkTriangleFilter::New();
+  fltTri->SetInput(xMeshRaw);
+
+  // Clean the mesh
+  vtkCleanPolyData *fltClean = vtkCleanPolyData::New();
+  fltClean->SetInput(fltTri->GetOutput());
+  fltClean->Update();
+  vtkPolyData *xMesh = fltClean->GetOutput();
   xMesh->BuildCells();
   xMesh->BuildLinks();
   

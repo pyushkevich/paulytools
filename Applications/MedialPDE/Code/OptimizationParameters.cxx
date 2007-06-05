@@ -24,6 +24,7 @@ OptimizationParameters
   xPenaltyTermRegMap.AddPair(MEDIAL_CURVATURE, "MedialCurvaturePenaltyTerm");
   xPenaltyTermRegMap.AddPair(ATOM_BADNESS, "AtomBadnessTerm");
   xPenaltyTermRegMap.AddPair(RADIUS, "RadiusPenaltyTerm");
+  xPenaltyTermRegMap.AddPair(MEDIAL_ANGLES, "MedialAnglesPenaltyTerm");
 
   xCTFSettingsRegMap.AddPair(COSINE_BASIS_PDE, "CosineBasisPDE");
   xCTFSettingsRegMap.AddPair(LOOP_SUBDIVISION_PDE, "LoopSubdivisionPDE");
@@ -60,6 +61,7 @@ OptimizationParameters
   xTermWeights[MEDIAL_CURVATURE] = R[xPenaltyTermRegMap(MEDIAL_CURVATURE)][0.0];
   xTermWeights[ATOM_BADNESS] = R[xPenaltyTermRegMap(ATOM_BADNESS)][0.01];
   xTermWeights[RADIUS] = R[xPenaltyTermRegMap(RADIUS)][0.1];
+  xTermWeights[MEDIAL_ANGLES] = R[xPenaltyTermRegMap(MEDIAL_ANGLES)][0.0];
 
   // Read the coarse-to-fine specification
   if(xCTFSettings != NULL) delete xCTFSettings;

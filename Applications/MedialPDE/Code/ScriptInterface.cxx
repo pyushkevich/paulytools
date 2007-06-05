@@ -791,8 +791,9 @@ void MedialPDE
         &xTermRadius, p.xTermWeights[OptimizationParameters::RADIUS]);
 
     // Add the angle penalty term
-    // TODO: set it up
-    // xProblem.AddEnergyTerm(&xTermAngles, 0.2);
+    if(p.xTermWeights[OptimizationParameters::MEDIAL_ANGLES] > 0.0)
+      xProblem.AddEnergyTerm(
+        &xTermAngles, p.xTermWeights[OptimizationParameters::MEDIAL_ANGLES]);
     }
 
   // Initial solution report

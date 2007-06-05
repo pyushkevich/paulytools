@@ -1173,7 +1173,7 @@ double MedialAnglesPenaltyTerm::ComputeEnergy(SolutionDataBase *S)
     MedialAtom &a = S->xAtoms[it.GetIndex()];
     double penalty = 
       a.G.xCovariantTensor[0][1] * a.G.xCovariantTensor[0][1] / a.G.g;
-    xTotalPenalty += penalty * xDomainWeights[it.GetIndex()];
+    xTotalPenalty += penalty;
     xMaxPenalty = std::max(penalty, xMaxPenalty);
     }
 
@@ -1182,7 +1182,6 @@ double MedialAnglesPenaltyTerm::ComputeEnergy(SolutionDataBase *S)
   //  xTotalPenalty += CosineSquareTuple(S->xAtoms, it);
 
   // return 0.25 * xTotalPenalty / S->xAtomGrid->GetNumberOfAtoms();
-  xTotalPenalty /= xDomainArea;
   return xTotalPenalty;
 }
 
@@ -1201,7 +1200,7 @@ double MedialAnglesPenaltyTerm::ComputePartialDerivative(SolutionData *S, Partia
       2.0 * a.G.xCovariantTensor[0][1] * da.G.xCovariantTensor[0][1];
     double d_penalty = 
       (d_numerator * a.G.g - numerator * da.G.g) / (a.G.g * a.G.g);
-    xTotalPenalty += d_penalty * xDomainWeights[it.GetIndex()];
+    dTotalPenalty += d_penalty;
     }
   /*
   // Sum the penalty over all triangles in the mesh
@@ -1210,7 +1209,7 @@ double MedialAnglesPenaltyTerm::ComputePartialDerivative(SolutionData *S, Partia
 
   return 0.25 * dTotalPenalty / S->xAtomGrid->GetNumberOfAtoms();
   */
-  return dTotalPenalty / xDomainArea;
+  return dTotalPenalty;
 }
 
 void MedialAnglesPenaltyTerm::PrintReport(ostream &sout)

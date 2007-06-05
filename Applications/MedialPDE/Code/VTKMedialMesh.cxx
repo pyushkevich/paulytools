@@ -65,7 +65,7 @@ void ExportMedialMeshToVTK(
   vtkFloatArray *lKappa1 = AddMedialScalarField(pMedial, xModel, "Kappa1");
   vtkFloatArray *lKappa2 = AddMedialScalarField(pMedial, xModel, "Kappa2");
   vtkFloatArray *lNormal = AddMedialVectorField(pMedial, xModel, "Atom Normal");
-  vtkFloatArray *lStretch = AddMedialScalarField(pMedial, xModel, "Stretch Norm");
+  vtkFloatArray *lStretch = AddMedialScalarField(pMedial, xModel, "Stretch");
   vtkFloatArray *lCurvPen = AddMedialScalarField(pMedial, xModel, "Curvature Penalty Feature");
 
   vtkFloatArray *lContraOffDiag = 
@@ -110,13 +110,7 @@ void ExportMedialMeshToVTK(
     lNormal->SetTuple3(i, a.N(0), a.N(1), a.N(2));
 
     // Compute the stretch ???
-    vnl_matrix<double> J(3,2);
-    J.set_column(0, a.Xu);
-    J.set_column(1, a.Xv);
-    vnl_svd<double> svd(J);
-    double v1 = svd.W()(0,0);
-    double v2 = svd.W()(1,1);
-    lStretch->SetTuple1(i, sqrt(v1*v1 + v2*v2));
+    lStretch->SetTuple1(i, a.G.xChristoffelSecond[0][0][0]);
 
     // Compute sum of the squares of principal curvatures
     double k2 = 4 * a.xMeanCurv * a.xMeanCurv - 2 * a.xGaussCurv;

@@ -70,6 +70,29 @@ public:
     { G.fill(0.0); }
 };
 
+inline double ScalarTripleProduct(
+  const SMLVec3d &A, const SMLVec3d &B, const SMLVec3d &C)
+{
+  return
+    A[0] * (B[1] * C[2] - B[2] * C[1]) + 
+    A[1] * (B[2] * C[0] - B[0] * C[2]) + 
+    A[2] * (B[0] * C[1] - B[1] * C[0]);
+}
+
+inline double ScalarTripleProductDerivative(
+  const SMLVec3d &A, const SMLVec3d &B, const SMLVec3d &C,
+  const SMLVec3d &DA, const SMLVec3d &DB, const SMLVec3d &DC)
+{
+  return
+    DA[0] * (B[1] * C[2] - B[2] * C[1]) + 
+    DA[1] * (B[2] * C[0] - B[0] * C[2]) + 
+    DA[2] * (B[0] * C[1] - B[1] * C[0]) +
+    A[0] * (DB[1] * C[2] - DB[2] * C[1] + B[1] * DC[2] - B[2] * DC[1]) + 
+    A[1] * (DB[2] * C[0] - DB[0] * C[2] + B[2] * DC[0] - B[0] * DC[2]) + 
+    A[2] * (DB[0] * C[1] - DB[1] * C[0] + B[0] * DC[1] - B[1] * DC[0]);
+}
+
+
 /**
  * Compute an area of a triangle
  */
@@ -198,6 +221,13 @@ public:
   SMLVec3d Nu(size_t v, MedialAtom *a) const { return NormalX(0, v, a); }
   SMLVec3d Nv(size_t v, MedialAtom *a) const { return NormalX(1, v, a); }
 
+  // Derivative of the global parameterization (U, V) with respect to the local
+  // parameterization
+  double Uu(size_t v, MedialAtom *a) const { return PartialU(0, v, a); }
+  double Uv(size_t v, MedialAtom *a) const { return PartialU(1, v, a); }
+  double Vu(size_t v, MedialAtom *a) const { return PartialV(0, v, a); }
+  double Vv(size_t v, MedialAtom *a) const { return PartialV(1, v, a); }
+  
 private:
 
   SMLVec3d TangentX(size_t d, size_t v, MedialAtom *atoms) const
@@ -253,6 +283,31 @@ private:
 
     return y;
     } 
+
+  double PartialU(size_t d, size_t v, MedialAtom *atoms) const
+    {
+    size_t *ri = level->nbr.GetRowIndex();
+    size_t *ci = level->nbr.GetColIndex();
+
+    double y = xVtxTangentWeights[d][v] * atoms[v].u;
+    for(size_t i = ri[v]; i < ri[v+1]; ++i)
+      y += xNbrTangentWeights[d][i] * atoms[ci[i]].u;
+
+    return y;
+    }
+
+  double PartialV(size_t d, size_t v, MedialAtom *atoms) const
+    {
+    size_t *ri = level->nbr.GetRowIndex();
+    size_t *ci = level->nbr.GetColIndex();
+
+    double y = xVtxTangentWeights[d][v] * atoms[v].v;
+    for(size_t i = ri[v]; i < ri[v+1]; ++i)
+      y += xNbrTangentWeights[d][i] * atoms[ci[i]].v;
+
+    return y;
+    }
+
 
   double PartialF(size_t d, size_t v, MedialAtom *atoms) const
     {
