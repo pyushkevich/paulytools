@@ -812,6 +812,10 @@ void MedialPDE
   xProblem.Evaluate(xSolution.data_block());
   xProblem.PrintReport(cout);
 
+  // Test the gradient computation
+  cout << "GRADIENT COMPUTATION ABS MAX ERROR (eps = 0.001): " << 
+    xProblem.TestGradientComputation(xSolution.data_block(), 0.001);
+
   // At this point, split depending on the method
   if(p.xOptimizer == OptimizationParameters::CONJGRAD)
     ConjugateGradientOptimizationTOMS(&xProblem, xSolution, nSteps, xStepSize);
@@ -821,19 +825,13 @@ void MedialPDE
     EvolutionaryOptimization(&xProblem, xSolution, nSteps);
   else throw ModelIOException("Unknown optimization technique");
 
+  // Test the gradient computation again
+  cout << "GRADIENT COMPUTATION ABS MAX ERROR (eps = 0.001): " << 
+    xProblem.TestGradientComputation(xSolution.data_block(), 0.001);
+
   // After optimization, apply the best result
   xMedialModel->SetCoefficientArray(xMapping->Apply(xInitialCoeff, xSolution));
-  cout << "COMPUTING FINAL ATOMS " << endl;
-  try
-    {
-    xMedialModel->ComputeAtoms();
-    cout << "Phi[" << 123 << "] = " << xMedialModel->GetHintArray()[123] << endl;
-    cout << "Phi[" << 312 << "] = " << xMedialModel->GetHintArray()[312] << endl;
-    }
-  catch(MedialModelException &exc)
-    {
-    cout << "CAUGHT EXCEPTION: " << exc.what() << endl;
-    }
+  xMedialModel->ComputeAtoms();
 
   // Delete the mapping
   delete xMapping;

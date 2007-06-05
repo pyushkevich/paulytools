@@ -327,6 +327,7 @@ private:
 class BoundaryJacobianEnergyTerm : public EnergyTerm
 {
 public:
+  BoundaryJacobianEnergyTerm();
 
   // Compute the energy
   double ComputeEnergy(SolutionDataBase *data);
@@ -625,6 +626,9 @@ public:
   
   /** Compute the function and the gradient (comes from optima library) */
   double ComputeGradient(double *X, double *XGrad);
+
+  /** Test gradient computation using central difference approximation */
+  double TestGradientComputation(double *X, double eps);
 
   /** Compute the function and the partial derivative in one given direction */
   // double ComputePartialDerivative(double *xEvalPoint, double *xDirection, double &df);

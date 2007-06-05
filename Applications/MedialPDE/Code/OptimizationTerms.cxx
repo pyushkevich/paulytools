@@ -507,6 +507,43 @@ inline double ComputeJacobian(const SMLVec3d &Xu, const SMLVec3d &Xv,
 const double BoundaryJacobianEnergyTerm::xDefaultPenaltyA = 10;
 const double BoundaryJacobianEnergyTerm::xDefaultPenaltyB = 20;
 
+BoundaryJacobianEnergyTerm::BoundaryJacobianEnergyTerm()
+{
+  xPenaltyA = xDefaultPenaltyA;
+  xPenaltyB = xDefaultPenaltyB;
+}
+
+/**
+ * This is a penalty function of the form exp(alpha * (x-x0)) that 
+ * has a 'cap' C, such that if exp(alpha * (x-x0)) > C, the function
+ * becomes linear rather than exponential.
+ */
+class ExponentialBarrierFunction
+{
+public:
+  ExponentialBarrierFunction(double alpha, double x0, double C)
+    {
+    this->a = alpha;
+    this->x0 = x0;
+    this->C = C;
+    this->aC = alpha * C;
+    this->b = C * (1 - log(C));
+    this->t = x0 + log(C) / alpha;
+    }
+
+  double f(double x)
+    {
+    return x < t ? exp(a * (x - x0)) : aC * (x - x0) + b;
+    }
+
+  double df(double x, double f)
+    {
+    return x < t ? a * f : aC;
+    }
+private:
+  double a, x0, C, aC, b, t;
+};
+
 double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
 {
   // Place to store the Jacobian
@@ -514,6 +551,10 @@ double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
 
   // Reset the penalty accumulator
   saPenalty.Reset();
+
+  // Create a barrier function
+  ExponentialBarrierFunction ebfA(xPenaltyA, 0.0, 100);
+  ExponentialBarrierFunction ebfB(1.0, xPenaltyB, 100);
 
   // Reset the TriangleEntry vector
   if(xTriangleEntries.size() != S->xAtomGrid->GetNumberOfTriangles())
@@ -551,8 +592,8 @@ double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionDataBase *S)
       
       // Compute the penalty terms
       // return exp(-a * x) + exp(x - b); 
-      eit->PenA[z] = exp(-xPenaltyA * eit->J[z]);
-      eit->PenB[z] = exp(eit->J[z] - xPenaltyB);
+      eit->PenA[z] = ebfA.f(-eit->J[z]);
+      eit->PenB[z] = ebfB.f( eit->J[z]);
       saPenalty.Update(eit->PenA[z] + eit->PenB[z]);
       }
     }
@@ -571,11 +612,14 @@ double BoundaryJacobianEnergyTerm
   // Make sure that the quad entry array has been initialized
   assert(xTriangleEntries.size() == S->xAtomGrid->GetNumberOfTriangles());
   
+  // Create a barrier function
+  ExponentialBarrierFunction ebfA(xPenaltyA, 0.0, 100);
+  ExponentialBarrierFunction ebfB(1.0, xPenaltyB, 100);
+
   // Keep track of the entry index
   TriangleVector::iterator eit = xTriangleEntries.begin();
   
   // Create a Triangle-iterator through the atoms
-  
   for(MedialTriangleIterator itt(S->xAtomGrid); !itt.IsAtEnd(); ++itt, ++eit)
     {
     // Get the derivative atoms too
@@ -604,8 +648,9 @@ double BoundaryJacobianEnergyTerm
         dot_product(eit->NY[z], dNX) - eit->J[z] * dgX2) / eit->gX2;
 
       // Compute the penalty terms
-      dTotalPenalty += 
-        (-xPenaltyA * eit->PenA[z] + eit->PenB[z]) * dJ;
+      dTotalPenalty += dJ * (
+        - ebfA.df(-eit->J[z], eit->PenA[z]) 
+        + ebfB.df( eit->J[z], eit->PenB[z]));
       }
     }
 
@@ -1995,6 +2040,33 @@ MedialOptimizationProblem
 
   // Clean up
   delete[] a1; delete[] a2; delete[] a0;
+}
+
+double
+MedialOptimizationProblem
+::TestGradientComputation(double *x, double eps)
+{
+  // Allocate the analytic and finite difference gradients
+  vnl_vector<double> gcd(nCoeff), ga(nCoeff), acc(nCoeff);
+
+  // Compute the gradient at the current point
+  ComputeGradient(x, ga.data_block());
+
+  // Compute the central difference approximation
+  for(size_t i = 0; i < nCoeff; i++)
+    { 
+    // Compute central difference
+    vnl_vector<double> x1(x, nCoeff), x2(x, nCoeff);
+    x1[i] -= eps;
+    x2[i] += eps;
+    gcd[i] = (Evaluate(x2.data_block()) - Evaluate(x1.data_block())) / (2 * eps);
+
+    // Compute the accuracy of the approximation
+    acc[i] = fabs(gcd[i] - ga[i]) / (eps + 0.5 * (fabs(gcd[i]) + fabs(ga[i])));
+    }
+
+  // Construct a test value
+  return acc.inf_norm();
 }
 
 double 
