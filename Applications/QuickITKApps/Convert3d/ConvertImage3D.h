@@ -81,6 +81,7 @@ private:
   void ComputeFFT();
   void ComputeOverlaps(double value);
   void ConnectedComponents();
+  void ImageERF(double thresh, double scale);
   void SignedDistanceTransform();
   void ExtractRegion(RegionType bbox);
   void LevelSetSegmentation(int nIter);

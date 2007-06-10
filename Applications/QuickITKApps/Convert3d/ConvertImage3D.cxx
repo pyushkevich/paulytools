@@ -1,4 +1,5 @@
 #include "ConvertImage3D.h"
+#include "vnl/vnl_erf.h"
 
 // Helper function: read a double, throw exception if unreadable
 double myatof(char *str)
@@ -73,6 +74,14 @@ ImageConverter<TPixel, VDim>
     {
     ConnectedComponents();
     return 0;
+    }
+
+  else if(cmd == "-erf")
+    {
+    double thresh = atof(argv[1]);
+    double scale = atof(argv[2]);
+    ImageERF(thresh, scale);
+    return 2;
     }
 
   else if(cmd == "-probe")
@@ -945,6 +954,32 @@ ImageConverter<TPixel, VDim>
 template<class TPixel, unsigned int VDim>
 void
 ImageConverter<TPixel, VDim>
+::ImageERF(double thresh, double scale)
+{
+  // Get the input image
+  ImagePointer input = m_ImageStack.back();
+
+  // Use iterator to apply erf
+  itk::ImageRegionIteratorWithIndex<ImageType> 
+    it(input, input->GetBufferedRegion());
+  for(; !it.IsAtEnd(); ++it)
+    {
+    double x = it.Value();
+    double y = vnl_erf((x - thresh) / scale);
+    it.Set(y);
+    }
+
+  // Say what we are doing
+  *verbose << "Taking ERF of #" << m_ImageStack.size() << endl;
+  *verbose << "  y = erf((x - " << thresh << ") / scale)" << endl;
+
+  // Updated
+  input->Modified();
+}
+
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
 ::TrimImage(const RealVector &margin)
 {
   // Get the input image
@@ -1054,8 +1089,8 @@ ImageConverter<TPixel, VDim>
   ImagePointer i2 = m_ImageStack[m_ImageStack.size() - 2];
 
   // Write something
-  *verbose << "Multiplying #" << m_ImageStack.size() - 1 
-    << " by #" << m_ImageStack.size() << endl;
+  *verbose << "Adding #" << m_ImageStack.size() - 1 << " and "  
+    << m_ImageStack.size() - 2 << endl;
 
   // Perform the multiplication
   typedef itk::AddImageFilter<ImageType, ImageType, ImageType> FilterType;
