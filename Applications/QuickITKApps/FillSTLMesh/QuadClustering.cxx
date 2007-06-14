@@ -2,6 +2,7 @@
 #include "vtkPoints.h"
 #include "vtkQuadricClustering.h"
 #include "vtkCleanPolyData.h"
+#include "vtkTriangleFilter.h"
 #include <iostream>
 
 using namespace std;
@@ -29,10 +30,16 @@ int main(int argc, char *argv[])
   // Read the input
   vtkPolyData *input = ReadVTKData(argv[1]);
 
+  // Triangulate ?
+  vtkTriangleFilter *fltTriangle = vtkTriangleFilter::New();
+  fltTriangle->SetInput(input);
+  fltTriangle->Update();
+  vtkPolyData *tri = fltTriangle->GetOutput();
+
   // Get the extents of the mesh
   double bounds[6];
-  input->ComputeBounds();
-  input->GetBounds(bounds);
+  tri->ComputeBounds();
+  tri->GetBounds(bounds);
 
   // Compute the number of divisions
   int nx = (int) ceil((bounds[1] - bounds[0]) / cx);
@@ -42,8 +49,9 @@ int main(int argc, char *argv[])
 
   // Create the clustering filter
   vtkQuadricClustering *flt = vtkQuadricClustering::New();
-  flt->SetInput(input);
+  flt->SetInput(tri);
   flt->SetNumberOfDivisions(nx,ny,nz);
+  flt->SetNumberOfDivisions(50,50,50);
   // flt->SetNumberOfDivisions((int) cx, (int) cy, (int) cz);
   flt->Update();
 

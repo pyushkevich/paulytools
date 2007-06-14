@@ -183,7 +183,6 @@ void ComputeGeodesics(
       {
       if(it->first == i)
         {
-        cout << "Distance " << i << " to " << j " is " << dijkstra.GetVertexDistance(it->second) << endl;
         d[j] = dijkstra.GetVertexDistance(it->second);
         }
       else if(it->second == i)
