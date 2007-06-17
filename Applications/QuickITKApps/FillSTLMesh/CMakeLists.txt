@@ -4,6 +4,7 @@ SET(FILLSTLMESH_SRCS
   FillSTLMesh.cxx
 )
 
+ADD_EXECUTABLE(meshcluster SurfaceClusterAnalysis.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(meshdiff CompareMeshes.cxx)
 ADD_EXECUTABLE(mesh2img ${FILLSTLMESH_SRCS})
 ADD_EXECUTABLE(avgmesh AverageMeshes.cxx)
@@ -43,6 +44,7 @@ SET(COMMON_LIBS
   vtkHybrid
   vtkPatented
   vtkRendering
+  vtkPatented
 )
 
 INCLUDE_DIRECTORIES(${MYLIBS_INCLUDE_DIRS}
@@ -57,6 +59,7 @@ TARGET_LINK_LIBRARIES(avgmesharr ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(identimg ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(scalemesh ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(dumpmeshpoints ${COMMON_LIBS})
+TARGET_LINK_LIBRARIES(meshcluster ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(dumpmeshattr ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(importqvoronoi ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(mesh2img ${COMMON_LIBS})
