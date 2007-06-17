@@ -67,6 +67,7 @@ void ExportMedialMeshToVTK(
   vtkFloatArray *lNormal = AddMedialVectorField(pMedial, xModel, "Atom Normal");
   vtkFloatArray *lStretch = AddMedialScalarField(pMedial, xModel, "Stretch");
   vtkFloatArray *lCurvPen = AddMedialScalarField(pMedial, xModel, "Curvature Penalty Feature");
+  vtkFloatArray *lAreaElement = AddMedialScalarField(pMedial, xModel, "Area Element");
 
   vtkFloatArray *lContraOffDiag = 
     AddMedialScalarField(pMedial, xModel, "Off Diagonal Term of Contravariant MT");
@@ -107,6 +108,8 @@ void ExportMedialMeshToVTK(
     lKappa1->SetTuple1(i, a.xMeanCurv - sqrt( a.xMeanCurv *  a.xMeanCurv -  a.xGaussCurv));
     lKappa2->SetTuple1(i, a.xMeanCurv + sqrt( a.xMeanCurv *  a.xMeanCurv -  a.xGaussCurv));
 
+    lAreaElement->SetTuple1(i, a.aelt);
+    
     lNormal->SetTuple3(i, a.N(0), a.N(1), a.N(2));
 
     // Compute the stretch ???
@@ -183,6 +186,7 @@ void ExportMedialMeshToVTK(
   lAngle->Delete();
   lMeanCurv->Delete();
   lGaussCurv->Delete();
+  lAreaElement->Delete();
   pMedial->Delete();
 }
 
