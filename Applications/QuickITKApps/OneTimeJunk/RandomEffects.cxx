@@ -120,7 +120,8 @@ double HotellingT2(vnl_matrix<double> &A)
   vnl_matrix<double> S = (B.transpose() * B) / (n - 1);
 
   // Compute the statistic
-  double T2 = dot_product(mu, vnl_matrix_inverse<double>(S) * mu) * n;
+  vnl_matrix_inverse<double> iS(S);
+  double T2 = dot_product(mu, iS * mu) * n;
 
   return T2;
 }

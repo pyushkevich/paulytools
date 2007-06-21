@@ -118,7 +118,6 @@ Function {createUI()} {open
         }
         menuitem {} {
           label {Import Level Set...}
-          callback uiLoadImage
           xywh {10 10 100 20}
         }
       }

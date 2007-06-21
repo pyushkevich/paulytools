@@ -115,8 +115,11 @@ int main(int argc, char *argv[])
     }
 
   // Save the distance matrix
-  vnl_matlab_filewrite exporter(argv[3]);
-  exporter.write(mDist, "dist");
+  ofstream of1(argv[3]);
+  of1 << mDist << endl;
+  of1.close();
+  // vnl_matlab_filewrite exporter(argv[3]);
+  // exporter.write(mDist, "dist");
 
   // Save the coordinates of the landmarks
   vnl_matrix<double> mCoord(n, 3, 0.0);
@@ -129,8 +132,11 @@ int main(int argc, char *argv[])
     }
 
   // Save the distance matrix
-  vnl_matlab_filewrite exporter2(argv[2]);
-  exporter2.write(mCoord, "xyz");
+  ofstream of2(argv[2]);
+  of2 << mCoord << endl;
+  of2.close();
+  // vnl_matlab_filewrite exporter2(argv[2]);
+  // exporter2.write(mCoord, "xyz");
 
   delete xLandmarks;
 }

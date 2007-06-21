@@ -2,6 +2,8 @@
 #include "imagesurface.h"
 #include <itkImageFileReader.h>
 
+Model model;
+
 /**
  * PROGRAM bettermesh.cpp
  * 
@@ -33,4 +35,7 @@ int main(int argc, char *argv[])
   return 0;
 }
 
+
+void fillCurrentPointInfo() {
+}
 

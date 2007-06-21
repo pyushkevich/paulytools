@@ -376,7 +376,7 @@ TracerUserInterfaceLogic
     for(unsigned int i = 1; i <= m_BrsCurves->size(); i++)
       {
       TracerCurves::IdType iCurve = 
-        (TracerCurves::IdType) m_BrsCurves->data(i);
+        static_cast<TracerCurves::IdType>(m_BrsCurves->data(i));
       if(iCurve == m_Data->GetCurrentCurve())
         {
         m_BrsCurves->select(i);
@@ -394,7 +394,8 @@ TracerUserInterfaceLogic
   if(value < 1) return;
   
   // Get the user data for the selected curve
-  TracerCurves::IdType id = (TracerCurves::IdType) m_BrsCurves->data(value);
+  TracerCurves::IdType id = 
+    reinterpret_cast<TracerCurves::IdType> (m_BrsCurves->data(value));
   
   // Select the curve in the data
   m_Data->SetCurrentCurve(id);

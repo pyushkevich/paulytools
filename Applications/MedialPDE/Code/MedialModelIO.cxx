@@ -342,11 +342,20 @@ SubdivisionMedialModelIO
   xAux->SetNumberOfTuples(model->mlCoefficient.nVertices);
   poly->GetPointData()->AddArray(xAux);
 
+  // Set the UV (texture coordinate) array
+  vtkDoubleArray *xUV = vtkDoubleArray::New();
+  xUV->SetNumberOfComponents(2);
+  xUV->SetNumberOfTuples(model->mlCoefficient.nVertices);
+  poly->GetPointData()->SetTCoords(xUV);
+
   // Set the values of X (for now this is the same for all models)
   for(size_t i = 0; i < model->mlCoefficient.nVertices; i++)
   {
     // Set the point's coordinates
     points->InsertNextPoint(model->xCoefficients.data_block() + i * 4);
+
+    // Set the texture coordinates
+    xUV->SetTuple2(i, model->uCoeff[i], model->vCoeff[i]);
   }
 
   // Branch by the subtype of model
@@ -398,6 +407,7 @@ SubdivisionMedialModelIO
   // Clean up
   writer->Delete();
   xAux->Delete();
+  xUV->Delete();
   points->Delete();
   poly->Delete();
 }

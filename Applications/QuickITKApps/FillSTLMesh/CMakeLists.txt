@@ -4,7 +4,10 @@ SET(FILLSTLMESH_SRCS
   FillSTLMesh.cxx
 )
 
-ADD_EXECUTABLE(meshcluster SurfaceClusterAnalysis.cxx ReadWriteVTK.cxx)
+INCLUDE_DIRECTORIES(${PAULY_SOURCE_DIR}/Applications/MedialPDE/Code)
+
+ADD_EXECUTABLE(meshcluster SurfaceClusterAnalysis.cxx ReadWriteVTK.cxx
+  ${PAULY_SOURCE_DIR}/Applications/MedialPDE/Code/Registry.cxx)
 ADD_EXECUTABLE(meshdiff CompareMeshes.cxx)
 ADD_EXECUTABLE(mesh2img ${FILLSTLMESH_SRCS})
 ADD_EXECUTABLE(avgmesh AverageMeshes.cxx)
@@ -18,6 +21,7 @@ ADD_EXECUTABLE(dumpmeshpoints DumpMeshPoints.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(dumpmeshattr DumpMeshAttr.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(real2mesh RealImageToMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(WarpMeshBackward WarpMeshBackwards.cxx ReadWriteVTK.cxx)
+ADD_EXECUTABLE(flipmesh FlipMesh.cxx ReadWriteVTK.cxx)
 
 ADD_EXECUTABLE(importqvoronoi 
   ImportQVoronoi.cxx
@@ -42,9 +46,7 @@ SET(COMMON_LIBS
   vtkIO 
   vtkGraphics 
   vtkHybrid
-  vtkPatented
   vtkRendering
-  vtkPatented
 )
 
 INCLUDE_DIRECTORIES(${MYLIBS_INCLUDE_DIRS}
@@ -63,6 +65,7 @@ TARGET_LINK_LIBRARIES(meshcluster ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(dumpmeshattr ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(importqvoronoi ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(mesh2img ${COMMON_LIBS})
+TARGET_LINK_LIBRARIES(flipmesh ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(real2mesh ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(WarpMeshBackward ${COMMON_LIBS} ${ITK_LIBS})
 

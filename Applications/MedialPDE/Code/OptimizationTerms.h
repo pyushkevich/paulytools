@@ -457,6 +457,43 @@ private:
   const static double xScale;
 };
 
+/**
+ * Mesh regularization penalty term. This term computes a penalty
+ * based on how much a mesh deviates from a surface parameterized
+ * by Fourier harmonics. The number of harmonics in U and V is a 
+ * parameter. For this to work, the u and v in each atom must be
+ * specified properly
+ */
+class MeshRegularizationPenaltyTerm : public EnergyTerm
+{
+public:
+  // Constructor, takes the initial model and number of components
+  MeshRegularizationPenaltyTerm(
+    GenericMedialModel *model, size_t nu, size_t nv);
+
+  // Compute the penalty
+  double ComputeEnergy(SolutionDataBase *data);
+
+  // Describe the terms of the penalty
+  void PrintReport(ostream &sout);
+
+  // Compute the partial derivative
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
+
+private:
+  // Accumulators for display and statistics calculation
+  StatisticsAccumulator saPenalty, saDelta[3];
+
+  // The matrix Q, such that the prior term has the form |x|^2 - |Qx|^2
+  // matrix for a specific basis function decomposition
+  vnl_matrix<double> Q, Qt, Z;
+
+  // The vector b = 2(x - Q'Qx), useful to speed up the gradient 
+  // computation
+  vnl_vector<double> x[3], b[3];
+};
+
 
 /**
  * Term that penalizes excessive curvature of the medial axis. This
@@ -635,6 +672,10 @@ public:
 
   /** Print a detailed report */
   void PrintReport(ostream &sout);
+
+  /** Get the medial model */
+  GenericMedialModel *GetMedialModel()
+    { return xMedialModel; }
 
 private:
   typedef CoefficientMapping::Vec Vec;

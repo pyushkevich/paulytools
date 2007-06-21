@@ -767,6 +767,7 @@ int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img)
 
   // Create an array of image match terms
   vector<EnergyTerm *> vt;
+  vt.push_back(new MeshRegularizationPenaltyTerm(model, 4, 4));
   vt.push_back(new BoundaryJacobianEnergyTerm());
   vt.push_back(new MedialCurvaturePenalty());
   vt.push_back(new ProbabilisticEnergyTerm(img, 4));
@@ -787,6 +788,7 @@ int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img)
 
   // Create labels
   char *nt[] = {
+    "MeshRegularizationPenaltyTerm", 
     "BoundaryJacobianEnergyTerm", 
     "MedialCurvaturePenalty",
     "ProbabilisticEnergyTerm",
@@ -802,7 +804,7 @@ int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img)
     "IdentityCoefficientMapping",
     "AffineTransformCoefficientMapping" };
 
-  double stepsize[] = {0.1, 0.001, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
+  double stepsize[] = {0.1, 0.1, 0.001, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
 
   // Loop over both options
   size_t i, j;

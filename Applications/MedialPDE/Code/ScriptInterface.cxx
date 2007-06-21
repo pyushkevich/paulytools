@@ -402,8 +402,18 @@ void my_fdf(const gsl_vector *v, void *params, double *f, gsl_vector *df)
 /** CALLBACK FUNCTIONS FOR TOMS611 ROUTINE */
 void my_calcf(int &n, double *x, int &nf, double &f, int *dummy1, double *dummy2, void *info)
 {
+  static int it = 0;
+
   // Get a pointer to the object on which to evaluate
   MedialOptimizationProblem *mop = static_cast<MedialOptimizationProblem *>(info);
+
+  // Check if x is ok
+  vnl_vector<double> vx(x, n);
+  if(!vx.is_finite())
+    {
+    nf = 0;
+    return;
+    }
 
   // Try to evaluate at this point, and if we fail return 0 in nf (request
   // smaller step from the solver, this is a nice feature of toms611)
@@ -413,6 +423,11 @@ void my_calcf(int &n, double *x, int &nf, double &f, int *dummy1, double *dummy2
     cout << " [BAD SOLN (calcf) " << exc.what() << "]" << endl;
     nf = 0; 
     }
+
+  // Save a mesh
+  ExportMedialMeshToVTK(mop->GetMedialModel(), NULL, "iter.med.vtk");
+  ExportBoundaryMeshToVTK(mop->GetMedialModel(), NULL, "iter.bnd.vtk");
+
 }
 
 void my_calcg(int &n, double *x, int &nf, double *g, int *, double *, void *info)
@@ -762,8 +777,13 @@ void MedialPDE
   MedialCurvaturePenalty xTermCurvature;
   RadiusPenaltyTerm xTermRadius(0.025);
 
+  // TODO: do this better
+  // MeshRegularizationPenaltyTerm xMeshRegTerm(xMedialModel, 6, 6);
+
   // Add the terms to the problem
   xProblem.AddEnergyTerm(xTermImage, 1.0);
+
+  // xProblem.AddEnergyTerm(&xMeshRegTerm, 1.0);
 
   // Add prior terms only for deformable registration
   if(p.xMapping != OptimizationParameters::AFFINE && p.xMapping != OptimizationParameters::PCA)
@@ -813,8 +833,8 @@ void MedialPDE
   xProblem.PrintReport(cout);
 
   // Test the gradient computation
-  cout << "GRADIENT COMPUTATION ABS MAX ERROR (eps = 0.001): " << 
-    xProblem.TestGradientComputation(xSolution.data_block(), 0.001);
+  // cout << "GRADIENT COMPUTATION ABS MAX ERROR (eps = 0.001): " << 
+  //  xProblem.TestGradientComputation(xSolution.data_block(), 0.001);
 
   // At this point, split depending on the method
   if(p.xOptimizer == OptimizationParameters::CONJGRAD)
@@ -826,8 +846,8 @@ void MedialPDE
   else throw ModelIOException("Unknown optimization technique");
 
   // Test the gradient computation again
-  cout << "GRADIENT COMPUTATION ABS MAX ERROR (eps = 0.001): " << 
-    xProblem.TestGradientComputation(xSolution.data_block(), 0.001);
+  // cout << "GRADIENT COMPUTATION ABS MAX ERROR (eps = 0.001): " << 
+  //   xProblem.TestGradientComputation(xSolution.data_block(), 0.001);
 
   // After optimization, apply the best result
   xMedialModel->SetCoefficientArray(xMapping->Apply(xInitialCoeff, xSolution));

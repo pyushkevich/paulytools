@@ -69,6 +69,9 @@ void ExportMedialMeshToVTK(
   vtkFloatArray *lCurvPen = AddMedialScalarField(pMedial, xModel, "Curvature Penalty Feature");
   vtkFloatArray *lAreaElement = AddMedialScalarField(pMedial, xModel, "Area Element");
 
+  vtkFloatArray *lSpoke1 = AddMedialVectorField(pMedial, xModel, "Spoke1");
+  vtkFloatArray *lSpoke2 = AddMedialVectorField(pMedial, xModel, "Spoke2");
+
   vtkFloatArray *lContraOffDiag = 
     AddMedialScalarField(pMedial, xModel, "Off Diagonal Term of Contravariant MT");
 
@@ -114,6 +117,10 @@ void ExportMedialMeshToVTK(
 
     // Compute the stretch ???
     lStretch->SetTuple1(i, a.G.xChristoffelSecond[0][0][0]);
+
+    // Add the spoke vectors
+    lSpoke1->SetTuple3(i, a.R * a.xBnd[0].N[0], a.R * a.xBnd[0].N[1], a.R * a.xBnd[0].N[2]);
+    lSpoke2->SetTuple3(i, a.R * a.xBnd[1].N[0], a.R * a.xBnd[1].N[1], a.R * a.xBnd[1].N[2]);
 
     // Compute sum of the squares of principal curvatures
     double k2 = 4 * a.xMeanCurv * a.xMeanCurv - 2 * a.xGaussCurv;
@@ -188,6 +195,8 @@ void ExportMedialMeshToVTK(
   lGaussCurv->Delete();
   lAreaElement->Delete();
   pMedial->Delete();
+  lSpoke2->Delete();
+  lSpoke1->Delete();
 }
 
 vtkUnstructuredGrid *

@@ -3,6 +3,7 @@
 #include "MedialAtom.h"
 #include "ITKImageWrapper.h"
 #include <iostream>
+#include <vnl/algo/vnl_svd.h>
 
 using namespace std;
 
@@ -1214,13 +1215,20 @@ double MedialAnglesPenaltyTerm::ComputeEnergy(SolutionDataBase *S)
 {
   xTotalPenalty = xMaxPenalty = 0.0;
 
-  // Compute the square of the cosine of the angle between Xu and Xv
+  // Look at the angle made by Xu and Xv at a point
+  // Create a penalty term
+  ExponentialBarrierFunction ebf(30, 1, 100);
+
+  // This penalty computes the tangent of the angle between Xu and Xv
+  // Then, in order to give more flexibility, we take this term to a 
+  // power, so that the penalty near 0 is smaller
   for(MedialAtomIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
     {
     MedialAtom &a = S->xAtoms[it.GetIndex()];
     double penalty = 
       a.G.xCovariantTensor[0][1] * a.G.xCovariantTensor[0][1] / a.G.g;
-    xTotalPenalty += penalty;
+    double p_scale = penalty * penalty * penalty * penalty;
+    xTotalPenalty += p_scale;
     xMaxPenalty = std::max(penalty, xMaxPenalty);
     }
 
@@ -1229,6 +1237,7 @@ double MedialAnglesPenaltyTerm::ComputeEnergy(SolutionDataBase *S)
   //  xTotalPenalty += CosineSquareTuple(S->xAtoms, it);
 
   // return 0.25 * xTotalPenalty / S->xAtomGrid->GetNumberOfAtoms();
+  xTotalPenalty /= S->xAtomGrid->GetNumberOfAtoms();
   return xTotalPenalty;
 }
 
@@ -1241,13 +1250,15 @@ double MedialAnglesPenaltyTerm::ComputePartialDerivative(SolutionData *S, Partia
     {
     MedialAtom &a = S->xAtoms[it.GetIndex()];
     MedialAtom &da = dS->xAtoms[it.GetIndex()];
+
     double numerator = 
       a.G.xCovariantTensor[0][1] * a.G.xCovariantTensor[0][1];
     double d_numerator = 
       2.0 * a.G.xCovariantTensor[0][1] * da.G.xCovariantTensor[0][1];
     double d_penalty = 
       (d_numerator * a.G.g - numerator * da.G.g) / (a.G.g * a.G.g);
-    dTotalPenalty += d_penalty;
+    double penalty = numerator / a.G.g;
+    dTotalPenalty += 4.0 * d_penalty * penalty * penalty * penalty;
     }
   /*
   // Sum the penalty over all triangles in the mesh
@@ -1256,7 +1267,7 @@ double MedialAnglesPenaltyTerm::ComputePartialDerivative(SolutionData *S, Partia
 
   return 0.25 * dTotalPenalty / S->xAtomGrid->GetNumberOfAtoms();
   */
-  return dTotalPenalty;
+  return dTotalPenalty / S->xAtomGrid->GetNumberOfAtoms();
 }
 
 void MedialAnglesPenaltyTerm::PrintReport(ostream &sout)
@@ -1704,7 +1715,140 @@ DistanceToPointSetEnergyTerm
   sout << "    Mean squared distance     : " << xTotalMatch << endl;
 }
 
+/*********************************************************************************
+ * MESH REGULARIZATION PENALTY TERM
+ ********************************************************************************/
+MeshRegularizationPenaltyTerm
+::MeshRegularizationPenaltyTerm(
+  GenericMedialModel *model, size_t nu, size_t nv)
+{
+  // We first compute the weight matrix W. For the given basis with coeffs c
+  // the matrix gives x = Wc. Then the regularization prior for x with respect to
+  // the basis is given by |x|^2 - x'W.inv(W'W).W'x, or |x|^2 - |Qx|^2, where
+  // (U, S, V) = svd(W) and Q = U[:,1:m]', i.e, the first m rows of the U matrix
+  
+  // Set m, the number of basis functions, and n, the number of atoms
+  size_t m = nu * nv;
+  size_t n = model->GetNumberOfAtoms();
+  size_t i, j;
 
+  // Compute the range of u and v in the atoms for the basis functions
+  StatisticsAccumulator sau, sav;
+  for(size_t i = 0; i < n; i++)
+    { 
+    sau.Update(model->GetAtomArray()[i].u);
+    sav.Update(model->GetAtomArray()[i].v);
+    }
+
+  // Fill out the weight matrix
+  vnl_matrix<double> W(n, m);
+  for(i = 0; i < n; i++)
+    {
+    // Get the medial atom
+    const MedialAtom &a = model->GetAtomArray()[i];
+
+    // Scale u and v to the unit square (isn't this a problem for funky shapes?)
+    double u = (a.u - sau.GetMin()) / (sau.GetMax() - sau.GetMin());
+    double v = (a.v - sav.GetMin()) / (sav.GetMax() - sav.GetMin());
+
+    // Shift u so no point is on the boundary
+    u = 0.9 * u + 0.05; v = 0.9 * v + 0.05;
+
+    // Compute the weight matrix
+    j = 0;
+    for(size_t iu = 0; iu < nu; iu++) for(size_t iv = 0; iv < nv; iv++)
+      {
+      // Compute the basis functions for u and v
+      W(i, j++) = cos(M_PI * iu * u) * cos(M_PI * iv * v);
+      }
+    }
+
+  // Compute the SVD of the matrix W and the matrix Q
+  vnl_svd<double> svd(W);
+  Qt = svd.U().get_n_columns(0,m);
+  Q = Qt.transpose();
+
+  // TEST code
+  Z = W * vnl_svd<double>(W.transpose() * W).inverse() * W.transpose();
+}
+
+double
+MeshRegularizationPenaltyTerm
+::ComputeEnergy(SolutionDataBase *S)
+{
+  // The penalty term
+  saPenalty.Reset();
+
+  // Compute the distortion in X, Y and Z (I guess we can let R alone)
+  vnl_vector<double> x(S->xAtomGrid->GetNumberOfAtoms());
+
+  // Repeat for each component
+  for(size_t c = 0; c < 3; c++)
+    {
+    size_t i;
+
+    // Populate the x-vector
+    for(i = 0; i < x.size(); i++)
+      {
+      x[i] = S->xAtoms[i].X[c];
+      }
+
+    vnl_vector<double> delta = x - Z * x;
+    saDelta[c].Reset();
+    for(i = 0; i < x.size(); i++)
+      saDelta[c].Update(delta[i] * delta[i]);
+
+    // Compute the penalty
+    vnl_vector<double> Qx = Q * x;
+    saPenalty.Update(dot_product(x,x) - dot_product(Qx,Qx));
+
+    // Update the vector b
+    b[c] = 2.0 * (x - Qt * Qx);
+    }
+
+
+
+  // Return the total penalty
+  return saPenalty.GetSum() / S->xAtomGrid->GetNumberOfAtoms();
+}
+
+// Compute the partial derivative
+double 
+MeshRegularizationPenaltyTerm
+::ComputePartialDerivative(
+  SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  // Initialize the derivative
+  double dPenalty = 0.0;
+
+  // Generate the derivative vectors
+  vnl_vector<double> dx(S->xAtomGrid->GetNumberOfAtoms());
+
+  // Repeat for each component
+  for(size_t c = 0; c < 3; c++)
+    {
+    // Populate the x-vector
+    for(size_t i = 0; i < dx.size(); i++)
+      dx[i] = dS->xAtoms[i].X[c];
+
+    // Compute the gradient
+    dPenalty += dot_product(b[c], dx);
+    }
+
+  return dPenalty / S->xAtomGrid->GetNumberOfAtoms();
+}
+
+// Describe the terms of the penalty
+void 
+MeshRegularizationPenaltyTerm
+::PrintReport(ostream &sout)
+{
+  sout << "  MeshRegularizationPenaltyTerm:" << endl;
+  sout << "    Total penalty     : " << saPenalty.GetSum() << endl;
+  sout << "    X distance mean   : " << saDelta[0].GetMean() << endl;
+  sout << "    Y distance mean   : " << saDelta[1].GetMean() << endl;
+  sout << "    Z distance mean   : " << saDelta[2].GetMean() << endl;
+}
 
 /*********************************************************************************
  * FIT TO INTERNAL POINTS ENERGY TERM
@@ -2117,7 +2261,7 @@ MedialOptimizationProblem
     }
     */
   // cout << " [GRAD: " << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
-  
+
   // Stop the timer
   xSolveGradTimer.Stop();
 
@@ -2178,8 +2322,24 @@ MedialOptimizationProblem
   flagGradientComputed = true;
 
 
+  // Show the gradient
+  /* 
+  cout << "Gradient: ";
+  vnl_vector<double> X = xLastEvalPoint;
+  for(size_t i = 0; i < nCoeff; i++)
+    {
+    printf("%+6E ", xLastGradient[i]);
+    double x0 = X[i];
+    X[i] = x0 + 0.001;
+    double f1 = this->Evaluate(X.data_block());
+    X[i] = x0 - 0.001;
+    double f2 = this->Evaluate(X.data_block());
+    X[i] = x0;
+    printf("(%+6E)  ", (f1-f2) / 0.002);
+    }
+  cout << endl;
+  */
   
-
   // Return the solution value
   return xLastSolutionValue;
 }

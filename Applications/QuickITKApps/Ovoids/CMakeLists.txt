@@ -17,6 +17,13 @@ INCLUDE_DIRECTORIES(
   ${PAULY_SOURCE_DIR}/Applications/QuickITKApps/Ovoids
 )
 
+LINK_LIBRARIES(
+  ${ITK_LIBRARIES}
+  vtkCommon
+  ${PAULY_CORE_LIBS}
+  ${FLTK_LIBRARY}
+)
+
 FLTK_WRAP_UI(ovoids ui.fl)
 ADD_EXECUTABLE(ovoids 
   ${OVOIDS_SRC}
@@ -26,16 +33,6 @@ ADD_EXECUTABLE(ovoids
 ADD_EXECUTABLE(bettermesh 
   ${OVOIDS_SRC} 
   bettermesh.cpp)
-
-LINK_LIBRARIES(
-  ITKCommon 
-  ITKBasicFilters 
-  ITKIO 
-  ITKNumerics
-  vtkCommon
-  ${PAULY_CORE_LIBS}
-  ${FLTK_LIBRARY}
-)
 
 IF(WIN32)
   LINK_LIBRARIES(wsock32 comctl32)
