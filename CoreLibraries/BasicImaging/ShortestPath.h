@@ -36,15 +36,15 @@ public:
   static const TWeight INFINITE_WEIGHT;
 
   /** Constant representing no path to source vertex */
-  static const unsigned int NO_PATH;
+  static const size_t NO_PATH;
 
   /** 
    * Constructor, creates shortest path computer for given graph
    * specified in METIS format. In addition pass in the weights
    * associated with the edges. */
   DijkstraShortestPath(
-    unsigned int nVertices, unsigned int *xAdjacencyIndex,
-    unsigned int *xAdjacency, TWeight *xEdgeLen)
+    size_t nVertices, size_t *xAdjacencyIndex,
+    size_t *xAdjacency, TWeight *xEdgeLen)
     {
     // Store the sizes
     this->m_NumberOfVertices = nVertices;
@@ -57,7 +57,7 @@ public:
 
     // Allocate the array of distances
     m_Distance = new TWeight[nVertices];
-    m_Predecessor = new unsigned int[nVertices];
+    m_Predecessor = new size_t[nVertices];
 
     // Create the Binary heap (priority que)
     m_Heap = new BinaryHeap<TWeight>(m_NumberOfVertices, m_Distance);
@@ -72,9 +72,9 @@ public:
     }
 
   /** Compute the shortest paths for given source vertex */
-  void ComputePathsFromSource(unsigned int iSource, unsigned int iTarget = 0xffffffff)
+  void ComputePathsFromSource(size_t iSource, size_t iTarget = 0xffffffff)
     {
-    unsigned int i;
+    size_t i;
 
     // Initialize the predecessor array (necessary?)
     for(i = 0; i < m_NumberOfVertices; i++)
@@ -93,7 +93,7 @@ public:
     for(i = m_AdjacencyIndex[iSource]; i < m_AdjacencyIndex[iSource+1]; i++)
       {
       // Get the neighbor of i
-      unsigned int iNbr = m_Adjacency[i];
+      size_t iNbr = m_Adjacency[i];
 
       // Get the edge weight associated with it and update it in the queue
       m_Heap->DecreaseElementWeight(iNbr, m_EdgeWeight[i]);
@@ -106,7 +106,7 @@ public:
     while(m_Heap->GetSize())
       {
       // Pop off the closest vertex
-      unsigned int w = m_Heap->PopMinimum();
+      size_t w = m_Heap->PopMinimum();
 
       // If w is the target vertex, we are done
       if(w == iTarget) break;
@@ -115,7 +115,7 @@ public:
       for(i = m_AdjacencyIndex[w]; i < m_AdjacencyIndex[w+1]; i++)
         {
         // Get the neighbor of i
-        unsigned int iNbr = m_Adjacency[i];
+        size_t iNbr = m_Adjacency[i];
 
         // Get the edge weight associated with it and update it in the queue
         if(m_Heap->ContainsElement(iNbr))
@@ -137,7 +137,7 @@ public:
     }
 
   /** Get the predecessor array */
-  const unsigned int *GetPredecessorArray()
+  const size_t *GetPredecessorArray()
     { return m_Predecessor; }
 
   /** Get the distance array */
@@ -148,9 +148,9 @@ protected:
   BinaryHeap<TWeight> *m_Heap;
   TWeight *m_Distance;
   TWeight *m_EdgeWeight;
-  unsigned int *m_Predecessor;
-  unsigned int *m_AdjacencyIndex, *m_Adjacency;
-  unsigned int m_NumberOfVertices, m_NumberOfEdges;
+  size_t *m_Predecessor;
+  size_t *m_AdjacencyIndex, *m_Adjacency;
+  size_t m_NumberOfVertices, m_NumberOfEdges;
 };
 
 template<class TWeight>
@@ -160,11 +160,11 @@ public:
   typedef DijkstraShortestPath<TWeight> Superclass;
   
   GraphVoronoiDiagram(
-    unsigned int nVertices, unsigned int *xAdjacencyIndex,
-    unsigned int *xAdjacency, TWeight *xEdgeLen) : 
+    size_t nVertices, size_t *xAdjacencyIndex,
+    size_t *xAdjacency, TWeight *xEdgeLen) : 
     Superclass(nVertices, xAdjacencyIndex, xAdjacency, xEdgeLen)
     {
-      m_Source = new unsigned int[nVertices];
+      m_Source = new size_t[nVertices];
       cout << "GVD : " << nVertices << " " << this->m_NumberOfEdges << endl;
     }
 
@@ -173,9 +173,9 @@ public:
 
   /** Compute paths from multiple sources. Use this method to construct a
    * sort of a Voronoi diagram of the graph */ 
-  void ComputePathsFromManySources(unsigned int nSources, unsigned int *lSources)
+  void ComputePathsFromManySources(size_t nSources, size_t *lSources)
     {
-    unsigned int i;
+    size_t i;
 
     cout << "Number of sources: " << nSources << endl;
     cout << "Number of vertices: " << this->m_NumberOfVertices << endl;
@@ -192,10 +192,10 @@ public:
     this->m_Heap->InsertAllElementsWithEqualWeights(this->INFINITE_WEIGHT);
 
     // Initialize the heap with the sources
-    for(unsigned int iSource = 0; iSource < nSources; iSource++)
+    for(size_t iSource = 0; iSource < nSources; iSource++)
       {
       // Get the source vertex
-      unsigned int id = lSources[iSource];
+      size_t id = lSources[iSource];
 
       // Change the weight for all the sources to 0
       this->m_Heap->DecreaseElementWeight(id, 0);
@@ -208,13 +208,13 @@ public:
     while(this->m_Heap->GetSize())
       {
       // Pop off the closest vertex
-      unsigned int w = this->m_Heap->PopMinimum();
+      size_t w = this->m_Heap->PopMinimum();
 
       // Relax the vertices remaining in the heap
       for(i = this->m_AdjacencyIndex[w]; i < this->m_AdjacencyIndex[w+1]; i++)
         {
         // Get the neighbor of i
-        unsigned int iNbr = this->m_Adjacency[i];
+        size_t iNbr = this->m_Adjacency[i];
 
         // Get the edge weight associated with it and update it in the queue
         if(this->m_Heap->ContainsElement(iNbr))
@@ -241,11 +241,11 @@ public:
   /** Get the source of a vertex, i.e., the source vertex that is closest to
     the given vertex, or NO_PATH if there is no path to the given vertex from
     any of the sources */
-  unsigned int GetVertexSource(unsigned int iVertex) const
+  size_t GetVertexSource(size_t iVertex) const
     { return m_Source[iVertex]; }
 
 private:
-  unsigned int *m_Source;
+  size_t *m_Source;
 };
 
 template<class TWeight>
@@ -254,8 +254,8 @@ DijkstraShortestPath<TWeight>
 ::INFINITE_WEIGHT = std::numeric_limits<TWeight>::max();
 
 template<class TWeight>
-const unsigned int
+const size_t
 DijkstraShortestPath<TWeight>
-::NO_PATH = std::numeric_limits<unsigned int>::max();
+::NO_PATH = std::numeric_limits<size_t>::max();
 
 #endif
