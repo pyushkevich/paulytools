@@ -785,47 +785,43 @@ void MedialPDE
 
   // xProblem.AddEnergyTerm(&xMeshRegTerm, 1.0);
 
-  // Add prior terms only for deformable registration
-  if(p.xMapping != OptimizationParameters::AFFINE && p.xMapping != OptimizationParameters::PCA)
+  // Add the boundary Jacobian term
+  if(p.xTermWeights[OptimizationParameters::BOUNDARY_JACOBIAN] > 0.0)
     {
-    // Add the boundary Jacobian term
-    if(p.xTermWeights[OptimizationParameters::BOUNDARY_JACOBIAN] > 0.0)
-      {
-      xTermJacobian.SetParameters(p.xTermParameters[OptimizationParameters::BOUNDARY_JACOBIAN]);
-      xProblem.AddEnergyTerm(
-        &xTermJacobian, p.xTermWeights[OptimizationParameters::BOUNDARY_JACOBIAN]);
-      }
-
-    // Add the atom badness term
-    if(p.xTermWeights[OptimizationParameters::ATOM_BADNESS] > 0.0)
-      xProblem.AddEnergyTerm(
-        &xTermBadness, p.xTermWeights[OptimizationParameters::ATOM_BADNESS]);
-
-    // Add the atom badness term
-    if(p.xTermWeights[OptimizationParameters::BOUNDARY_GRAD_R] > 0.0)
-      xProblem.AddEnergyTerm(
-        &xTermGradR, p.xTermWeights[OptimizationParameters::BOUNDARY_GRAD_R]);
-
-    // Add the regularization term
-    if(p.xTermWeights[OptimizationParameters::MEDIAL_REGULARITY] > 0.0)
-      xProblem.AddEnergyTerm(
-        &xTermRegularize, p.xTermWeights[OptimizationParameters::MEDIAL_REGULARITY]);
-
-    // Add the curvature term
-    if(p.xTermWeights[OptimizationParameters::MEDIAL_CURVATURE] > 0.0)
-      xProblem.AddEnergyTerm(
-        &xTermCurvature, p.xTermWeights[OptimizationParameters::MEDIAL_CURVATURE]);
-
-    // Add the radius penalty term
-    if(p.xTermWeights[OptimizationParameters::RADIUS] > 0.0)
-      xProblem.AddEnergyTerm(
-        &xTermRadius, p.xTermWeights[OptimizationParameters::RADIUS]);
-
-    // Add the angle penalty term
-    if(p.xTermWeights[OptimizationParameters::MEDIAL_ANGLES] > 0.0)
-      xProblem.AddEnergyTerm(
-        &xTermAngles, p.xTermWeights[OptimizationParameters::MEDIAL_ANGLES]);
+    xTermJacobian.SetParameters(p.xTermParameters[OptimizationParameters::BOUNDARY_JACOBIAN]);
+    xProblem.AddEnergyTerm(
+      &xTermJacobian, p.xTermWeights[OptimizationParameters::BOUNDARY_JACOBIAN]);
     }
+
+  // Add the atom badness term
+  if(p.xTermWeights[OptimizationParameters::ATOM_BADNESS] > 0.0)
+    xProblem.AddEnergyTerm(
+      &xTermBadness, p.xTermWeights[OptimizationParameters::ATOM_BADNESS]);
+
+  // Add the atom badness term
+  if(p.xTermWeights[OptimizationParameters::BOUNDARY_GRAD_R] > 0.0)
+    xProblem.AddEnergyTerm(
+      &xTermGradR, p.xTermWeights[OptimizationParameters::BOUNDARY_GRAD_R]);
+
+  // Add the regularization term
+  if(p.xTermWeights[OptimizationParameters::MEDIAL_REGULARITY] > 0.0)
+    xProblem.AddEnergyTerm(
+      &xTermRegularize, p.xTermWeights[OptimizationParameters::MEDIAL_REGULARITY]);
+
+  // Add the curvature term
+  if(p.xTermWeights[OptimizationParameters::MEDIAL_CURVATURE] > 0.0)
+    xProblem.AddEnergyTerm(
+      &xTermCurvature, p.xTermWeights[OptimizationParameters::MEDIAL_CURVATURE]);
+
+  // Add the radius penalty term
+  if(p.xTermWeights[OptimizationParameters::RADIUS] > 0.0)
+    xProblem.AddEnergyTerm(
+      &xTermRadius, p.xTermWeights[OptimizationParameters::RADIUS]);
+
+  // Add the angle penalty term
+  if(p.xTermWeights[OptimizationParameters::MEDIAL_ANGLES] > 0.0)
+    xProblem.AddEnergyTerm(
+      &xTermAngles, p.xTermWeights[OptimizationParameters::MEDIAL_ANGLES]);
 
   // Initial solution report
   cout << "INITIAL SOLUTION REPORT: " << endl;
