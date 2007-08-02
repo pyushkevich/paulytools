@@ -34,6 +34,7 @@
 #include <itkSegmentationLevelSetImageFilter.h>
 #include "itkSignedDanielssonDistanceMapImageFilter.h"
 #include "itkShiftScaleImageFilter.h"
+#include "itkSTAPLEImageFilter.h"
 #include <itksys/SystemTools.hxx>
 #include "itkVnlFFTRealToComplexConjugateImageFilter.h"
 #include "itkVoxBoCUBImageIOFactory.h"
@@ -88,6 +89,7 @@ private:
   void MultiplyImages();
   void SampleImage(const RealVector &x);
   void ScaleShiftImage(double a, double b);
+  void StapleAlgorithm(double ival);
   void PrintImageInfo(bool flagFullInfo);
   void ReplaceIntensities(vector<double> &rules);
   void ThresholdImage(double u1, double u2, double vIn, double vOut);

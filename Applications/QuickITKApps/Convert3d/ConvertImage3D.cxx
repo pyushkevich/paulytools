@@ -228,6 +228,14 @@ ImageConverter<TPixel, VDim>
     return 0;
     }
 
+  else if(cmd == "-staple")
+    {
+    // Perform the STAPLE algorithm on the data
+    double ival = atof(argv[1]);
+    StapleAlgorithm(ival);
+    return 1;
+    }
+
   else if(cmd == "-fft")
     {
     ComputeFFT();
@@ -1481,6 +1489,44 @@ ImageConverter<TPixel, VDim>
   // Store the output
   m_ImageStack.pop_back();
   m_ImageStack.push_back(flt->GetOutput());
+}
+
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
+::StapleAlgorithm(double ival)
+{
+  size_t i;
+  
+  // Create a STAPLE filter
+  typedef itk::STAPLEImageFilter<ImageType, ImageType> Filter;
+  typename Filter::Pointer fltStaple = Filter::New();
+
+  // Add each of the images on the stack to the filter
+  for(i = 0; i < m_ImageStack.size(); i++)
+    fltStaple->SetInput(i, m_ImageStack[i]);
+
+  // Configure the STAPLE filter
+  fltStaple->SetForegroundValue(ival);
+
+  // Describe what we are doing
+  *verbose << "Executing STAPLE EM Algorithm on " << m_ImageStack.size() << " images." << endl;
+
+  // Plug in the filter's components
+  fltStaple->Update();
+
+  // Dump sensitivity/specificity values
+  *verbose << "  Elapsed Iterations: " << fltStaple->GetElapsedIterations() << endl;
+  for(i = 0; i < m_ImageStack.size(); i++)
+    {
+    *verbose << "  Rater " << i 
+      << ": Sensitivity = " << fltStaple->GetSensitivity(i) 
+      << "; Specificity = " << fltStaple->GetSpecificity(i) << endl;
+    }
+
+  // Store the output
+  m_ImageStack.clear();
+  m_ImageStack.push_back(fltStaple->GetOutput());
 }
 
 

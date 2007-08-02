@@ -35,6 +35,7 @@
 #include "itkSignedDanielssonDistanceMapImageFilter.h"
 #include "itkAddImageFilter.h"
 #include "itkMultiplyImageFilter.h"
+#include "itkSTAPLEImageFilter.h"
 
 #include <string>
 
@@ -88,6 +89,7 @@ template class itk::BinaryFunctorImageFilter<DoubleImage, DoubleImage, DoubleIma
   itk::Function::Mult<double,double,double> >;
 
 template class itk::InPlaceImageFilter<DoubleImage, DoubleImage>;
+template class itk::STAPLEImageFilter<DoubleImage, DoubleImage>;
 
 // All the junk we need for complex
 template class itk::VnlFFTRealToComplexConjugateImageFilter<double, C3D_VDIM>;
