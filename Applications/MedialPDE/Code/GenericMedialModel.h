@@ -109,6 +109,39 @@ public:
    */
   virtual void ComputeAtoms(const double *xHint = NULL) = 0;
 
+  /** 
+   * This method is designed to compute all the terms in a set of variational 
+   * derivatives of a model that depend on the variation, but not on the
+   * current state of the model (i.e., the terms that are linear function of
+   * the variation). The method must allocate whatever data structure it wants
+   * and must return a pointer to this data structure to the caller
+   */
+  virtual void * ComputeNonvaryingTermsInVariationalDerivative(
+    const Vec &xVariation) const = 0;
+
+  /**
+   * This method is called to release the data allocated by the method
+   * ComputeNonvaryingTermsInVariationalDerivative 
+   */
+  virtual void ReleaseNonvaryingTermsInVariationalDerivative(void *data) const = 0;
+
+  /**
+   * This method is called when the computation of variational derivatives
+   * begins. It should be used to compute whatever terms are common to all variational
+   * derivatives (i.e., depend on the current state of the model, not on the variation
+   */
+  virtual void BeginGradientComputation() = 0;
+
+  /** 
+   * This method computes the variational derivative of the model with respect to 
+   * a variation. The non-varying terms are passed in as a void pointer
+   */
+  virtual void ComputeAtomVariationalDerivative(
+    const Vec &xVariation, void *xNonVarying) const = 0;
+
+  /** Clean up whatever was allocated for gradient computation */
+  virtual void EndGradientComputation() {}
+
   /**
    * This method is called before multiple calls to the ComputeJet routine. Given a  
    * of variation (direction in which directional derivatives will be computed), and 
@@ -175,6 +208,13 @@ public:
     return this->GetAffineTransformDescriptor()->GetCenterOfRotation(
       this->GetCoefficientArray());
     }
+
+  /** Compute boundary curvature; default returns an array of zeros */
+  virtual void ComputeBoundaryCurvature(Vec &xMeanCurv, Vec &xGaussCurv)
+    { xMeanCurv.fill(0.0); xGaussCurv.fill(0.0); }
+
+  virtual void ComputeBoundaryCurvaturePartial(Vec &dMeanCurv, Vec &dGaussCurv, MedialAtom *dAtom)
+    { dMeanCurv.fill(0.0); dGaussCurv.fill(0.0); }
 
 
 protected:

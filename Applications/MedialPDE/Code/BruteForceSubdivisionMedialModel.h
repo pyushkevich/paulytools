@@ -56,12 +56,22 @@ public:
    */
   void WriteToRegistry(Registry &folder);
 
+  /** Compute curvature at the boundary */
+  void ComputeBoundaryCurvature(Vec &xMeanCurv, Vec &xGaussCurv);
+  void ComputeBoundaryCurvaturePartial(Vec &dMeanCurv, Vec &dGaussCurv, MedialAtom *dAtom);
+
 private:
   // Vector typedef
   typedef vnl_vector<double> Vec;
 
   // Loop scheme for computing tangents
   MedialAtomLoopScheme xLoopScheme;
+
+  // Sparse matrices containing the contribuion of each mesh node
+  // to partial derivatives in U and V
+  typedef std::pair<double, double> UVPair;
+  typedef ImmutableSparseArray<UVPair> SparseMat;
+  SparseMat Wuv;
 };
 
 

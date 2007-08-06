@@ -12,6 +12,7 @@ MedialAtom
 {
   X.fill(0.0); Xu.fill(0.0); Xv.fill(0.0); Xuu.fill(0.0); Xuv.fill(0.0); Xvv.fill(0.0);
   F = 0.0; Fu = 0.0; Fv = 0.0; R = 0.0; Ru = 0.0; Rv = 0.0;
+  Fuu = 0.0; Fuv = 0.0; Fvv = 0.0;
 
   G.g = G.gInv = 0.0;
   for(size_t a1 = 0; a1 < 2; a1++)
@@ -212,6 +213,36 @@ MedialAtom
   dAtom.aelt = 0.5 * dAtom.G.g / aelt;
 }
 
+void
+MedialAtom
+::ComputeChristoffelDerivatives(MedialAtom &dAtom) const
+{
+  // Compute the derivative of the first kind
+  dAtom.G.xChristoffelFirst[0][0][0] = 
+    dot_product(dAtom.Xuu, Xu) + dot_product(Xuu, dAtom.Xu);
+  dAtom.G.xChristoffelFirst[0][0][1] = 
+    dot_product(dAtom.Xuu, Xv) + dot_product(Xuu, dAtom.Xv);
+  dAtom.G.xChristoffelFirst[0][1][0] = 
+    dot_product(dAtom.Xuv, Xu) + dot_product(Xuv, dAtom.Xu);
+  dAtom.G.xChristoffelFirst[0][1][1] = 
+    dot_product(dAtom.Xuv, Xv) + dot_product(Xuv, dAtom.Xv);
+  dAtom.G.xChristoffelFirst[1][1][0] = 
+    dot_product(dAtom.Xvv, Xu) + dot_product(Xvv, dAtom.Xu);
+  dAtom.G.xChristoffelFirst[1][1][1] = 
+    dot_product(dAtom.Xvv, Xv) + dot_product(Xvv, dAtom.Xv);
+  dAtom.G.xChristoffelFirst[1][0][0] = dAtom.G.xChristoffelFirst[0][1][0];
+  dAtom.G.xChristoffelFirst[1][0][1] = dAtom.G.xChristoffelFirst[0][1][1];
+
+  // Compute the derivative of the second kind
+  size_t i, j, k;
+  for(i = 0; i < 2; i++) for(j = 0; j < 2; j++) for(k = 0; k < 2; k++)
+  	dAtom.G.xChristoffelSecond[i][j][k] = 
+	  	dAtom.G.xContravariantTensor[k][0] * G.xChristoffelFirst[i][j][0] + 
+	  	dAtom.G.xContravariantTensor[k][1] * G.xChristoffelFirst[i][j][1] +	  	 
+	  	G.xContravariantTensor[k][0] * dAtom.G.xChristoffelFirst[i][j][0] + 
+	  	G.xContravariantTensor[k][1] * dAtom.G.xChristoffelFirst[i][j][1]; 	  	 
+}
+
 // Prerequisites:
 //  * The first jet for the atom and datom
 //  * The contravariant tensor for the atom and datom
@@ -263,6 +294,8 @@ MedialAtom::ComputeBoundaryAtomDerivatives(
   dAtom.xGradRMagSqr = z1iRi * dt.Ru + z2iRi * dt.Rv 
     + 2.0 * (dt.g1iRi * Pu + dt.g2iRi * Pv);
 
+  // Compute the 
+
   // Address the edge case first
   if(flagCrest) 
     {
@@ -294,6 +327,9 @@ MedialAtom::ComputeBoundaryAtomDerivatives(
     {
     if(flagValid)
       {
+      // Set the normal factor
+      dAtom.xNormalFactor = -0.5 * dAtom.xGradRMagSqr / xNormalFactor;
+
       // Compute the plus-minus term
       SMLVec3d dNormalTerm;
       vmulset(dNormalTerm, dAtom.N, xNormalFactor);

@@ -652,6 +652,7 @@ CartesianMedialModel
 
       // Compute the derivative of the atom's metric tensor
       xAtom.ComputeMetricTensorDerivatives(dAtom);
+      xAtom.ComputeChristoffelDerivatives(dAtom);
       
       // Compute the right hand side
       rhs[k][iSite] = 

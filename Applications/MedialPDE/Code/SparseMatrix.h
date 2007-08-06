@@ -58,7 +58,7 @@ public:
   class ConstRowIterator {
   public:
     ConstRowIterator(const Self *p, size_t row)
-      { this->p = p; iPos = p->xRowIndex[row]; iEnd = p->xRowIndex[row+1]; }
+      { this->p = p; iStart = iPos = p->xRowIndex[row]; iEnd = p->xRowIndex[row+1]; }
     
     bool IsAtEnd()
       { return iPos == iEnd; }
@@ -69,25 +69,31 @@ public:
     size_t Column()
       { return p->xColIndex[iPos]; }
 
+    size_t Size()
+      { return iEnd - iStart; }
+
     ConstRowIterator &operator++()
       { ++iPos; return *this; }
     
   private:
     const Self *p;
-    size_t iPos, iEnd;
+    size_t iPos, iEnd, iStart;
   };
 
   // Row iterator goes through nonzero elements of rows
   class RowIterator {
   public:
     RowIterator(Self *p, size_t row)
-      { this->p = p; iPos = p->xRowIndex[row]; iEnd = p->xRowIndex[row+1]; }
+      { this->p = p; iStart = iPos = p->xRowIndex[row]; iEnd = p->xRowIndex[row+1]; }
     
     bool IsAtEnd()
       { return iPos == iEnd; }
 
     TVal &Value()
       { return p->xSparseValues[iPos]; }
+
+    size_t Size()
+      { return iEnd - iStart; }
 
     size_t Column()
       { return p->xColIndex[iPos]; }
@@ -97,7 +103,7 @@ public:
     
   private:
     Self *p;
-    size_t iPos, iEnd;
+    size_t iPos, iEnd, iStart;
   };
     
   // Get the row iterator

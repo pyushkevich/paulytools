@@ -32,7 +32,7 @@ struct MedialAtom
   GeometryDescriptor G;
 
   // The phi function and its first partial derivatives
-  double F, Fu, Fv;
+  double F, Fu, Fv, Fuu, Fuv, Fvv;
 
   // The radius function and its partial derivatives
   double R, Ru, Rv; 
@@ -88,6 +88,9 @@ struct MedialAtom
    * directional derivatives of X, Xu and Xv contained in dAtom
    */
   void ComputeMetricTensorDerivatives(MedialAtom &dAtom) const;
+
+  /** Compute the derivatives of the Christoffel symbols */
+  void ComputeChristoffelDerivatives(MedialAtom &dAtom) const;
 
   /**
    * Compute terms that are common in derivative computations (i.e. terms that

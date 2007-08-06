@@ -23,6 +23,7 @@ OptimizationParameters
   xPenaltyTermRegMap.AddPair(BOUNDARY_GRAD_R, "BoundaryGradRPenaltyTerm");
   xPenaltyTermRegMap.AddPair(MEDIAL_REGULARITY, "MedialRegularityTerm");
   xPenaltyTermRegMap.AddPair(MEDIAL_CURVATURE, "MedialCurvaturePenaltyTerm");
+  xPenaltyTermRegMap.AddPair(BND_CURVATURE, "BoundaryCurvaturePenaltyTerm");
   xPenaltyTermRegMap.AddPair(ATOM_BADNESS, "AtomBadnessTerm");
   xPenaltyTermRegMap.AddPair(RADIUS, "RadiusPenaltyTerm");
   xPenaltyTermRegMap.AddPair(MEDIAL_ANGLES, "MedialAnglesPenaltyTerm");
@@ -36,6 +37,7 @@ OptimizationParameters
   xTermDefaultWeights[BOUNDARY_GRAD_R] = 0.0;
   xTermDefaultWeights[MEDIAL_REGULARITY] = 1.0;
   xTermDefaultWeights[MEDIAL_CURVATURE] = 0.0;
+  xTermDefaultWeights[BND_CURVATURE] = 0.0;
   xTermDefaultWeights[ATOM_BADNESS] = 0.01;
   xTermDefaultWeights[RADIUS] = 0.1;
   xTermDefaultWeights[MEDIAL_ANGLES] = 0.0;

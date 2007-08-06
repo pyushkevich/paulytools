@@ -20,6 +20,16 @@ vtkFloatArray *AddMedialScalarField(vtkPolyData *target, GenericMedialModel *mod
   return array;
 }
 
+vtkFloatArray *AddBndScalarField(vtkPolyData *target, GenericMedialModel *model, char *name)
+{
+  vtkFloatArray *array = vtkFloatArray::New();
+  array->SetName(name);
+  array->SetNumberOfComponents(1);
+  array->SetNumberOfTuples(model->GetNumberOfBoundaryPoints());
+  target->GetPointData()->AddArray(array);
+  return array;
+}
+
 vtkFloatArray *AddMedialVectorField(vtkPolyData *target, GenericMedialModel *model, char *name)
 {
   vtkFloatArray *array = vtkFloatArray::New();
@@ -75,6 +85,9 @@ void ExportMedialMeshToVTK(
   vtkFloatArray *lContraOffDiag = 
     AddMedialScalarField(pMedial, xModel, "Off Diagonal Term of Contravariant MT");
 
+  vtkFloatArray *lXu = AddMedialVectorField(pMedial, xModel, "Xu");
+  vtkFloatArray *lXv = AddMedialVectorField(pMedial, xModel, "Xv");
+
   // Allocate and add the image intensity array
   bool flagImage = xImage && xImage->IsImageLoaded();
   vtkFloatArray *lImage = vtkFloatArray::New();
@@ -99,6 +112,8 @@ void ExportMedialMeshToVTK(
     SMLVec3d X = a.X; SMLVec3d N = a.N;
     lPoints->InsertNextPoint(X[0], X[1], X[2]);
     lNormals->SetTuple3(i, N[0], N[1], N[2]);
+    lXu->SetTuple3(i, a.Xu[0], a.Xu[1], a.Xu[2]);
+    lXv->SetTuple3(i, a.Xv[0], a.Xv[1], a.Xv[2]);
     lMetric->SetTuple1(i, a.G.g);
     lRadius->SetTuple1(i, a.R);
     lRho->SetTuple1(i, a.xLapR);
@@ -263,6 +278,7 @@ void ExportBoundaryMeshToVTK(
   lNormals->SetNumberOfComponents(3);
   lNormals->SetNumberOfTuples(xModel->GetNumberOfBoundaryPoints());
   
+
   // Allocate the polydata
   vtkPolyData *pMedial = vtkPolyData::New();
   pMedial->Allocate(xModel->GetNumberOfBoundaryTriangles());
@@ -270,6 +286,17 @@ void ExportBoundaryMeshToVTK(
   
   // Add the arrays to the poly data
   pMedial->GetPointData()->SetNormals(lNormals);
+
+  // Some more data arrays
+  vtkFloatArray *lMeanCurv =  AddBndScalarField(pMedial, xModel, "Mean Curvature");
+  vtkFloatArray *lGaussCurv = AddBndScalarField(pMedial, xModel, "Gauss Curvature");
+  vtkFloatArray *lCurvPen = AddBndScalarField(pMedial, xModel, "Curvature Penalty");
+
+  // Compute the curvatures
+  GenericMedialModel::Vec 
+    vGauss(xModel->GetNumberOfBoundaryPoints()), 
+    vMean(xModel->GetNumberOfBoundaryPoints());
+  xModel->ComputeBoundaryCurvature(vMean, vGauss);
 
   // Allocate the image intensity array
   bool flagImage = xImage && xImage->IsImageLoaded();
@@ -293,6 +320,9 @@ void ExportBoundaryMeshToVTK(
     BoundaryAtom &B = GetBoundaryPoint(it, xAtoms);
     lPoints->InsertNextPoint(B.X[0], B.X[1], B.X[2]);
     lNormals->SetTuple3(i, B.N[0], B.N[1], B.N[2]);
+    lMeanCurv->SetTuple1(i, vMean[i]);
+    lGaussCurv->SetTuple1(i, vGauss[i]);
+    lCurvPen->SetTuple1(i, 4 * vMean[i] * vMean[i] - 2 * vGauss[i]);
 
     // Sample the image along the middle
     if(flagImage)
@@ -327,6 +357,9 @@ void ExportBoundaryMeshToVTK(
   lPoints->Delete();
   pMedial->Delete();
   lImage->Delete();
+  lMeanCurv->Delete();
+  lGaussCurv->Delete();
+  lCurvPen->Delete();
 }
 
 /*

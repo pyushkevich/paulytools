@@ -527,6 +527,44 @@ private:
 
 
 /**
+ * Term that penalizes excessive curvature of the medial axis. This
+ * penalty has the form r^2 * (kappa1^2 + kappa2^2). Thus it penalizes
+ * situations where one of the radii of curvature is excessively greater
+ * than the radius of the medial model. Of course the model can avoid 
+ * this penalty by pushing the radius to zero, so this penalty should
+ * always be used in conjunction with a radius penalty.
+ */
+class BoundaryCurvaturePenalty : public EnergyTerm
+{
+public:
+  // Constructr
+  BoundaryCurvaturePenalty(GenericMedialModel *model);
+
+  // Compute the penalty
+  double ComputeEnergy(SolutionDataBase *data);
+
+  // Describe the terms of the penalty
+  void PrintReport(ostream &sout);
+
+  // Compute the partial derivative
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
+
+private:
+  // Accumulators for display and statistics calculation
+  StatisticsAccumulator 
+    saMeanCurv, saGaussCurv, saSumSqKappa, saRad, saFeature, saPenalty;
+
+  // Temps
+  GenericMedialModel *model;
+  size_t n;
+  vnl_vector<double> MC, GC, dMC, dGC;
+
+  // Parameters of the penalty, which is of the form pow(f/scale, power)
+  const static double xScale, xPower;
+};
+
+/**
  * This term is used to fit phi to an existing radius field. The fitting
  * is least-squares in phi, which may not be a great idea, but if we make it
  * least-squares in R, there may be unforseen problems with stability at R=0

@@ -8,6 +8,8 @@ struct GeometryDescriptor
   double xCovariantTensor[2][2];
   double xContravariantTensor[2][2];
   double xChristoffelFirst[2][2][2];
+
+  // xChristoffelSecond[i][j][k] => \Gamma_{ij}^k
   double xChristoffelSecond[2][2][2];
 
   // The determinant of the covariant tensor and its inverse

@@ -8,3 +8,4 @@ template class ImmutableSparseArray<double>;
 template class ImmutableSparseArray<int>;
 template class ImmutableSparseMatrix<double>;
 template class ImmutableSparseMatrix<int>;
+template class ImmutableSparseArray<std::pair<double, double> >;

@@ -199,17 +199,17 @@ public:
   // Helper methods to get all the partials given a list of atoms
   SMLVec3d Xu(size_t v, MedialAtom *a) const { return TangentX(0, v, a); }
   SMLVec3d Xv(size_t v, MedialAtom *a) const { return TangentX(1, v, a); }
-  // SMLVec3d Xuu(size_t v, MedialAtom *a) const { return TangentXu(0, v, a); }
-  // SMLVec3d Xuv(size_t v, MedialAtom *a) const { return TangentXv(0, v, a); }
-  // SMLVec3d Xvu(size_t v, MedialAtom *a) const { return TangentXu(1, v, a); }
-  // SMLVec3d Xvv(size_t v, MedialAtom *a) const { return TangentXv(1, v, a); }
+  SMLVec3d Xuu(size_t v, MedialAtom *a) const { return TangentXu(0, v, a); }
+  SMLVec3d Xuv(size_t v, MedialAtom *a) const { return TangentXv(0, v, a); }
+  SMLVec3d Xvu(size_t v, MedialAtom *a) const { return TangentXu(1, v, a); }
+  SMLVec3d Xvv(size_t v, MedialAtom *a) const { return TangentXv(1, v, a); }
 
   double Fu(size_t v, MedialAtom *a) const { return PartialF(0, v, a); }
   double Fv(size_t v, MedialAtom *a) const { return PartialF(1, v, a); }
-  // double Fuu(size_t v, MedialAtom *a) const { return PartialFu(0, v, a); }
-  // double Fuv(size_t v, MedialAtom *a) const { return PartialFv(0, v, a); }
-  // double Fvu(size_t v, MedialAtom *a) const { return PartialFu(1, v, a); }
-  // double Fvv(size_t v, MedialAtom *a) const { return PartialFv(1, v, a); }
+  double Fuu(size_t v, MedialAtom *a) const { return PartialFu(0, v, a); }
+  double Fuv(size_t v, MedialAtom *a) const { return PartialFv(0, v, a); }
+  double Fvu(size_t v, MedialAtom *a) const { return PartialFu(1, v, a); }
+  double Fvv(size_t v, MedialAtom *a) const { return PartialFv(1, v, a); }
 
   double Ru(size_t v, MedialAtom *a) const { return PartialR(0, v, a); }
   double Rv(size_t v, MedialAtom *a) const { return PartialR(1, v, a); }
@@ -218,6 +218,9 @@ public:
   // double Rvu(size_t v, MedialAtom *a) const { return PartialRu(1, v, a); }
   // double Rvv(size_t v, MedialAtom *a) const { return PartialRv(1, v, a); }
   
+  double AreaEltDu(size_t v, MedialAtom *a) const { return PartialAreaElt(0, v, a); }
+  double AreaEltDv(size_t v, MedialAtom *a) const { return PartialAreaElt(1, v, a); }
+
   SMLVec3d Nu(size_t v, MedialAtom *a) const { return NormalX(0, v, a); }
   SMLVec3d Nv(size_t v, MedialAtom *a) const { return NormalX(1, v, a); }
 
@@ -377,6 +380,18 @@ private:
     double y = xVtxTangentWeights[d][v] * atoms[v].Ru;
     for(size_t i = ri[v]; i < ri[v+1]; ++i)
       y += xNbrTangentWeights[d][i] * atoms[ci[i]].Ru;
+
+    return y;
+    }
+
+  double PartialAreaElt(size_t d, size_t v, MedialAtom *atoms) const
+    {
+    size_t *ri = level->nbr.GetRowIndex();
+    size_t *ci = level->nbr.GetColIndex();
+
+    double y = xVtxTangentWeights[d][v] * atoms[v].aelt;
+    for(size_t i = ri[v]; i < ri[v+1]; ++i)
+      y += xNbrTangentWeights[d][i] * atoms[ci[i]].aelt;
 
     return y;
     }

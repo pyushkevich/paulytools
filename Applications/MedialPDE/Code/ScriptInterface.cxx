@@ -775,6 +775,7 @@ void MedialPDE
   MedialBendingEnergyTerm xTermBending(xMedialModel);
   MedialAnglesPenaltyTerm xTermAngles(xMedialModel);
   MedialCurvaturePenalty xTermCurvature;
+  BoundaryCurvaturePenalty xTermBndCurvature(xMedialModel);
   RadiusPenaltyTerm xTermRadius(0.025);
 
   // TODO: do this better
@@ -812,6 +813,11 @@ void MedialPDE
   if(p.xTermWeights[OptimizationParameters::MEDIAL_CURVATURE] > 0.0)
     xProblem.AddEnergyTerm(
       &xTermCurvature, p.xTermWeights[OptimizationParameters::MEDIAL_CURVATURE]);
+
+  // Add the curvature term
+  if(p.xTermWeights[OptimizationParameters::BND_CURVATURE] > 0.0)
+    xProblem.AddEnergyTerm(
+      &xTermBndCurvature, p.xTermWeights[OptimizationParameters::BND_CURVATURE]);
 
   // Add the radius penalty term
   if(p.xTermWeights[OptimizationParameters::RADIUS] > 0.0)

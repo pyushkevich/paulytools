@@ -1277,6 +1277,98 @@ void MedialAnglesPenaltyTerm::PrintReport(ostream &sout)
   sout << "    total penalty            : " << xTotalPenalty << endl;
 }
 
+/*********************************************************************************
+ * Boundary Curvature Penalty Term
+ ********************************************************************************/
+const double BoundaryCurvaturePenalty::xPower = 1;
+const double BoundaryCurvaturePenalty::xScale = 1;
+
+BoundaryCurvaturePenalty
+::BoundaryCurvaturePenalty(GenericMedialModel *model)
+{
+  this->model = model;
+  this->n = model->GetNumberOfBoundaryPoints();
+  this->MC.set_size(n);
+  this->GC.set_size(n);
+  this->dMC.set_size(n);
+  this->dGC.set_size(n);
+}
+
+double
+BoundaryCurvaturePenalty
+::ComputeEnergy(SolutionDataBase *S)
+{
+  // Reset the accumulators
+  saMeanCurv.Reset();
+  saGaussCurv.Reset();
+  saPenalty.Reset();
+  saSumSqKappa.Reset();
+  saFeature.Reset();
+  saRad.Reset();
+
+  // Compute the curvature
+  model->ComputeBoundaryCurvature(MC, GC);
+
+  // Compute the penalty term
+  for(size_t i = 0; i < n; i++)
+    {
+    // Compute penalty term
+    saMeanCurv.Update(MC[i]);
+    saGaussCurv.Update(GC[i]);
+    double k2 = 4 * MC[i] * MC[i] - 2 * GC[i];
+    saSumSqKappa.Update(k2);
+
+    // Compute the penalty. The penalty should be such that the 
+    double p = pow(k2 / xScale, xPower);
+    saPenalty.Update(p);
+    }
+
+  // Return the sum of the penalty terms
+  return saPenalty.GetSum();
+}
+
+double 
+BoundaryCurvaturePenalty
+::ComputePartialDerivative(
+  SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  double dTotalPenalty = 0.0;
+
+  // Iterate over all atoms
+  model->ComputeBoundaryCurvaturePartial(dMC, dGC, dS->xAtoms);
+
+  // Compute the penalty term
+  for(size_t i = 0; i < n; i++)
+    {
+    // Compute sum of the squares of principal curvatures
+    double k2 = 4 * MC[i] * MC[i] - 2 * GC[i];
+    double dk2 = 8 * MC[i] * dMC[i] - 2 * dGC[i];
+
+    // Compute the feature that gets penalized
+    double f = k2;
+    double df = dk2;
+
+    // Compute the penalty. The penalty should be such that the 
+    double p = pow(f / xScale, xPower);
+    double dp = xPower * pow(f / xScale, xPower-1) * df / xScale;
+    dTotalPenalty += dp;
+    }
+
+  return dTotalPenalty;
+}
+
+void BoundaryCurvaturePenalty
+::PrintReport(ostream &sout)
+{
+  sout << "  Boundary Curvature Penalty: " << endl;
+  sout << "    mean curvature stats: " << saMeanCurv << endl;
+  sout << "    gaussuan curv. stats: " << saGaussCurv << endl;
+  sout << "    sum sqr. kappa stats: " << saSumSqKappa << endl;
+  sout << "    radius stats: " << saRad << endl;
+  sout << "    feautre stats: " << saFeature << endl;
+  sout << "    total penalty: " << saPenalty.GetSum() << endl;
+}
+
 
 /*********************************************************************************
  * Medial Curvature Penalty Term

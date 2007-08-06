@@ -22,10 +22,14 @@ inline void UpdateMax(double xValue, double &xMaxValue)
 
 class DerivativeTestQuantities {
 public:
+  typedef std::map<std::string, double> MapType;
+  typedef MapType::iterator MapIter;
+  typedef MapType::const_iterator ConstMapIter;
+
   DerivativeTestQuantities()
     { slenmax = 0; }
 
-  void Update(const std::string &s, double v)
+  void Update(const std::string &s, MapType &xMap, double v)
     {
     MapIter it = xMap.find(s);
     if(it == xMap.end())
@@ -39,38 +43,47 @@ public:
 
   void Update(const std::string &s, double dv, double v1, double v2, double eps)
     {
-    this->Update(s, fabs(dv - (v1 - v2) * 0.5 / eps)); 
+    double eabs = fabs(dv - (v1 - v2) * 0.5 / eps);
+    double erel = eabs / (fabs(0.5 * (v1 + v2)) + eps);
+    this->Update(s, xAbsError, eabs); 
+    this->Update(s, xRelError, erel); 
     }
 
   void Update(const std::string &s, SMLVec3d dv, SMLVec3d v1, SMLVec3d v2, double eps)
     {
-    this->Update(s, (dv - (v1 - v2) * 0.5 / eps).two_norm()); 
+    double eabs = (dv - (v1 - v2) * 0.5 / eps).two_norm();
+    double erel = eabs / (0.5 * (v1 + v2).two_norm() + eps);
+    this->Update(s, xAbsError, eabs); 
+    this->Update(s, xRelError, erel); 
     }
 
   void Update(const DerivativeTestQuantities &src)
     {
-    for(ConstMapIter it = src.xMap.begin(); it != src.xMap.end(); ++it)
-      this->Update(it->first, it->second);
+    for(ConstMapIter it = src.xAbsError.begin(); it != src.xAbsError.end(); ++it)
+      this->Update(it->first, xAbsError, it->second);
+    for(ConstMapIter it = src.xRelError.begin(); it != src.xRelError.end(); ++it)
+      this->Update(it->first, xRelError, it->second);
     }
 
-  bool Test(double xMaxError)
+  bool Test(double xMaxAbsError, double xMaxRelError)
     {
-    for(ConstMapIter it = xMap.begin(); it != xMap.end(); ++it)
-      if(it->second > xMaxError) return false;
+    for(ConstMapIter it = xAbsError.begin(); it != xAbsError.end(); ++it)
+      if(it->second > xMaxAbsError) return false;
+    for(ConstMapIter it = xRelError.begin(); it != xRelError.end(); ++it)
+      if(it->second > xMaxRelError) return false;
     return true;
     }
 
   void PrintReport() 
     {
-    for(ConstMapIter it = xMap.begin(); it != xMap.end(); ++it)
-      cout << std::setw(slenmax) << it->first << " : " << it->second << endl;
+    for(ConstMapIter it = xAbsError.begin(); it != xAbsError.end(); ++it)
+      cout << std::setw(slenmax) << it->first 
+        << " :  abs = " << std::setw(12) << it->second 
+        << ";  rel = "  << std::setw(12) << xRelError[it->first] << endl;
     }
 
 private:
-  typedef std::map<std::string, double> MapType;
-  typedef MapType::iterator MapIter;
-  typedef MapType::const_iterator ConstMapIter;
-  MapType xMap;
+  MapType xAbsError, xRelError;
 
   size_t slenmax;
 };
@@ -175,25 +188,42 @@ int TestGradientComputation(
   tAnalytic.Stop();
   cout << endl;
 
+  // Create curvature arrays
+  size_t nb = xSolver->GetNumberOfBoundaryPoints();
+  vnl_vector<double> MC1(nb), MC2(nb), dMC(nb);
+  vnl_vector<double> GC1(nb), GC2(nb), dGC(nb);
+
   // Compute all the other derivatives
   for(iVar = 0; iVar < xVariations.size(); iVar++) 
     {
     cout << "----------------------------------------" << endl;
     cout << xVariationNames[iVar] << endl;
     cout << "----------------------------------------" << endl;
+
+    xSolver->ComputeBoundaryCurvaturePartial(dMC, dGC, dAtomArray[iVar]);
     
     // Solve for the forward difference
     xSolver->SetCoefficientArray(xMapping->Apply(C0, P0 + eps * xVariations[iVar]));
     tCentral.Start(); xSolver->ComputeAtoms(xHint.data_block()); tCentral.Stop();
     std::copy(xSolver->GetAtomArray(), xSolver->GetAtomArray() + nAtoms, A1);
 
+    xSolver->ComputeBoundaryCurvature(MC1, GC1);
+
     // Solve for the backward difference
     xSolver->SetCoefficientArray(xMapping->Apply(C0, P0 - eps * xVariations[iVar]));
     tCentral.Start(); xSolver->ComputeAtoms(xHint.data_block()); tCentral.Stop();
     std::copy(xSolver->GetAtomArray(), xSolver->GetAtomArray() + nAtoms, A2);
 
+    xSolver->ComputeBoundaryCurvature(MC2, GC2);
+
     // Define an accumulator for all atom-wise errors
     DerivativeTestQuantities dtq;
+
+    for(unsigned int j = 0; j < nb; j++)
+      {
+      dtq.Update("Bnd Mean Curv",dMC[j], MC1[j], MC2[j], eps);
+      dtq.Update("Bnd Gauss Curv",dGC[j], GC1[j], GC2[j], eps);
+      }
 
     // Compute atom-wise errors
     for(unsigned int i = 0; i < nAtoms; i++)
@@ -228,6 +258,19 @@ int TestGradientComputation(
           a0.G.xContravariantTensor[u][v],
           a1.G.xContravariantTensor[u][v],
           a2.G.xContravariantTensor[u][v], eps);
+
+        for(size_t w = 0; w < 2; w++)
+          {
+          dtq.Update("ChristoffelSymols(1)",
+            a0.G.xChristoffelFirst[u][v][w],
+            a1.G.xChristoffelFirst[u][v][w],
+            a2.G.xChristoffelFirst[u][v][w], eps);
+
+          dtq.Update("ChristoffelSymols(2)",
+            a0.G.xChristoffelSecond[u][v][w],
+            a1.G.xChristoffelSecond[u][v][w],
+            a2.G.xChristoffelSecond[u][v][w], eps);
+          }
         }
 
       // Take the largest difference in Phi
@@ -332,7 +375,7 @@ int TestGradientComputation(
   cout << "----------------------------------------" << endl;
 
   // Check if all the errors are reasonable
-  bool flagPass = dtqGlobal.Test(eps);
+  bool flagPass = dtqGlobal.Test(1e100, 1);
 
   // Describe what happened
   if(flagPass)
