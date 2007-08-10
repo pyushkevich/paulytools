@@ -581,6 +581,146 @@ CartesianMedialModel
 
 void
 CartesianMedialModel
+::SetVariationalBasis(const Mat &xBasis)
+{
+  // Allocate the array of terms linearly dependent on the variation
+  xVariationalBasis = VariationalBasisRep(xBasis.rows(), VariationRep(n*m));
+
+  // Loop over the variations
+  for(size_t var = 0; var < xBasis.rows(); var++)
+    {
+    // The current variation
+    Vec xVariation = xBasis.get_row(var);
+
+    // Get a variation surface corresponding to this variation
+    IHyperSurface2D *fnVariation = xSurface->GetVariationSurface(xVariation.data_block());
+
+    // Evaluate the variation over the atom grid
+    for(size_t i = 0; i < m; i++) for(size_t j = 0; j < n; j++)
+      {
+      // Get the index of the site
+      size_t iGrid = GetGridAtomIndex(i, j);
+      size_t iSite = xSiteIndex[i][j];
+
+      // Access the medial atom underneath
+      VariationalBasisAtomData &vbad = xVariationalBasis[var][iGrid];
+
+      // Evaluate the variation and its derivatives
+      fnVariation->EvaluateAtGridIndex(i, j, 0, 0, 0, 3, vbad.X.data_block());
+      fnVariation->EvaluateAtGridIndex(i, j, 1, 0, 0, 3, vbad.Xu.data_block());
+      fnVariation->EvaluateAtGridIndex(i, j, 0, 1, 0, 3, vbad.Xv.data_block());
+      fnVariation->EvaluateAtGridIndex(i, j, 2, 0, 0, 3, vbad.Xuu.data_block());
+      fnVariation->EvaluateAtGridIndex(i, j, 1, 1, 0, 3, vbad.Xuv.data_block());
+      fnVariation->EvaluateAtGridIndex(i, j, 0, 2, 0, 3, vbad.Xvv.data_block());
+      fnVariation->EvaluateAtGridIndex(i, j, 0, 0, 3, 1, &vbad.xLapR);
+      }
+
+    // Release the variation surface
+    xSurface->ReleaseVariationSurface(fnVariation);
+    }
+}
+
+void
+CartesianMedialModel
+::BeginGradientComputation()
+{
+  size_t i, j, k;
+
+  // Reset the array of derivative terms
+  xTempDerivativeTerms = vector<MedialAtom::DerivativeTerms>(nSites);
+
+  // Prepare for the gradient computation
+  for(i = 0; i < m; i++) for(j = 0; j < n; j++)
+    {
+    // Get the index of the site
+    size_t iGrid = GetGridAtomIndex(i, j);
+    size_t iSite = xSiteIndex[i][j];
+
+    // Get the medial atom
+    MedialAtom &xAtom = xAtoms[iGrid];
+
+    // Initialize the atom gradient terms
+    xAtom.ComputeCommonDerivativeTerms(xTempDerivativeTerms[iSite]);
+
+    // Compute the matrix for linear solver
+    xSites[iSite]->ComputeVariationalDerivativeMatrix(
+      y, xSparseValues + xRowIndex[iSite] - 1, &xAtom);
+    }
+
+  // Factorize the matrix so that the linear system associated with each
+  // variational derivative can be solved instantly
+  clock_t t0 = clock();
+  tSolver.Start();
+  xPardiso.NumericFactorization(xSparseValues);
+  tSolver.Stop();
+  cout << " [FCT: " << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
+}
+
+void
+CartesianMedialModel
+::ComputeAtomVariationalDerivative(size_t ivar, MedialAtom *dAtoms)
+{
+  size_t i, j; 
+
+  // Compute the right hand side for the derivative computation
+  Vec rhs(nSites, 0.0), soln(nSites, 0.0);
+  for(i = 0; i < m; i++) for(j = 0; j < n; j++)
+    {
+    // Get the index of the site
+    size_t iGrid = GetGridAtomIndex(i, j);
+    size_t iSite = xSiteIndex[i][j];
+
+    // Get the reference to the atom's derivative
+    MedialAtom &a  = xAtoms[iGrid];
+    MedialAtom &da = dAtoms[iGrid];
+
+    // Get the reference to the way this variation affects this atom
+    VariationalBasisAtomData &vbad = xVariationalBasis[ivar][iGrid];
+
+    // Copy the derivatives of X-jet into da
+    da.X = vbad.X; da.Xu = vbad.Xu; da.Xv = vbad.Xv;
+    da.Xuu = vbad.Xuu; da.Xuv = vbad.Xuv; da.Xvv = vbad.Xvv;
+    da.xLapR = vbad.xLapR;
+
+    // Set the atoms' domain coordinates
+    da.u = uGrid[i]; da.v = vGrid[j];
+    da.uIndex = i; da.vIndex = j;
+
+    // Compute the derivative of the atom's metric tensor
+    a.ComputeMetricTensorDerivatives(da);
+    a.ComputeChristoffelDerivatives(da);
+
+    // Compute the right hand side
+    rhs[iSite] = xSites[iSite]->ComputeVariationalDerivativeRHS(y, &a, &da);
+    }
+
+  // Solve for the derivative of phi 
+  xPardiso.Solve(rhs.data_block(), soln.data_block());
+
+  // Access the phi matrix
+  vnl_matrix_ref<double> phi(m, n, soln.data_block());
+    
+  // Compute phi-dependent atom quantities
+  for(i = 0; i < m; i++) for(j = 0; j < n; j++)
+    {
+    // Get the index of the site
+    size_t iGrid = GetGridAtomIndex(i, j);
+    size_t iSite = xSiteIndex[i][j];
+
+    // Access the medial atom underneath
+    MedialAtom &da = dAtoms[iGrid];
+
+    // Compute the gradient of phi for the new atom
+    da.F = xMasks[iSite]->ComputeOneJet(phi.data_block(), da.Fu, da.Fv);
+
+    // Compute the rest of the atom derivative
+    xAtoms[iGrid].ComputeBoundaryAtomDerivatives(da, xTempDerivativeTerms[iSite]);
+    }
+}
+
+/*
+void
+CartesianMedialModel
 ::PrepareAtomsForVariationalDerivative(const Vec &xVariation, MedialAtom *dAtoms) const
 {
   // Get a variation surface corresponding to this variation
@@ -695,6 +835,7 @@ CartesianMedialModel
     }
   cout << " [BND: " << (clock() - t0) / CLOCKS_PER_SEC << " s] " << flush;
 }
+*/
 
 double fnTestF01(double u, double v)
 {

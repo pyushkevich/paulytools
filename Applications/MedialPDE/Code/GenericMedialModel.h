@@ -16,12 +16,46 @@ class AffineTransformDescriptor;
  * This class represents a generic medial model, whether Cartesian-based or
  * subdivision surface based. The user can inquire basic information about the
  * model, such as the number of atoms, etc.
+ *
+ * This is how gradient computation works. A gradient, in a general sense,
+ * is a set of directional (i.e. variational) derivatives with respect to 
+ * a given set of directions (variations). The set of directions may simply
+ * be the coordinate axes, but in this code, any set of directions is 
+ * admitted. We refer to this set of directions as "Variational Basis"
+ *
+ * Certain terms in the gradient computation depend only on the variational 
+ * basis itself (i.e. the directions themselves) and not on the state of the
+ * model at the time the gradient is evaluated. These terms are linear with
+ * respect to the directions. For instance, the X, Xu, Xv, etc. on the medial
+ * surface are typically such terms. 
+ *
+ * To make the computation more efficient, the code requires the children of the 
+ * GenericMedialModel class to precompute these terms once before a set of 
+ * gradient computations (since the gradient is usually evaluated 100s of times
+ * in an optimization problem). This is done by the children in the method
+ * SetVariationalBasis(). The user specifies the set of directions with respect
+ * to which derivatives will be taken, and the method computes whatever terms
+ * are going to pepend on these directions and not on the state of the model. 
+ *
+ * The actual computation of the gradient consists of three steps. First the 
+ * method BeginGradientComputation() is called. Then, for each direction, the
+ * method ComputeAtomVariationalDerivative() is called. Finally, the method
+ * EndGradientComputation() is executed. The Begin and End methods are intented 
+ * to allow the MedialModel to precompute a set of terms that only depend on the
+ * state of the model and not on the variation. Again, this is done to minimize
+ * duplication of work by the program. 
+ *
+ * Note that the call to ComputeAtomVariationalDerivative() does not take as a 
+ * parameter the actual variation. It is the responsibility of the MedialModel
+ * to store the variations - or necessary terms derived from the variations - 
+ * during the call to SetVariationalBasis
  */
 class GenericMedialModel
 {
 public:
   // Vector typedef
   typedef vnl_vector<double> Vec;
+  typedef vnl_matrix<double> Mat;
   
   size_t GetNumberOfAtoms() const
     { return xIterationContext->GetNumberOfAtoms(); }
@@ -110,54 +144,27 @@ public:
   virtual void ComputeAtoms(const double *xHint = NULL) = 0;
 
   /** 
-   * This method is designed to compute all the terms in a set of variational 
-   * derivatives of a model that depend on the variation, but not on the
-   * current state of the model (i.e., the terms that are linear function of
-   * the variation). The method must allocate whatever data structure it wants
-   * and must return a pointer to this data structure to the caller
+   * Specify the set of directions (variations) for repeated gradient computations
+   * Each row in xBasis specifies a variation.
    */
-  virtual void * ComputeNonvaryingTermsInVariationalDerivative(
-    const Vec &xVariation) const = 0;
+  virtual void SetVariationalBasis(const Mat &xBasis) = 0;
 
-  /**
-   * This method is called to release the data allocated by the method
-   * ComputeNonvaryingTermsInVariationalDerivative 
-   */
-  virtual void ReleaseNonvaryingTermsInVariationalDerivative(void *data) const = 0;
-
-  /**
-   * This method is called when the computation of variational derivatives
-   * begins. It should be used to compute whatever terms are common to all variational
-   * derivatives (i.e., depend on the current state of the model, not on the variation
+  /** 
+   * Method called before multiple calls to ComputeAtomVariationalDerivative()
    */
   virtual void BeginGradientComputation() = 0;
 
   /** 
    * This method computes the variational derivative of the model with respect to 
-   * a variation. The non-varying terms are passed in as a void pointer
+   * a variation. Index iVar points into the variations passed in to the method
+   * SetVariationalBasis();
    */
-  virtual void ComputeAtomVariationalDerivative(
-    const Vec &xVariation, void *xNonVarying) const = 0;
+  virtual void ComputeAtomVariationalDerivative(size_t iVar, MedialAtom *dAtoms) = 0;
 
-  /** Clean up whatever was allocated for gradient computation */
-  virtual void EndGradientComputation() {}
-
-  /**
-   * This method is called before multiple calls to the ComputeJet routine. Given a  
-   * of variation (direction in which directional derivatives will be computed), and 
-   * an array of atoms corresponding to the variation, this method will precompute the
-   * parts of the atoms that do not depend on the position in coefficient space where 
-   * the gradient is taken. This method must be called for each variation in the Jet.
+  /** 
+   * Method called before multiple calls to ComputeAtomVariationalDerivative()
    */
-  virtual void PrepareAtomsForVariationalDerivative(
-    const Vec &xVariation, MedialAtom *dAtoms) const = 0;
-
-  /**
-   * This method computes the 'gradient' (actually, any set of directional derivatives)
-   * for the current values of the coefficients. As in ComputeAtoms, a set of initial 
-   * values can be passed in. By default, the previous solution is used to initialize.
-   */
-  virtual void ComputeAtomGradient(std::vector<MedialAtom *> &dAtoms) = 0;
+  virtual void EndGradientComputation() = 0;
 
   /**
    * Get a pointer to the affine transform descriptor corresponding to this class. 

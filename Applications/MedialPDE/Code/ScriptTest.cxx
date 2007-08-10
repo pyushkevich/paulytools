@@ -89,65 +89,6 @@ public:
     { return 1; }
 };
 
-// Test volume computations
-void TestAreaAndVolume(GenericMedialModel *xSolver)
-{
-  unsigned int nCuts = 6;
-
-  // Compute the area 
-  MedialIterationContext *xGrid = xSolver->GetIterationContext();
-  double xArea, *xAreaWeights = new double[xGrid->GetNumberOfBoundaryPoints()];
-  xArea = ComputeMedialBoundaryAreaWeights(xGrid, xSolver->GetAtomArray(), xAreaWeights);
-
-  cout << "Area : " << xArea << endl;
-  TestFunction01 fn1;
-  cout << "Verification " << 
-    IntegrateFunctionOverBoundary(xGrid, xSolver->GetAtomArray(), 
-      xAreaWeights, &fn1) << endl;
-  
-  // Compute the volume
-  double xVol, *xVolWeights = new double[xGrid->GetNumberOfInternalPoints(nCuts)];
-  double *xProfileWeights = new double[xGrid->GetNumberOfProfileIntervals(nCuts)];
-  
-  SMLVec3d *xInternal = new SMLVec3d[xGrid->GetNumberOfInternalPoints(nCuts)];
-  ComputeMedialInternalPoints(
-    xGrid, xSolver->GetAtomArray(), nCuts, xInternal);
-  
-  xVol = ComputeMedialInternalVolumeWeights(
-    xGrid, xInternal, nCuts, xVolWeights, xProfileWeights);
-
-  cout << "Volume : " << xVol << endl;
-  cout << "Verification " << 
-    IntegrateFunctionOverInterior(
-      xGrid, xInternal, xVolWeights, nCuts, &fn1) << endl;
-
-  // Volume accumulator
-  xVol = 0.0;
-  
-  // Create an internal point iterator
-  for(MedialBoundaryPointIterator it(xGrid); !it.IsAtEnd(); ++it) 
-    {
-    // Evaluate the image at this location
-    BoundaryAtom &B = GetBoundaryPoint(it, xSolver->GetAtomArray()); 
-    xVol += dot_product(B.X , B.N) * xAreaWeights[it.GetIndex()] / 3.0; 
-    }
-
-  // Return match scaled by total weight
-  cout << "Verification " << xVol << endl;
-
-  // One more test
-  xVol = 0.0;
-  for(MedialProfileIntervalIterator itProf(xGrid,nCuts); !itProf.IsAtEnd(); ++itProf)
-    xVol += xProfileWeights[itProf.GetIndex()];
-  cout << "Profiles add up to " << xVol << endl;
-
-  // Check the Jacobian
-  SolutionData S(xGrid, xSolver->GetAtomArray());
-  BoundaryJacobianEnergyTerm termJac;
-  termJac.ComputeEnergy(&S);
-  termJac.PrintReport(cout);
-}
-
 void ExportMedialMeshToVTK(
   GenericMedialModel *xModel, ITKImageWrapper<float> *xImage, const char *file);
 
@@ -170,46 +111,99 @@ int TestVolumeComputation(const char *file)
   MedialPDE mp(file);
   GenericMedialModel *model = mp.GetMedialModel();
 
+  size_t nInternalPoints = model->GetNumberOfInternalPoints(nCuts);
+
+  // Use wedge-based system to compute volume. This is an old way that is
+  // fairly slow but seemingly reliable
+  double *xVolWedgeWeights = new double[model->GetNumberOfInternalPoints(nCuts)];
+  SMLVec3d *xInternalPoints = new SMLVec3d[model->GetNumberOfInternalPoints(nCuts)];
+  ComputeMedialInternalPoints(
+    model->GetIterationContext(),
+    model->GetAtomArray(),
+    nCuts,
+    xInternalPoints);
+  double volWedgeBased = 
+    ComputeMedialInternalVolumeWeights(
+      model->GetIterationContext(), 
+      model->GetAtomArray(),
+      xInternalPoints,
+      nCuts, 
+      xVolWedgeWeights, NULL);
+
+  // Use the newer method
+  double *xMedSurfaceAreaWeights = new double[model->GetNumberOfAtoms()];
+  double *xBndSurfaceAreaWeights = new double[model->GetNumberOfBoundaryPoints()];
+  double *xFastVolumeWeights = new double[model->GetNumberOfInternalPoints(nCuts)];
+  SMLVec3d *xMedNormals = new SMLVec3d[model->GetNumberOfAtoms()]; 
+  SMLVec3d *xBndNormals = new SMLVec3d[model->GetNumberOfBoundaryPoints()];
+  double xBndSurfaceArea = 
+    ComputeMedialBoundaryAreaWeights(
+      model->GetIterationContext(), 
+      model->GetAtomArray(),
+      xBndNormals,
+      xBndSurfaceAreaWeights);
+  double xMedSurfaceArea = 
+    ComputeMedialSurfaceAreaWeights(
+      model->GetIterationContext(), 
+      model->GetAtomArray(),
+      xMedNormals,
+      xMedSurfaceAreaWeights);
+  double volFastMethod = 
+    FastComputeMedialInternalVolumeWeights(
+      model->GetIterationContext(), 
+      model->GetAtomArray(),
+      xMedSurfaceAreaWeights, 
+      xBndSurfaceAreaWeights,
+      nCuts, xFastVolumeWeights);
+
+  // Report what's computed by the two methods
+  cout << "Wedge-Based Volume: " << volWedgeBased << endl;
+  cout << "Fast Method Volume: " << volFastMethod << endl;
+
+  // Compute the volume via VolumeOverlap class
+  TestFloatImage testimg(model->GetCenterOfRotation(), 100.0, 1.0);
+  VolumeOverlapEnergyTerm voet(model, &testimg, nCuts);
+  SolutionData sdat(model->GetIterationContext(), model->GetAtomArray());
+  sdat.ComputeIntegrationWeights();
+  voet.ComputeEnergy(&sdat);
+  cout << "Vol Ovl ETerm Vol : " << voet.GetModelVolume() << endl;
+
+  // Compare the volumes
+  StatisticsAccumulator volRatio, volFast, volWedge;
+  for(size_t i = 0; i < model->GetNumberOfInternalPoints(nCuts); i++)
+    {
+    volFast.Update(xFastVolumeWeights[i]);
+    volWedge.Update(xVolWedgeWeights[i]);
+    volRatio.Update(xFastVolumeWeights[i] / xVolWedgeWeights[i]);
+    }
+  cout << "Mean F/W Ratio    : " << volRatio.GetMean() << endl;
+  cout << "SDev F/W Ratio    : " << volRatio.GetStdDev() << endl;
+  cout << "Min/Max F/W Ratio : " << volRatio.GetMin()  
+    << ", " << volRatio.GetMax() << endl;
+
   // Create a solution data based on this model
   MedialIterationContext *grid = model->GetIterationContext();
-  SolutionData sd(grid, model->GetAtomArray());
-
-  // Generate internal weights in the solution
-  sd.UpdateInternalWeights(nCuts);
-  sd.UpdateBoundaryWeights();
 
   // Test 1. Ensure that the volume of every wedge in the model is positive
-  double minWeight = sd.xInternalWeights[0], maxWeight = sd.xInternalWeights[0];
-  for(i = 1; i < sd.nInternalPoints; i++)
-    {
-    minWeight = std::min(minWeight, sd.xInternalWeights[i]);
-    maxWeight = std::max(maxWeight, sd.xInternalWeights[i]);
-    }
-  cout << "Max volume element: " << maxWeight << endl;
-  cout << "Min volume element: " << minWeight << endl;
-  cout << "Avg volume element: " << (sd.xInternalVolume / sd.nInternalPoints) << endl;
+  cout << "Max wedge velement: " << volWedge.GetMax() << endl;
+  cout << "Min wedge velement: " << volWedge.GetMin() << endl;
+  cout << "Avg wedge velement: " << volWedge.GetMean() << endl;
 
-  if(minWeight < 0.0)
+  if(volWedge.GetMin() < 0.0)
     flagSuccess = false;
 
   // Test 2. Ensure that the boundary area elements are also positive
-  double minAreaElt = sd.xBoundaryWeights[0], 
-         maxAreaElt = sd.xBoundaryWeights[0],
-         sumAreaElt = sd.xBoundaryWeights[0];
-  for(i = 1; i < model->GetNumberOfBoundaryPoints(); i++)
-    {
-    minAreaElt = std::min(minAreaElt, sd.xBoundaryWeights[i]);
-    maxAreaElt = std::max(minAreaElt, sd.xBoundaryWeights[i]);
-    sumAreaElt += sd.xBoundaryWeights[i];
-    }
-  cout << "Max area element: " << maxAreaElt << endl;
-  cout << "Min area element: " << minAreaElt << endl;
-  cout << "Avg area element: " << 
-    (sd.xBoundaryArea / model->GetNumberOfBoundaryPoints()) << endl;
-  cout << "Sum area element: " << sumAreaElt << endl;
-  cout << "Surface area: " << sd.xBoundaryArea << endl;
+  StatisticsAccumulator saArea;
+  for(i = 0; i < model->GetNumberOfBoundaryPoints(); i++)
+    saArea.Update(xBndSurfaceAreaWeights[i]);
 
-  if(minAreaElt < 0.0 || sumAreaElt != sd.xBoundaryArea)
+  cout << "Max area element: " << saArea.GetMax() << endl;
+  cout << "Min area element: " << saArea.GetMin() << endl;
+  cout << "Avg area element: " << saArea.GetMean() << endl;
+  cout << "Sum area element: " << saArea.GetSum() << endl;
+  cout << "Surface area: " << xBndSurfaceArea << endl;
+
+  if(saArea.GetMin() < 0.0 || saArea.GetSum() != xBndSurfaceArea)
     flagSuccess = false;
 
   // Test 3. Compare volume computed by integration to volume estimated by
@@ -218,11 +212,10 @@ int TestVolumeComputation(const char *file)
   for(MedialBoundaryPointIterator bit(grid); !bit.IsAtEnd(); ++bit)
     {
     BoundaryAtom bat = GetBoundaryPoint(bit, model->GetAtomArray());
-    xVolGreen += dot_product(bat.X, bat.N) * sd.xBoundaryWeights[bit.GetIndex()];
+    xVolGreen += dot_product(bat.X, bat.N) * xBndSurfaceAreaWeights[bit.GetIndex()];
     }
   xVolGreen /= 3.0;
 
-  cout << "Volume Integral : " << sd.xInternalVolume << endl;
   cout << "Green Thm. Integral : " << xVolGreen << endl;
 
   // Test 4. Another way to compute Green's integral
@@ -259,7 +252,6 @@ void Test01()
   mp->SaveBYUMesh("temp.byu");
 
   // Make sure areas and volumes add up
-  TestAreaAndVolume(mp->GetMedialModel());
   
   // Load the image and gradients
   // FloatImage img;
@@ -735,6 +727,19 @@ void MakeFlatTemplate(FourierSurface *xSurface)
   delete u; delete v; delete x; delete y; delete z; delete rho;
 }
 
+struct TermInfo
+{
+  string name;
+  EnergyTerm *et;
+  double step;
+  TermInfo(const char *nm, EnergyTerm *e, double s)
+    {
+    name = nm;
+    et = e;
+    step = s;
+    }
+};
+
 int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img)
 {
   // Return Code
@@ -745,8 +750,15 @@ int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img)
   
   // Define a test image (this in not a real thing)
   GenericMedialModel *model = mp.GetMedialModel();
+  model->ComputeAtoms();
+
   SMLVec3d C = model->GetCenterOfRotation();
-  TestFloatImage testimg( C, 7.0, 4.0 );
+  double rLogSum = 0;
+  for(size_t ia = 0; ia < model->GetNumberOfAtoms(); ia++)
+    rLogSum += log((C - model->GetAtomArray()[ia].X).magnitude());
+  double rMean = exp(rLogSum / model->GetNumberOfAtoms());
+
+  TestFloatImage testimg(C, rMean, rMean/10);
 
   if(img == NULL)
     img = &testimg;
@@ -766,19 +778,29 @@ int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img)
     }
 
   // Create an array of image match terms
-  vector<EnergyTerm *> vt;
-  vt.push_back(new MeshRegularizationPenaltyTerm(model, 4, 4));
-  vt.push_back(new BoundaryJacobianEnergyTerm());
-  vt.push_back(new MedialCurvaturePenalty());
-  vt.push_back(new ProbabilisticEnergyTerm(img, 4));
-  vt.push_back(new MedialBendingEnergyTerm(model));
-  vt.push_back(new DistanceToPointSetEnergyTerm(
-      model, px.data_block(), py.data_block(), pz.data_block()));
-  vt.push_back(new BoundaryImageMatchTerm(img));
-  vt.push_back(new DistanceToRadiusFieldEnergyTerm(model, rad.data_block()));
-  vt.push_back(new MedialAnglesPenaltyTerm(model));
-  vt.push_back(new MedialRegularityTerm(model));
-  vt.push_back(new BoundaryGradRPenaltyTerm());
+  vector<TermInfo> vt;
+  vt.push_back(TermInfo(
+      "BoundaryImageMatchTerm", new BoundaryImageMatchTerm(img), 0.1));
+  vt.push_back(TermInfo(
+      "BoundaryJacobianEnergyTerm", new BoundaryJacobianEnergyTerm(), 1.0e-4));
+  vt.push_back(TermInfo(
+      "MedialCurvaturePenalty", new MedialCurvaturePenalty(), 0.1));
+  vt.push_back(TermInfo(
+      "VolumeOverlapEnergyTerm", new VolumeOverlapEnergyTerm(model, img, 4), 0.1));
+  vt.push_back(TermInfo(
+      "MedialBendingEnergyTerm", new MedialBendingEnergyTerm(model), 0.1));
+  vt.push_back(TermInfo(
+      "DistanceToPointSetEnergyTerm", new DistanceToPointSetEnergyTerm(
+        model, px.data_block(), py.data_block(), pz.data_block()), 0.1));
+  vt.push_back(TermInfo(
+      "DistanceToRadiusFieldEnergyTerm", new DistanceToRadiusFieldEnergyTerm(
+        model, rad.data_block()), 0.1));
+  vt.push_back(TermInfo(
+      "MedialAnglesPenaltyTerm", new MedialAnglesPenaltyTerm(model), 1.0e-4));
+  vt.push_back(TermInfo(
+      "MedialRegularityTerm", new MedialRegularityTerm(model), 0.1));
+  vt.push_back(TermInfo(
+      "BoundaryGradRPenaltyTerm", new BoundaryGradRPenaltyTerm(), 0.1));
 
   // Create an array of masks
   vector<CoefficientMapping *> vm;
@@ -786,43 +808,35 @@ int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img)
   vm.push_back(new IdentityCoefficientMapping(model));
   vm.push_back(new AffineTransformCoefficientMapping(model));
 
-  // Create labels
-  char *nt[] = {
-    "MeshRegularizationPenaltyTerm", 
-    "BoundaryJacobianEnergyTerm", 
-    "MedialCurvaturePenalty",
-    "ProbabilisticEnergyTerm",
-    "MedialBendingEnergyTerm",
-    "DistanceToPointSetEnergyTerm",
-    "BoundaryImageMatchTerm",
-    "DistanceToRadiusFieldEnergyTerm",
-    "MedialAnglesPenaltyTerm",
-    "MedialRegularityTerm",
-    "BoundaryGradRPenaltyTerm" };
   char *nm[] = {
     "RadialOnlyCoefficientMapping",
     "IdentityCoefficientMapping",
     "AffineTransformCoefficientMapping" };
 
-  double stepsize[] = {0.1, 0.1, 0.001, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
+  printf("%34s  %34s : %9s  %9s  %9s  %9s  %9s  P/F\n",
+    "ENERGY TERM", "COEFFICIENT MAPPING",
+    "ENERGY VAL", 
+    "ABS ERROR", "REL ERROR", "T(AGRAD)", "T(NGRAD)");
 
   // Loop over both options
   size_t i, j;
   for(i = 0; i < vt.size(); i++) for(j = 0; j < vm.size(); j++)
     {
-    cout << "-------------------------------------------------------------------" << endl;
-    cout << " TESTING " << nt[i] << " ON " << nm[j] << endl;
-    cout << "-------------------------------------------------------------------" << endl;
     
+    MedialPDE mp1(fnMPDE);
+  
     // Set up the test
-    MedialOptimizationProblem mop(model, vm[j]);
-    mop.AddEnergyTerm(vt[i], 1.0);
-    iReturn += TestOptimizerGradientComputation(mop, *vm[j], model, stepsize[i]);
+    // MedialOptimizationProblem mop(model, vm[j]);
+    MedialOptimizationProblem mop(mp1.GetMedialModel(), vm[j]);
+    mop.AddEnergyTerm(vt[i].et, 1.0);
+    iReturn += TestOptimizerGradientComputation(
+      mop, *vm[j], mp1.GetMedialModel(), vt[i].step, vt[i].name.c_str(), nm[j]);
+    // iReturn += TestOptimizerGradientComputation(mop, *vm[j], model, stepsize[i]);
     }
 
   // Delete both pointers
   for(i = 0; i < vt.size(); i++) 
-    delete vt[i];
+    delete vt[i].et;
   
   for(j = 0; j < vm.size(); j++)
     delete vm[j];

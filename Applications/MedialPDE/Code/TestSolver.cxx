@@ -106,6 +106,7 @@ int TestGradientComputation(
   // The number of parameters in the source coefficient space
   size_t nParams = xMapping->GetNumberOfParameters();
   size_t nCoeffs = xMapping->GetNumberOfCoefficients();
+  size_t nVar = nParams + nRandVar;
   
   // Holder for all the test quantities. This object will report the maximum
   // value for each quantity over all the tests
@@ -116,9 +117,11 @@ int TestGradientComputation(
   cout << "*****************************************" << endl;
 
   // Create a list of variational surfaces: some components, some random
-  // variations
+  // variations. There are two basis sets: one in parameter space (PS) 
+  // another in coefficient space (CS)
+  vnl_matrix<double> xVariationalBasisPS(nParams + nRandVar, nParams, 0.0);
+  vnl_matrix<double> xVariationalBasisCS(nParams + nRandVar, nCoeffs, 0.0);
   vector<string> xVariationNames;
-  vector< vnl_vector<double> > xVariations;
 
   // The initial coefficient vector is C0
   vnl_vector<double> C0 = xSolver->GetCoefficientArray();
@@ -133,7 +136,7 @@ int TestGradientComputation(
     vnl_vector<double> xParamVariation(nParams, 0.0); xParamVariation[iComp] = 1.0;
     
     xVariationNames.push_back(oss.str());
-    xVariations.push_back(xParamVariation);
+    xVariationalBasisPS.set_row(iComp, xParamVariation);
     }
 
   // Create mixed variations
@@ -144,24 +147,22 @@ int TestGradientComputation(
       dx[j] = rand() * 2.0 / RAND_MAX - 1.0;
 
     xVariationNames.push_back(" Random Variation ");
-    xVariations.push_back(dx);
+    xVariationalBasisPS.set_row(nParams + i, dx);
    }
 
-  // For each variation, allocate a derivative array
-  vector<MedialAtom *> dAtomArray;
-  
-  // Repeat for all variations
-  for(iVar = 0; iVar < xVariations.size(); iVar++)
+  // Compute the variations in coefficient space
+  for(iVar = 0; iVar < nVar; iVar++)
     {
     // Transform the variation in parameters to a variation in coefficients
-    vnl_vector<double> dC = 
-      xMapping->ApplyJacobianInParameters(C0, P0, xVariations[iVar]);
-
-    // Create an array of atoms to hold the derivative data
-    MedialAtom *dAtoms = new MedialAtom[nAtoms];
-    xSolver->PrepareAtomsForVariationalDerivative(dC, dAtoms);
-    dAtomArray.push_back(dAtoms);
+    xVariationalBasisCS.set_row(iVar,
+      xMapping->ApplyJacobianInParameters(C0, P0, xVariationalBasisPS.get_row(iVar)));
     }
+
+  // Pass in the variations to the solver
+  xSolver->SetVariationalBasis(xVariationalBasisCS);
+
+  // For each variation, allocate a derivative array
+  MedialAtom * dAtoms = new MedialAtom[nAtoms];
 
   // Set the coefficients for the initial solution
   xSolver->SetCoefficientArray(xMapping->Apply(C0, P0));
@@ -182,35 +183,43 @@ int TestGradientComputation(
   // Copy the current solution into the first array
   std::copy(xSolver->GetAtomArray(), xSolver->GetAtomArray() + nAtoms, A0);
 
-  // Compute the analytical gradient of the atoms
+  // Begin the gradient computation
   tAnalytic.Start();
-  xSolver->ComputeAtomGradient(dAtomArray);
+  xSolver->BeginGradientComputation();
   tAnalytic.Stop();
-  cout << endl;
-
+  
   // Create curvature arrays
   size_t nb = xSolver->GetNumberOfBoundaryPoints();
   vnl_vector<double> MC1(nb), MC2(nb), dMC(nb);
   vnl_vector<double> GC1(nb), GC2(nb), dGC(nb);
 
   // Compute all the other derivatives
-  for(iVar = 0; iVar < xVariations.size(); iVar++) 
+  for(iVar = 0; iVar < nVar; iVar++) 
     {
     cout << "----------------------------------------" << endl;
     cout << xVariationNames[iVar] << endl;
     cout << "----------------------------------------" << endl;
 
-    xSolver->ComputeBoundaryCurvaturePartial(dMC, dGC, dAtomArray[iVar]);
+    // Compute the directional derivative
+    tAnalytic.Start();
+    xSolver->ComputeAtomVariationalDerivative(iVar, dAtoms);
+    tAnalytic.Stop();
+
+    // Compute the directional derivative of boundary curvature (?)
+    xSolver->ComputeBoundaryCurvaturePartial(dMC, dGC, dAtoms);
     
+    // Get the current variation in parameter space
+    vnl_vector<double> xVar = xVariationalBasisPS.get_row(iVar);
+
     // Solve for the forward difference
-    xSolver->SetCoefficientArray(xMapping->Apply(C0, P0 + eps * xVariations[iVar]));
+    xSolver->SetCoefficientArray(xMapping->Apply(C0, P0 + eps * xVar));
     tCentral.Start(); xSolver->ComputeAtoms(xHint.data_block()); tCentral.Stop();
     std::copy(xSolver->GetAtomArray(), xSolver->GetAtomArray() + nAtoms, A1);
 
     xSolver->ComputeBoundaryCurvature(MC1, GC1);
 
     // Solve for the backward difference
-    xSolver->SetCoefficientArray(xMapping->Apply(C0, P0 - eps * xVariations[iVar]));
+    xSolver->SetCoefficientArray(xMapping->Apply(C0, P0 - eps * xVar));
     tCentral.Start(); xSolver->ComputeAtoms(xHint.data_block()); tCentral.Stop();
     std::copy(xSolver->GetAtomArray(), xSolver->GetAtomArray() + nAtoms, A2);
 
@@ -232,7 +241,7 @@ int TestGradientComputation(
       // Point to the atoms
       MedialAtom &a1 = A1[i];
       MedialAtom &a2 = A2[i];
-      MedialAtom &a0 = dAtomArray[iVar][i];
+      MedialAtom &a0 = dAtoms[i];
 
       // Look at such a simple thing as a.X
       dtq.Update("Atom's X", a0.X, a1.X, a2.X, eps);
@@ -302,48 +311,46 @@ int TestGradientComputation(
     SolutionData sd0(xGrid, A0);
     SolutionData sd1(xGrid, A1);
     SolutionData sd2(xGrid, A2);
-    PartialDerivativeSolutionData pdsd(&sd0, dAtomArray[iVar]);
+    PartialDerivativeSolutionData pdsd(&sd0, dAtoms);
 
     // Compute the boundary weights derivatives
-    sd0.UpdateBoundaryWeights();
-    sd1.UpdateBoundaryWeights();
-    sd2.UpdateBoundaryWeights();
-    pdsd.UpdateBoundaryWeights();
+    sd0.ComputeIntegrationWeights();
+    sd1.ComputeIntegrationWeights();
+    sd2.ComputeIntegrationWeights();
+    pdsd.ComputeIntegrationWeights();
+
+    for(size_t q = 0; q < xGrid->GetNumberOfAtoms(); q++)
+      {
+      dtq.Update("Weights (medial)",
+        pdsd.xMedialWeights[q],
+        sd1.xMedialWeights[q],
+        sd2.xMedialWeights[q], eps);
+      }
 
     // Compute the area weight difference
     double xMaxBndAreaDiff = 0.0;
     for(MedialBoundaryPointIterator it(xGrid); !it.IsAtEnd(); ++it)
       {
-      dtq.Update("Boundary Area Element",
+      dtq.Update("Weights (boundary)",
         pdsd.xBoundaryWeights[it.GetIndex()],
         sd1.xBoundaryWeights[it.GetIndex()],
         sd2.xBoundaryWeights[it.GetIndex()], eps);
 
       dtq.Update("Boundary Node Positions",
-        GetBoundaryPoint(it, dAtomArray[iVar]).X,
+        GetBoundaryPoint(it, dAtoms).X,
         GetBoundaryPoint(it, A1).X,
         GetBoundaryPoint(it, A2).X, eps);
 
       dtq.Update("Boundary Node Normals",
-        GetBoundaryPoint(it, dAtomArray[iVar]).N,
+        GetBoundaryPoint(it, dAtoms).N,
         GetBoundaryPoint(it, A1).N,
         GetBoundaryPoint(it, A2).N, eps);
+
+      dtq.Update("Integration Weights",
+        pdsd.xInteriorVolumeElement[it.GetIndex()],
+        sd1.xInteriorVolumeElement[it.GetIndex()],
+        sd2.xInteriorVolumeElement[it.GetIndex()], eps);
       }
-
-    // Compute the difference in internal point volume weights
-    size_t nInternal = 4;
-    sd0.UpdateInternalWeights(nInternal);
-    sd1.UpdateInternalWeights(nInternal);
-    sd2.UpdateInternalWeights(nInternal);
-    pdsd.UpdateInternalWeights(nInternal);
-
-    // Compute the area weight difference
-    double xMaxCellVolumeDiff = 0.0;
-    for(MedialInternalPointIterator itPoint(xGrid,nInternal); !itPoint.IsAtEnd(); ++itPoint)
-      dtq.Update("Internal Volume Element",
-        pdsd.xInternalWeights[itPoint.GetIndex()],
-        sd1.xInternalWeights[itPoint.GetIndex()],
-        sd2.xInternalWeights[itPoint.GetIndex()], eps);
 
     // Print the report
     cout << "Maximal differences between numeric and analytic derivatives:" << endl;
@@ -351,14 +358,19 @@ int TestGradientComputation(
 
     // Update the global maximum counters
     dtqGlobal.Update(dtq);
-
-    // Delete the atoms
-    delete dAtomArray[iVar];
     }
+
+  // Delete the atoms
+  delete dAtoms;
 
   // Delete the atom arrays
   delete A0; delete A1; delete A2;
 
+  // Finalize the gradient computation
+  tAnalytic.Start();
+  xSolver->EndGradientComputation();
+  tAnalytic.Stop();
+  
     
   // Print the final report
   cout << "========================================" << endl;
@@ -392,7 +404,7 @@ int TestOptimizerGradientComputation(
   MedialOptimizationProblem &mop, 
   CoefficientMapping &xMapping,
   GenericMedialModel *xSolver,
-  double xStepSize)
+  double xStepSize, const char *nm_term, const char *nm_map)
 {
   // Set up timers
   CodeTimer tAnalytic, tNumeric;
@@ -407,11 +419,11 @@ int TestOptimizerGradientComputation(
   // detect problems for other P values. So instead, we can move along the
   // gradient a certain direction.
   mop.ComputeGradient(P.data_block(), xGradient.data_block());
-  cout << "GRADIENT AT 0 " << xGradient << endl;
+  // cout << "GRADIENT AT 0 " << xGradient << endl;
   P += xStepSize * xGradient;
 
   // Now we are ready to perform the test.
-  mop.PrintReport(cout);
+  // mop.PrintReport(cout);
 
   // Compute the analytic gradient
   tAnalytic.Start();
@@ -420,6 +432,7 @@ int TestOptimizerGradientComputation(
   
   // Keep track of the maximum error value
   double xMaxError = 0.0, xMaxRelError = 0.0;
+  double fVal = mop.Evaluate(P.data_block());
   
   // Compute the numeric gradient of the objective function
   double eps = 0.0001;
@@ -447,8 +460,8 @@ int TestOptimizerGradientComputation(
     double dNumeric = 0.5 * (f1 - f2) / eps;
     double xDifference = fabs(xGradient[i] - dNumeric);
     double xRelError = xDifference / (0.5 * (fabs(dNumeric) + fabs(xGradient[i])) + eps);
-    printf("D[x_%04d](f):  AN = %+6E   CD = %+6E   AE = %+6E   RE = %+6E\n",
-      i, dNumeric, xGradient[i], xDifference, xRelError);
+    // printf("D[x_%04d](f):  AN = %+6E   CD = %+6E   AE = %+6E   RE = %+6E\n",
+    //  i, dNumeric, xGradient[i], xDifference, xRelError);
 
     // Update the max error tracker
     UpdateMax(xDifference, xMaxError);
@@ -456,11 +469,10 @@ int TestOptimizerGradientComputation(
     }
 
   // Report difference in time
-  cout << "Maximal Absolute Error : " << xMaxError << endl;
-  cout << "Maximal Relative Error : " << xMaxRelError << endl;
-  cout << (xMaxError > eps ? "TEST FAILED" : "TEST PASSED") << endl;
-  cout << "Central difference computed in " << tNumeric.Read() << " sec." << endl;
-  cout << "Analytic gradient computed in  " << tAnalytic.Read() << " sec." << endl; 
+  printf("%34s  %34s :", nm_term, nm_map);
+  printf("   %4.2le   %4.2le   %4.2le   %4.2le   %4.2le  %s\n",
+    fVal, xMaxError, xMaxRelError, tAnalytic.Read(), tNumeric.Read(),
+    (xMaxError > eps ? -1 : 0) ? "FAIL" : "PASS");
 
   return xMaxError > eps ? -1 : 0;
 }

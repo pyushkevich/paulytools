@@ -60,6 +60,9 @@ public:
     ConstRowIterator(const Self *p, size_t row)
       { this->p = p; iStart = iPos = p->xRowIndex[row]; iEnd = p->xRowIndex[row+1]; }
     
+    ConstRowIterator()
+      { p = NULL; iPos = iEnd = iStart = 0; }
+
     bool IsAtEnd()
       { return iPos == iEnd; }
 
@@ -85,6 +88,9 @@ public:
   public:
     RowIterator(Self *p, size_t row)
       { this->p = p; iStart = iPos = p->xRowIndex[row]; iEnd = p->xRowIndex[row+1]; }
+
+    RowIterator()
+      { p = NULL; iPos = iEnd = iStart = 0; }
     
     bool IsAtEnd()
       { return iPos == iEnd; }

@@ -57,6 +57,9 @@ public:
   void GoToBegin()
     { i = 0; }
 
+  size_t GetIndex() const
+    { return i; }
+
 private:
   // Context object defining our behavior
   MedialIterationContext *context;
@@ -139,6 +142,9 @@ public:
   size_t GetBoundarySide() const
     { return iSide; }
 
+  size_t GetIndex() const
+    { return iSide + (itTriangle.GetIndex() << 1); }
+
   MedialBoundaryTriangleIterator &operator++()
     {
     if(iSide == 0) 
@@ -182,13 +188,18 @@ public:
   // Get the index of this internal point in the parent context
   size_t GetIndex() const
     { 
-    return context->GetInternalPointIndex(
-      GetAtomIndex(), GetBoundarySide(), iDepth);
+    // assert(iIndex == context->GetInternalPointIndex(
+    //   GetAtomIndex(), GetBoundarySide(), iDepth))
+    return iIndex;
     }
   
   // Get the index of the corresponding atom on the medial surface
   size_t GetAtomIndex() const
     { return iDepth == 0 ? itAtom.GetIndex() : itBnd.GetAtomIndex(); }
+
+  // Get the corresponding boundary index (-1 returned for depth=0)
+  size_t GetBoundaryIndex() const
+    { return iDepth == 0 ? (size_t) -1 : itBnd.GetIndex(); }
 
   // Is the point on the profile that corresponds to a medial edge?
   bool IsEdgeAtom() const
@@ -231,6 +242,7 @@ public:
       if(itBnd.IsAtEnd())
         { SetDepth(iDepth+1); itBnd.GoToBegin(); }
       }
+    iIndex++;
     }
   
   bool IsAtEnd() const
@@ -239,7 +251,8 @@ public:
   void GoToBegin()
     {
     itAtom.GoToBegin(); itBnd.GoToBegin();
-    SetDepth(0); 
+    SetDepth(0);
+    iIndex = 0; 
     }
   
 private:
@@ -257,6 +270,7 @@ private:
   MedialBoundaryPointIterator itBnd;
   size_t iDepth, iMaxDepth;
   double xRelativeDepth;
+  size_t iIndex;
 };
 
 /** 

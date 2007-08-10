@@ -38,6 +38,9 @@ MedialAtom
   xBnd[1].X.fill(0.0); xBnd[1].N.fill(0.0);
 
   xMeanCurv = xGaussCurv = 0.0;
+
+  // By default, atoms are assumed to depend on variation
+  order = 0;
 }
 
 void

@@ -25,8 +25,8 @@ int TestGradientComputation(
 
 int TestOptimizerGradientComputation(
   MedialOptimizationProblem &mop, 
-  CoefficientMapping &xMask,
+  CoefficientMapping &xMapping,
   GenericMedialModel *xSolver,
-  double xStepSize);
+  double xStepSize, const char *nm_term, const char *nm_map);
 
 #endif

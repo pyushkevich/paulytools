@@ -67,33 +67,56 @@ PDESubdivisionMedialModel::GetHintArray() const
 
 void
 PDESubdivisionMedialModel
-::PrepareAtomsForVariationalDerivative(
-  const Vec &xVariation, MedialAtom *dAtoms) const
+::SetVariationalBasis(const Mat &xBasis)
 {
-  // This method must compute the terms in the derivative atoms that will not
-  // change as the coefficients themselves change. This simply means setting
-  // the values of xLapR and X.
-  for(size_t i = 0; i < mlAtom.nVertices; i++)
-    {
-    // Set up i-th atom
-    MedialAtom &da = dAtoms[i]; da.X.fill(0.0); da.xLapR = 0.0;
+  // Allocate the array of terms linearly dependent on the variation
+  xVariationalBasis = 
+    VariationalBasisRep(xBasis.rows(), VariationRep(mlAtom.nVertices));
 
-    // Compute the weighted sum of the coefficients
-    ImmutableSparseMatrix<double>::ConstRowIterator it = mlAtom.weights.Row(i);
-    for( ; !it.IsAtEnd(); ++it)
+  // Loop over the variations
+  for(size_t var = 0; var < xBasis.rows(); var++)
+    {
+    // The current variation
+    Vec xVariation = xBasis.get_row(var);
+
+    for(size_t i = 0; i < mlAtom.nVertices; i++)
       {
-      size_t j = it.Column() << 2; double w = it.Value();
-      da.X += w * xVariation.extract(3, j);
-      da.xLapR += w * xVariation[j+3];
+      // Set up i-th atom
+      VariationalBasisAtomData &vbad = xVariationalBasis[var][i];
+
+      // Compute the weighted sum of the coefficients
+      ImmutableSparseMatrix<double>::RowIterator it = mlAtom.weights.Row(i);
+      for( ; !it.IsAtEnd(); ++it)
+        {
+        size_t j = it.Column() << 2; double w = it.Value();
+        vbad.X += w * xVariation.extract(3, j);
+        vbad.xLapR += w * xVariation[j+3];
+        }
       }
     }
 }
 
 void
 PDESubdivisionMedialModel
-::ComputeAtomGradient(std::vector<MedialAtom *> &dAtoms)
+::BeginGradientComputation()
 {
-  xSolver.ComputeGradient(dAtoms);
+  xSolver.BeginGradientComputation();
+}
+
+void
+PDESubdivisionMedialModel
+::ComputeAtomVariationalDerivative(size_t ivar, MedialAtom *dAtoms)
+{
+  // Set whatever we can in the dAtoms array
+  for(size_t i = 0; i < mlAtom.nVertices; i++)
+    {
+    // Set up i-th atom
+    VariationalBasisAtomData &vbad = xVariationalBasis[ivar][i];
+    dAtoms[i].X = vbad.X;
+    dAtoms[i].xLapR = vbad.xLapR;
+    }
+
+  xSolver.ComputeAtomVariationalDerivative(dAtoms);
 }
 
 

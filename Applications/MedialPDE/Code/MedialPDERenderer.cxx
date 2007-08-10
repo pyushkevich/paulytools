@@ -115,11 +115,12 @@ PDESplineRenderer
     GLColor(0.1), GLColor(0.4));
 }
 
+/*
 void PDESplineRenderer::DrawInternalPoints( size_t nCuts )
 {
   // Generate the internal points using solutiondata
   SolutionData S(solver->GetIterationContext(), solver->GetAtomArray());
-  S.UpdateInternalWeights( nCuts );
+  S.UpdateInternalWeights(nCuts);
 
   // Pass the points as vertex pointers
   // glVertexPointer(3, GL_DOUBLE, sizeof(SMLVec3d), 
@@ -157,6 +158,7 @@ void PDESplineRenderer::DrawInternalPoints( size_t nCuts )
   
   glPopAttrib();
 }
+*/
 
 void
 PDESplineRenderer

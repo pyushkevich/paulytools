@@ -55,8 +55,16 @@ struct MedialAtom
   // Whether this is a 'crest' atom, and whether it's valid at all
   bool flagCrest, flagValid;
 
-  // A 'user' int that can be used to flag atoms
-  int user_data;
+  /* 
+   * The order of the atom. This is only used when the data structure is
+   * used to represent a derivative of an atom with respect to a variation
+   * The values are:
+   *    0 (default)       X,R,Xu,Ru,Xuu,Ruu, etc depend on variation
+   *    1                 Xu,Ru,Xuu,Ruu depend on variation
+   *    2                 Xuu,Ruu depend on variation
+   *    3                 atom not affected by variation at all
+   */
+  int order;
 
   // The two associated boundary 'atoms'
   BoundaryAtom xBnd[2];

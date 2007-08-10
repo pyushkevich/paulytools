@@ -44,10 +44,12 @@ double ComputeMedialDomainAreaWeights( MedialIterationContext *xGrid,
  * surface is the return value 
  */
 double ComputeMedialBoundaryAreaWeights( 
-  MedialIterationContext *xGrid, MedialAtom *xAtoms, double *xWeights);
+  MedialIterationContext *xGrid, MedialAtom *xAtoms,
+  SMLVec3d *xNormals, double *xWeights);
 
 double ComputeMedialInternalVolumePartialDerivativeWeights(
-  MedialIterationContext *xGrid, SMLVec3d *xPoints, SMLVec3d *dPoints, size_t nCuts, 
+  MedialIterationContext *xGrid, MedialAtom *dAtoms, 
+  SMLVec3d *xPoints, SMLVec3d *dPoints, size_t nCuts, 
   double *dWeights, double *dInternalProfileWeights);
 
 /**
@@ -56,11 +58,51 @@ double ComputeMedialBoundaryAreaPartialDerivative(
   MedialIterationContext *xGrid, MedialAtom *xAtoms, MedialAtom *dAtoms, 
   double *xWeights, double *dWeights);
 
+/** Compute integration weights over the medial surface */
+double ComputeMedialSurfaceAreaWeights( 
+  MedialIterationContext *xGrid, MedialAtom *xAtoms, 
+  SMLVec3d *xNormals, double *xWeights);
+
+double ComputeMedialSurfaceAreaPartialDerivative(
+  MedialIterationContext *xGrid, 
+  MedialAtom *xAtoms, MedialAtom *dAtoms, 
+  double *xWeights, double *dWeights);
+
+/**
+ * This is a fast method for volume element computation. It uses a rough
+ * approximation of volume element as
+ *   V(u,v,w) = r * ((1-w) aelt[medial] + w aelt[bnd])
+ * I've played around in mathematica and it seems that the difference 
+ * between this and the true volume element
+ *   V(u,v,w) = - Zu x Zv . Zw, Z = (1-w) X[medial] + w * X[bnd]
+ * is pretty tiny. Perhaps it's not so tiny near the boundary of the 
+ * medial surface, but everything is messed up there anyway :)
+ */
+double FastComputeMedialInternalVolumeWeights(
+  MedialIterationContext *xGrid, 
+  MedialAtom *xAtoms,
+  double *xMedialWeights, 
+  double *xBoundaryWeights, 
+  size_t nCuts,
+  double *xWeights);
+
+double FastComputeMedialInternalVolumeWeightsVariationalDerivative(
+  MedialIterationContext *xGrid, 
+  MedialAtom *xAtoms, MedialAtom *dAtoms,
+  double *xMedialWeights, double *dMedialWeights,
+  double *xBoundaryWeights, double *dBoundaryWeights,
+  double *xWeights, size_t nCuts,
+  double *dWeights);
+
+
 /** 
  * Interpolate a list of internal medial points from the m-rep.
  */
 void ComputeMedialInternalPoints(
   MedialIterationContext *xGrid, MedialAtom *xAtoms, size_t nCuts, SMLVec3d *xPoints);
+
+void ComputeMedialInternalPointsPartialDerivative(
+  MedialIterationContext *xGrid, MedialAtom *dAtoms, size_t nCuts, SMLVec3d *dPoints);
 
 // This is a measure that can be computed over a volume (just a R3 function)
 class EuclideanFunction {
@@ -159,8 +201,13 @@ double WedgeVolume(
  * is equal to the volume of the m-rep
  */
 double ComputeMedialInternalVolumeWeights(
-  MedialIterationContext *xGrid, SMLVec3d *xPoints, size_t nCuts, 
+  MedialIterationContext *xGrid, MedialAtom *xAtoms, 
+  SMLVec3d *xPoints, size_t nCuts, 
   double *xWeights, double *xProfileIntervalWeights = NULL);
+
+void ComputeMedialVolumeIntegrationWeights (
+  MedialIterationContext *xGrid, MedialAtom *xAtoms, 
+  double *xVolumeEltQuadTerm, double *xVolumeEltSlope, double *xVolumeEltIntercept);
 
 /** This method integrates any given function over the interior of mrep */
 double IntegrateFunctionOverInterior (
@@ -170,12 +217,12 @@ double IntegrateFunctionOverInterior (
 /** Integrate any function over the interior of a medial atom */
 double IntegrateFunctionOverBoundary (
   MedialIterationContext *xGrid, MedialAtom *xAtoms, 
-  double *xWeights, EuclideanFunction *fMatch);
+  std::vector<double> &xWeights, EuclideanFunction *fMatch);
 
 /** Compute gradient of a function over the boundary */
 double ComputeFunctionJetOverBoundary(
   MedialIterationContext *xGrid, MedialAtom *xAtoms, 
-  double *xWeights, EuclideanFunction *fMatch, SMLVec3d *xOutGradient);
+  std::vector<double> &xWeights, EuclideanFunction *fMatch, SMLVec3d *xOutGradient);
 
 
 /** 

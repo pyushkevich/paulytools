@@ -1121,6 +1121,75 @@ MeshMedialPDESolver
 
 void
 MeshMedialPDESolver
+::BeginGradientComputation()
+{
+  size_t i, q, j;
+
+  // Compute the weight matrix for the right hand side computations
+  this->ComputeRHSGradientMatrix();
+
+  // We must initialize pardiso
+  xPardiso.SymbolicFactorization(
+    topology->nVertices, xPardisoRowIndex, xPardisoColIndex, A.GetSparseData());
+
+  // In the subsequent iterations, only do the numeric factorization and solve
+  xPardiso.NumericFactorization(A.GetSparseData());
+
+  // Precompute common terms for atom derivatives
+  xTempDerivativeTerms = TempDerivativeTermsArray(topology->nVertices);
+  for(i = 0; i < topology->nVertices; i++)
+    xAtoms[i].ComputeCommonDerivativeTerms(xTempDerivativeTerms[i]);
+}
+
+void
+MeshMedialPDESolver
+::ComputeAtomVariationalDerivative(MedialAtom *dAtoms)
+{
+  size_t i, q, j;
+
+  // Each variational derivative is a linear system Ax = b. The matrix A
+  // should be set correctly from the last call to Solve() and all we have to
+  // change are the vectors B.
+  vnl_vector<double> rhs(topology->nVertices, 0.0);
+  vnl_vector<double> soln(topology->nVertices, 0.0);
+
+  // Repeat for each atom
+  for(i = 0; i < topology->nVertices; i++) 
+    {
+    // Set up the initial right hand side value
+    rhs[i] = (topology->IsVertexInternal(i)) ? dAtoms[i].xLapR : 0.0;
+
+    // Compute the rest of the right hand side
+    for(size_t j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
+      rhs[i] -= dot_product(W[j], dAtoms[A.GetColIndex()[j]].X);
+    }
+
+  // Solve the partial differential equation (dPhi/dVar)
+  xPardiso.Solve(rhs.data_block(), soln.data_block());
+
+  // Compute each atom
+  for(i = 0; i < topology->nVertices; i++) 
+    {
+    // For each atom, compute F, Fu, Fv, Xu and Xv
+    MedialAtom &da = dAtoms[i];
+    da.F = soln[i];
+    da.Fu = xLoopScheme.GetPartialDerivative(0, i, soln.data_block());
+    da.Fv = xLoopScheme.GetPartialDerivative(1, i, soln.data_block());
+    da.Xu = xLoopScheme.Xu(i, dAtoms);
+    da.Xv = xLoopScheme.Xv(i, dAtoms);
+    da.Xuu = da.Xuv = da.Xvv = SMLVec3d(0.0); 
+
+    // Compute the metric tensor derivatives of the atom
+    xAtoms[i].ComputeMetricTensorDerivatives(dAtoms[i]);
+
+    // Compute the derivatives of the boundary nodes
+    xAtoms[i].ComputeBoundaryAtomDerivatives(dAtoms[i], xTempDerivativeTerms[i]);
+    }
+}
+
+/*
+void
+MeshMedialPDESolver
 ::ComputeGradient(vector<MedialAtom *> xVariations)
 {
   size_t i, q, j;
@@ -1189,6 +1258,7 @@ MeshMedialPDESolver
   // Delete junk
   delete dt;
 }
+*/
 
 
 int

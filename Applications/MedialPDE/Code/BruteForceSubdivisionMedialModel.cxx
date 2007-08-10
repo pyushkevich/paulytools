@@ -567,7 +567,7 @@ ComputeBoundaryCurvaturePartial(
     dGaussCurv[ib] = 0.0;
 
     // Just set up an edge walk
-    if(a.flagValid && !a.flagCrest)
+    if(a.flagValid && !a.flagCrest && da.order < 3)
       {
       /* 
       cout << "*** IB = " << ib << endl;
@@ -985,6 +985,242 @@ BruteForceSubdivisionMedialModel::GetHintArray() const
   return xHint;
 }
 
+void 
+BruteForceSubdivisionMedialModel
+::SetVariationalBasis(const Mat &xBasis) 
+{
+  size_t i;
+
+  // The non-varying terms are represented as a sparse array. Each entry in the
+  // sparse array holds X and its partial derivatives, as well as F. 
+  size_t nvar = xBasis.rows();
+
+  // Allocate structure for holding data derived from the basis
+  NonvaryingTermsMatrix::STLSourceType nvSource;
+
+  // Iterate over all basis components
+  for(size_t var = 0; var < nvar; var++)
+    {
+    // Get the current variation
+    Vec xVariation = xBasis.get_row(var);
+
+    // For each atom, we must decide if any of it's properties are affected by the
+    // variation or not. The atom's properties depend on up to the second derivative
+    // of X and R. The following array is used to label atoms as dependent or not
+
+    // Also allocate a non-sparse array for computing the non-varying terms
+    std::vector<NonvaryingAtomTerms> vTerms(mlAtom.nVertices);
+
+    // Go through and mark the atoms whose X and R are affected
+    size_t nc = 0;
+    for(i = 0; i < mlAtom.nVertices; i++)
+      {
+      // Loop over 1-ring of neighbors
+      for(ImmutableSparseMatrix<double>::RowIterator it = mlAtom.weights.Row(i);
+        !it.IsAtEnd(); ++it)
+        {
+        // Get the index of the neighbor in the variation
+        size_t j = it.Column() << 2; 
+
+        // Get the neighbor's X and R combined, scale by the neighbor's weight
+        SMLVec4d XR = it.Value() * xVariation.extract(4,j);
+
+        // Check if there is any contribution from the variation to atom i
+        if(XR.squared_magnitude() > 0.0)
+          {
+          // Set the atom's order to 0 (it's set to 3 by default)
+          vTerms[i].order = 0;
+          nc++;
+          }
+
+        vTerms[i].X += XR.extract(3);
+        vTerms[i].R += XR[3];
+        }
+      }
+
+    // Propagate the dependency flag to the 2-nd ring of neighbors. This
+    // is because the neighbors are used in the computation of Xu and Xv
+    for(int level = 0; level < 2; level++)
+      {
+      size_t nc = 0;
+      std::vector<bool> vMark(mlAtom.nVertices, false);
+      for(i = 0; i < mlAtom.nVertices; i++)
+        {
+        for(EdgeWalkAroundVertex it(&mlAtom, i); !it.IsAtEnd(); ++it)
+          {
+          if(vTerms[it.MovingVertexId()].order < 3)
+            vMark[i] = true;
+          }
+        if(vMark[i]) nc++;
+        }
+      for(i = 0; i < mlAtom.nVertices; i++)
+        if(vMark[i])
+          vTerms[i].order = std::min(vTerms[i].order, level+1);
+      }
+
+    for(int ord = 0; ord < 3; ord++)
+      {
+      size_t nc = 0;
+      for(i = 0; i < mlAtom.nVertices; i++) 
+        if(vTerms[i].order == ord)
+          nc++;
+      // cout << "Order " << ord << ": " << nc << " atoms. " << endl;
+      }
+
+    // Next, precompute the first partial derivatives of X and R
+    for(i = 0; i < mlAtom.nVertices; i++) 
+      for(SparseMat::RowIterator it = Wuv.Row(i); !it.IsAtEnd(); ++it)
+        {
+        double wu = it.Value().first;
+        double wv = it.Value().second;
+        SMLVec3d Xnbr = vTerms[it.Column()].X;
+
+        vTerms[i].Xu += wu * Xnbr;
+        vTerms[i].Xv += wv * Xnbr;
+        }
+
+    // Next, precompute the second order partial derivatives of X and R
+    for(i = 0; i < mlAtom.nVertices; i++) 
+      for(SparseMat::RowIterator it = Wuv.Row(i); !it.IsAtEnd(); ++it)
+        {
+        double wu = it.Value().first;
+        double wv = it.Value().second;
+        SMLVec3d XUnbr = vTerms[it.Column()].Xu;
+        SMLVec3d XVnbr = vTerms[it.Column()].Xv;
+
+        vTerms[i].Xuu += wu * XUnbr;
+        vTerms[i].Xuv += 0.5 * (wu * XVnbr + wv * XUnbr);
+        vTerms[i].Xvv += wv * XVnbr;
+        }
+
+    // Finally, place the marked nodes into a sparse structure for later use
+    NonvaryingTermsMatrix::STLRowType nvRow;
+    for(i = 0; i < mlAtom.nVertices; i++)
+      if(vTerms[i].order < 3)
+        nvRow.push_back(make_pair(i, vTerms[i]));
+    nvSource.push_back(nvRow);
+    }
+
+  // The very last step is to initialize the sparse matrix
+  this->xBasis.SetFromSTL(nvSource, mlAtom.nVertices);
+}
+
+void
+BruteForceSubdivisionMedialModel
+::BeginGradientComputation()
+{
+  // Precompute common terms for atom derivatives
+  dt = new MedialAtom::DerivativeTerms[mlAtom.nVertices];
+  for(size_t i = 0; i < mlAtom.nVertices; i++)
+    xAtoms[i].ComputeCommonDerivativeTerms(dt[i]);
+}
+
+void
+BruteForceSubdivisionMedialModel
+::EndGradientComputation()
+{
+  // Precompute common terms for atom derivatives
+  delete dt;
+}
+
+void
+BruteForceSubdivisionMedialModel
+::ComputeAtomVariationalDerivative(size_t iBasis, MedialAtom *dAtoms)
+{
+  // Iterator for selecting the atoms affected by the current variation
+  NonvaryingTermsMatrix::RowIterator it;
+
+  // Clear the derivative information in all atoms
+  for(size_t i = 0; i < mlAtom.nVertices; i++)
+    {
+    dAtoms[i].SetAllDerivativeTermsToZero();
+    dAtoms[i].order = 3;
+    }
+
+  // Iterate over the corresponding sparse matrix row to compute the 
+  // relevant atoms
+  size_t nc = 0;
+  for(it = xBasis.Row(iBasis); !it.IsAtEnd(); ++it)
+    {
+    // Get the atom's index
+    size_t j = it.Column();
+
+    // Label the atom as dependent
+    dAtoms[j].order = it.Value().order;
+    nc++;
+
+    // Copy the constant terms. This is a little wasteful, but pretty much 
+    // necessary in order to only hold one array of dAtoms in memory
+    dAtoms[j].R   = it.Value().R;
+    dAtoms[j].X   = it.Value().X;
+    dAtoms[j].Xu  = it.Value().Xu;
+    dAtoms[j].Xv  = it.Value().Xv;
+    dAtoms[j].Xuu = it.Value().Xuu;
+    dAtoms[j].Xuv = it.Value().Xuv;
+    dAtoms[j].Xvv = it.Value().Xvv;
+
+    // Compute the derivative of F = R^2 at the atom
+    dAtoms[j].F = 2.0 * dAtoms[j].R * xAtoms[j].R;
+    }
+  // cout << "Dep Atoms : " << nc << " of " << mlAtom.nVertices << endl;
+
+  // Second loop to compute partials of F
+  for(it = xBasis.Row(iBasis); !it.IsAtEnd(); ++it)
+    {
+    // Get the atom's index
+    size_t j = it.Column();
+
+    // Get the current atom and the derivative (which we are computing)
+    MedialAtom &a = xAtoms[j];
+    MedialAtom &da = dAtoms[j];
+
+    // Compute the partial derivatives of Fu
+    da.Fu = da.Fv = 0.0;
+    for(SparseMat::RowIterator wit = Wuv.Row(j); !wit.IsAtEnd(); ++wit)
+      {
+      double Fnbr = dAtoms[wit.Column()].F;
+      double wu = wit.Value().first;
+      double wv = wit.Value().second;
+
+      da.Fu += wu * Fnbr;
+      da.Fv += wv * Fnbr;
+      }
+
+    // Compute the metric tensor derivatives of the atom
+    a.ComputeMetricTensorDerivatives(da);
+    a.ComputeChristoffelDerivatives(da);
+
+    // Compute the derivatives of the boundary nodes
+    a.ComputeBoundaryAtomDerivatives(da, dt[j]);
+    }
+
+  // Third loop to compute second order partials of F
+  for(it = xBasis.Row(iBasis); !it.IsAtEnd(); ++it)
+    {
+    // Get the atom's index
+    size_t j = it.Column();
+
+    // Get the current atom and the derivative (which we are computing)
+    MedialAtom &a = xAtoms[j];
+    MedialAtom &da = dAtoms[j];
+
+    // Compute the derivative of mean and gauss curvatures
+    da.Fuu = da.Fuv = da.Fvv = 0.0;
+    for(SparseMat::RowIterator wit = Wuv.Row(j); !wit.IsAtEnd(); ++wit)
+      {
+      MedialAtom &danbr = dAtoms[wit.Column()];
+      double wu = wit.Value().first;
+      double wv = wit.Value().second;
+
+      da.Fuu += wu * danbr.Fu;
+      da.Fvv += wv * danbr.Fv;
+      da.Fuv += 0.5 * (wu * danbr.Fv + wv * danbr.Fu);
+      }
+
+    // Compute things in the atom that depend on second derivatives
+    }
+}
+/*
 void
 BruteForceSubdivisionMedialModel
 ::PrepareAtomsForVariationalDerivative(
@@ -1086,7 +1322,9 @@ BruteForceSubdivisionMedialModel
       dAtoms[i].SetAllDerivativeTermsToZero();
     }
 }
+*/
 
+/* 
 void
 BruteForceSubdivisionMedialModel
 ::ComputeAtomGradient(std::vector<MedialAtom *> &xVariations)
@@ -1168,6 +1406,7 @@ BruteForceSubdivisionMedialModel
       }
 
     // Compute the curvatures
+    */
     /*
     for(i = 0; i < mlAtom.nVertices; i++) 
       {
@@ -1216,10 +1455,12 @@ BruteForceSubdivisionMedialModel
         }
       }
       */
+    /*
     }
 
   delete dt;
 }
+*/
 
 
 void

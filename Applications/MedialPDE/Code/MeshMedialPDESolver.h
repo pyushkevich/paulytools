@@ -58,8 +58,11 @@ public:
   // terms involved in gradient computation should also be computed
   void SolveEquation(double *xInitSoln = NULL, bool flagGradient = false);
 
-  // Compute the gradient of the solution with respect to some basis.
-  void ComputeGradient(vector<MedialAtom *> dAtoms);
+  // Compute the common part of the gradient computation
+  void BeginGradientComputation();
+
+  // Compute the directional derivative of the solution
+  void ComputeAtomVariationalDerivative(MedialAtom * dAtoms);
 
   // Test the accuracy of partial derivative computations in the gradient code
   // this method should be called after calling solve with some data
@@ -178,6 +181,9 @@ private:
   static void ComputeLMResidual(void *handle, int n, double *x, double *fx);
   static void ComputeLMJacobian(void *handle, int n, double *x, SparseMat &J);
 
+  // Array that holds temporary data for gradient computation
+  typedef std::vector<MedialAtom::DerivativeTerms> TempDerivativeTermsArray;
+  TempDerivativeTermsArray xTempDerivativeTerms;
 };
 
 

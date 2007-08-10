@@ -65,10 +65,6 @@ public:
   void ComputeAtoms(const double *xHint = NULL)
     { this->Solve(xHint); }
 
-  /** Compute the gradient of the solution */
-  void ComputeAtomGradient(std::vector<MedialAtom *> &dAtoms)
-    { this->ComputeVariationalGradient(dAtoms); }
-
   /** 
    * Store the current solution vector as the initialization vector
    */
@@ -96,21 +92,28 @@ public:
    */
   void Solve(const double *xHint = NULL, double delta = 1e-12);
 
-  /**
-   * This is a prelimiary step for computing the gradient of the phi-function
-   * with respect to some set of basis functions. Call this method for each basis
-   * function just once to pre-compute values that are common between all subsequent
-   * gradient computations
+  /** 
+   * Specify the set of directions (variations) for repeated gradient computations
+   * Each row in xBasis specifies a variation.
    */
-  void PrepareAtomsForVariationalDerivative(
-    const Vec &xVariation, MedialAtom *dAtoms) const;
+  void SetVariationalBasis(const Mat &xBasis);
 
-  /**
-   * Compute the gradient of the equation with respect to the basis functions
-   * that constitute the medial surface. This means solving the PDEs that define
-   * the gradient of the phi function with respect to the basis functions, as 
-   * well as computing the other partial */
-  void ComputeVariationalGradient(vector<MedialAtom *> &dAtomArray);
+  /** 
+   * Method called before multiple calls to ComputeAtomVariationalDerivative()
+   */
+  void BeginGradientComputation();
+
+  /** 
+   * This method computes the variational derivative of the model with respect to 
+   * a variation. Index iVar points into the variations passed in to the method
+   * SetVariationalBasis();
+   */
+  void ComputeAtomVariationalDerivative(size_t iVar, MedialAtom *dAtoms);
+
+  /** 
+   * Method called before multiple calls to ComputeAtomVariationalDerivative()
+   */
+  void EndGradientComputation() {}
 
   /** Get the number of atoms in u dimension */
   unsigned int GetNumberOfUPoints()
@@ -190,6 +193,22 @@ private:
 
   /** Three vectors used in the iteration */
   Mat eps, b, y, zTest, xInitSoln, xDefaultInitSoln, dy;
+
+  /** Representation of the variational basis */
+  struct VariationalBasisAtomData {
+    SMLVec3d X, Xu, Xv, Xuu, Xuv, Xvv;
+    double xLapR;
+    VariationalBasisAtomData() 
+      : X(0.0), Xu(0.0), Xv(0.0), Xuu(0.0), Xuv(0.0), Xvv(0.0), xLapR(0.0) {}
+  };
+
+  // Matrix storing all data associated with a variational basis
+  typedef std::vector<VariationalBasisAtomData> VariationRep;
+  typedef std::vector<VariationRep> VariationalBasisRep;
+  VariationalBasisRep xVariationalBasis;
+
+  // Array that holds temporary data for gradient computation
+  std::vector<MedialAtom::DerivativeTerms> xTempDerivativeTerms;
 
   // Sparse linear matrix solver
   UnsymmetricRealPARDISO xPardiso;

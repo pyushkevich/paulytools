@@ -425,8 +425,8 @@ void my_calcf(int &n, double *x, int &nf, double &f, int *dummy1, double *dummy2
     }
 
   // Save a mesh
-  ExportMedialMeshToVTK(mop->GetMedialModel(), NULL, "iter.med.vtk");
-  ExportBoundaryMeshToVTK(mop->GetMedialModel(), NULL, "iter.bnd.vtk");
+  // ExportMedialMeshToVTK(mop->GetMedialModel(), NULL, "iter.med.vtk");
+  // ExportBoundaryMeshToVTK(mop->GetMedialModel(), NULL, "iter.bnd.vtk");
 
 }
 
@@ -755,7 +755,7 @@ void MedialPDE
   // Create an image match term and a jacobian term
   EnergyTerm *xTermImage = NULL;
   if(p.xImageMatch == OptimizationParameters::VOLUME)
-    xTermImage = new ProbabilisticEnergyTerm(image, 8);
+    xTermImage = new VolumeOverlapEnergyTerm(xMedialModel, image, 8);
   else if(p.xImageMatch == OptimizationParameters::BOUNDARY)
     xTermImage = new BoundaryImageMatchTerm(image);
   else if(p.xImageMatch == OptimizationParameters::RADIUS_VALUES)
@@ -1046,26 +1046,26 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
 
   // Create a solution data object to speed up computations
   SolutionData S0(xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
-  S0.UpdateInternalWeights(nCuts);
+  S0.ComputeIntegrationWeights();
 
   for(i = 0; i < 3; i++)
     {
     // Compute the first moment in i-th direction
     FirstMomentComputer fmc(i);
-    yMean[i] = IntegrateFunctionOverInterior(
-      S0.xAtomGrid, S0.xInternalPoints, S0.xInternalWeights, nCuts, &fmc);
+    VolumeIntegralEnergyTerm viet1(xMedialModel, &fmc, nCuts);
+    yMean[i] = viet1.ComputeEnergy(&S0);
+    yVolume = viet1.GetModelVolume();
 
     for(j = 0; j <= i; j++)
       {
       // Compute the second moment in i-th and j-th directions
       SecondMomentComputer smc(i,j);
-      yCov[i][j] = yCov[j][i] = IntegrateFunctionOverInterior(
-        S0.xAtomGrid, S0.xInternalPoints, S0.xInternalWeights, nCuts, &smc);
+      VolumeIntegralEnergyTerm viet2(xMedialModel, &smc, nCuts);
+      yCov[i][j] = yCov[j][i] = viet2.ComputeEnergy(&S0);
       }
     }
 
   // Compute the actual mean and covariance
-  yVolume = S0.xInternalVolume;
   yMean /= yVolume;
   yCov = (yCov - yVolume * outer_product(yMean, yMean)) / yVolume;
 
@@ -1094,7 +1094,7 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
   const AffineTransformDescriptor *affDesc = xMedialModel->GetAffineTransformDescriptor();
 
   // Create a volume match object
-  ProbabilisticEnergyTerm tVolumeMatch(image, nCuts);
+  VolumeOverlapEnergyTerm tVolumeMatch(xMedialModel, image, nCuts);
 
   // Compute the best image match over all possible flips of the eigenvalues
   // (there are 8 possible matches, including mirroring)
@@ -1136,25 +1136,25 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
 
   // Test the results
   SolutionData S1(xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
-  S1.UpdateInternalWeights( nCuts );
+  S1.ComputeIntegrationWeights();
   for(i = 0; i < 3; i++)
     {
     // Compute the first moment in i-th direction
     FirstMomentComputer fmc(i);
-    yMean[i] = IntegrateFunctionOverInterior(
-      S1.xAtomGrid, S1.xInternalPoints, S1.xInternalWeights, nCuts, &fmc);
+    VolumeIntegralEnergyTerm viet1(xMedialModel, &fmc, nCuts);
+    yMean[i] = viet1.ComputeEnergy(&S1); 
+    yVolume = viet1.GetModelVolume();
 
     for(j = 0; j <= i; j++)
       {
       // Compute the second moment in i-th and j-th directions
       SecondMomentComputer smc(i,j);
-      yCov[i][j] = yCov[j][i] = IntegrateFunctionOverInterior(
-        S1.xAtomGrid, S1.xInternalPoints, S1.xInternalWeights, nCuts, &smc);
+      VolumeIntegralEnergyTerm viet2(xMedialModel, &smc, nCuts);
+      yCov[i][j] = yCov[j][i] = viet2.ComputeEnergy(&S1);
       }
     }
 
   // Compute the actual mean and covariance
-  yVolume = S1.xInternalVolume;
   yMean /= yVolume;
   yCov = (yCov - yVolume * outer_product(yMean, yMean)) / yVolume;
 

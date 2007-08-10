@@ -266,14 +266,19 @@ double ComputeMedialDomainAreaWeights(
 
 // Old Method: always returns positive areas - dangerous!
 double ComputeMedialBoundaryAreaWeights(
-  MedialIterationContext *xGrid, MedialAtom *xAtoms, double *xWeights)
+  MedialIterationContext *xGrid, MedialAtom *xAtoms, 
+  SMLVec3d *xNormal, double *xWeights)
 {
   // A constant to hold 1/3
   const static double THIRD = 1.0f / 3.0f;
   double xTotalArea = 0.0f;
 
   // Clear the content of the weights
-  memset(xWeights, 0, sizeof(double) * xGrid->GetNumberOfBoundaryPoints());
+  size_t nBnd = xGrid->GetNumberOfBoundaryPoints();
+
+  // Clear the content of the weights
+  for(size_t i = 0; i < nBnd; i++)
+    { xWeights[i] = 0; xNormal[i].fill(0.0); }
   
   // Iterate over the triangles
   for(MedialBoundaryTriangleIterator itt(xGrid); !itt.IsAtEnd() ; ++itt)
@@ -289,17 +294,144 @@ double ComputeMedialBoundaryAreaWeights(
     SMLVec3d X2 = GetBoundaryPoint(itt, xAtoms, 2).X;
 
     // Compute the area of triangle
-    double A = THIRD * TriangleArea( X0, X1, X2 );
+    SMLVec3d N = THIRD * vnl_cross_3d(X1-X0,X2-X0);
+    double A = 0.5 * N.magnitude();
     
     // Add to the total area
     xTotalArea += A;
 
     // Assign a third of each weight to each corner
+    xNormal[i0] += N; xNormal[i1] += N; xNormal[i2] += N;
     xWeights[i0] += A; xWeights[i1] += A; xWeights[i2] += A;
     }
 
   // Return the total area
   return 3.0f * xTotalArea;
+}
+
+// Old Method: always returns positive areas - dangerous!
+double ComputeMedialSurfaceAreaWeights(
+  MedialIterationContext *xGrid, 
+  MedialAtom *xAtoms, 
+  SMLVec3d *xNormal,
+  double *xWeights)
+{
+  // A constant to hold 1/3
+  const static double THIRD = 1.0f / 3.0f;
+  double xTotalArea = 0.0f;
+  size_t nAtoms = xGrid->GetNumberOfAtoms();
+
+  // Clear the content of the weights
+  for(size_t i = 0; i < nAtoms; i++)
+    { xWeights[i] = 0; xNormal[i].fill(0.0); }
+  
+  // Iterate over the triangles
+  for(MedialTriangleIterator itt(xGrid); !itt.IsAtEnd() ; ++itt)
+    {
+    // Access the four medial atoms
+    size_t i0 = itt.GetAtomIndex(0);
+    size_t i1 = itt.GetAtomIndex(1);
+    size_t i2 = itt.GetAtomIndex(2);
+
+    // Access the four medial points
+    SMLVec3d X0 = xAtoms[i0].X; 
+    SMLVec3d X1 = xAtoms[i1].X;
+    SMLVec3d X2 = xAtoms[i2].X;
+
+    // Compute the normal vector
+    SMLVec3d N = THIRD * vnl_cross_3d(X1-X0,X2-X0);
+
+    // Compute the area of triangle
+    double A = 0.5 * N.magnitude();
+    
+    // Add to the total area
+    xTotalArea += A;
+
+    // Assign a third of each weight to each corner
+    xNormal[i0] += N; xNormal[i1] += N; xNormal[i2] += N;
+    xWeights[i0] += A; xWeights[i1] += A; xWeights[i2] += A;
+    }
+
+  // Return the total area
+  return 3.0f * xTotalArea;
+}
+
+// For each point on the boundary, return a pair of numbers (a, b)
+// such that the volume element for piece of spoke centered at 
+// some point P along the spoke with distance xi*R from the 
+// medial axis is given by (a + b * xi) * len
+void ComputeMedialVolumeIntegrationWeights (
+  MedialIterationContext *xGrid, MedialAtom *xAtoms, 
+  double *xVolumeEltQuadTerm,
+  double *xVolumeEltSlope, 
+  double *xVolumeEltIntercept)
+{
+  // A constant to hold 1/3
+  const static double EIGHTEENTH = 1.0f / 18.0f;
+  double xTotalVol = 0.0;
+
+  // Clear the content of the weights
+  size_t nBnd = xGrid->GetNumberOfBoundaryPoints();
+
+  // Clear the content of the weights
+  for(size_t i = 0; i < nBnd; i++)
+    { 
+    xVolumeEltQuadTerm[i] = 0; 
+    xVolumeEltSlope[i] = 0; 
+    xVolumeEltIntercept[i] = 0; 
+    }
+  
+  // Iterate over the triangles
+  for(MedialBoundaryTriangleIterator itt(xGrid); !itt.IsAtEnd() ; ++itt)
+    {
+    // Access the four medial atoms
+    size_t ib0 = itt.GetBoundaryIndex(0);
+    size_t ib1 = itt.GetBoundaryIndex(1);
+    size_t ib2 = itt.GetBoundaryIndex(2);
+    size_t ia0 = itt.GetAtomIndex(0);
+    size_t ia1 = itt.GetAtomIndex(1);
+    size_t ia2 = itt.GetAtomIndex(2);
+
+    // Access the four medial points
+    SMLVec3d X0 = xAtoms[ia0].X;
+    SMLVec3d X1 = xAtoms[ia1].X;
+    SMLVec3d X2 = xAtoms[ia2].X;
+    SMLVec3d U0 = GetBoundaryPoint(itt, xAtoms, 0).X - X0;
+    SMLVec3d U1 = GetBoundaryPoint(itt, xAtoms, 1).X - X1;
+    SMLVec3d U2 = GetBoundaryPoint(itt, xAtoms, 2).X - X2;
+
+    SMLVec3d W = EIGHTEENTH * (U0 + U1 + U2);
+    double a = ScalarTripleProduct(X1-X0, X2-X0, W);
+    double b = ScalarTripleProduct(U1-U0, X2-X0, W) + ScalarTripleProduct(X1-X0, U2-U0, W);
+    double c = ScalarTripleProduct(U1-U0, U2-U0, W);
+
+    // Assign a third of each weight to each corner
+    xVolumeEltQuadTerm[ib0] += c; xVolumeEltSlope[ib0] += b; xVolumeEltIntercept[ib0] += a;
+    xVolumeEltQuadTerm[ib1] += c; xVolumeEltSlope[ib1] += b; xVolumeEltIntercept[ib1] += a;
+    xVolumeEltQuadTerm[ib2] += c; xVolumeEltSlope[ib2] += b; xVolumeEltIntercept[ib2] += a;
+    }
+  cout << "TOT VOL HERE: " << xTotalVol << endl;
+}
+
+
+
+
+inline bool CheckTriangleDependency(MedialBoundaryTriangleIterator &it, MedialAtom *dAtom)
+{
+  // For a triangle to be dependent, at least one of the vertices
+  // must have its X/R depend on the variation
+  return 
+    dAtom[it.GetAtomIndex(0)].order <= 1 ||
+    dAtom[it.GetAtomIndex(1)].order <= 1 ||
+    dAtom[it.GetAtomIndex(2)].order <= 1;
+}
+
+inline bool CheckCellDependency(MedialInternalCellIterator &it, MedialAtom *dAtom)
+{
+  return 
+    dAtom[it.GetAtomIndex(0)].order <= 1 ||
+    dAtom[it.GetAtomIndex(1)].order <= 1 ||
+    dAtom[it.GetAtomIndex(2)].order <= 1;
 }
 
 double ComputeMedialBoundaryAreaPartialDerivative(
@@ -316,32 +448,87 @@ double ComputeMedialBoundaryAreaPartialDerivative(
   // For each quad, compute the area associated with it
   for(MedialBoundaryTriangleIterator it(xGrid); !it.IsAtEnd(); ++it)
     {
-    // Access the four medial points
-    SMLVec3d X0 = GetBoundaryPoint(it, xAtoms, 0).X;
-    SMLVec3d X1 = GetBoundaryPoint(it, xAtoms, 1).X;
-    SMLVec3d X2 = GetBoundaryPoint(it, xAtoms, 2).X;
+    // Only proceed if there is a dependency
+    if(CheckTriangleDependency(it, dAtoms))
+      {
+      // Access the derivatives of the points
+      SMLVec3d D0 = GetBoundaryPoint(it, dAtoms, 0).X;
+      SMLVec3d D1 = GetBoundaryPoint(it, dAtoms, 1).X;
+      SMLVec3d D2 = GetBoundaryPoint(it, dAtoms, 2).X;
 
-    // Access the derivatives of the points
-    SMLVec3d D0 = GetBoundaryPoint(it, dAtoms, 0).X;
-    SMLVec3d D1 = GetBoundaryPoint(it, dAtoms, 1).X;
-    SMLVec3d D2 = GetBoundaryPoint(it, dAtoms, 2).X;
+      // Access the four medial points
+      SMLVec3d X0 = GetBoundaryPoint(it, xAtoms, 0).X;
+      SMLVec3d X1 = GetBoundaryPoint(it, xAtoms, 1).X;
+      SMLVec3d X2 = GetBoundaryPoint(it, xAtoms, 2).X;
 
-    // Compute the derivative of the triangle area
-    double dA = THIRD * 
-      TriangleAreaPartialDerivative(X0, X1, X2, D0, D1, D2, TriangleArea(X0, X1, X2));
-    
-    // Update the total area
-    dTotalArea += dA;
+      // Compute the derivative of the triangle area
+      double dA = THIRD * 
+        TriangleAreaPartialDerivative(X0, X1, X2, D0, D1, D2, TriangleArea(X0, X1, X2));
+      
+      // Update the total area
+      dTotalArea += dA;
 
-    // Assign a third of each weight to each corner
-    dWeights[it.GetBoundaryIndex(0)] += dA;
-    dWeights[it.GetBoundaryIndex(1)] += dA;
-    dWeights[it.GetBoundaryIndex(2)] += dA;
+      // Assign a third of each weight to each corner
+      dWeights[it.GetBoundaryIndex(0)] += dA;
+      dWeights[it.GetBoundaryIndex(1)] += dA;
+      dWeights[it.GetBoundaryIndex(2)] += dA;
+      }
     }
 
   // Return the total area
   return 3.0f * dTotalArea;
 }
+
+
+double ComputeMedialSurfaceAreaPartialDerivative(
+  MedialIterationContext *xGrid, 
+  MedialAtom *xAtoms, MedialAtom *dAtoms, 
+  double *xWeights, double *dWeights)
+{
+  // A constant to hold 1/3
+  const static double THIRD = 1.0f / 3.0f;
+  double dTotalArea = 0.0f;
+
+  // Clear the content of the weights
+  memset(dWeights, 0, sizeof(double) * xGrid->GetNumberOfAtoms());
+  
+  // For each quad, compute the area associated with it
+  for(MedialTriangleIterator it(xGrid); !it.IsAtEnd(); ++it)
+    {
+    // Access the four medial atoms
+    size_t i0 = it.GetAtomIndex(0);
+    size_t i1 = it.GetAtomIndex(1);
+    size_t i2 = it.GetAtomIndex(2);
+
+    if(dAtoms[i0].order == 0 || dAtoms[i1].order == 0 || dAtoms[i2].order == 0)
+      {
+      // Access the four medial points
+      SMLVec3d D0 = dAtoms[i0].X; 
+      SMLVec3d D1 = dAtoms[i1].X;
+      SMLVec3d D2 = dAtoms[i2].X;
+
+      // Access the four medial points
+      SMLVec3d X0 = xAtoms[i0].X; 
+      SMLVec3d X1 = xAtoms[i1].X;
+      SMLVec3d X2 = xAtoms[i2].X;
+
+      // Compute the derivative of the triangle area
+      double dA = THIRD * 
+        TriangleAreaPartialDerivative(X0, X1, X2, D0, D1, D2, TriangleArea(X0, X1, X2));
+      // Update the total area
+      dTotalArea += dA;
+
+      // Assign a third of each weight to each corner
+      dWeights[i0] += dA;
+      dWeights[i1] += dA;
+      dWeights[i2] += dA;
+      }
+    }
+
+  // Return the total area
+  return 3.0f * dTotalArea;
+}
+
 
 /** 
  * Interpolate a list of internal medial points from the m-rep.
@@ -352,6 +539,20 @@ void ComputeMedialInternalPoints(
   // Create an internal point iterator
   for(MedialInternalPointIterator it(xGrid, nCuts); !it.IsAtEnd(); ++it)
     xPoints[it.GetIndex()] = GetInternalPoint(it, xAtoms);
+}
+
+void ComputeMedialInternalPointsPartialDerivative(
+  MedialIterationContext *xGrid, MedialAtom *dAtoms, size_t nCuts, SMLVec3d *dPoints)
+{
+  // Create an internal point iterator
+  for(MedialInternalPointIterator it(xGrid, nCuts); !it.IsAtEnd(); ++it)
+    {
+    size_t i = it.GetIndex();
+    if(dAtoms[it.GetAtomIndex()].order <= 1)
+      dPoints[i] = GetInternalPoint(it, dAtoms);
+    else
+      dPoints[i][0] = dPoints[i][1] = dPoints[i][2] = 0.0;
+    }
 }
 
 class CellVolumeWeightComputer {
@@ -440,58 +641,193 @@ private:
  */
 template<class TWeightComputer>
 double ComputeMedialInteralWeights(
-  MedialIterationContext *xGrid, TWeightComputer *xComputer, size_t nCuts, 
-  double *xWeights, double *xInternalProfileWeights)
+  MedialIterationContext *xGrid, MedialAtom *xAtoms, 
+  TWeightComputer *xComputer, size_t nCuts, 
+  double *xWeights, double *xInternalProfileWeights, bool flagCheckDependency)
 {
   const static double SIXTH = 1.0 / 6.0;
 
   // Set all the weights to zero to begin with
   double xTotalVolume = 0.0;
   size_t nPoints = xGrid->GetNumberOfInternalPoints(nCuts);
-  memset(xWeights, 0, sizeof(double) * nPoints);
-  memset(xInternalProfileWeights, 0, sizeof(double) 
-    * xGrid->GetNumberOfProfileIntervals(nCuts));
-  
+  size_t nProfs = xGrid->GetNumberOfProfileIntervals(nCuts);
+
+  for(size_t q = 0; q < nPoints; q++)
+    xWeights[q] = 0.0;
+
+  if(xInternalProfileWeights)
+    for(size_t p = 0; p < nProfs; p++)
+      xInternalProfileWeights[p] = 0.0;
+
   // Iterate over all the wedges
+  size_t nc = 0, ns = 0;
   for(MedialInternalCellIterator it(xGrid, nCuts); !it.IsAtEnd(); ++it)
     {
-    // Get the indices of the six points
-    size_t i00 = it.GetInternalPointIndex(0, 0);
-    size_t i01 = it.GetInternalPointIndex(1, 0);
-    size_t i02 = it.GetInternalPointIndex(2, 0);
-    size_t i10 = it.GetInternalPointIndex(0, 1);
-    size_t i11 = it.GetInternalPointIndex(1, 1);
-    size_t i12 = it.GetInternalPointIndex(2, 1);
+    // In some cases, we know from the structure of the problem that the 
+    // volume element is going to be zero
+    if(flagCheckDependency == false || CheckCellDependency(it,xAtoms))
+      { 
+      // Get the indices of the six points
+      size_t i00 = it.GetInternalPointIndex(0, 0);
+      size_t i01 = it.GetInternalPointIndex(1, 0);
+      size_t i02 = it.GetInternalPointIndex(2, 0);
+      size_t i10 = it.GetInternalPointIndex(0, 1);
+      size_t i11 = it.GetInternalPointIndex(1, 1);
+      size_t i12 = it.GetInternalPointIndex(2, 1);
 
-    // Add to total volume of the structure
-    double V = xComputer->ComputeWeight(i00, i01, i02, i10, i11, i12); 
-    xTotalVolume += V;
+      // Add to total volume of the structure
+      double V = xComputer->ComputeWeight(i00, i01, i02, i10, i11, i12); 
+      xTotalVolume += V;
 
-    // Scale by a sixth (since each wedge has six corners)
-    V *= SIXTH;
+      // Scale by a sixth (since each wedge has six corners)
+      V *= SIXTH;
 
-    // Assign the fractions of the volume to the corresponding internal points
-    xWeights[i00] += V; xWeights[i10] += V;
-    xWeights[i01] += V; xWeights[i11] += V;
-    xWeights[i02] += V; xWeights[i12] += V;
+      // Assign the fractions of the volume to the corresponding internal points
+      xWeights[i00] += V; xWeights[i10] += V;
+      xWeights[i01] += V; xWeights[i11] += V;
+      xWeights[i02] += V; xWeights[i12] += V;
 
-    // Also assign fractions of the weights to the profile intervals
-    if(xInternalProfileWeights)
+      // Also assign fractions of the weights to the profile intervals
+      if(xInternalProfileWeights)
+        {
+        size_t j0 = it.GetProfileIntervalIndex(0);
+        size_t j1 = it.GetProfileIntervalIndex(1);
+        size_t j2 = it.GetProfileIntervalIndex(2);
+        V = V + V;
+        xInternalProfileWeights[j0] += V;
+        xInternalProfileWeights[j1] += V;
+        xInternalProfileWeights[j2] += V;
+        }
+      nc++;
+      }
+    else 
       {
-      size_t j0 = it.GetProfileIntervalIndex(0);
-      size_t j1 = it.GetProfileIntervalIndex(1);
-      size_t j2 = it.GetProfileIntervalIndex(2);
-      V = V + V;
-      xInternalProfileWeights[j0] += V;
-      xInternalProfileWeights[j1] += V;
-      xInternalProfileWeights[j2] += V;
+      ns++;
       }
     }
+
+  // cout << "PD comp: skipped " << ns << ", computed " << nc << endl;
 
   // Return the total area
   // cout << "TOTAL VOLUME " << xTotalVolume << endl;
   return xTotalVolume; 
 }
+
+/**
+ * This is a fast method for volume element computation. It uses a rough
+ * approximation of volume element as
+ *   V(u,v,w) = r * ((1-w) aelt[medial] + w aelt[bnd])
+ * I've played around in mathematica and it seems that the difference 
+ * between this and the true volume element
+ *   V(u,v,w) = - Zu x Zv . Zw, Z = (1-w) X[medial] + w * X[bnd]
+ * is pretty tiny. Perhaps it's not so tiny near the boundary of the 
+ * medial surface, but everything is messed up there anyway :)
+ */
+double FastComputeMedialInternalVolumeWeights(
+  MedialIterationContext *xGrid, 
+  MedialAtom *xAtoms,
+  double *xMedialWeights, 
+  double *xBoundaryWeights, 
+  size_t nCuts,
+  double *xWeights)
+{
+  // Set the xi interval
+  double r_factor = 1.0 / (nCuts + 1);
+
+  // Compute total volume
+  double vTotal = 0.0;
+  double vTotal2 = 0.0;
+
+  // Loop over the internal points
+  for(MedialInternalPointIterator it(xGrid, nCuts); !it.IsAtEnd(); ++it)
+    {
+    size_t iAtom = it.GetAtomIndex();
+    double elt_medial = xMedialWeights[iAtom];
+    double r_scale = xAtoms[iAtom].R * r_factor;
+    if(it.GetDepth() == 0)
+      {
+      xWeights[it.GetIndex()] = elt_medial * r_scale;
+      }
+    else
+      {
+      size_t iBnd = it.GetBoundaryIndex();
+      double elt_bnd = xBoundaryWeights[iBnd];
+      double xi = it.GetRelativeDistanceToMedialAxis();
+      if(it.GetDepth() == it.GetMaxDepth())
+        xWeights[it.GetIndex()] = 0.5 * r_scale * elt_bnd;
+      else
+        xWeights[it.GetIndex()] = 
+          r_scale * (elt_medial * (1.0 - xi) + elt_bnd * xi);
+      }
+    vTotal += xWeights[it.GetIndex()];
+    }
+
+  for(MedialBoundaryPointIterator bit(xGrid); !bit.IsAtEnd(); ++bit)
+    {
+    double elt_bnd = xBoundaryWeights[bit.GetIndex()];
+    double elt_med = xMedialWeights[bit.GetAtomIndex()];
+    vTotal2 += 0.5 * xAtoms[bit.GetAtomIndex()].R * (elt_med + elt_bnd);
+    }
+  cout << "vTotal = " << vTotal << ", vTotal2 = " << vTotal2 << endl;
+
+  // Return total volume
+  return vTotal;
+}
+
+double FastComputeMedialInternalVolumeWeightsVariationalDerivative(
+  MedialIterationContext *xGrid, 
+  MedialAtom *xAtoms, MedialAtom *dAtoms,
+  double *xMedialWeights, double *dMedialWeights,
+  double *xBoundaryWeights, double *dBoundaryWeights,
+  double *xWeights, size_t nCuts,
+  double *dWeights)
+{
+  // Set the xi interval
+  double r_factor = 1.0 / (nCuts + 1);
+
+  // Compute total volume
+  double d_vTotal = 0.0;
+
+  // Loop over the internal points
+  for(MedialInternalPointIterator it(xGrid, nCuts); !it.IsAtEnd(); ++it)
+    {
+    size_t iAtom = it.GetAtomIndex();
+    double d_weight = 0.0;
+    if(dAtoms[iAtom].order <= 2)
+      {
+      double elt_medial = xMedialWeights[iAtom];
+      double d_elt_medial = dMedialWeights[iAtom];
+
+      double r_scale = xAtoms[iAtom].R * r_factor;
+      double d_r_scale = dAtoms[iAtom].R * r_factor;
+
+      if(it.GetDepth() == 0)
+        {
+        d_weight = elt_medial * d_r_scale + d_elt_medial * r_scale;
+        }
+      else
+        {
+        size_t iBnd = it.GetBoundaryIndex();
+        double elt_bnd = xBoundaryWeights[iBnd];
+        double d_elt_bnd = dBoundaryWeights[iBnd];
+        double xi = it.GetRelativeDistanceToMedialAxis();
+        if(it.GetDepth() == it.GetMaxDepth())
+        d_weight = 0.5 * 
+          (d_r_scale * elt_bnd + r_scale * d_elt_bnd);
+        else
+        d_weight = 
+          (d_r_scale * elt_medial + r_scale * d_elt_medial) * (1.0 - xi) +
+          (d_r_scale * elt_bnd + r_scale * d_elt_bnd) * xi;
+        }
+      }
+    dWeights[it.GetIndex()] = d_weight;
+    d_vTotal += d_weight;
+    }
+
+  // Return total volume
+  return d_vTotal;
+}
+
 
 
 /**
@@ -501,27 +837,29 @@ double ComputeMedialInteralWeights(
  * is equal to the volume of the m-rep
  */
 double ComputeMedialInternalVolumeWeights(
-  MedialIterationContext *xGrid, SMLVec3d *xPoints, size_t nCuts, 
+  MedialIterationContext *xGrid, MedialAtom *xAtoms, 
+  SMLVec3d *xPoints, size_t nCuts, 
   double *xWeights, double *xInternalProfileWeights)
 {
   // Create a specialization object
   WedgeVolumeWeightComputer xComputer(xPoints);
 
   // Compute the weights
-  return ComputeMedialInteralWeights(xGrid, &xComputer, nCuts, 
-    xWeights, xInternalProfileWeights);
+  return ComputeMedialInteralWeights(xGrid, xAtoms, &xComputer, nCuts, 
+    xWeights, xInternalProfileWeights, false);
 }
 
 double ComputeMedialInternalVolumePartialDerivativeWeights(
-  MedialIterationContext *xGrid, SMLVec3d *xPoints, SMLVec3d *dPoints, size_t nCuts, 
+  MedialIterationContext *xGrid, MedialAtom *dAtoms,
+  SMLVec3d *xPoints, SMLVec3d *dPoints, size_t nCuts, 
   double *dWeights, double *dInternalProfileWeights)
 {
   // Create a specialization object
   WedgeVolumePartialDerivativeWeightComputer xComputer(xPoints, dPoints);
 
   // Compute the weights
-  return ComputeMedialInteralWeights(xGrid, &xComputer, nCuts, 
-    dWeights, dInternalProfileWeights);
+  return ComputeMedialInteralWeights(xGrid, dAtoms, &xComputer, nCuts, 
+    dWeights, dInternalProfileWeights, true);
 }
 
 /** This method integrates any given function over the interior of mrep */
@@ -547,7 +885,7 @@ double IntegrateFunctionOverInterior (
 /** Integrate any function over the interior of a medial atom */
 double IntegrateFunctionOverBoundary (
   MedialIterationContext *xGrid, MedialAtom *xAtoms, 
-  double *xWeights, EuclideanFunction *fMatch)
+  std::vector<double> &xWeights, EuclideanFunction *fMatch)
 {
   // Match accumulator
   double xMatch = 0.0;
@@ -637,7 +975,7 @@ double AdaptivelyIntegrateFunctionOverBoundary(
 /** Compute gradient of a function over the boundary */
 double ComputeFunctionJetOverBoundary(
   MedialIterationContext *xGrid, MedialAtom *xAtoms, 
-  double *xWeights, EuclideanFunction *fMatch, SMLVec3d *xOutGradient) 
+  std::vector<double> &xWeights, EuclideanFunction *fMatch, SMLVec3d *xOutGradient) 
 {
   // Compute the image match
   double xMatch = IntegrateFunctionOverBoundary(xGrid, xAtoms, xWeights, fMatch);

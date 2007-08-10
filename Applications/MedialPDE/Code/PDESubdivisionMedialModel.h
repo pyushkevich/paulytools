@@ -27,22 +27,28 @@ public:
   /** Compute the atoms from given a set of coefficients.  */
   void ComputeAtoms(const double *xHint = NULL);
 
-  /**
-   * This method is called before multiple calls to the ComputeJet routine. Given a  
-   * of variation (direction in which directional derivatives will be computed), and 
-   * an array of atoms corresponding to the variation, this method will precompute the
-   * parts of the atoms that do not depend on the position in coefficient space where 
-   * the gradient is taken. This method must be called for each variation in the Jet.
+  /** 
+   * Specify the set of directions (variations) for repeated gradient computations
+   * Each row in xBasis specifies a variation.
    */
-  void PrepareAtomsForVariationalDerivative(
-    const Vec &xVariation, MedialAtom *dAtoms) const;
+  void SetVariationalBasis(const Mat &xBasis);
 
-  /**
-   * This method computes the 'gradient' (actually, any set of directional derivatives)
-   * for the current values of the coefficients. As in ComputeAtoms, a set of initial 
-   * values can be passed in. By default, the previous solution is used to initialize.
+  /** 
+   * Method called before multiple calls to ComputeAtomVariationalDerivative()
    */
-  void ComputeAtomGradient(std::vector<MedialAtom *> &dAtoms);
+  void BeginGradientComputation();
+
+  /** 
+   * This method computes the variational derivative of the model with respect to 
+   * a variation. Index iVar points into the variations passed in to the method
+   * SetVariationalBasis();
+   */
+  void ComputeAtomVariationalDerivative(size_t iVar, MedialAtom *dAtoms);
+
+  /** 
+   * Method called before multiple calls to ComputeAtomVariationalDerivative()
+   */
+  void EndGradientComputation() {}
 
   /**
    * Load a medial model from the Registry.
@@ -60,6 +66,20 @@ private:
 
   // PDE solver which does most of the work in this method
   MeshMedialPDESolver xSolver;
+
+  /** Representation of the variational basis */
+  struct VariationalBasisAtomData {
+    SMLVec3d X, Xu, Xv, Xuu, Xuv, Xvv;
+    double xLapR;
+    VariationalBasisAtomData() 
+      : X(0.0), Xu(0.0), Xv(0.0), Xuu(0.0), Xuv(0.0), Xvv(0.0), xLapR(0.0) {}
+  };
+
+  // Matrix storing all data associated with a variational basis
+  typedef std::vector<VariationalBasisAtomData> VariationRep;
+  typedef std::vector<VariationRep> VariationalBasisRep;
+  VariationalBasisRep xVariationalBasis;
+
 };
 
 
