@@ -27,6 +27,8 @@ public:
   /** Compute the atoms from given a set of coefficients.  */
   void ComputeAtoms(const double *xHint = NULL);
 
+  Vec ComputeLBO(const double *phi);
+
   /** 
    * Specify the set of directions (variations) for repeated gradient computations
    * Each row in xBasis specifies a variation.

@@ -1565,16 +1565,16 @@ void SubdivisionMPDE::BruteForceToPDE()
   PDESubdivisionMedialModel *pde = new PDESubdivisionMedialModel();
   // pde->SetMesh(brute->GetCoefficientMesh(), C, u, v, 
   //  brute->GetSubdivisionLevel(), 0);
-  cout << "START HERE" << endl;
+  //  cout << "START HERE" << endl;
   pde->SetMesh(brute->GetAtomMesh(), Ca, ua, va, 0, 0);
-  cout << "GOT HERE" << endl;
+  // cout << "GOT HERE" << endl;
 
-  vnl_vector<double> hint(brute->GetAtomMesh().nVertices, 0.0);
-  try { pde->ComputeAtoms(hint.data_block()); } catch(...) {}
+  // vnl_vector<double> hint(brute->GetAtomMesh().nVertices, 0.0);
+  // try { pde->ComputeAtoms(hint.data_block()); } catch(...) {}
 
   // Compute the Laplace-Beltrami operator, using the current phi values
   vnl_vector<double> rho_atom = 
-    pde->GetSolver()->ComputeLBO(brute->GetPhi().data_block());
+    pde->ComputeLBO(brute->GetPhi().data_block());
   vnl_vector<double> rho_ctl;
 
   // If there is subdivision in the model, we have to do a least square fit
@@ -1602,6 +1602,7 @@ void SubdivisionMPDE::BruteForceToPDE()
     {
     // If no subdivision, the control-level rho is the same as the atom-level
     rho_ctl = rho_atom;
+    cout << "RHO = " << rho_ctl << endl;
     }
   
   /*
@@ -1629,8 +1630,7 @@ void SubdivisionMPDE::BruteForceToPDE()
 
   // Assign the rho values to the PDE model
   for(size_t i = 0; i < rho_ctl.size(); i++)
-    C[4 * i + 3] = rho_ctl[i];
-  pde->SetCoefficientArray(C);
+    pde->SetCoefficient(4*i+3, rho_ctl[i]);
 
   // Try solving the PDE problem
   try

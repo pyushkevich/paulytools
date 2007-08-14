@@ -82,10 +82,6 @@ public:
    */
   void WriteToRegistry(Registry &folder);
 
-  /** Compute curvature at the boundary */
-  void ComputeBoundaryCurvature(Vec &xMeanCurv, Vec &xGaussCurv);
-  void ComputeBoundaryCurvaturePartial(Vec &dMeanCurv, Vec &dGaussCurv, MedialAtom *dAtom);
-
 private:
   // Loop scheme for computing tangents
   MedialAtomLoopScheme xLoopScheme;

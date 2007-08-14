@@ -37,6 +37,10 @@ MedialAtom
   xBnd[0].X.fill(0.0); xBnd[0].N.fill(0.0);
   xBnd[1].X.fill(0.0); xBnd[1].N.fill(0.0);
 
+  xBnd[0].curv_mean = 0.0; xBnd[0].curv_gauss = 0.0;
+  xBnd[1].curv_mean = 0.0; xBnd[1].curv_gauss = 0.0;
+
+
   xMeanCurv = xGaussCurv = 0.0;
 
   // By default, atoms are assumed to depend on variation
@@ -149,6 +153,270 @@ bool MedialAtom::ComputeBoundaryAtoms(bool flagEdgeAtom)
     }
 
   return flagValid;
+}
+
+double temp01(
+  SMLVec3d &Au, SMLVec3d &Bu, SMLVec3d &Cu,
+  SMLVec3d &Av, SMLVec3d &Bv, SMLVec3d &Cv)
+{
+
+  double rtn = 0.0;
+  rtn += (dot_product(Au, Au) + 2*dot_product(Bu, Cu)) * dot_product(Cu, Cu);
+  rtn += (dot_product(Av, Av) + 2*dot_product(Bv, Cv)) * dot_product(Cv, Cv);
+  rtn -= (dot_product(Au, Av) + dot_product(Bu, Cv) + dot_product(Bv, Cu))
+    * 0.5 * dot_product(Cu, Cv);
+  rtn += 4 * dot_product(Au, Cu) * dot_product(Av, Cv);
+
+  double t1 = dot_product(Au, Cv) + dot_product(Av, Cu);
+  rtn -= t1 * t1;
+  return rtn;
+}
+
+void MedialAtom::ComputeBoundaryCurvature()
+{
+  // Just set up an edge walk
+  if(flagValid && !flagCrest)
+    {
+    // Create arrays to allow easier looping
+    SMLVec3d Xi[2] = {Xu, Xv};
+    SMLVec3d Xij[2][2] = {{Xuu, Xuv},{Xuv, Xvv}};
+    double Fi[2] = {Fu, Fv};
+    double Fij[2][2] = {{Fuu, Fuv},{Fuv, Fvv}};
+
+    // Compute the partial derivatives of GradF
+    SMLVec3d NB_i[2], XB_i[2];
+
+    size_t i,j,k,l;
+    for(i=0;i<2;i++) 
+      {
+      // Derivative of gradF wrt U^i
+      gradF_i[i].fill(0.0);
+
+      // Sum over j, k 
+      for(j=0;j<2;j++) for(k=0;k<2;k++)
+        {
+        // Compute dg^jk/du^i
+        double dg_jk_d_ui = 0.0;
+        for(l=0;l<2;l++)
+          {
+          dg_jk_d_ui += -(
+            G.xContravariantTensor[l][k] * G.xChristoffelSecond[l][i][j] +
+            G.xContravariantTensor[j][l] * G.xChristoffelSecond[l][i][k]);
+          }
+
+        // Compute contribution to gradFi
+        gradF_i[i] += 
+          (dg_jk_d_ui * Fi[k]) * Xi[j]
+          + (G.xContravariantTensor[j][k] *  Fi[k]) * Xij[j][i] 
+          + (G.xContravariantTensor[j][k] * Fij[k][i]) * Xi[j];
+        }
+
+      // Compute the partial derivative of gradR
+      gradR_i[i] = (gradF_i[i] * R - xGradR * Fi[i]) / (2.0 * F);
+
+      // Compute the partial derivative of the unit normal to the medial axis
+      double dg_di = 2 * G.g * (
+        G.xChristoffelSecond[0][i][0] + G.xChristoffelSecond[1][i][1]);
+      SMLVec3d dN0_di = 
+        vnl_cross_3d(Xij[0][i], Xi[1]) + vnl_cross_3d(Xi[0], Xij[1][i]);
+      N_i[i] = (dN0_di * aelt - 0.5 * N * dg_di) / (G.g);
+      }
+
+    // Repeat for both sides of the atom
+    for(size_t side = 0; side < 2; side++)
+      {
+      // Get the boundary atom
+      BoundaryAtom &ba = xBnd[side];
+
+      for(i=0;i<2;i++) 
+        {
+        // Compute the boundary node's normal
+        ba.N_i[i] = 
+          - gradR_i[i] + (side ? 1.0 : -1.0) * (
+            - dot_product(xGradR, gradR_i[i]) * N / xNormalFactor +
+            xNormalFactor * N_i[i]);
+
+        // Compute the boundary node's position
+        ba.X_i[i] = Xi[i] + (Fi[i] / (2 * R)) * ba.N + R * ba.N_i[i];
+        }
+
+      // Now that we have the first derivatives of the normal and X on the boundary, curvature
+      // computation is easy
+      SMLVec3d &Xu = ba.X_i[0], &Xv = ba.X_i[1], &Nu = ba.N_i[0], &Nv = ba.N_i[1];
+      ba.ee = - dot_product(Nv,Xv);
+      ba.ff = -0.5 * (dot_product(Nu, Xv) + dot_product(Nv, Xu));
+      ba.gg = - dot_product(Nu, Xu);
+      ba.E = dot_product(Xu, Xu);
+      ba.F = dot_product(Xu, Xv);
+      ba.G = dot_product(Xv, Xv);
+      ba.det_g = (ba.E*ba.G - ba.F*ba.F);
+
+      ba.curv_mean= (ba.ee * ba.G - 2 * ba.ff * ba.F + ba.gg * ba.E) / (2 * ba.det_g);
+      ba.curv_gauss = (ba.ee * ba.gg - ba.ff * ba.ff) / ba.det_g;
+      }
+    }
+  else
+    {
+    for(size_t side = 0; side < 2; side++)
+      {
+      BoundaryAtom &ba = xBnd[side];
+      ba.curv_gauss = ba.curv_mean = 0.0;
+      }
+    }
+}
+
+void MedialAtom::ComputeBoundaryCurvatureDerivative(MedialAtom &da)
+{
+  if(flagValid && !flagCrest && da.order < 3)
+    {
+    // Create arrays to allow easier looping
+    SMLVec3d Xi[2] = {Xu, Xv};
+    SMLVec3d Xij[2][2] = {{Xuu, Xuv},{Xuv, Xvv}};
+    SMLVec3d DXi[2] = {da.Xu, da.Xv};
+    SMLVec3d DXij[2][2] = {{da.Xuu, da.Xuv},{da.Xuv, da.Xvv}};
+
+    double Fi[2] = {Fu, Fv};
+    double Fij[2][2] = {{Fuu, Fuv},{Fuv, Fvv}};
+    double DFi[2] = {da.Fu, da.Fv};
+    double DFij[2][2] = {{da.Fuu, da.Fuv},{da.Fuv, da.Fvv}};
+
+    // Compute the partial derivatives of GradF
+    size_t i,j,k,l;
+    for(i=0;i<2;i++) 
+      {
+      // Derivative of gradF wrt U^i
+      da.gradF_i[i].fill(0.0);
+
+      // Sum over j, k 
+      for(j=0;j<2;j++) for(k=0;k<2;k++)
+        {
+        // Compute dg^jk/du^i
+        double dg_jk_d_ui = 0.0;
+        double d_dg_jk_d_ui = 0.0;
+        for(l=0;l<2;l++)
+          {
+          dg_jk_d_ui += -(
+            G.xContravariantTensor[l][k] * G.xChristoffelSecond[l][i][j] +
+            G.xContravariantTensor[j][l] * G.xChristoffelSecond[l][i][k]);
+
+          d_dg_jk_d_ui += -(
+            da.G.xContravariantTensor[l][k] * G.xChristoffelSecond[l][i][j] +
+            G.xContravariantTensor[l][k] * da.G.xChristoffelSecond[l][i][j] +
+            da.G.xContravariantTensor[j][l] * G.xChristoffelSecond[l][i][k] +
+            G.xContravariantTensor[j][l] * da.G.xChristoffelSecond[l][i][k]);
+          }
+
+        // Holy cow, what a mess!
+        da.gradF_i[i] += 
+          (d_dg_jk_d_ui * Fi[k]) * Xi[j]
+          + (dg_jk_d_ui * DFi[k]) * Xi[j]
+          + (dg_jk_d_ui * Fi[k]) * DXi[j]
+          + (da.G.xContravariantTensor[j][k] *  Fi[k]) * Xij[j][i] 
+          + (G.xContravariantTensor[j][k] *  DFi[k]) * Xij[j][i] 
+          + (G.xContravariantTensor[j][k] *  Fi[k]) * DXij[j][i] 
+          + (da.G.xContravariantTensor[j][k] * Fij[k][i]) * Xi[j]
+          + (G.xContravariantTensor[j][k] * DFij[k][i]) * Xi[j]
+          + (G.xContravariantTensor[j][k] * Fij[k][i]) * DXi[j];
+        }
+
+      // cout << "d_gradF_i[" << i << " = " << d_gradF_i[i] << endl;
+
+      // Compute the partial derivative of gradR
+      da.gradR_i[i] = 
+        ((da.gradF_i[i] * R + gradF_i[i] * da.R 
+          - (da.xGradR * Fi[i] + xGradR * DFi[i])) * (F)
+         - (gradF_i[i] * R - xGradR * Fi[i]) * (da.F))
+        / (2.0 * F * F);
+
+      // cout << "d_gradR_i[" << i << " = " << d_gradR_i[i] << endl;
+
+      // Compute the partial derivative of the unit normal to the medial axis
+      double dg_di = 2 * G.g * (
+        G.xChristoffelSecond[0][i][0] + G.xChristoffelSecond[1][i][1]);
+      double d_dg_di = 
+        2 * da.G.g * (
+          G.xChristoffelSecond[0][i][0] + G.xChristoffelSecond[1][i][1])
+        + 2 * G.g * (
+          da.G.xChristoffelSecond[0][i][0] + da.G.xChristoffelSecond[1][i][1]);
+
+      SMLVec3d dN0_di = 
+        vnl_cross_3d(Xij[0][i], Xi[1]) + vnl_cross_3d(Xi[0], Xij[1][i]);
+      SMLVec3d d_dN0_di = 
+        vnl_cross_3d(DXij[0][i], Xi[1]) 
+        + vnl_cross_3d(Xij[0][i], DXi[1]) 
+        + vnl_cross_3d(DXi[0], Xij[1][i])
+        + vnl_cross_3d(Xi[0], DXij[1][i]);
+
+      da.N_i[i] = (
+        (d_dN0_di * aelt + dN0_di * da.aelt - 0.5 * 
+         (da.N * dg_di + N * d_dg_di)) * G.g
+        - (dN0_di * aelt - 0.5 * N * dg_di) * da.G.g) / (G.g * G.g);
+    
+      // Compute some intermediate terms first
+      double tmp1 = - dot_product(xGradR, gradR_i[i]);
+      double d_tmp1 = - dot_product(da.xGradR, gradR_i[i]) 
+        - dot_product(xGradR, da.gradR_i[i]);
+
+      SMLVec3d tmp2 = N / xNormalFactor;
+      SMLVec3d d_tmp2 = (da.N * xNormalFactor - N * da.xNormalFactor) /
+        (xNormalFactor * xNormalFactor);
+
+      // Compute the boundary node's position
+      double Ri = 0.5 * Fi[i] / R;
+      double d_Ri = 0.5 * (DFi[i] * R - Fi[i] * da.R) / F;
+
+      // Repeat for each side
+      for(size_t side = 0; side < 2; side++)
+        {
+        BoundaryAtom &ba = xBnd[side];
+        BoundaryAtom &dba = da.xBnd[side];
+
+        // Compute the boundary node's normal
+        dba.N_i[i] = 
+          - da.gradR_i[i] + (side ? 1.0 : -1.0) * (
+            d_tmp1 * tmp2 + tmp1 * d_tmp2 
+            + da.xNormalFactor * N_i[i] + xNormalFactor * da.N_i[i]);
+
+        dba.X_i[i] = DXi[i] + d_Ri * ba.N + Ri * dba.N + da.R * ba.N_i[i] + R * dba.N_i[i];
+        }
+      }
+
+    // Compute the curvatures
+    for(size_t side = 0; side < 2; side++)
+      {
+      BoundaryAtom &ba = xBnd[side];
+      BoundaryAtom &dba = da.xBnd[side];
+
+      // Now that we have the first derivatives of the normal and X on the boundary, curvature
+      // computation is easy
+      SMLVec3d &Xu = ba.X_i[0], &Xv = ba.X_i[1], &Nu = ba.N_i[0], &Nv = ba.N_i[1];
+      SMLVec3d &dXu = dba.X_i[0], &dXv = dba.X_i[1], &dNu = dba.N_i[0], &dNv = dba.N_i[1];
+
+      dba.ee = - dot_product(dNv,Xv) - dot_product(Nv, dXv);
+      dba.ff = - 0.5 * (
+        dot_product(dNu, Xv) + dot_product(Nu, dXv) + 
+        dot_product(dNv, Xu) + dot_product(Nv, dXu));
+      dba.gg = - dot_product(dNu, Xu) - dot_product(Nu, dXu);
+
+      dba.E = 2.0 * dot_product(Xu, dXu);
+      dba.F = dot_product(dXu, Xv) + dot_product(Xu, dXv);
+      dba.G = 2.0 * dot_product(Xv, dXv);
+
+      dba.det_g = (dba.E*ba.G + ba.E*dba.G - 2*ba.F*dba.F);
+
+      // cout << "Mean Curv " << (ee * G - 2 * ff * F + gg * E) / (2 * det);
+      // cout << "Gauss Crv " << (ee * gg - ff * ff) / det;
+      dba.curv_mean = 0.5 *
+        ((dba.ee * ba.G + ba.ee * dba.G - 
+          2 * (dba.ff * ba.F + ba.ff * dba.F) + 
+          dba.gg * ba.E + ba.gg * dba.E) * ba.det_g 
+         - (ba.ee * ba.G - 2 * ba.ff * ba.F + ba.gg * ba.E) * dba.det_g) / (ba.det_g * ba.det_g);
+
+      dba.curv_gauss = (
+        (dba.ee * ba.gg + ba.ee * dba.gg - 2 * ba.ff * dba.ff) * ba.det_g
+        - (ba.ee * ba.gg - ba.ff * ba.ff) * dba.det_g) / (ba.det_g * ba.det_g);
+      }
+    }
 }
 
 

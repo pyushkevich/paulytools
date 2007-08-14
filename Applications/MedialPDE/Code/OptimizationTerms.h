@@ -559,6 +559,35 @@ public:
   double ComputePartialDerivative(
     SolutionData *S, PartialDerivativeSolutionData *dS);
 
+  // Get the curvature computed internally
+  SMLVec3d GetCurvatureVector(size_t i)
+    { return xMeanCurvVec[i]; }
+
+private:
+  // Temps
+  GenericMedialModel *model;
+  size_t nBnd;
+  std::vector<SMLVec3d> xMeanCurvVec, dMeanCurvVec;
+  double xIntegralSqrMeanCrv, xCrestCurvatureTerm, xPenalty;
+};
+
+/*
+class BoundaryCurvaturePenalty : public EnergyTerm
+{
+public:
+  // Constructr
+  BoundaryCurvaturePenalty(GenericMedialModel *model);
+
+  // Compute the penalty
+  double ComputeEnergy(SolutionData *data);
+
+  // Describe the terms of the penalty
+  void PrintReport(ostream &sout);
+
+  // Compute the partial derivative
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
+
 private:
   // Accumulators for display and statistics calculation
   StatisticsAccumulator 
@@ -572,6 +601,7 @@ private:
   // Parameters of the penalty, which is of the form pow(f/scale, power)
   const static double xScale, xPower;
 };
+*/
 
 /**
  * This term is used to fit phi to an existing radius field. The fitting

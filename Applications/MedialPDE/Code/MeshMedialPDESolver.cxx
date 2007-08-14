@@ -96,13 +96,15 @@ double levenberg_marquardt(
     bool verbose = true;
     if(verbose)
       printf(
-        "   -> LM Iter: %3d    F = %8.4e    fmax = %8.4e    mu = %8.4e    "
+        "   -> LM Iter: %3d    F = %8.4e    fmax = %8.4e    fmean = %8.4e"
+        "    mu = %8.4e    "
         "|h| = %8.4e    |x| = %8.4e\n",
-        k, normsq_fx / 2, fx.inf_norm(), mu, norm_h, norm_x); 
+        k, normsq_fx / 2, fx.inf_norm(), 
+       dot_product(fx, vnl_vector<double>(n, 1.0/n)),
+        mu, norm_h, norm_x); 
     else
       cout << "." << flush;
    
-
     // Check for convergence
     if(norm_h <= eps2 * (norm_x + eps2)) found = true;
     else
@@ -514,7 +516,6 @@ MeshMedialPDESolver
 
         // Set the weight for the moving vertex (to be scaled)
         A.GetSparseData()[xMapVertexNbrToA[it.GetPositionInMeshSparseArray()]] = weight;
-
         // Update accumulators
         w_accum += weight;
         }
@@ -585,7 +586,9 @@ MeshMedialPDESolver
     // row of sparse matrix A.
     double lap_phi = 0.0;
     for(size_t j = A.GetRowIndex()[i]; j < A.GetRowIndex()[i+1]; j++)
+      {
       lap_phi += A.GetSparseData()[j] * phi[A.GetColIndex()[j]];
+      }
 
     // Now, the right hand side has the form \Delta \phi - \rho
     return lap_phi - xAtoms[i].xLapR;
@@ -937,10 +940,10 @@ MeshMedialPDESolver
     &MeshMedialPDESolver::ComputeLMResidual,
     &MeshMedialPDESolver::ComputeLMJacobian,
     xSoln.data_block(),
-    6000);
+    200);
 
-  if(fval > 1.0e-8)
-    throw MedialModelException("Bad solution");
+  // if(fval > 1.0e-8)
+  //  throw MedialModelException("Bad solution");
 
   // Compute the medial atoms
   ComputeMedialAtoms(xSoln.data_block());

@@ -212,6 +212,7 @@ BruteForceSubdivisionMedialModel
     a.ComputeDifferentialGeometry();
     a.ComputeNormalVector();
     a.ComputeBoundaryAtoms(!mlAtom.IsVertexInternal(i));
+    // a.ComputeBoundaryCurvature();
 
     // Compute second order differential geometry
     // a.ComputeDifferentialGeometry();
@@ -249,6 +250,7 @@ printvec(SMLVec3d &x)
   cout << "{" << x[0] << "," << x[1] << "," << x[2] << "}";
 }
 
+#ifdef LALALA
 void 
 BruteForceSubdivisionMedialModel::
 ComputeBoundaryCurvature(Vec &xMeanCurv, Vec &xGaussCurv)
@@ -370,6 +372,7 @@ ComputeBoundaryCurvature(Vec &xMeanCurv, Vec &xGaussCurv)
     }
 
 }
+
 /*
 void 
 BruteForceSubdivisionMedialModel::
@@ -781,6 +784,8 @@ ComputeBoundaryCurvaturePartial(
       }
     }
 
+#endif
+
 /*
 void 
 BruteForceSubdivisionMedialModel::
@@ -975,8 +980,8 @@ ComputeBoundaryCurvaturePartial(
       dGaussCurv[ib] = dGaussCurvFull;
       }
     }
-    */
 }
+    */
 
 BruteForceSubdivisionMedialModel::Vec
 BruteForceSubdivisionMedialModel::GetHintArray() const
@@ -1218,6 +1223,7 @@ BruteForceSubdivisionMedialModel
       }
 
     // Compute things in the atom that depend on second derivatives
+    // a.ComputeBoundaryCurvatureDerivative(da);
     }
 }
 /*

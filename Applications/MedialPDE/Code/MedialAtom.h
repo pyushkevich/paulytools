@@ -11,7 +11,23 @@
  */
 struct BoundaryAtom 
 {
+  // The boundary site and its normal vector
   SMLVec3d X, N;
+
+  // Partial derivatives of X and N
+  SMLVec3d X_i[2], N_i[2];
+
+  // First fundamental form
+  double E, F, G;
+  
+  // Second fundamental form
+  double ee, ff, gg;
+
+  // Determinant of the first fundamental form
+  double det_g;
+
+  // Gaussian and mean curvature
+  double curv_mean, curv_gauss;
 };
 
 /**
@@ -46,6 +62,9 @@ struct MedialAtom
   // The normal vector and the Riemannian gradient of R on the surface
   SMLVec3d N, xGradR; //, xGradPhi;
 
+  // Partial derivatives of gradR, gradF, normal to the medial axis
+  SMLVec3d gradF_i[2], gradR_i[2], N_i[2];
+
   // The Riemannian laplacian of R
   double xLapR;
 
@@ -79,6 +98,9 @@ struct MedialAtom
   /** Given the differential geometry and the normal vector are computed,
    * compute GradR and the boundary sites. */
   bool ComputeBoundaryAtoms(bool flagEdgeAtom);
+
+  void ComputeBoundaryCurvature();
+  void ComputeBoundaryCurvatureDerivative(MedialAtom &da);
 
   /**
    * These terms are used to compute Gateaux derivatives of the atom's

@@ -9,6 +9,7 @@
 #include "GenericMedialModel.h"
 #include "ITKImageWrapper.h"
 #include "itkImage.h"
+#include "OptimizationTerms.h"
 
 vtkFloatArray *AddMedialScalarField(vtkPolyData *target, GenericMedialModel *model, char *name)
 {
@@ -291,12 +292,8 @@ void ExportBoundaryMeshToVTK(
   vtkFloatArray *lMeanCurv =  AddBndScalarField(pMedial, xModel, "Mean Curvature");
   vtkFloatArray *lGaussCurv = AddBndScalarField(pMedial, xModel, "Gauss Curvature");
   vtkFloatArray *lCurvPen = AddBndScalarField(pMedial, xModel, "Curvature Penalty");
-
-  // Compute the curvatures
-  GenericMedialModel::Vec 
-    vGauss(xModel->GetNumberOfBoundaryPoints()), 
-    vMean(xModel->GetNumberOfBoundaryPoints());
-  xModel->ComputeBoundaryCurvature(vMean, vGauss);
+  vtkFloatArray *lSqrMeanCrv = AddBndScalarField(pMedial, xModel, "SqrMeanCrv");
+  vtkFloatArray *lJac = AddBndScalarField(pMedial, xModel, "Boundary Jacobian");
 
   // Allocate the image intensity array
   bool flagImage = xImage && xImage->IsImageLoaded();
@@ -313,16 +310,32 @@ void ExportBoundaryMeshToVTK(
   MedialIterationContext *xGrid = xModel->GetIterationContext();
   MedialAtom *xAtoms = xModel->GetAtomArray();
 
+  // Compute certain derived terms
+  SolutionData soldat(xGrid, xAtoms);
+  soldat.ComputeIntegrationWeights();
+  BoundaryCurvaturePenalty termBC(xModel);
+  termBC.ComputeEnergy(&soldat);
+
   // Add all the points
   for(MedialBoundaryPointIterator it(xGrid); !it.IsAtEnd(); ++it)
     {
     size_t i = it.GetIndex();
     BoundaryAtom &B = GetBoundaryPoint(it, xAtoms);
+    MedialAtom &A = xAtoms[it.GetAtomIndex()];
     lPoints->InsertNextPoint(B.X[0], B.X[1], B.X[2]);
     lNormals->SetTuple3(i, B.N[0], B.N[1], B.N[2]);
-    lMeanCurv->SetTuple1(i, vMean[i]);
-    lGaussCurv->SetTuple1(i, vGauss[i]);
-    lCurvPen->SetTuple1(i, 4 * vMean[i] * vMean[i] - 2 * vGauss[i]);
+    lMeanCurv->SetTuple1(i, B.curv_mean);
+    lGaussCurv->SetTuple1(i, B.curv_gauss);
+    lCurvPen->SetTuple1(i, 4 * B.curv_mean * B.curv_mean - 2 * B.curv_gauss);
+
+    SMLVec3d NX = (it.GetBoundarySide() > 0 ? 1.0:1.0) *  vnl_cross_3d(A.Xu, A.Xv);
+    SMLVec3d NY = vnl_cross_3d(B.X_i[0], B.X_i[1]);
+    lJac->SetTuple1(i, dot_product(NX, NY)/dot_product(NX,NX));
+
+    SMLVec3d Kvec = termBC.GetCurvatureVector(i);
+    double H2 = Kvec.squared_magnitude() / 
+      (soldat.xBoundaryWeights[i] * soldat.xBoundaryWeights[i]);
+    lSqrMeanCrv->SetTuple1(i, H2);
 
     // Sample the image along the middle
     if(flagImage)
@@ -360,6 +373,8 @@ void ExportBoundaryMeshToVTK(
   lMeanCurv->Delete();
   lGaussCurv->Delete();
   lCurvPen->Delete();
+  lJac->Delete();
+  lSqrMeanCrv->Delete();
 }
 
 /*

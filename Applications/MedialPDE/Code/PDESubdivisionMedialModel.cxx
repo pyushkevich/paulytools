@@ -22,6 +22,33 @@ PDESubdivisionMedialModel
   xSolver.SetMeshTopology(&mlAtom, xAtoms);
 }
 
+PDESubdivisionMedialModel::Vec
+PDESubdivisionMedialModel
+::ComputeLBO(const double *phi)
+{
+  size_t i;
+
+  // The first step is to compute the X and rho of the atoms based on the
+  // coefficients. This step is performed in this class, not in the solver
+  for(i = 0; i < mlAtom.nVertices; i++)
+    {
+    // Set up i-th atom
+    MedialAtom &a = xAtoms[i]; a.X.fill(0.0); a.xLapR = 0.0;
+
+    // Compute the weighted sum of the coefficients
+    ImmutableSparseMatrix<double>::RowIterator it = mlAtom.weights.Row(i);
+    for( ; !it.IsAtEnd(); ++it)
+      {
+      size_t j = it.Column() << 2; double w = it.Value();
+      a.X += w * xCoefficients.extract(3, j);
+      a.xLapR += w * xCoefficients[j+3];
+      }
+    }
+
+  // Now have the solver solve the equation
+  return xSolver.ComputeLBO(phi);
+}
+
 void 
 PDESubdivisionMedialModel
 ::ComputeAtoms(const double *xHint)

@@ -1285,6 +1285,172 @@ void MedialAnglesPenaltyTerm::PrintReport(ostream &sout)
 /*********************************************************************************
  * Boundary Curvature Penalty Term
  ********************************************************************************/
+// const double BoundaryCurvaturePenalty::xPower = 1;
+// const double BoundaryCurvaturePenalty::xScale = 1;
+
+BoundaryCurvaturePenalty
+::BoundaryCurvaturePenalty(GenericMedialModel *model)
+{
+  // Initialize the curvature vector array
+  nBnd = model->GetNumberOfBoundaryPoints();
+  xMeanCurvVec.resize(nBnd, SMLVec3d(0.0));
+  dMeanCurvVec.resize(nBnd, SMLVec3d(0.0));
+}
+
+double
+BoundaryCurvaturePenalty
+::ComputeEnergy(SolutionData *S)
+{
+  // Set all the curvature vectors to zero
+  std::fill(xMeanCurvVec.begin(), xMeanCurvVec.end(), SMLVec3d(0.0));
+
+  // Iterate over the triangles on the boundary
+  for(MedialBoundaryTriangleIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
+    {
+    // Compute the cotangent of each angle in the triangle
+    for(size_t j = 0; j < 3; j++)
+      {
+
+      size_t j1 = (j+1) % 3, j2 = (j+2) % 3;
+      SMLVec3d &Xj = GetBoundaryPoint(it, S->xAtoms, j).X;
+      SMLVec3d &Xj1 = GetBoundaryPoint(it, S->xAtoms, j1).X;
+      SMLVec3d &Xj2 = GetBoundaryPoint(it, S->xAtoms, j2).X;
+      SMLVec3d A = Xj2 - Xj, B = Xj1 - Xj;
+
+      // Compute the cotangent of the angle at j
+      double AB = dot_product(A, B);
+      SMLVec3d AxB = vnl_cross_3d(A, B);
+      double magAxB = AxB.magnitude();
+      double cotAlphaJ = AB / magAxB;
+
+      // Compute the contribution to the normal vector
+      SMLVec3d xcontr = (Xj2 - Xj1) * cotAlphaJ;
+      xMeanCurvVec[it.GetBoundaryIndex(j2)] += xcontr;
+      xMeanCurvVec[it.GetBoundaryIndex(j1)] -= xcontr;
+      }
+    }
+
+  // Integrate the sqaured mean curvature
+  xIntegralSqrMeanCrv = 0.0;
+  xCrestCurvatureTerm = 0.0;
+  for(MedialBoundaryPointIterator ip(S->xAtomGrid); !ip.IsAtEnd(); ++ip)
+    {
+    size_t ib = ip.GetIndex();
+    double w = S->xBoundaryWeights[ib];
+    xIntegralSqrMeanCrv += 
+      xMeanCurvVec[ib].squared_magnitude() / (3.0 * w);
+
+    // We must also subtract one of the principal curvatures along the boundary
+    // which is just 1/r
+    if(ip.IsEdgeAtom())
+      {
+      double F = S->xAtoms[ip.GetAtomIndex()].F;
+      xCrestCurvatureTerm += w / F;
+      }
+    }
+
+  // TURN OFF CREST RADIUS TERM
+  xCrestCurvatureTerm = 0;
+
+  xPenalty = (4 * xIntegralSqrMeanCrv - xCrestCurvatureTerm) 
+    / S->xBoundaryArea;
+  return xPenalty;
+}
+
+double 
+BoundaryCurvaturePenalty
+::ComputePartialDerivative(
+  SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  // Set all the curvature vectors to zero
+  std::fill(dMeanCurvVec.begin(), dMeanCurvVec.end(), SMLVec3d(0.0));
+
+  // Iterate over the triangles on the boundary
+  for(MedialBoundaryTriangleIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
+    {
+    // Compute the cotangent of each angle in the triangle
+    for(size_t j = 0; j < 3; j++)
+      {
+      // Only consider the point if it's order 2 or less
+      if(S->xAtoms[it.GetAtomIndex(j)].order <= 2)
+        {
+        size_t j1 = (j+1) % 3, j2 = (j+2) % 3;
+        SMLVec3d &Xj = GetBoundaryPoint(it, S->xAtoms, j).X;
+        SMLVec3d &Xj1 = GetBoundaryPoint(it, S->xAtoms, j1).X;
+        SMLVec3d &Xj2 = GetBoundaryPoint(it, S->xAtoms, j2).X;
+        SMLVec3d &DXj = GetBoundaryPoint(it, dS->xAtoms, j).X;
+        SMLVec3d &DXj1 = GetBoundaryPoint(it, dS->xAtoms, j1).X;
+        SMLVec3d &DXj2 = GetBoundaryPoint(it, dS->xAtoms, j2).X;
+        SMLVec3d A = Xj2 - Xj, B = Xj1 - Xj;
+        SMLVec3d dA = DXj2 - DXj, dB = DXj1 - DXj;
+
+        // Compute the cotangent of the angle at j
+        double AB = dot_product(A, B);
+        double dAB = dot_product(dA, B) + dot_product(A, dB);
+
+        SMLVec3d AxB = vnl_cross_3d(A, B);
+        SMLVec3d d_AxB = vnl_cross_3d(dA, B) + vnl_cross_3d(A, dB);
+
+        double magAxB = AxB.magnitude();
+        double d_magAxB = dot_product(AxB, d_AxB) / magAxB;
+
+        double cotAlphaJ = AB / magAxB;
+        double d_cotAlphaJ = (dAB * magAxB - AB * d_magAxB) / (magAxB * magAxB);
+
+        // Compute the contribution to the normal vector
+        SMLVec3d xcontr = (Xj2 - Xj1) * cotAlphaJ;
+        SMLVec3d d_xcontr = 
+          (Xj2 - Xj1) * d_cotAlphaJ + (DXj2 - DXj1) * cotAlphaJ;
+
+        dMeanCurvVec[it.GetBoundaryIndex(j2)] += d_xcontr;
+        dMeanCurvVec[it.GetBoundaryIndex(j1)] -= d_xcontr;
+        }
+      }
+    }
+
+  // Integrate the sqaured mean curvature
+  double dIntegralSqrMeanCrv = 0.0;
+  double dCrestCurvatureTerm = 0.0;
+  for(MedialBoundaryPointIterator ip(S->xAtomGrid); !ip.IsAtEnd(); ++ip)
+    {
+    size_t ib = ip.GetIndex();
+
+    double w = S->xBoundaryWeights[ib];
+    double dw = dS->xBoundaryWeights[ib];
+    dIntegralSqrMeanCrv +=
+      (2 * dot_product(xMeanCurvVec[ib], dMeanCurvVec[ib]) * w -
+       xMeanCurvVec[ib].squared_magnitude() * dw) / (3.0 * w * w);
+
+    // We must also subtract one of the principal curvatures along the boundary
+    // which is just 1/r
+    if(ip.IsEdgeAtom())
+      {
+      double F = S->xAtoms[ip.GetAtomIndex()].F;
+      double dF = dS->xAtoms[ip.GetAtomIndex()].F;
+      dCrestCurvatureTerm += (dw * F - w * dF) / (F * F);
+      }
+    }
+
+  // TURN OFF CREST RADIUS TERM
+  dCrestCurvatureTerm = 0;
+
+  return
+    ((4 * dIntegralSqrMeanCrv - dCrestCurvatureTerm) - xPenalty * dS->xBoundaryArea)
+    / S->xBoundaryArea;
+}
+
+void BoundaryCurvaturePenalty
+::PrintReport(ostream &sout)
+{
+  sout << "  Boundary Curvature Penalty: " << endl;
+  sout << "    int sqr mean curv : " << xIntegralSqrMeanCrv << endl;
+  sout << "    int crest kappa1  : " << xCrestCurvatureTerm << endl;
+  sout << "    total penalty     : " << xPenalty << endl;
+}
+/*********************************************************************************
+ * Boundary Curvature Penalty Term
+ ********************************************************************************/
+/*
 const double BoundaryCurvaturePenalty::xPower = 1;
 const double BoundaryCurvaturePenalty::xScale = 1;
 
@@ -1297,6 +1463,9 @@ BoundaryCurvaturePenalty
   this->GC.set_size(n);
   this->dMC.set_size(n);
   this->dGC.set_size(n);
+
+  // Initialize the curvature vector array
+  xMeanCurvVec.resize(n, SMLVec3d(0.0));
 }
 
 double
@@ -1311,25 +1480,24 @@ BoundaryCurvaturePenalty
   saFeature.Reset();
   saRad.Reset();
 
-  // Compute the curvature
-  model->ComputeBoundaryCurvature(MC, GC);
-
   // Compute the penalty term
-  for(size_t i = 0; i < n; i++)
+  for(MedialBoundaryPointIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
     {
-    // Compute penalty term
-    saMeanCurv.Update(MC[i]);
-    saGaussCurv.Update(GC[i]);
-    double k2 = 4 * MC[i] * MC[i] - 2 * GC[i];
+    BoundaryAtom &ba = S->xAtoms[it.GetAtomIndex()].xBnd[it.GetBoundarySide()];
+    saMeanCurv.Update(ba.curv_mean);
+    saGaussCurv.Update(ba.curv_gauss);
+
+    double k2 = 4 * ba.curv_mean * ba.curv_mean - 2 * ba.curv_gauss;
+    double w = S->xBoundaryWeights[it.GetIndex()];
+
     saSumSqKappa.Update(k2);
 
     // Compute the penalty. The penalty should be such that the 
-    double p = pow(k2 / xScale, xPower);
-    saPenalty.Update(p);
+    saPenalty.Update(k2 * w);
     }
 
   // Return the sum of the penalty terms
-  return saPenalty.GetSum();
+  return saPenalty.GetSum() / S->xBoundaryArea;
 }
 
 double 
@@ -1339,27 +1507,22 @@ BoundaryCurvaturePenalty
 {
   double dTotalPenalty = 0.0;
 
-  // Iterate over all atoms
-  model->ComputeBoundaryCurvaturePartial(dMC, dGC, dS->xAtoms);
-
   // Compute the penalty term
-  for(size_t i = 0; i < n; i++)
+  for(MedialBoundaryPointIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
     {
-    // Compute sum of the squares of principal curvatures
-    double k2 = 4 * MC[i] * MC[i] - 2 * GC[i];
-    double dk2 = 8 * MC[i] * dMC[i] - 2 * dGC[i];
+    BoundaryAtom &ba = S->xAtoms[it.GetAtomIndex()].xBnd[it.GetBoundarySide()];
+    BoundaryAtom &dba = dS->xAtoms[it.GetAtomIndex()].xBnd[it.GetBoundarySide()];
+    double k2 = 4 * ba.curv_mean * ba.curv_mean - 2 * ba.curv_gauss;
+    double dk2 = 8 * ba.curv_mean * dba.curv_mean - 2 * dba.curv_gauss;
+    double w = S->xBoundaryWeights[it.GetIndex()];
+    double dw = dS->xBoundaryWeights[it.GetIndex()];
 
     // Compute the feature that gets penalized
-    double f = k2;
-    double df = dk2;
-
-    // Compute the penalty. The penalty should be such that the 
-    double p = pow(f / xScale, xPower);
-    double dp = xPower * pow(f / xScale, xPower-1) * df / xScale;
-    dTotalPenalty += dp;
+    dTotalPenalty += k2 * dw + dk2 * w;
     }
 
-  return dTotalPenalty;
+  return (dTotalPenalty * S->xBoundaryArea - saPenalty.GetSum() * dS->xBoundaryArea)
+    / (S->xBoundaryArea * S->xBoundaryArea);
 }
 
 void BoundaryCurvaturePenalty
@@ -1373,6 +1536,7 @@ void BoundaryCurvaturePenalty
   sout << "    feautre stats: " << saFeature << endl;
   sout << "    total penalty: " << saPenalty.GetSum() << endl;
 }
+*/
 
 
 /*********************************************************************************
@@ -2405,6 +2569,7 @@ MedialOptimizationProblem
   flagGradientComputed = true;
 
   // Random quality control check
+  /*
   vnl_random randy;
   if(randy.lrand32(20) == 0)
     {
@@ -2423,6 +2588,7 @@ MedialOptimizationProblem
       dfa, dfn, fabs(dfa-dfn), fabs(dfa-dfn) / fabs(eps+dfa+dfn));
     Evaluate(xEvalPoint);
     }
+    */
 
   // Return the solution value
   return xLastSolutionValue;

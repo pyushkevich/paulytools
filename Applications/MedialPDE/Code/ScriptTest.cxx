@@ -784,6 +784,8 @@ int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img)
   vt.push_back(TermInfo(
       "BoundaryJacobianEnergyTerm", new BoundaryJacobianEnergyTerm(), 1.0e-4));
   vt.push_back(TermInfo(
+      "BoundaryCurvaturePenalty", new BoundaryCurvaturePenalty(model), 0.1));
+  vt.push_back(TermInfo(
       "MedialCurvaturePenalty", new MedialCurvaturePenalty(), 0.1));
   vt.push_back(TermInfo(
       "VolumeOverlapEnergyTerm", new VolumeOverlapEnergyTerm(model, img, 4), 0.1));
@@ -920,6 +922,66 @@ int TestAffineTransform(const char *fnMPDE)
   return (maxdiff > 1.0e-6);
 }
 
+int tquan(const char *name, double val, double expval)
+{
+  cout << name << " : " << val << " vs. " << expval << endl;
+  if(fabs(val - expval) < 0.00001)
+    return 0;
+  else return 1;
+}
+
+/** 
+ * This is a simple canned atom math test. It just checks that the methods in 
+ * the medial atom computation are correct. The data supplied below is from a
+ * Mathematica notebook
+ */
+int TestAtomMath()
+{
+  int rc = 0;
+
+  MedialAtom a;
+  MedialAtom da;
+
+  a.X = SMLVec3d(134.685, 136.622, 107.994);
+  a.Xu = SMLVec3d(0.999853, -0.000184419, 8.73641);
+  a.Xv = SMLVec3d(0.0000424167, 1.00006, -3.10348);
+  a.Xuu = SMLVec3d(0.000608536, 0.00105602, -16.3668);
+  a.Xuv = SMLVec3d(-0.000217664, -0.000382739, 5.38932);
+  a.Xvv = SMLVec3d(0.0000943396, 0.000155847, -2.58367);
+  a.F = 0.722479; a.Fu = 0.77349; a.Fv = -0.229935; 
+  a.Fuu = -1.47484; a.Fuv = 0.466966; 
+  a.Fvv = -0.220057; 
+
+  da.X = SMLVec3d(-0.347434, -0.189541, -0.111304);
+  da.Xu = SMLVec3d(0.59202, -0.159739, 0.730395);
+  da.Xv = SMLVec3d(-0.260392, -0.137631, -0.421155);
+  da.Xuu = SMLVec3d(-0.722212, -5.02168, -2.0399);
+  da.Xuv = SMLVec3d(0.253515, 2.4806, 0.721954);
+  da.Xvv = SMLVec3d(-0.121972, -1.01809, -0.303003);
+  da.F = 0.111147; da.Fu = -2.59863; da.Fv = 0.716595; 
+  da.Fuu = 6.58777; da.Fuv = -2.70117; da.Fvv = 1.20756;
+
+  a.ComputeDifferentialGeometry();
+  a.ComputeNormalVector();
+  a.ComputeBoundaryAtoms(false);
+  a.ComputeBoundaryCurvature();
+
+  MedialAtom::DerivativeTerms dt;
+  a.ComputeCommonDerivativeTerms(dt);
+  a.ComputeMetricTensorDerivatives(da);
+  a.ComputeChristoffelDerivatives(da);
+  a.ComputeBoundaryAtomDerivatives(da, dt);
+  a.ComputeBoundaryCurvatureDerivative(da);
+
+  // Check that the values match what we expect
+  rc += tquan("Bnd. Mean. Curv[0]", a.xBnd[0].curv_mean, 0.574173);
+  rc += tquan("Bnd. Gauss. Crv[0]", a.xBnd[0].curv_gauss, 0.00155289);
+  rc += tquan("Bnd. Mean. Curv[0] Deriv", da.xBnd[0].curv_mean, 1.99231);
+  rc += tquan("Bnd. Gauss. Crv[0] Deriv", da.xBnd[0].curv_gauss, 0.00449958);
+
+  return rc;
+}
+
 
 int usage()
 {
@@ -931,6 +993,7 @@ int usage()
   cout << "    DERIV3 XX.mpde             Check variations on basis functions." << endl;
   cout << "    DERIV4 XX.mpde             Test diff. geom. operators." << endl;
   cout << "    AFFINE XX.mpde             Test affine transform computation." << endl;
+  cout << "    ATOMMATH                   Test local medial geometry." << endl;
   cout << endl;
   return -1;
 }
@@ -966,6 +1029,9 @@ int main(int argc, char *argv[])
     return TestVolumeComputation(argv[2]);
   else if(0 == strcmp(argv[1], "AFFINE") && argc > 2)
     return TestAffineTransform(argv[2]);
+  else if(0 == strcmp(argv[1], "ATOMMATH"))
+    return TestAtomMath();
+
   else 
     return usage();
 }

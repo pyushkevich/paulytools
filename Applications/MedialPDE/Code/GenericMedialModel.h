@@ -216,14 +216,6 @@ public:
       this->GetCoefficientArray());
     }
 
-  /** Compute boundary curvature; default returns an array of zeros */
-  virtual void ComputeBoundaryCurvature(Vec &xMeanCurv, Vec &xGaussCurv)
-    { xMeanCurv.fill(0.0); xGaussCurv.fill(0.0); }
-
-  virtual void ComputeBoundaryCurvaturePartial(Vec &dMeanCurv, Vec &dGaussCurv, MedialAtom *dAtom)
-    { dMeanCurv.fill(0.0); dGaussCurv.fill(0.0); }
-
-
 protected:
 
   // Hidden constructor

@@ -190,8 +190,6 @@ int TestGradientComputation(
   
   // Create curvature arrays
   size_t nb = xSolver->GetNumberOfBoundaryPoints();
-  vnl_vector<double> MC1(nb), MC2(nb), dMC(nb);
-  vnl_vector<double> GC1(nb), GC2(nb), dGC(nb);
 
   // Compute all the other derivatives
   for(iVar = 0; iVar < nVar; iVar++) 
@@ -205,9 +203,6 @@ int TestGradientComputation(
     xSolver->ComputeAtomVariationalDerivative(iVar, dAtoms);
     tAnalytic.Stop();
 
-    // Compute the directional derivative of boundary curvature (?)
-    xSolver->ComputeBoundaryCurvaturePartial(dMC, dGC, dAtoms);
-    
     // Get the current variation in parameter space
     vnl_vector<double> xVar = xVariationalBasisPS.get_row(iVar);
 
@@ -216,23 +211,13 @@ int TestGradientComputation(
     tCentral.Start(); xSolver->ComputeAtoms(xHint.data_block()); tCentral.Stop();
     std::copy(xSolver->GetAtomArray(), xSolver->GetAtomArray() + nAtoms, A1);
 
-    xSolver->ComputeBoundaryCurvature(MC1, GC1);
-
     // Solve for the backward difference
     xSolver->SetCoefficientArray(xMapping->Apply(C0, P0 - eps * xVar));
     tCentral.Start(); xSolver->ComputeAtoms(xHint.data_block()); tCentral.Stop();
     std::copy(xSolver->GetAtomArray(), xSolver->GetAtomArray() + nAtoms, A2);
 
-    xSolver->ComputeBoundaryCurvature(MC2, GC2);
-
     // Define an accumulator for all atom-wise errors
     DerivativeTestQuantities dtq;
-
-    for(unsigned int j = 0; j < nb; j++)
-      {
-      dtq.Update("Bnd Mean Curv",dMC[j], MC1[j], MC2[j], eps);
-      dtq.Update("Bnd Gauss Curv",dGC[j], GC1[j], GC2[j], eps);
-      }
 
     // Compute atom-wise errors
     for(unsigned int i = 0; i < nAtoms; i++)
@@ -345,6 +330,16 @@ int TestGradientComputation(
         GetBoundaryPoint(it, dAtoms).N,
         GetBoundaryPoint(it, A1).N,
         GetBoundaryPoint(it, A2).N, eps);
+
+      dtq.Update("Boundary Mean Curv",
+        GetBoundaryPoint(it, dAtoms).curv_mean,
+        GetBoundaryPoint(it, A1).curv_mean,
+        GetBoundaryPoint(it, A2).curv_mean, eps);
+
+      dtq.Update("Boundary Gauss Curv",
+        GetBoundaryPoint(it, dAtoms).curv_gauss,
+        GetBoundaryPoint(it, A1).curv_gauss,
+        GetBoundaryPoint(it, A2).curv_gauss, eps);
 
       dtq.Update("Integration Weights",
         pdsd.xInteriorVolumeElement[it.GetIndex()],
