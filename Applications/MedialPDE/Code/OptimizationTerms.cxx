@@ -661,78 +661,6 @@ BoundaryJacobianEnergyTerm
   sout << "    right penalty  : " << xPenaltyB << endl;
 }
 
-/* 
-double BoundaryJacobianEnergyTerm::ComputeEnergy(SolutionData *S)
-{
-  // Place to store the Jacobian
-  xTotalPenalty = 0.0;
-  xMaxJacobian = 1.0, xMinJacobian = 1.0, xAvgJacobian = 0.0;
-  
-  // Create a Quad-iterator through the atoms
-  MedialQuadIterator *itQuad = S->xAtomGrid->NewQuadIterator();
-  while(!itQuad->IsAtEnd())
-    {
-    // Get the four atoms in this quad
-    MedialAtom &A00 = S->xAtoms[itQuad->GetAtomIndex(0, 0)];
-    MedialAtom &A01 = S->xAtoms[itQuad->GetAtomIndex(0, 1)];
-    MedialAtom &A10 = S->xAtoms[itQuad->GetAtomIndex(1, 0)];
-    MedialAtom &A11 = S->xAtoms[itQuad->GetAtomIndex(1, 1)];
-
-    // Compute area element vectors on the medial surface
-    SMLVec3d NM00 = vnl_cross_3d(A01.X - A00.X, A10.X - A00.X);
-    SMLVec3d NM11 = vnl_cross_3d(A11.X - A10.X, A11.X - A01.X);
-    
-    // Compute the jacobians for each boundary side
-    for(size_t k = 0; k < 2; k++)
-      {
-      // Compute area element vectors on the boundary side
-      SMLVec3d NB00 = 
-        vnl_cross_3d(A01.xBnd[k].X - A00.xBnd[k].X, A10.xBnd[k].X - A00.xBnd[k].X);
-      SMLVec3d NB11 = 
-        vnl_cross_3d(A11.xBnd[k].X - A10.xBnd[k].X, A11.xBnd[k].X - A01.xBnd[k].X);
-
-      // Compute the 'Jacobians'
-      double xSign = (k == 0) ? 1 : -1;
-      double J00 = dot_product(NM00, NB00) / dot_product(NM00, NM00);
-      double J11 = dot_product(NM11, NB11) / dot_product(NM11, NM11);
-
-      // Store the smallest and largest Jacobian values
-      if(J00 < xMinJacobian) xMinJacobian = J00;
-      if(J11 < xMinJacobian) xMinJacobian = J11;
-      if(J00 > xMaxJacobian) xMaxJacobian = J00;
-      if(J11 > xMaxJacobian) xMaxJacobian = J11;
-
-      // Add to the average Jacobian
-      xAvgJacobian += J00 + J11;
-        
-      // Compute the penalty function
-      xTotalPenalty += PenaltyFunction(J00, 10, 40);
-      xTotalPenalty += PenaltyFunction(J11, 10, 40);
-      }
-
-    ++(*itQuad);
-    }
-
-  // Scale the average jacobian
-  xAvgJacobian /= 2.0 * S->xAtomGrid->GetNumberOfBoundaryQuads();
-
-  // Return the total value
-  return xTotalPenalty;
-}
-
-// Print a verbose report
-void 
-BoundaryJacobianEnergyTerm
-::PrintReport(ostream &sout)
-{
-  sout << "  Boundary Jacobian Term " << endl;
-  sout << "    total match  : " << xTotalPenalty << endl;
-  sout << "    min jacobian : " << xMinJacobian << endl;  
-  sout << "    max jacobian : " << xMaxJacobian << endl;  
-  sout << "    avg jacobian : " << xAvgJacobian << endl;  
-}
-*/
-
 VolumeIntegralEnergyTerm
 ::VolumeIntegralEnergyTerm(
   GenericMedialModel *model, EuclideanFunction *function, size_t nCuts)
@@ -910,58 +838,6 @@ void VolumeOverlapEnergyTerm::PrintReport(ostream &sout)
   sout << "    ratio          : " << worker->xObjectIntegral / xImageIntegral << endl;
   sout << "    final value    : " << xRatio << endl;
 }
-
-/*********************************************************************************
- * Crest Laplacian Penalty Term: Assure negative Rho on the crest
- ********************************************************************************/
-/*
-double CrestLaplacianEnergyTerm::ComputeEnergy(SolutionData *S)
-{
-  // Initialize the accumulators
-  xMaxLaplacian = -1e10;
-  xTotalPenalty = xAvgLaplacian = 0.0;
-  nCrestAtoms = nBadSites = 0;
-  
-  // Iterate over all crest atoms
-  for(MedialAtomIterator it(S->xAtomGrid) ; !it.IsAtEnd(); ++it)
-    {
-    if(it.IsEdgeAtom())
-      {
-      // Get the laplacian at this point
-      double x = S->xAtoms[it.GetIndex()].xLapR;
-
-      // Update the minimum value
-      if(x > xMaxLaplacian) xMaxLaplacian = x;
-
-      // Update the bad atom counter 
-      if(x > 0) nBadSites++;
-      nCrestAtoms++;
-
-      // Update the average
-      xAvgLaplacian += x;
-      
-      // Update the total penalty
-      xTotalPenalty += PenaltyFunction(x, 300, 0.0);
-      }
-    }
-
-  // Finish up
-  xAvgLaplacian /= nCrestAtoms;
-  xTotalPenalty;
-
-  return xTotalPenalty;
-}  
-
-void CrestLaplacianEnergyTerm::PrintReport(ostream &sout)
-{
-  sout << "  Crest Laplacian Penalty Term: " << endl;
-  sout << "    number of crest atoms    : " << nCrestAtoms << endl; 
-  sout << "    number of bad atoms      : " << nBadSites << endl; 
-  sout << "    largest laplacian value  : " << xMaxLaplacian << endl; 
-  sout << "    average laplacian value  : " << xAvgLaplacian << endl; 
-  sout << "    total penalty            : " << xTotalPenalty << endl;
-}
-*/
 
 /*********************************************************************************
  * BoundaryGradRPenaltyTerm
@@ -1372,7 +1248,7 @@ BoundaryCurvaturePenalty
     for(size_t j = 0; j < 3; j++)
       {
       // Only consider the point if it's order 2 or less
-      if(S->xAtoms[it.GetAtomIndex(j)].order <= 2)
+      if(dS->xAtoms[it.GetAtomIndex(j)].order <= 2)
         {
         size_t j1 = (j+1) % 3, j2 = (j+2) % 3;
         SMLVec3d &Xj = GetBoundaryPoint(it, S->xAtoms, j).X;
@@ -1413,21 +1289,24 @@ BoundaryCurvaturePenalty
   double dCrestCurvatureTerm = 0.0;
   for(MedialBoundaryPointIterator ip(S->xAtomGrid); !ip.IsAtEnd(); ++ip)
     {
-    size_t ib = ip.GetIndex();
-
-    double w = S->xBoundaryWeights[ib];
-    double dw = dS->xBoundaryWeights[ib];
-    dIntegralSqrMeanCrv +=
-      (2 * dot_product(xMeanCurvVec[ib], dMeanCurvVec[ib]) * w -
-       xMeanCurvVec[ib].squared_magnitude() * dw) / (3.0 * w * w);
-
-    // We must also subtract one of the principal curvatures along the boundary
-    // which is just 1/r
-    if(ip.IsEdgeAtom())
+    if(dS->xAtoms[ip.GetAtomIndex()].order <= 2)
       {
-      double F = S->xAtoms[ip.GetAtomIndex()].F;
-      double dF = dS->xAtoms[ip.GetAtomIndex()].F;
-      dCrestCurvatureTerm += (dw * F - w * dF) / (F * F);
+      size_t ib = ip.GetIndex();
+
+      double w = S->xBoundaryWeights[ib];
+      double dw = dS->xBoundaryWeights[ib];
+      dIntegralSqrMeanCrv +=
+        (2 * dot_product(xMeanCurvVec[ib], dMeanCurvVec[ib]) * w -
+         xMeanCurvVec[ib].squared_magnitude() * dw) / (3.0 * w * w);
+
+      // We must also subtract one of the principal curvatures along the boundary
+      // which is just 1/r
+      if(ip.IsEdgeAtom())
+        {
+        double F = S->xAtoms[ip.GetAtomIndex()].F;
+        double dF = dS->xAtoms[ip.GetAtomIndex()].F;
+        dCrestCurvatureTerm += (dw * F - w * dF) / (F * F);
+        }
       }
     }
 
@@ -1447,97 +1326,6 @@ void BoundaryCurvaturePenalty
   sout << "    int crest kappa1  : " << xCrestCurvatureTerm << endl;
   sout << "    total penalty     : " << xPenalty << endl;
 }
-/*********************************************************************************
- * Boundary Curvature Penalty Term
- ********************************************************************************/
-/*
-const double BoundaryCurvaturePenalty::xPower = 1;
-const double BoundaryCurvaturePenalty::xScale = 1;
-
-BoundaryCurvaturePenalty
-::BoundaryCurvaturePenalty(GenericMedialModel *model)
-{
-  this->model = model;
-  this->n = model->GetNumberOfBoundaryPoints();
-  this->MC.set_size(n);
-  this->GC.set_size(n);
-  this->dMC.set_size(n);
-  this->dGC.set_size(n);
-
-  // Initialize the curvature vector array
-  xMeanCurvVec.resize(n, SMLVec3d(0.0));
-}
-
-double
-BoundaryCurvaturePenalty
-::ComputeEnergy(SolutionData *S)
-{
-  // Reset the accumulators
-  saMeanCurv.Reset();
-  saGaussCurv.Reset();
-  saPenalty.Reset();
-  saSumSqKappa.Reset();
-  saFeature.Reset();
-  saRad.Reset();
-
-  // Compute the penalty term
-  for(MedialBoundaryPointIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
-    {
-    BoundaryAtom &ba = S->xAtoms[it.GetAtomIndex()].xBnd[it.GetBoundarySide()];
-    saMeanCurv.Update(ba.curv_mean);
-    saGaussCurv.Update(ba.curv_gauss);
-
-    double k2 = 4 * ba.curv_mean * ba.curv_mean - 2 * ba.curv_gauss;
-    double w = S->xBoundaryWeights[it.GetIndex()];
-
-    saSumSqKappa.Update(k2);
-
-    // Compute the penalty. The penalty should be such that the 
-    saPenalty.Update(k2 * w);
-    }
-
-  // Return the sum of the penalty terms
-  return saPenalty.GetSum() / S->xBoundaryArea;
-}
-
-double 
-BoundaryCurvaturePenalty
-::ComputePartialDerivative(
-  SolutionData *S, PartialDerivativeSolutionData *dS)
-{
-  double dTotalPenalty = 0.0;
-
-  // Compute the penalty term
-  for(MedialBoundaryPointIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
-    {
-    BoundaryAtom &ba = S->xAtoms[it.GetAtomIndex()].xBnd[it.GetBoundarySide()];
-    BoundaryAtom &dba = dS->xAtoms[it.GetAtomIndex()].xBnd[it.GetBoundarySide()];
-    double k2 = 4 * ba.curv_mean * ba.curv_mean - 2 * ba.curv_gauss;
-    double dk2 = 8 * ba.curv_mean * dba.curv_mean - 2 * dba.curv_gauss;
-    double w = S->xBoundaryWeights[it.GetIndex()];
-    double dw = dS->xBoundaryWeights[it.GetIndex()];
-
-    // Compute the feature that gets penalized
-    dTotalPenalty += k2 * dw + dk2 * w;
-    }
-
-  return (dTotalPenalty * S->xBoundaryArea - saPenalty.GetSum() * dS->xBoundaryArea)
-    / (S->xBoundaryArea * S->xBoundaryArea);
-}
-
-void BoundaryCurvaturePenalty
-::PrintReport(ostream &sout)
-{
-  sout << "  Boundary Curvature Penalty: " << endl;
-  sout << "    mean curvature stats: " << saMeanCurv << endl;
-  sout << "    gaussuan curv. stats: " << saGaussCurv << endl;
-  sout << "    sum sqr. kappa stats: " << saSumSqKappa << endl;
-  sout << "    radius stats: " << saRad << endl;
-  sout << "    feautre stats: " << saFeature << endl;
-  sout << "    total penalty: " << saPenalty.GetSum() << endl;
-}
-*/
-
 
 /*********************************************************************************
  * Medial Curvature Penalty Term
@@ -2115,95 +1903,6 @@ MeshRegularizationPenaltyTerm
 }
 
 /*********************************************************************************
- * FIT TO INTERNAL POINTS ENERGY TERM
- ********************************************************************************/
-/* 
-InternalPointDeformationEnergyTerm
-::InternalPointDeformationEnergyTerm(GenericMedialModel *model, int nCuts)
-{
-  // Initialize the array of current point values. 
-  this->nCuts = nCuts;
-  nInternalPoints = model->GetAtomIndex()->GetNumberOfInternalPoints(nCuts);
-  xInternalPoints = new SMLVec3d[nInternalPoints];
-  ComputeMedialInternalPoints(
-    model->GetAtomIndex(), model->GetAtomArray(), nCuts, xInternalPoints);
-}
-
-InternalPointDeformationEnergyTerm
-::~InternalPointDeformationEnergyTerm()
-{
-  delete xInternalPoints;
-}
-
-double
-InternalPointDeformationEnergyTerm
-::ComputeEnergy(SolutionData *S)
-{
-  // Accumulators
-  xTotalVolume = 0.0;
-  xSqrDistIntegral = 0.0;
-
-  // Integrate the total deformation
-  for(size_t i = 0; i < nInternalPoints; i++)
-    {
-    // Get the total deformation
-    SMLVec3d delta = S->xInternalPoints[i] - xInternalPoints[i];
-
-    // Get the weight of the deformation
-    double w = S->xInternalWeights[i];
-
-    // Integrate squared deformation over the volume
-    xTotalVolume += w;
-    xSqrDistIntegral += w * delta.squared_magnitude();
-    }
-
-  // Compute the match
-  xTotalMatch = xSqrDistIntegral / xTotalVolume;
-  return xTotalMatch;
-}
-
-double
-InternalPointDeformationEnergyTerm
-::ComputePartialDerivative(
-  SolutionData *S,
-  PartialDerivativeSolutionData *dS)
-{
-  double dSqrDistIntegral = 0.0;
-  double dTotalVolume = 0.0;
-
-  // Integrate the total deformation
-  for(size_t i = 0; i < nInternalPoints; i++)
-    {
-    // Get the total deformation
-    SMLVec3d delta = S->xInternalPoints[i] - xInternalPoints[i];
-    SMLVec3d ddelta = dS->xInternalPoints[i];
-
-    // Get the weight of the deformation
-    double w = S->xInternalWeights[i];
-    double dw = dS->xInternalWeights[i];
-
-    // Integrate squared deformation over the volume
-    dTotalVolume += dw;
-    dSqrDistIntegral += 
-      dw * delta.squared_magnitude() + 
-      2 * w * dot_product(delta, ddelta);
-    }
-
-  double dTotalMatch = (dSqrDistIntegral - dTotalVolume * xTotalMatch) / xTotalVolume;
-  return dTotalMatch;
-}
-
-void
-InternalPointDeformationEnergyTerm
-::PrintReport(ostream &sout)
-{
-  sout << "  InternalPointDeformationEnergyTerm:" << endl;
-  sout << "    Mean squared distance     : " << xTotalMatch << endl;
-}
-*/
-
-
-/*********************************************************************************
  * MEDIAL OPTIMIZATION PROBLEM
  ********************************************************************************/
 const double MedialOptimizationProblem::xPrecision = 1.0e-10;
@@ -2347,117 +2046,6 @@ double MedialOptimizationProblem::Evaluate(double *xEvalPoint)
   // Return the result
   return xLastSolutionValue;
 }
-
-/*
-double MedialOptimizationProblem
-::ComputePartialDerivative(double *xEvalPoint, double *xDirection, double &df)
-{
-  // Solve the PDE at the current point
-  SolvePDE(xEvalPoint);
-
-  // Initialize the problem with the current solution
-  xMedialModel->SetSolutionAsInitialGuess();
-
-  // Create a solution data 
-  SolutionData S(xMedialModel);
-
-  // Compute the variation in the gradient direction and the var. deriv.
-  IHyperSurface2D *xVariation = xCoeff->GetVariationSurface(xDirection);
-  xSolveGradTimer.Start();
-  xMedialModel->ComputeVariationalDerivative(xVariation, dAtoms); 
-  xSolveGradTimer.Stop();
-  PartialDerivativeSolutionData dS(&S, dAtoms);
-
-  // Compute the solution at the current point
-  xLastSolutionValue = 0.0; df = 0.0;
-  for(size_t iTerm = 0; iTerm < xTerms.size(); iTerm++)
-    {
-    // Compute the solution
-    xTimers[iTerm].Start();
-    xLastSolutionValue +=
-      xWeights[iTerm] * xTerms[iTerm]->BeginGradientComputation(&S);
-    xTimers[iTerm].Stop();
-
-    // Compute the partial derivative
-    xSolveGradTimer.Start();
-    df += xWeights[iTerm] * xTerms[iTerm]->ComputePartialDerivative(&S, &dS);
-    xSolveGradTimer.Stop();
-
-    // Clean up
-    xTerms[iTerm]->EndGradientComputation();
-    }
-
-  // Release the variation surface
-  xCoeff->ReleaseVariationSurface(xVariation);
-
-  // Return the function value
-  return xLastSolutionValue;
-}
-*/
-
-/*
-void
-MedialOptimizationProblem
-::ComputeCentralDifferenceGradientPhi(double *x)
-{
-  // Epsilon used for central differences
-  double eps = 0.0001;
-  size_t i, n = xMedialModel->GetNumberOfAtoms();
-
-  // Allocate medial atom arrays for central gradient computation
-  MedialAtom *a1 = new MedialAtom[n];
-  MedialAtom *a2 = new MedialAtom[n];
-
-  // Make a copy of the atoms at the central location
-  MedialAtom *a0 = new MedialAtom[n];
-  std::copy(xMedialModel->GetAtomArray(), xMedialModel->GetAtomArray()+n, a0);
-
-  // Get a hint array to improve computation of c.d. gradients
-  GenericMedialModel::Vec xHint = xMedialModel->GetHintArray(); 
-
-  // Create a timer for this procedure
-  CodeTimer tCDG;
-
-  // Compute the central difference gradient for each direction
-  for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)
-    {
-    // Get the current value of the parameters
-    double c = xLastEvalPoint[iCoeff];
-
-    // Compute the forward differences
-    xLastEvalPoint[iCoeff] = c + eps;
-    xMedialModel->SetCoefficientArray(xCoeff->Apply(xInitialCoefficients, xLastEvalPoint));
-    xMedialModel->ComputeAtoms(xHint.data_block());
-
-    // Save the atoms
-    std::copy(xMedialModel->GetAtomArray(), xMedialModel->GetAtomArray()+n, a1);
-
-    // Compute the backward differences
-    xLastEvalPoint[iCoeff] = c - eps;
-    xMedialModel->SetCoefficientArray(xCoeff->Apply(xInitialCoefficients, xLastEvalPoint));
-    xMedialModel->ComputeAtoms(xHint.data_block());
-
-    // Save the atoms
-    std::copy(xMedialModel->GetAtomArray(), xMedialModel->GetAtomArray()+n, a2);
-
-    // Reset the coefficient
-    xLastEvalPoint[iCoeff] = c;
-
-    // Compute the atom derivative arrays
-    for(i = 0; i< n; i++)
-      MedialAtomCentralDifference(a1[i], a2[i], eps, dAtomArray[iCoeff][i]);
-    }
-
-  // Print timing information
-  // cout << "[CDG: " << tCDG.StopAndRead() << " ms] " << flush;
-
-  // Restore the atoms in the solution
-  std::copy(a0, a0 + n, xMedialModel->GetAtomArray());
-
-  // Clean up
-  delete[] a1; delete[] a2; delete[] a0;
-}
-*/
 
 double
 MedialOptimizationProblem

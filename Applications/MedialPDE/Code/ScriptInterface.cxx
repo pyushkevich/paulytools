@@ -1119,6 +1119,7 @@ void MedialPDE::MatchImageByMoments(FloatImage *image, unsigned int nCuts)
 
     // Create a solution object and a volume match term
     SolutionData SRot(xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
+    SRot.ComputeIntegrationWeights();
     double xMatch = tVolumeMatch.ComputeEnergy(&SRot);
 
     // Record the best match ever
