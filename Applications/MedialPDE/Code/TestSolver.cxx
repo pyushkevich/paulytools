@@ -415,7 +415,7 @@ int TestOptimizerGradientComputation(
   // gradient a certain direction.
   mop.ComputeGradient(P.data_block(), xGradient.data_block());
   // cout << "GRADIENT AT 0 " << xGradient << endl;
-  P += xStepSize * xGradient;
+  // P += xStepSize * xGradient;
 
   // Now we are ready to perform the test.
   // mop.PrintReport(cout);

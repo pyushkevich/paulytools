@@ -30,6 +30,11 @@ FloatImage::~FloatImage()
   delete xGradient[2];
 }
 
+void FloatImage::GetVoxelIndex(const SMLVec3d &x, int &vx, int &vy, int &vz)
+{
+  xImage->GetVoxel(x[0], x[1], x[2], vx, vy, vz);
+
+}
 
 // Interpolate the image at a given position
 float FloatImage::Interpolate(const SMLVec3d &x)

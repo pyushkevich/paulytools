@@ -13,6 +13,7 @@ class MedialOptimizationProblem;
 class IMedialCoefficientMask;
 class PrincipalComponents;
 class PCACoefficientMask;
+class Registry;
 template <typename TPixel> class ITKImageWrapper;
 
 void TestTriangleAreaPartialDerivative();
@@ -28,6 +29,7 @@ class FloatImage;
 class FloatImage
 {
 public:
+  typedef ITKImageWrapper<float> WrapperType;
 
   FloatImage();
   ~FloatImage();
@@ -71,6 +73,9 @@ public:
   // of this function
   virtual double IntegratePositiveVoxels();
 
+  // Get the voxel corresponding to a point. Return values set to -1 if point is outside
+  virtual void GetVoxelIndex(const SMLVec3d &x, int &vx, int &vy, int &vz);
+
   // Interpolate the image at a given position
   virtual float Interpolate(const SMLVec3d &x);
 
@@ -93,9 +98,12 @@ public:
   // Do this after loading the image!
   void SetImageOrigin(double ox, double oy, double oz);
 
+  // Get internal image
+  WrapperType *GetInternalImage()
+    { return xImage; } 
+
 private:
   // Internally stored image
-  typedef ITKImageWrapper<float> WrapperType;
   WrapperType *xImage;
 
   // Optional gradient images - used to compute image match with gradient
@@ -185,8 +193,11 @@ public:
    * The idea is to eventually have a user interface for designing these
    * parameter files.
    */
+  void RunOptimization(FloatImage *image, size_t nSteps, Registry &reg);
+  
+  // Same as above
   void RunOptimization(
-    FloatImage *image, size_t nSteps,
+    FloatImage *image, size_t nSteps, 
     const char *paramfile, const char *folderName = NULL);
 
   /** Save the model as a BYU mesh */
@@ -261,7 +272,6 @@ protected:
     vnl_vector<double> &xSolution, unsigned int nSteps, double xStep);
 
   // Friend functions
-  friend void RenderMedialPDE(MedialPDE *);
   friend class MedialPCA;
 
   // PCA matrix (used to create PCA coefficient masks)
@@ -436,9 +446,6 @@ private:
 
   PrincipalComponents *xPCA, *xAppearancePCA;
 };
-
-/** Function to visualize the medial PDE result */
-// void RenderMedialPDE(MedialPDE *model);
 
 } // Namespace medial PDE!
 

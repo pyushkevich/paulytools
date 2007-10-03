@@ -14,6 +14,7 @@ OptimizationParameters
   xMappingRegMap.AddPair(PCA, "PCA");
   xMappingRegMap.AddPair(RADIUS_SUBSET, "RadiusSubset");
   xMappingRegMap.AddPair(POSITION_SUBSET, "PositionSubset");
+  xMappingRegMap.AddPair(REFLECTION, "Reflection");
 
   xImageMatchRegMap.AddPair(VOLUME, "VolumeOverlap");
   xImageMatchRegMap.AddPair(BOUNDARY, "BoundaryIntegral");
@@ -107,4 +108,13 @@ OptimizationParameters
   // Read the PCA settings if they are there
   xPCAFileName = R["PCA.FileName"][""];
   nPCAModes = R["PCA.NumberOfModes"][10];
+
+  // Read reflection plane info
+  if(xMapping == REFLECTION)
+    {
+    xReflectionPlane[0] = R["Reflection.Normal[0]"][1.0];
+    xReflectionPlane[1] = R["Reflection.Normal[1]"][0.0];
+    xReflectionPlane[2] = R["Reflection.Normal[2]"][0.0];
+    xReflectionIntercept = R["Reflection.Intercept"][0.0];
+    }
 }

@@ -74,6 +74,8 @@ SET(PDE_LIBS
   ${GLUT_LIBRARY}
   vtkCommon
   vtkIO
+  vtkImaging
+  vtkGraphics
   ${LAPACK_OR_MKL_LIBS}
   ${GSL_LIBRARY} ${GSL_CBLAS_LIBRARY}
   toms611
@@ -99,6 +101,12 @@ TARGET_LINK_LIBRARIES(testsub medialpde)
 
 ADD_EXECUTABLE(cmr_fitbin Code/ProgramFitBinary.cxx ${COMMON_SRCS})
 TARGET_LINK_LIBRARIES(cmr_fitbin ${PDE_LIBS})
+
+ADD_EXECUTABLE(cmr_fit Code/Fit.cxx ${COMMON_SRCS})
+TARGET_LINK_LIBRARIES(cmr_fit ${PDE_LIBS})
+
+ADD_EXECUTABLE(cmr_sample_img Code/SampleImage.cxx ${COMMON_SRCS})
+TARGET_LINK_LIBRARIES(cmr_sample_img ${PDE_LIBS})
 
 # Create a statically linked profiling executable
 ### ADD_EXECUTABLE(mpdeprof Code/ProfilerDriver.cxx ${COMMON_SRCS})

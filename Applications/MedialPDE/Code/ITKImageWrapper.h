@@ -29,6 +29,9 @@ public:
   virtual double GetImageSpacing(unsigned int d) = 0;
   virtual double GetImageOrigin(unsigned int d) = 0;
 
+  // Get a voxel corresponding to point in space
+  virtual void GetVoxel(double px, double py, double pz, int &vx, int &vy, int &vz) = 0;
+
   // Interpolate the image at a continuous index, or return background if out of bounds
   virtual float Interpolate(float x, float y, float z, float xBackground) = 0;
 

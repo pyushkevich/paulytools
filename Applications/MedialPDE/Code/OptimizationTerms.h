@@ -150,6 +150,9 @@ public:
   // Print a verbose report
   virtual void PrintReport(ostream &sout) = 0;
 
+  // Print a short name
+  virtual string GetShortName() = 0;
+
   // Pass in parameters using a registry object
   virtual void SetParameters(Registry &r) {}
 };
@@ -194,6 +197,10 @@ public:
 
   // Print a verbose report
   void PrintReport(ostream &sout);
+
+  // Print a short name
+  string GetShortName() { return string("BMATCH"); }
+
 
 private:
   FloatImage *xImage;
@@ -241,6 +248,9 @@ public:
 
   double GetModelVolume()
     { return xVolumeIntegral; }
+
+  // Print a short name
+  string GetShortName() { return string("VOLOVL"); }
   
 private:
   /** Common method for energy computation */
@@ -314,6 +324,9 @@ public:
   void PrintReport(ostream &sout);
 
 
+  // Print a short name
+  string GetShortName() { return string("VOLOVL"); }
+
   double GetModelVolume()
     { return worker->GetModelVolume(); }
   
@@ -355,6 +368,9 @@ public:
     xPenaltyA = R["PenaltyA"][xDefaultPenaltyA];
     xPenaltyB = R["PenaltyB"][xDefaultPenaltyB];
     }
+
+  // Print a short name
+  string GetShortName() { return string("BNDJAC"); }
 
 private:
   // Maximum and minimum values of the Jacobian encountered during
@@ -403,6 +419,9 @@ public:
   // Compute the partial derivative term
   double ComputePartialDerivative(
     SolutionData *S, PartialDerivativeSolutionData *dS);
+
+  // Print a short name
+  string GetShortName() { return string("MEDANG"); }
   
 private:
   double xTotalPenalty, xMaxPenalty;
@@ -435,6 +454,9 @@ public:
   // Get the number of bad atoms
   size_t GetNumberOfBadAtoms() 
     { return nBadAtoms; }
+
+  // Print a short name
+  string GetShortName() { return string("ATMBAD"); }
   
 private:
   vnl_vector<double> xPenalty;
@@ -457,6 +479,9 @@ public:
   // Compute the partial derivative
   double ComputePartialDerivative(
     SolutionData *S, PartialDerivativeSolutionData *dS);
+
+  // Print a short name
+  string GetShortName() { return string("GRAD-R"); }
 
 private:
   // Accumulators for display and statistics calculation
@@ -489,6 +514,9 @@ public:
   // Compute the partial derivative
   double ComputePartialDerivative(
     SolutionData *S, PartialDerivativeSolutionData *dS);
+
+  // Print a short name
+  string GetShortName() { return string("MSHREG"); }
 
 private:
   // Accumulators for display and statistics calculation
@@ -525,6 +553,9 @@ public:
   double ComputePartialDerivative(
     SolutionData *S, PartialDerivativeSolutionData *dS);
 
+  // Print a short name
+  string GetShortName() { return string("MEDCRV"); }
+
 private:
   // Accumulators for display and statistics calculation
   StatisticsAccumulator 
@@ -558,6 +589,9 @@ public:
   // Compute the partial derivative
   double ComputePartialDerivative(
     SolutionData *S, PartialDerivativeSolutionData *dS);
+
+  // Print a short name
+  string GetShortName() { return string("BNDCRV"); }
 
   // Get the curvature computed internally
   SMLVec3d GetCurvatureVector(size_t i)
@@ -621,6 +655,9 @@ public:
 
   void PrintReport(ostream &sout);
 
+  // Print a short name
+  string GetShortName() { return string("DSTRAD"); }
+
 private:
 
   typedef vnl_vector<double> Vec;
@@ -648,6 +685,9 @@ public:
 
   void PrintReport(ostream &sout);
 
+  // Print a short name
+  string GetShortName() { return string("DSTPNT"); }
+
 private:
 
   // Target points
@@ -672,6 +712,9 @@ public:
   
   void PrintReport(ostream &sout);
 
+  // Print a short name
+  string GetShortName() { return string("RADIUS"); }
+
   // Compute the partial derivative
   double ComputePartialDerivative(
     SolutionData *S, PartialDerivativeSolutionData *dS);
@@ -693,6 +736,9 @@ public:
     SolutionData *S, PartialDerivativeSolutionData *dS);
   
   void PrintReport(ostream &sout);
+
+  // Print a short name
+  string GetShortName() { return string("MED-BE"); }
 private:
   double xMaxBending, xTotalBending, xMeanBending;
 };
@@ -709,6 +755,9 @@ public:
   // Compute partial derivative
   double ComputePartialDerivative(
     SolutionData *S, PartialDerivativeSolutionData *dS);
+
+  // Print a short name
+  string GetShortName() { return string("MEDREG"); }
   
   void PrintReport(ostream &sout);
 private:

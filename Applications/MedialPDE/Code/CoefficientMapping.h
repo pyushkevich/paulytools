@@ -4,6 +4,7 @@
 #include "GenericMedialModel.h"
 
 class PrincipalComponents;
+class SubdivisionMedialModel;
 
 /*
  * Coefficient Transformations
@@ -336,5 +337,50 @@ public:
   
   virtual ~PCAPlusAffineCoefficientMapping();
 };
+
+/** 
+ * Coefficient mapping representing a reflection of a medial model about
+ * a specified plane. This is only defined for non-branching medial models.
+ * The control point pairs {(u,v),(u,-v)} are forced to be symmetric about
+ * some plane P
+ */
+class ReflectionCoefficientMapping : public CoefficientMapping
+{
+public:
+  typedef vnl_vector<double> Vec;
+
+  /** This mapping is currently only defined for subdivision models. The plane
+   * of reflection is defined as n.x - b = 0 */
+  ReflectionCoefficientMapping(SubdivisionMedialModel *model, SMLVec3d &n, double b);
+
+  /** Apply the coefficient mapping C' = T(C, P) */
+  Vec Apply(const Vec &C, const Vec &p);
+
+  /** Compute the variation J_T(P) * v_P given C, P and v_P */
+  Vec ApplyJacobianInParameters(const Vec &C, const Vec &P, const Vec &varP);
+
+  /** Compute the variation J_T(C) * v_C given C, P and v_C */
+  Vec ApplyJacobianInCoefficients(const Vec &C, const Vec &P, const Vec &varC);
+
+  /** Whether this mapping is linear in P and C */
+  bool IsLinear() const { return true; }
+
+protected:
+  // The plane of reflection
+  SMLVec3d p;
+  double b;
+  size_t k;
+
+  // The mapping from points to opposite points
+  std::vector<size_t> opp;
+};
+
+
+
+
+
+
+
+
 #endif // __AffineMapping_h_
 

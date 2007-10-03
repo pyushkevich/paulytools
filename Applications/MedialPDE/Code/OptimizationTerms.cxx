@@ -2038,7 +2038,9 @@ double MedialOptimizationProblem::Evaluate(double *xEvalPoint)
       xLastTermValues[iTerm] = xTerms[iTerm]->ComputeEnergy(S);
       xLastSolutionValue += xLastTermValues[iTerm] * xWeights[iTerm]; 
       xTimers[iTerm].Stop();
+      // printf("%7.2le ",xLastTermValues[iTerm]);
       }
+    // printf("  |  %7.2le\n", xLastSolutionValue);
 
     // cout << "[MAP: " << (clock() - t0)/CLOCKS_PER_SEC << " s] " << endl;
     }
@@ -2108,6 +2110,13 @@ MedialOptimizationProblem
 
   // Compute the integration weights
   S->ComputeIntegrationWeights();
+
+  // Print header line
+  for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
+    {
+    printf("%6s   ",xTerms[iTerm]->GetShortName().c_str());
+    }
+  printf("  |  TOTAL\n");
   
   // Begin the gradient computation for each of the energy terms
   xLastSolutionValue = 0.0;
@@ -2118,7 +2127,10 @@ MedialOptimizationProblem
     xLastTermValues[iTerm] = xTerms[iTerm]->BeginGradientComputation(S);
     xLastSolutionValue += xWeights[iTerm] * xLastTermValues[iTerm];
     xTimers[iTerm].Stop();
+    printf("%7.2le ",xLastTermValues[iTerm]);
     }
+
+  printf("  |  %7.2le\n", xLastSolutionValue);
 
   // Iterate variation by variation to compute the gradient
   for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)

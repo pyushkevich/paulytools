@@ -1,5 +1,6 @@
 #include "vtkPolyData.h"
 #include "vtkPointData.h"
+#include "vtkCellData.h"
 #include "vtkPoints.h"
 #include "vtkFloatArray.h"
 #include "vtkPolyDataWriter.h"
@@ -28,6 +29,16 @@ vtkFloatArray *AddBndScalarField(vtkPolyData *target, GenericMedialModel *model,
   array->SetNumberOfComponents(1);
   array->SetNumberOfTuples(model->GetNumberOfBoundaryPoints());
   target->GetPointData()->AddArray(array);
+  return array;
+}
+
+vtkFloatArray *AddBndTriScalarField(vtkPolyData *target, GenericMedialModel *model, char *name)
+{
+  vtkFloatArray *array = vtkFloatArray::New();
+  array->SetName(name);
+  array->SetNumberOfComponents(1);
+  array->SetNumberOfTuples(model->GetNumberOfBoundaryTriangles());
+  target->GetCellData()->AddArray(array);
   return array;
 }
 
@@ -293,7 +304,7 @@ void ExportBoundaryMeshToVTK(
   vtkFloatArray *lGaussCurv = AddBndScalarField(pMedial, xModel, "Gauss Curvature");
   vtkFloatArray *lCurvPen = AddBndScalarField(pMedial, xModel, "Curvature Penalty");
   vtkFloatArray *lSqrMeanCrv = AddBndScalarField(pMedial, xModel, "SqrMeanCrv");
-  vtkFloatArray *lJac = AddBndScalarField(pMedial, xModel, "Boundary Jacobian");
+  vtkFloatArray *lCellJac = AddBndTriScalarField(pMedial, xModel, "Jacobian");
 
   // Allocate the image intensity array
   bool flagImage = xImage && xImage->IsImageLoaded();
@@ -330,7 +341,6 @@ void ExportBoundaryMeshToVTK(
 
     SMLVec3d NX = (it.GetBoundarySide() > 0 ? 1.0:1.0) *  vnl_cross_3d(A.Xu, A.Xv);
     SMLVec3d NY = vnl_cross_3d(B.X_i[0], B.X_i[1]);
-    lJac->SetTuple1(i, dot_product(NX, NY)/dot_product(NX,NX));
 
     SMLVec3d Kvec = termBC.GetCurvatureVector(i);
     double H2 = Kvec.squared_magnitude() / 
@@ -352,11 +362,29 @@ void ExportBoundaryMeshToVTK(
   // Add all the quads
   for(MedialBoundaryTriangleIterator itt(xGrid); !itt.IsAtEnd(); ++itt)
     {
+    // Insert the cells
     vtkIdType xTri[3];
     xTri[0] = itt.GetBoundaryIndex(0);
     xTri[1] = itt.GetBoundaryIndex(1);
     xTri[2] = itt.GetBoundaryIndex(2);
     pMedial->InsertNextCell(VTK_TRIANGLE, 3, xTri);
+
+    // Set the Jacobian value
+    MedialAtom &A0 = xAtoms[itt.GetAtomIndex(0)];
+    MedialAtom &A1 = xAtoms[itt.GetAtomIndex(1)];
+    MedialAtom &A2 = xAtoms[itt.GetAtomIndex(2)];
+
+    // Compute the Xu and Xv vectors and the normal
+    SMLVec3d XU = A1.X - A0.X,  XV = A2.X - A0.X;
+    SMLVec3d NX = vnl_cross_3d(XU, XV);
+    double gX2 = dot_product(NX, NX);
+
+    size_t z = itt.GetBoundarySide();
+    SMLVec3d YU = A1.xBnd[z].X - A0.xBnd[z].X;
+    SMLVec3d YV = A2.xBnd[z].X - A0.xBnd[z].X;
+    SMLVec3d NY = vnl_cross_3d(YU, YV);
+    double J = dot_product(NY, NX) / gX2;
+    lCellJac->SetTuple1(itt.GetIndex(), J);
     }
 
   vtkPolyDataWriter *fltWriter = vtkPolyDataWriter::New();
@@ -373,7 +401,7 @@ void ExportBoundaryMeshToVTK(
   lMeanCurv->Delete();
   lGaussCurv->Delete();
   lCurvPen->Delete();
-  lJac->Delete();
+  lCellJac->Delete();
   lSqrMeanCrv->Delete();
 }
 

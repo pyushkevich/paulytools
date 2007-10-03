@@ -670,12 +670,27 @@ void EvolutionaryOptimization(
 
 void MedialPDE
 ::RunOptimization(
-  FloatImage *image, size_t nSteps, const char *paramfile, const char *folderName)
+  FloatImage *image, size_t nSteps,
+  const char *paramfile, const char *folderName)
 {
-  // Load the registry from the parameter file
-  Registry registry(paramfile);
-  Registry &folder = (folderName == NULL) ? registry : registry.Folder(folderName);
+  Registry reg;
+  reg.ReadFromFile(paramfile);
+  if(folderName)
+    {
+    Registry fld = reg.Folder(folderName);
+    this->RunOptimization(image,nSteps,fld);
+    }
+  else
+    {
+    this->RunOptimization(image,nSteps,reg);
+    }
+}
 
+
+void MedialPDE
+::RunOptimization(
+  FloatImage *image, size_t nSteps, Registry &folder)
+{
   // Read the optimization parameters from the file
   OptimizationParameters p; p.ReadFromRegistry(folder);
 
@@ -737,6 +752,20 @@ void MedialPDE
 
     // Create a mapping
     xMapping = new SubsetCoefficientMapping(mask);
+    }
+  else if(p.xMapping == OptimizationParameters::REFLECTION)
+    {
+    try 
+      {
+      SubdivisionMedialModel *smm = 
+        reinterpret_cast<SubdivisionMedialModel *>(xMedialModel);
+      xMapping = 
+        new ReflectionCoefficientMapping(smm, p.xReflectionPlane, p.xReflectionIntercept);
+      }
+    catch(...)
+      {
+      throw ModelIOException("Reflection coefficient mapping works only for subdivision models");
+      }
     }
   else
     {
@@ -2707,6 +2736,7 @@ void MedialPCA::GetShapeAtFSLocation(MedialPDE *target)
     }
 }
 
+/*
 void RenderMedialPDE(MedialPDE *model)
 {
   // Create a renderer
@@ -2735,5 +2765,6 @@ void RenderMedialPDE(MedialPDE *model)
   // Start GLUT
   glutMainLoop();
 }
+*/
 
 } // namespace

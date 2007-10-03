@@ -53,6 +53,9 @@ public:
   // Interpolate the image at a continuous index, or return background if out of bounds
   float InterpolateNearestNeighbor(float x, float y, float z, float xBackground);
 
+  // Get a voxel for a point in space
+  void GetVoxel(double px, double py, double pz, int &vx, int &vy, int &vz);
+
   // Get the internal ITK image pointer
   ImageType *GetInternalImage()
     { return xImage.GetPointer(); }
@@ -82,6 +85,32 @@ ITKImageWrapperImpl<TPixel>
   xImage = ImageType::New();
   fnInterpolator = InterpolatorType::New();
   fnInterpolatorNN = NNInterpolator::New();
+}
+
+template<typename TPixel>
+void
+ITKImageWrapperImpl<TPixel>
+::GetVoxel(double px, double py, double pz, int &vx, int &vy, int &vz)
+{
+  // Create a point with the passed in coordinates
+  itk::Point<float, 3> xPoint;
+  xPoint[0] = px; xPoint[1] = py; xPoint[2] = pz;
+
+  // Create a continuous index from the point
+  itk::Index<3> xIndex;
+  xImage->TransformPhysicalPointToIndex(xPoint, xIndex);
+
+  // Interpolate at the index
+  if(fnInterpolator->IsInsideBuffer(xIndex))
+    {
+    vx = (int) xIndex[0];
+    vy = (int) xIndex[1];
+    vz = (int) xIndex[2];
+    }
+  else
+    {
+    vx = vy = vz = -1;
+    }
 }
 
 

@@ -2,13 +2,16 @@
 #define __OptimizationParameters_h_
 
 #include "Registry.h"
+#include <smlmath.h>
 
 class CoarseToFineSettings;
 
 class OptimizationParameters {
 public:
   enum Optimizer{ CONJGRAD, GRADIENT, EVOLUTION };
-  enum Mapping { AFFINE, COARSE_TO_FINE, IDENTITY, PCA, RADIUS_SUBSET, POSITION_SUBSET }; 
+  enum Mapping { 
+    AFFINE, COARSE_TO_FINE, IDENTITY, PCA, 
+    RADIUS_SUBSET, POSITION_SUBSET, REFLECTION }; 
   enum ImageMatch { VOLUME, BOUNDARY, RADIUS_VALUES };
   enum PenaltyTerm { 
     BOUNDARY_JACOBIAN = 0, MEDIAL_REGULARITY, ATOM_BADNESS, 
@@ -32,6 +35,10 @@ public:
   
   /** Number of PCA modes to use in PCA-based optimization */
   size_t nPCAModes;
+
+  /** Reflection plane information (only defined for reflection mapping) */
+  SMLVec3d xReflectionPlane;
+  double xReflectionIntercept;
 
   /** Weights of the various penalty terms */
   std::map<PenaltyTerm, double> xTermWeights, xTermDefaultWeights;
