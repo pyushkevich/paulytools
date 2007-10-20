@@ -51,6 +51,14 @@ ImageConverter<TPixel, VDim>
     return 0;
     }
 
+  else if(cmd == "-anisotropic-diffusion" || cmd == "-ad")
+    {
+    double cond = atof(argv[1]);
+    int niter = atoi(argv[2]);
+    PeronaMalik(cond, (size_t) niter);
+    return 2;
+    }
+
   // Anti-alias a binary image, turning it into a smoother floating point image;
   // the argument is the iso-surface value
   // This command is affected by -iterations and -rms flags
@@ -1330,6 +1338,12 @@ private:
   void operator=(const Self &s);
 };
 
+void DumpProgress(itk::Object *object, const itk::EventObject &obj, void *client_data)
+{
+  itk::ProcessObject *po = (itk::ProcessObject *)object;
+  cout << po->GetProgress() << endl;
+}
+
 /**
  * Performs SNAP-like level set segmentation. The image stack must have to images. The one
  * at the top of the stack is the initial segmentation and the next one on the stack is 
@@ -1380,6 +1394,10 @@ ImageConverter<TPixel, VDim>
   fltSegment->SetIsoSurfaceValue(0.0);
   fltSegment->SetNumberOfIterations(nIter);
 
+  *verbose << "  NIterations:    " << nIter << endl;
+  *verbose << "  Curv Weight:    " << m_LevSetCurvature << endl;
+  *verbose << "  Adv Weight:     " << m_LevSetAdvection << endl;
+
   // Execute the filter
   fltSegment->Update();
 
@@ -1388,7 +1406,8 @@ ImageConverter<TPixel, VDim>
   m_ImageStack.pop_back();
   m_ImageStack.push_back(fltSegment->GetOutput());
 
-  *verbose << "Level set done" << endl;
+  *verbose << "Level set done after" << fltSegment->GetElapsedIterations() << " iterations" << endl;
+  
 }
 
 template<class TPixel, unsigned int VDim>
@@ -1529,6 +1548,29 @@ ImageConverter<TPixel, VDim>
   m_ImageStack.push_back(fltStaple->GetOutput());
 }
 
+template<class TPixel, unsigned int VDim>
+void
+ImageConverter<TPixel, VDim>
+::PeronaMalik(double conductance, size_t nIter)
+{
+  // Get an image off the stack
+  ImagePointer image = m_ImageStack.back();
+
+  // Create a filter
+  typedef itk::GradientAnisotropicDiffusionImageFilter<
+    ImageType,ImageType> FilterType;
+  typename FilterType::Pointer filter = FilterType::New();
+
+  *verbose << "Performing anisotropic diffusion on #" << m_ImageStack.size() << endl;
+  filter->SetInput(image);
+  filter->SetConductanceParameter(conductance);
+  filter->SetNumberOfIterations(nIter);
+  filter->SetTimeStep(0.0125);
+  filter->UseImageSpacingOn();
+  filter->Update();
+
+  m_ImageStack.push_back(filter->GetOutput());
+}
 
 template<class TPixel, unsigned int VDim>
 void

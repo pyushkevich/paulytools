@@ -40,13 +40,7 @@ SET(ITK_LIBS
 
 SET(COMMON_LIBS
   ${ITK_LIBS}
-  vtkCommon 
-  vtkFiltering
-  vtkImaging
-  vtkIO 
-  vtkGraphics 
-  vtkHybrid
-  vtkRendering
+  ${VTK_COMMON_LIBS}
 )
 
 INCLUDE_DIRECTORIES(${MYLIBS_INCLUDE_DIRS}

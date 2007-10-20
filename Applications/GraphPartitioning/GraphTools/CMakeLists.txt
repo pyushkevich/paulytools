@@ -7,15 +7,7 @@ INCLUDE_DIRECTORIES(
   ${PAULY_SOURCE_DIR}/Applications/MedialPDE/Code
   ${PAULY_SOURCE_DIR}/Applications/GraphPartitioning/ImageGraphCut)
 
-LINK_LIBRARIES(${ITK_LIBRARIES}
-  vtkCommon 
-  vtkFiltering
-  vtkImaging
-  vtkIO 
-  vtkGraphics 
-  vtkHybrid
-  vtkPatented
-  vtkRendering)
+LINK_LIBRARIES(${ITK_LIBRARIES} ${VTK_COMMON_LIBS}) 
 
 ADD_EXECUTABLE(imglandgraph
   BinaryImageLandmarkGraph.cxx

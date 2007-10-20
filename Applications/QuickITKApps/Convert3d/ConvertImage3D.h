@@ -38,6 +38,9 @@
 #include <itksys/SystemTools.hxx>
 #include "itkVnlFFTRealToComplexConjugateImageFilter.h"
 #include "itkVoxBoCUBImageIOFactory.h"
+#include "itkCommand.h"
+#include "itkEventObject.h"
+#include "itkGradientAnisotropicDiffusionImageFilter.h"
 
 #include <iostream>
 #include <cctype>
@@ -94,6 +97,7 @@ private:
   void ReplaceIntensities(vector<double> &rules);
   void ThresholdImage(double u1, double u2, double vIn, double vOut);
   void TrimImage(const RealVector &margin);
+  void PeronaMalik(double conductance, size_t nIter);
   int ProcessCommand(int argc, char *argv[]);
   int ProcessResampleCommand(int argc, char *argv[]);
   int ProcessSmoothCommand(int argc, char *argv[]);

@@ -36,6 +36,7 @@
 #include "itkAddImageFilter.h"
 #include "itkMultiplyImageFilter.h"
 #include "itkSTAPLEImageFilter.h"
+#include "itkGradientAnisotropicDiffusionImageFilter.h"
 
 #include <string>
 
@@ -87,6 +88,7 @@ template class itk::BinaryFunctorImageFilter<DoubleImage, DoubleImage, DoubleIma
   itk::Functor::Add2<double,double,double> >;
 template class itk::BinaryFunctorImageFilter<DoubleImage, DoubleImage, DoubleImage,
   itk::Function::Mult<double,double,double> >;
+template class itk::GradientAnisotropicDiffusionImageFilter<DoubleImage,DoubleImage>;
 
 template class itk::InPlaceImageFilter<DoubleImage, DoubleImage>;
 template class itk::STAPLEImageFilter<DoubleImage, DoubleImage>;

@@ -31,14 +31,7 @@ SET(COMMON_LIBS
   ITKStatistics
   ITKVoxBoIO
   ${PAULY_CORE_LIBS}
-  vtkCommon 
-  vtkFiltering
-  vtkImaging
-  vtkIO 
-  vtkGraphics 
-  vtkHybrid
-  vtkRendering
-  vtkPatented
+  ${VTK_COMMON_LIBS}
   ${FLTK_LIBRARY}
 )
 

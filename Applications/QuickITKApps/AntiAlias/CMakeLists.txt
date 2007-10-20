@@ -12,13 +12,7 @@ SET(COMMON_LIBS
   ITKBasicFilters 
   ITKIO 
   ${PAULY_CORE_LIBS}
-  vtkCommon 
-  vtkFiltering
-  vtkImaging
-  vtkIO 
-  vtkGraphics 
-  vtkHybrid
-  vtkRendering)
+  ${VTK_COMMON_LIBS})
 
 TARGET_LINK_LIBRARIES(aalias ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(lsplit ${COMMON_LIBS})

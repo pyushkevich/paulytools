@@ -72,6 +72,18 @@ IF(USE_VTK)
   FIND_PACKAGE(VTK)
   IF(VTK_FOUND)
     INCLUDE(${VTK_USE_FILE})
+
+    # Set flags depending on VTK version
+    IF("${VTK_MAJOR_VERSION}" EQUAL 5)
+      SET(HAVE_VTK_5 1)
+      SET(VTK_COMMON_LIBS vtkCommon vtkIO vtkGraphics vtkRendering
+        vtkFiltering vtkImaging vtkHybrid)
+    ELSE("${VTK_MAJOR_VERSION}" EQUAL 5)
+      SET(HAVE_VTK_5 0)
+      SET(VTK_COMMON_LIBS vtkCommon vtkIO vtkGraphics vtkRendering vtkPatented
+        vtkFiltering vtkImaging vtkHybrid)
+    ENDIF("${VTK_MAJOR_VERSION}" EQUAL 5)
+
   ELSE(VTK_FOUND)
     MESSAGE(FATAL_ERROR
       "Cannot build without VTK.  Please set VTK_DIR.")
