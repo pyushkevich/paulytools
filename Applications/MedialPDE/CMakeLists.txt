@@ -72,10 +72,7 @@ SET(PDE_LIBS
   ITKBasicFilters
   ITKVoxBoIO
   ${GLUT_LIBRARY}
-  vtkCommon
-  vtkIO
-  vtkImaging
-  vtkGraphics
+  ${VTK_COMMON_LIBS}
   ${LAPACK_OR_MKL_LIBS}
   ${GSL_LIBRARY} ${GSL_CBLAS_LIBRARY}
   toms611
@@ -176,3 +173,5 @@ FOREACH(FILE ${SCRIPT_FILES})
     ${MedialPDE_SOURCE_DIR}/Python/${FILE}
     ${MedialPDE_BINARY_DIR}/${FILE} )
 ENDFOREACH(FILE ${SCRIPT_FILES})
+
+INSTALL_TARGETS("/bin" cmr_fit cmr_sample_img)
