@@ -30,6 +30,7 @@ SET(COMMON_SRCS
   Code/Registry.cxx
   Code/ScriptImaging.cxx
   Code/ScriptInterface.cxx
+  Code/SmoothedImageSampler.cxx
   Code/SparseMatrix.cxx
   Code/SubdivisionMedialModel.cxx
   Code/SubdivisionSurface.cxx
