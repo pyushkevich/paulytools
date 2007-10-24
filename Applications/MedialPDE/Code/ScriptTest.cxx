@@ -6,6 +6,9 @@
 #include "CoefficientMapping.h"
 #include "MedialAtomGrid.h"
 #include "PrincipalComponents.h"
+#include "ITKImageWrapper.h"
+#include "SmoothedImageSampler.h"
+#include "itkImage.h"
 #include "TestSolver.h"
 #include "vnl/vnl_erf.h"
 #include "vnl/vnl_random.h"
@@ -988,6 +991,65 @@ int TestAtomMath()
   return rc;
 }
 
+int TestSmoothedImageSampler(const char *fn_image)
+{
+  // Read the image of interest
+  FloatImage fimg;
+  fimg.LoadFromFile(fn_image);
+
+  // Get the underlying itk::Image
+  typedef FloatImage::WrapperType::ImageType ImageType;
+  ImageType::Pointer im = fimg.GetInternalImage()->GetInternalImage();
+
+  // Compute the bounding box (in pixel coordinates)
+  double bb_start[] = {0.0, 0.0, 0.0};
+  double bb_end[3];
+  for(size_t d = 0; d < 3; d++)
+    bb_end[d] = im->GetBufferedRegion().GetSize()[d];
+
+  // Create the smooth image sampler
+  SmoothedImageSampler sissy(2.0, 3.5, im->GetBufferPointer(), bb_start, bb_end);
+
+  // Sample the image at some random location
+  for(size_t i = 0; i < 10; i++)
+    {
+    typedef vnl_vector_fixed<double, 3> Vec;
+    Vec X, Xp, Xm, G, Gd, Ga;
+    double f, fp, fm;
+    
+    // Create a random point and a random direction
+    for(size_t d = 0; d < 3; d++)
+      {
+      X[d] = bb_start[d] + rand() * (bb_end[d] - bb_start[d]) / RAND_MAX;
+      }
+
+    // Do finite difference computation
+    double eps = 0.01;
+    sissy.Sample(X.data_block(), &f, G.data_block());
+    for(size_t d = 0; d < 3; d++)
+      {
+      Xp = X; Xp[d] += eps;
+      Xm = X; Xm[d] -= eps;
+      sissy.Sample(Xp.data_block(), &fp, Gd.data_block());
+      sissy.Sample(Xm.data_block(), &fm, Gd.data_block());
+      Ga[d] = (fp - fm) / (2 * eps);
+      }
+
+    // Compute the difference
+    Vec dG = G - Ga;
+    double maxdiff = dG.inf_norm();
+    cout << "X : " << X << endl;
+    cout << "f : " << f << endl;
+    cout << "G : " << G << endl;
+    cout << "Ga : " << Ga << endl;
+    cout << "MaxDiff : " << maxdiff << endl;
+
+    if(maxdiff > eps)
+      return -1;
+    }
+  return 0;
+}
+
 
 int usage()
 {
@@ -1000,6 +1062,7 @@ int usage()
   cout << "    DERIV4 XX.mpde             Test diff. geom. operators." << endl;
   cout << "    AFFINE XX.mpde             Test affine transform computation." << endl;
   cout << "    ATOMMATH                   Test local medial geometry." << endl;
+  cout << "    SAMPLE XX.img              Test image sampler code (SmoothedImageSampler)" << endl;
   cout << endl;
   return -1;
 }
@@ -1037,6 +1100,15 @@ int main(int argc, char *argv[])
     return TestAffineTransform(argv[2]);
   else if(0 == strcmp(argv[1], "ATOMMATH"))
     return TestAtomMath();
+  else if(0 == strcmp(argv[1], "SAMPLE"))
+    {
+    if(argc < 3)
+      { 
+      cerr << "Usage: " << argv[0] << " SAMPLE image" << endl;
+      return -1;
+      }
+    return TestSmoothedImageSampler(argv[2]);
+    }
 
   else 
     return usage();

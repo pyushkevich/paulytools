@@ -1,4 +1,5 @@
 #include "SmoothedImageSampler.h"
+#include <iostream>
 
 SmoothedImageSampler
 ::SmoothedImageSampler(
@@ -22,6 +23,7 @@ SmoothedImageSampler
   ntx = (int)(bb_end[0] - bb_start[0] + 0.5);
   nty = (int)(bb_end[1] - bb_start[1] + 0.5);
   ntz = (int)(bb_end[2] - bb_start[2] + 0.5);
+  std::cout << "NT* : " << ntx << " " << nty << " " << ntz << std::endl;
 
   // Arrays to store the erf values in x, y and z
   dx = new double[ntx]; dy = new double[nty]; dz = new double[ntz];
@@ -108,7 +110,14 @@ SmoothedImageSampler
       }
     }
 
-  // Set the output value
-  *f = sum_wf / sum_w;
+  // Scaling factor for speed
+  double inv_sum_w = 1.0 / sum_w;
 
+  // Set the output value
+  *f = sum_wf * inv_sum_w;
+
+  // Set the derivative values
+  grad_f[0] = (sum_wfx - *f * sum_wx) * inv_sum_w;
+  grad_f[1] = (sum_wfy - *f * sum_wy) * inv_sum_w;
+  grad_f[2] = (sum_wfz - *f * sum_wz) * inv_sum_w;
 }

@@ -91,6 +91,9 @@ private:
       if(k0 < 0) k0 = 0;
       if(k1 > n) k1 = n;
 
+      // Scaling factor for derivative computations
+      double dscale = sfac * 1.128379167;
+
       // Start at the first voxel
       double t = (b - p + k0) * sfac;
       double e_last = erf(t);
