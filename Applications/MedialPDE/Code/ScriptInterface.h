@@ -193,7 +193,12 @@ public:
    * The idea is to eventually have a user interface for designing these
    * parameter files.
    */
-  void RunOptimization(FloatImage *image, size_t nSteps, Registry &reg);
+  void RunOptimization(
+    FloatImage *image, 
+    size_t nSteps, 
+    Registry &reg,
+    FloatImage *imggray = NULL,
+    bool do_deriv_test = false);
   
   // Same as above
   void RunOptimization(

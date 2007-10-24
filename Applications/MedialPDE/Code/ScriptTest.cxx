@@ -780,6 +780,10 @@ int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img)
   // Create an array of image match terms
   vector<TermInfo> vt;
   vt.push_back(TermInfo(
+      "CrossCorrelationImageMatchTerm", 
+      new CrossCorrelationImageMatchTerm(
+        img, model, img, model, 10, 1.0), 0.1));
+  vt.push_back(TermInfo(
       "RadiusPenaltyTerm", new RadiusPenaltyTerm(0.025), 0.1));
   vt.push_back(TermInfo(
       "BoundaryImageMatchTerm", new BoundaryImageMatchTerm(img), 0.1));

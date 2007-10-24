@@ -475,6 +475,234 @@ void BoundaryImageMatchTerm::EndGradientComputation()
 }
 
 /*********************************************************************************
+ * CROSS-CORRELATION ENERGY TERM
+ ********************************************************************************/
+CrossCorrelationImageMatchTerm::
+CrossCorrelationImageMatchTerm(
+  FloatImage *imTarget, GenericMedialModel *model,
+  FloatImage *imReference, GenericMedialModel *mdlReference,
+  size_t nCuts, double xiMax)
+{
+  // Copy the target image
+  this->image = imTarget;
+
+  // Initialize the profile array
+  nSamplesPerAtom = nCuts + 2;
+  xProfile.resize(
+    model->GetNumberOfBoundaryPoints(), 
+    ProfileData(nSamplesPerAtom));
+
+  // Compute the sample point values along xi
+  xSamples.resize(nSamplesPerAtom, 0.0);
+  for(size_t i = 0; i < nSamplesPerAtom; i++)
+    {
+    xSamples[i] = i * xiMax / (nCuts + 1.0);
+    }
+
+  // Init the reference data
+  InitializeReferenceData(imReference, mdlReference);
+}
+
+void
+CrossCorrelationImageMatchTerm::
+InitializeReferenceData(FloatImage *imReference, GenericMedialModel *mdlReference)
+{
+  // Create an adapter for image sampling
+  FloatImageEuclideanFunctionAdapter fnref(imReference);
+
+  // Sample the reference image along the reference model. It is assumed that
+  // the reference and target models have exactly the same mesh characteristics.
+  for(MedialBoundaryPointIterator bip(mdlReference->GetIterationContext());
+    !bip.IsAtEnd(); ++bip)
+    {
+    size_t ibnd = bip.GetIndex(), iatom = bip.GetAtomIndex();
+    ProfileData &p = xProfile[ibnd];
+
+    // Get the medial atom in question
+    MedialAtom &a = mdlReference->GetAtomArray()[iatom];
+
+    // Get the vector from medial to the boundary in the reference model
+    SMLVec3d U = a.xBnd[bip.GetBoundarySide()].X - a.X;
+
+    // Accumulators for mean and standard deviation
+    double xSumSq = 0.0, xSum = 0.0;
+
+    // Compute the volume element and image value for the intermediate points
+    for(size_t j = 0; j < nSamplesPerAtom; j++)
+      {
+      // Compute the sample points
+      SMLVec3d Xj = a.X + xSamples[j] * U;
+
+      // Sample the image intentisy
+      double v = fnref.Evaluate(Xj);
+      p.xRefImgVal[j] = v;
+
+      // Accumulate
+      xSumSq += v * v; xSum += v;
+      }
+
+    // Compute the mean 
+    p.xRefMean = xSum / nSamplesPerAtom;
+
+    // Compute the standard deviation. We don't scale by (n-1) for simplicity
+    // since correlation is just a ratio of quantities scaled by (n-1)
+    p.xRefSD = sqrt((xSumSq - xSum * p.xRefMean));
+    }
+}
+
+double
+CrossCorrelationImageMatchTerm::
+UnifiedComputeEnergy(SolutionData *S, bool gradient_mode)
+{
+  // Reset the statistical accumulators
+  saPenalty.Reset();
+
+  // Function for image sampling
+  FloatImageEuclideanFunctionAdapter function(image);
+  
+  // Sample the target image in the space of the target model.  
+  for(MedialBoundaryPointIterator bip(S->xAtomGrid); !bip.IsAtEnd(); ++bip)
+    {
+    size_t ibnd = bip.GetIndex(), iatom = bip.GetAtomIndex();
+    ProfileData &p = xProfile[ibnd];
+
+    // Get the medial atom in question
+    MedialAtom &a = S->xAtoms[iatom];
+
+    // Get the vector from medial to the boundary in the reference model
+    SMLVec3d U = a.xBnd[bip.GetBoundarySide()].X - a.X;
+
+    // Accumulators for mean and standard deviation
+    double xCovAcc = 0.0, xSumSq = 0.0, xSum = 0.0;
+
+    // Compute the volume element and image value for the intermediate points
+    for(size_t j = 0; j < nSamplesPerAtom; j++)
+      {
+      // Compute the sample points
+      SMLVec3d Xj = a.X + xSamples[j] * U;
+
+      // Sample the image intentisy at the sample point
+      double v = function.Evaluate(Xj);
+
+      // Compute the contribution to the covariance
+      xCovAcc += v * (p.xRefImgVal[j] - p.xRefMean);
+
+      // Compute the contribution to the sum and sum of squares
+      xSumSq += v * v;
+      xSum += v;
+
+      // For gradient computations, store the image value and the gradient
+      if(gradient_mode)
+        {
+        p.xImageVal[j] = v;
+        function.ComputeGradient(Xj, p.xImageGrad[j]);
+        }
+      }
+
+    // Compute the covariance of X and Y
+    p.xCov = xCovAcc;
+    p.xMean = xSum / nSamplesPerAtom;
+    p.xSD = sqrt((xSumSq - xSum * p.xMean));
+
+    // Compute the correlation of X and Y
+    p.xCorr = p.xCov / (p.xSD * p.xRefSD);
+    saCorr.Update(p.xCorr);
+
+    // Scale the correlation by the area element
+    double xContrib = (1.0 - p.xCorr) * S->xBoundaryWeights[ibnd];
+    saPenalty.Update(xContrib);
+    }
+
+  // Return the mean penalty scaled by the total area
+  xTotalPenalty = saPenalty.GetSum() / S->xBoundaryArea;
+
+  if(!xTotalPenalty <= 1.0 || !xTotalPenalty >= -1.0)
+    throw MedialModelException("NAN");
+
+  return xTotalPenalty;
+}
+
+
+double
+CrossCorrelationImageMatchTerm::
+ComputePartialDerivative(
+  SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  // Create an accumulator for total contibution
+  double dAccumPenalty = 0.0;
+
+  // Sample the target image in the space of the target model.  
+  for(MedialBoundaryPointIterator bip(S->xAtomGrid); !bip.IsAtEnd(); ++bip)
+    {
+    size_t ibnd = bip.GetIndex(), iatom = bip.GetAtomIndex();
+    ProfileData &p = xProfile[ibnd];
+
+    // Get the medial atom in question
+    MedialAtom &a = S->xAtoms[iatom];
+    MedialAtom &da = dS->xAtoms[iatom];
+
+    // Get the vector from medial to the boundary in the reference model
+    SMLVec3d U = a.xBnd[bip.GetBoundarySide()].X - a.X;
+    SMLVec3d dU = da.xBnd[bip.GetBoundarySide()].X - da.X;
+
+    // Accumulators for mean and standard deviation
+    double xCovAcc = 0.0, xSumSq = 0.0, xSum = 0.0;
+    double dCovAcc = 0.0, dSumSqHalf = 0.0, dSum = 0.0;
+
+    // Compute the volume element and image value for the intermediate points
+    for(size_t j = 0; j < nSamplesPerAtom; j++)
+      {
+      // Compute the sample points
+      SMLVec3d Xj = a.X + xSamples[j] * U;
+      SMLVec3d Dj = da.X + xSamples[j] * dU;
+
+      // Get the image value and the gradient of the image
+      double v = p.xImageVal[j];
+      double dv = dot_product(p.xImageGrad[j], Dj);
+
+      // Compute the contribution to the covariance
+      dCovAcc += dv * (p.xRefImgVal[j] - p.xRefMean);
+
+      // Compute the contribution to the sum and sum of squares
+      dSumSqHalf += v * dv;
+      dSum += dv;
+      }
+
+    // Compute the covariance of X and Y
+    double dCov = dCovAcc;
+    double dSD = (dSumSqHalf - dSum * p.xMean) / p.xSD;
+
+    // Compute the correlation of X and Y
+    double dCorr = (dCov * p.xSD - p.xCov * dSD) / (p.xSD * p.xSD * p.xRefSD);
+
+    // Scale the correlation by the area element
+    double dContrib = 
+      (1.0 - p.xCorr) * dS->xBoundaryWeights[ibnd] -
+      dCorr * S->xBoundaryWeights[ibnd];
+
+    dAccumPenalty += dContrib;
+    }
+
+  // Return the mean penalty scaled by the total area
+  double dTotalPenalty = 
+    (dAccumPenalty - xTotalPenalty * dS->xBoundaryArea) / S->xBoundaryArea;
+
+  return dTotalPenalty;
+}
+
+
+void
+CrossCorrelationImageMatchTerm
+::PrintReport(ostream &sout)
+{
+  sout << " Cross Correlation Image Match Term " << endl;
+  sout << "    total penalty  : " << xTotalPenalty << endl;
+  sout << "    min corr coeff : " << saCorr.GetMin() << endl;  
+  sout << "    max corr coeff : " << saCorr.GetMax() << endl;  
+  sout << "    avg corr coeff : " << saCorr.GetMean() << endl;  
+}
+
+/*********************************************************************************
  * BOUNDARY JACOBIAN TERM
  ********************************************************************************/
 

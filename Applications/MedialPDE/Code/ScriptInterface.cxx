@@ -22,6 +22,7 @@
 #include "vnl/algo/vnl_symmetric_eigensystem.h"
 #include "ConjugateGradientMethod.h"
 #include "EvolutionaryStrategy.h"
+#include "TestSolver.h"
 
 #include "vtkUnstructuredGrid.h"
 #include "vtkPointLocator.h"
@@ -689,7 +690,7 @@ void MedialPDE
 
 void MedialPDE
 ::RunOptimization(
-  FloatImage *image, size_t nSteps, Registry &folder)
+  FloatImage *image, size_t nSteps, Registry &folder, FloatImage *imgGray, bool flag_test)
 {
   // Read the optimization parameters from the file
   OptimizationParameters p; p.ReadFromRegistry(folder);
@@ -807,6 +808,9 @@ void MedialPDE
   BoundaryCurvaturePenalty xTermBndCurvature(xMedialModel);
   RadiusPenaltyTerm xTermRadius(0.025);
 
+  // This is unfortunate, but some terms have to be created 'on demand'
+  CrossCorrelationImageMatchTerm *xCrossCorr = NULL;
+
   // TODO: do this better
   // MeshRegularizationPenaltyTerm xMeshRegTerm(xMedialModel, 6, 6);
 
@@ -858,14 +862,71 @@ void MedialPDE
     xProblem.AddEnergyTerm(
       &xTermAngles, p.xTermWeights[OptimizationParameters::MEDIAL_ANGLES]);
 
+  // Add the cross-correlation energy term
+  if(p.xTermWeights[OptimizationParameters::CROSS_CORRELATION] > 0.0)
+    {
+    // Get the registry associated with the term
+    Registry &r = p.xTermParameters[OptimizationParameters::CROSS_CORRELATION];
+    
+    // Get the reference image filename
+    r.WriteToFile("laputa.txt");
+    std::string fnRefImage = r["ReferenceImage"][""];
+    std::string fnRefModel = r["ReferenceModel"][""];
+
+    // If the references don't exist, throw an exception
+    if(!fnRefModel.length())
+      throw MedialModelException("Missing reference model in CrossCorrelation term");
+
+    if(!fnRefImage.length())
+      throw MedialModelException("Missing reference image in CrossCorrelation term");
+
+    if(imgGray == NULL)
+      throw MedialModelException("Missing target image in CrossCorrelation term");
+
+    // Load the reference image
+    FloatImage refImage;
+    refImage.LoadFromFile(fnRefImage.c_str());
+
+    // Load the reference model
+    MedialPDE refModel(fnRefModel.c_str());
+
+    // Get the number of cuts and the extent of the cross-correlation model
+    size_t nCuts = r["NumberOfCuts"][16];
+    double xiMax = r["MaximumXi"][2.0];
+
+    // Create a new cross-correlation term
+    xCrossCorr = new CrossCorrelationImageMatchTerm(
+      imgGray, xMedialModel, &refImage, refModel.GetMedialModel(), nCuts, xiMax);
+
+    // Add the cross-correlation term to the optimization
+    xProblem.AddEnergyTerm(
+      xCrossCorr, p.xTermWeights[OptimizationParameters::CROSS_CORRELATION]);
+    }
+
   // Initial solution report
   cout << "INITIAL SOLUTION REPORT: " << endl;
   xProblem.Evaluate(xSolution.data_block());
   xProblem.PrintReport(cout);
 
-  // Test the gradient computation
-  // cout << "GRADIENT COMPUTATION ABS MAX ERROR (eps = 0.001): " << 
-  //  xProblem.TestGradientComputation(xSolution.data_block(), 0.001);
+  // Test the term-by-term gradient computation
+  if(flag_test)
+    {
+    printf("TESTING GRADIENT COMPUTATION\n");
+    printf("%34s  %34s : %9s  %9s  %9s  %9s  %9s  P/F\n",
+      "ENERGY TERM", "COEFFICIENT MAPPING",
+      "ENERGY VAL", 
+      "ABS ERROR", "REL ERROR", "T(AGRAD)", "T(NGRAD)");
+
+    vector<EnergyTerm *> &terms = xProblem.GetEnergyTerms();
+    for(size_t i = 0; i < terms.size(); i++)
+      {
+      MedialOptimizationProblem mop(xMedialModel, xMapping);
+      mop.AddEnergyTerm(terms[i], 1.0);
+      TestOptimizerGradientComputation(
+        mop, *xMapping, xMedialModel, 0.1, 
+        terms[i]->GetShortName().c_str(), "X");
+      }
+    }
 
   // At this point, split depending on the method
   if(p.xOptimizer == OptimizationParameters::CONJGRAD)
@@ -883,6 +944,11 @@ void MedialPDE
   // After optimization, apply the best result
   xMedialModel->SetCoefficientArray(xMapping->Apply(xInitialCoeff, xSolution));
   xMedialModel->ComputeAtoms();
+
+  // Delete dynamic terms (this is stupid, should all be dynamic, generated 
+  // using a factory class or something like that)
+  if(xCrossCorr)
+    delete xCrossCorr;
 
   // Delete the mapping
   delete xMapping;

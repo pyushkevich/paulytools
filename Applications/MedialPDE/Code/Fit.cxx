@@ -29,6 +29,8 @@ int usage()
   cout << "  cmrepfit [options] param.txt template.cmrep target.img output_dir" << endl;
   cout << "options: " << endl;
   cout << "  -s N   : Only run fitting stage N (first stage is stage 0)" << endl;
+  cout << "  -g FN  : Supply 'gray' image filename for direct-to-image fitting" << endl;
+  cout << "  -t     : Test gradient computation for each of the terms (debug)" << endl;
   cout << "parameter file specification: " << endl;
   cout << "  http://alliance.seas.upenn.edu/~pauly2/wiki/index.php?n=Main.CM-RepFittingToolCmrFit" << endl;
   cout << endl;
@@ -132,8 +134,10 @@ int main(int argc, char *argv[])
 
   // Check optional parameters
   bool flag_one_stage = false;
+  bool flag_test_deriv = false;
   size_t selected_stage = 0;
   size_t argoptmax = argc-4;
+  string fn_gray = "";
   for(size_t i = 1; i < argoptmax; i++)
     {
     string arg = argv[i];
@@ -142,6 +146,15 @@ int main(int argc, char *argv[])
       flag_one_stage = true;
       selected_stage = atoi(argv[i+1]);
       i++;
+      }
+    else if(arg == "-g" && i < argoptmax-1)
+      {
+      fn_gray = argv[i+1];
+      i++;
+      }
+    else if(arg == "-t")
+      {
+      flag_test_deriv = true;
       }
     else
       {
@@ -221,7 +234,7 @@ int main(int argc, char *argv[])
       rp.CollectKeys(klist);
       for(Registry::StringListType::iterator it = klist.begin(); it != klist.end(); it++)
         {
-        stages[i].param.Entry(*it) = rp.Entry(*it);
+        stages[i].param[*it] << rp.Entry(*it).GetInternalString();
         }
 
       }
@@ -251,6 +264,13 @@ int main(int argc, char *argv[])
 
     // Float image for future use
     FloatImage imgfloat;
+
+    // Grayscale image (if supplied)
+    FloatImage imggray;
+    if(fn_gray.length())
+      {
+      imggray.LoadFromFile(fn_gray.c_str());
+      }
 
     // Before starting the loop, we need a filename for the current model
     string fn_current = fn_temp;
@@ -313,7 +333,7 @@ int main(int argc, char *argv[])
         }
       else if(stages[i].mode == FIT_TO_BINARY)
         {
-        mrep.RunOptimization(&imgfloat, stages[i].max_iter, stages[i].param);
+        mrep.RunOptimization(&imgfloat, stages[i].max_iter, stages[i].param, &imggray, flag_test_deriv);
         }
       else throw string("Unknown optimization mode");
 

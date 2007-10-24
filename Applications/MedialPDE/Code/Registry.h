@@ -203,10 +203,10 @@ public:
   static StringType Key(const char *key,...);
 
   /** Get a list of all keys that have values, append it to keyList */
-  int GetEntryKeys(StringListType &keyList);
+  int GetEntryKeys(StringListType &keyList) const;
 
   /** Get a list of all subfolder keys, append it to keyList */
-  int GetFolderKeys(StringListType &keyList);
+  int GetFolderKeys(StringListType &keyList) const;
 
   /** Find a value in a folder or return "" */
   StringType FindValue(const StringType& value);
@@ -299,6 +299,8 @@ public:
   public:
     SyntaxException(const char *text) : StringType(text) {}
   };
+
+  Registry &operator =(const Registry &rsrc);
 
 private:
   // Hashtable type definition

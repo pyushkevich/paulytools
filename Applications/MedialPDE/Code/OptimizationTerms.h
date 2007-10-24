@@ -213,6 +213,95 @@ private:
   double *xImageVal;
 };
 
+class CrossCorrelationImageMatchTerm : public EnergyTerm
+{
+public:
+  /**
+   * Cross correlation energy term is initialized with a target image,
+   * a medial model, a reference image, and a reference medial model.
+   * The target image is the one we want to match, and the model is the
+   * deformable model that will be trying to match the target image. The
+   * reference model and image are the ones against which cross-correlation
+   * will be computed.
+   *
+   * The last two parameters are nCuts (the number of sample points along 
+   * each spoke, and xiMax, the extent of the spoke, which is 1.0 by default,
+   * meaning that the spoke extends to the boundary. Setting xiMax to 2.0 will
+   * make it extend one radius value past the boundary.
+   */
+  CrossCorrelationImageMatchTerm(
+    FloatImage *imTarget, GenericMedialModel *model,
+    FloatImage *imReference, GenericMedialModel *mdlReference,
+    size_t nCuts, double xiMax = 1.0);
+
+  /** Compute the volume overlap fraction between image and m-rep */
+  double ComputeEnergy(SolutionData *data)
+    { return UnifiedComputeEnergy(data, false); }
+
+  // Initialize gradient computation and return the value of the solution
+  double BeginGradientComputation(SolutionData *data)
+    { return UnifiedComputeEnergy(data, true); }
+  
+  // Finish gradient computation, remove all temporary data
+  void EndGradientComputation() {};
+
+  /** Compute directional deriavative */
+  double ComputePartialDerivative(SolutionData *S, 
+    PartialDerivativeSolutionData *dS);
+
+  /** Print the report */
+  void PrintReport(ostream &sout);
+
+  /** Print a short name of the energy term */
+  string GetShortName() { return string("X-CORR"); }
+
+private:
+
+  /** Compute x-correlation */
+  double UnifiedComputeEnergy(SolutionData *S, bool gradient_mode);
+
+  /** Sample the reference image */
+  void InitializeReferenceData(
+    FloatImage *imgReference, GenericMedialModel *mdlReference);
+
+  // Structure that holds intensity profile data
+  struct ProfileData
+    {
+    // Image profile and gradient
+    std::vector<SMLVec3d> xImageGrad;
+    std::vector<double> xImageVal;
+
+    // Reference image profile
+    std::vector<double> xRefImgVal;
+
+    // Statistics from the reference image
+    double xRefMean, xRefSD;
+    double xSD, xCov, xMean, xCorr;
+
+    ProfileData(size_t n) 
+      : xImageGrad(n), xImageVal(n), xRefImgVal(n) {}
+    ProfileData() {}
+    };
+
+  // Array of profiles, one for each boundary point
+  std::vector<ProfileData> xProfile;
+
+  // Array of sample points in xi
+  std::vector<double> xSamples;
+
+  // Sampling info
+  size_t nSamplesPerAtom;
+
+  // Statistical accumulators
+  StatisticsAccumulator saPenalty, saCorr;
+
+  // Total penalty
+  double xTotalPenalty;
+
+  // Target image function
+  FloatImage *image;
+};
+
 /**
  * This term computes the integral of some function over the volume of a 
  * cm-rep. 
@@ -802,6 +891,10 @@ public:
   /** Get the medial model */
   GenericMedialModel *GetMedialModel()
     { return xMedialModel; }
+
+  /** Get the list of energy terms */
+  vector<EnergyTerm *> &GetEnergyTerms()
+    { return xTerms; }
 
 private:
   typedef vnl_vector<double> Vec;

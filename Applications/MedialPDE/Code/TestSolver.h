@@ -14,7 +14,7 @@ int TestGradientComputation(
   vnl_vector<double> P0,
   int nRandVariations = 0);
 
-int TestGradientComputation(
+inline int TestGradientComputation(
   GenericMedialModel *xSolver, 
   CoefficientMapping *xMask, 
   int nRandVariations = 0)

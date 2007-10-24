@@ -83,10 +83,11 @@ Registry::Key(const char *format,...)
 
 int
 Registry
-::GetEntryKeys(StringListType &targetArray) 
+::GetEntryKeys(StringListType &targetArray) const
 {
   // Iterate through keys in ascending order
-  for(EntryIterator it=m_EntryMap.begin();it!=m_EntryMap.end();++it)
+  for(EntryMapType::const_iterator it = m_EntryMap.begin();
+    it != m_EntryMap.end(); ++it)
     {
     // Put the key in the array
     targetArray.push_back(it->first);
@@ -98,10 +99,11 @@ Registry
 
 int
 Registry
-::GetFolderKeys(StringListType &targetArray) 
+::GetFolderKeys(StringListType &targetArray)  const
 {
   // Iterate through keys in ascending order
-  for(FolderIterator it=m_FolderMap.begin();it!=m_FolderMap.end();++it)
+  for(FolderMapType::const_iterator it=m_FolderMap.begin();
+    it!=m_FolderMap.end();++it)
     {
     // Put the key in the array
     targetArray.push_back(it->first);
@@ -453,6 +455,27 @@ Registry
   // If the error stream is not empty, throw an exception
   if(serr.str().length())
     throw SyntaxException(serr.str().c_str());
+}
+
+Registry &
+Registry::operator =(const Registry &rsrc)
+{
+  // Empty ourselves
+  this->Clear();
+
+  // Apply copy operation on all folders
+  for(FolderMapType::const_iterator it = rsrc.m_FolderMap.begin();
+    it != rsrc.m_FolderMap.end(); ++it)
+    {
+    Registry *r = new Registry();
+    *r = *it->second;
+    m_FolderMap[it->first] = r;
+    }
+
+  // Copy all the entries
+  m_EntryMap = rsrc.m_EntryMap;
+
+  return *this;
 }
 
 
