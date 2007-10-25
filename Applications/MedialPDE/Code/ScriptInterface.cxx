@@ -233,7 +233,7 @@ double MedialPDE::ComputeImageMatch(FloatImage *image)
   SolutionData S(xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
 
   // Create an image match term
-  BoundaryImageMatchTerm termImage(image);
+  BoundaryImageMatchTerm termImage(xMedialModel, image);
 
   // Compute the energy
   double xMatch = termImage.ComputeEnergy(&S);
@@ -787,7 +787,7 @@ void MedialPDE
   if(p.xImageMatch == OptimizationParameters::VOLUME)
     xTermImage = new VolumeOverlapEnergyTerm(xMedialModel, image, 8);
   else if(p.xImageMatch == OptimizationParameters::BOUNDARY)
-    xTermImage = new BoundaryImageMatchTerm(image);
+    xTermImage = new BoundaryImageMatchTerm(xMedialModel, image);
   else if(p.xImageMatch == OptimizationParameters::RADIUS_VALUES)
     {
     vnl_vector<double> xRadius(xMedialModel->GetNumberOfAtoms());
@@ -894,9 +894,15 @@ void MedialPDE
     size_t nCuts = r["NumberOfCuts"][16];
     double xiMax = r["MaximumXi"][2.0];
 
+    // Create smoothing functions for source and target images
+    ImageSmoothSamplingEuclideanFunction *fReference = 
+      new ImageSmoothSamplingEuclideanFunction(&refImage, 2.0, 3.5);
+    ImageSmoothSamplingEuclideanFunction *fTarget = 
+      new ImageSmoothSamplingEuclideanFunction(imgGray, 2.0, 3.5);
+
     // Create a new cross-correlation term
     xCrossCorr = new CrossCorrelationImageMatchTerm(
-      imgGray, xMedialModel, &refImage, refModel.GetMedialModel(), nCuts, xiMax);
+      fTarget, xMedialModel, fReference, refModel.GetMedialModel(), nCuts, xiMax);
 
     // Add the cross-correlation term to the optimization
     xProblem.AddEnergyTerm(
@@ -912,7 +918,7 @@ void MedialPDE
   if(flag_test)
     {
     printf("TESTING GRADIENT COMPUTATION\n");
-    printf("%34s  %34s : %9s  %9s  %9s  %9s  %9s  P/F\n",
+    printf("%12s  %12s : %9s  %9s  %9s  %9s  %9s  P/F\n",
       "ENERGY TERM", "COEFFICIENT MAPPING",
       "ENERGY VAL", 
       "ABS ERROR", "REL ERROR", "T(AGRAD)", "T(NGRAD)");
@@ -923,7 +929,7 @@ void MedialPDE
       MedialOptimizationProblem mop(xMedialModel, xMapping);
       mop.AddEnergyTerm(terms[i], 1.0);
       TestOptimizerGradientComputation(
-        mop, *xMapping, xMedialModel, 0.1, 
+        mop, *xMapping, xMedialModel, 0.0, 
         terms[i]->GetShortName().c_str(), "X");
       }
     }
@@ -948,7 +954,11 @@ void MedialPDE
   // Delete dynamic terms (this is stupid, should all be dynamic, generated 
   // using a factory class or something like that)
   if(xCrossCorr)
+    {
+    delete xCrossCorr->GetReferenceFunction();
+    delete xCrossCorr->GetTargetFunction();
     delete xCrossCorr;
+    }
 
   // Delete the mapping
   delete xMapping;

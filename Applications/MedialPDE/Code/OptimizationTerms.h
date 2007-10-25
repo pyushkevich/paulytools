@@ -7,11 +7,113 @@
 #include "BasisFunctions2D.h"
 #include "ScriptInterface.h"
 #include "CoefficientMapping.h"
+#include "SmoothedImageSampler.h"
 #include "MedialAtomGrid.h"
 #include <optima.h>
 #include "Registry.h"
 
 using medialpde::FloatImage;
+
+/******************************************************************
+ * THIS EUCLIDEAN FUNCTION JUNK SHOULD GO SOMEWHERE ELSE
+ * ************************************************************** */
+
+/**
+ * A simple image adapter that samples the image without applying
+ * any additional processing
+ */
+class FloatImageEuclideanFunctionAdapter : public EuclideanFunction
+{
+public:
+  FloatImageEuclideanFunctionAdapter(FloatImage *image)
+    { this->image = image; }
+
+  double Evaluate(const SMLVec3d &X)
+    { return (double) image->Interpolate(X); }
+  
+  void ComputeGradient(const SMLVec3d &X, SMLVec3d &G)
+    { image->InterpolateImageGradient(X, G); }
+  
+protected:
+  FloatImage *image;
+};
+
+/** A function that computes the match as (I(x) - I0)^2, where I0 is some
+ * level set in the image. Used for blurred binary images */
+class FloatImageSquareValueFunctionAdapter : public EuclideanFunction
+{
+public:
+  FloatImageSquareValueFunctionAdapter(FloatImage *image, float xLevelSet = 0.0f) 
+    { this->image = image; this->xLevelSet = xLevelSet; }
+
+  double Evaluate(const SMLVec3d &X)
+    { 
+    // Get the image match from the superclass
+    double I = (double) image->Interpolate(X);
+    double d = I - xLevelSet; 
+    return d * d;
+    }
+
+  void ComputeGradient(const SMLVec3d &X, SMLVec3d &G)
+    {
+    // Get the gradient and match from the superclass
+    double I = (double) image->Interpolate(X);
+    double d = I - xLevelSet;
+    image->InterpolateImageGradient(X, G);
+    G *= 2.0 * d;
+    }
+
+private:
+  FloatImage *image;
+  float xLevelSet;
+};
+
+class ImageSmoothSamplingEuclideanFunction : public EuclideanFunction
+{
+public:
+  ImageSmoothSamplingEuclideanFunction(
+    FloatImage *image,
+    double sigma, double cutoff = 3.5);
+
+  ~ImageSmoothSamplingEuclideanFunction()
+    { delete sis; }
+
+  double ComputeFunctionAndGradient(const SMLVec3d &X, SMLVec3d &G)
+    {
+    SMLVec3d Ximg;
+    for(size_t d = 0; d < 3; d++)
+     Ximg[d] = (X[d] - xOrigin[d]) * xInvVoxSize[d];
+
+    double f = sis->Sample(Ximg.data_block(), G.data_block());
+
+    for(size_t d = 0; d < 3; d++)
+     G[d] = G[d] * xInvVoxSize[d];
+
+    return f;
+    }
+
+  double Evaluate(const SMLVec3d &X)
+    { 
+    SMLVec3d Ximg;
+    for(size_t d = 0; d < 3; d++)
+     Ximg[d] = (X[d] - xOrigin[d]) * xInvVoxSize[d];
+
+    return sis->Sample(Ximg.data_block());
+    }
+
+  void ComputeGradient(const SMLVec3d &X, SMLVec3d &G)
+    {
+    ComputeFunctionAndGradient(X, G);
+    }
+
+private:
+  FloatImage *image;
+  SmoothedImageSampler *sis;
+
+  SMLVec3d xOrigin, xInvVoxSize;
+
+};
+
 
 /** 
  * A base class for data associated with each solution as well as the 
@@ -177,23 +279,22 @@ class BoundaryImageMatchTerm : public EnergyTerm
 {
 public:
   // Constructor
-  BoundaryImageMatchTerm(FloatImage *image)
-    { this->xImage = image; }
+  BoundaryImageMatchTerm(GenericMedialModel *model, FloatImage *image);
+    ~BoundaryImageMatchTerm();
 
   // Compute the image match
-  double ComputeEnergy(SolutionData *data);
+  double ComputeEnergy(SolutionData *data)
+    { return UnifiedComputeEnergy(data, false); }
 
   // Initialize gradient computation and return the value of the solution
   // at the current state
-  double BeginGradientComputation(SolutionData *SCenter);
+  double BeginGradientComputation(SolutionData *data)
+    { return UnifiedComputeEnergy(data, true); }
   
   // Compute the partial derivative (must be called in the middle of Begin and
   // End of GradientComputation.
   double ComputePartialDerivative(
     SolutionData *S, PartialDerivativeSolutionData *dS);
-
-  // Finish gradient computation, remove all temporary data
-  void EndGradientComputation();
 
   // Print a verbose report
   void PrintReport(ostream &sout);
@@ -201,9 +302,11 @@ public:
   // Print a short name
   string GetShortName() { return string("BMATCH"); }
 
-
 private:
   FloatImage *xImage;
+
+  // Common energy function
+  double UnifiedComputeEnergy(SolutionData *, bool);
 
   // Terms used in reporting details
   double xImageMatch, xBoundaryArea, xFinalMatch;
@@ -230,8 +333,8 @@ public:
    * make it extend one radius value past the boundary.
    */
   CrossCorrelationImageMatchTerm(
-    FloatImage *imTarget, GenericMedialModel *model,
-    FloatImage *imReference, GenericMedialModel *mdlReference,
+    EuclideanFunction *fTarget, GenericMedialModel *model,
+    EuclideanFunction *fReference, GenericMedialModel *mdlReference,
     size_t nCuts, double xiMax = 1.0);
 
   /** Compute the volume overlap fraction between image and m-rep */
@@ -255,6 +358,12 @@ public:
   /** Print a short name of the energy term */
   string GetShortName() { return string("X-CORR"); }
 
+  EuclideanFunction *GetReferenceFunction()
+    { return fReference; }
+
+  EuclideanFunction *GetTargetFunction()
+    { return fTarget; }
+
 private:
 
   /** Compute x-correlation */
@@ -262,7 +371,7 @@ private:
 
   /** Sample the reference image */
   void InitializeReferenceData(
-    FloatImage *imgReference, GenericMedialModel *mdlReference);
+    EuclideanFunction *fReference, GenericMedialModel *mdlReference);
 
   // Structure that holds intensity profile data
   struct ProfileData
@@ -299,7 +408,7 @@ private:
   double xTotalPenalty;
 
   // Target image function
-  FloatImage *image;
+  EuclideanFunction *fTarget, *fReference;
 };
 
 /**

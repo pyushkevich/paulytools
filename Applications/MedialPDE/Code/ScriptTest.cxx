@@ -783,51 +783,45 @@ int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img)
   // Create an array of image match terms
   vector<TermInfo> vt;
   vt.push_back(TermInfo(
-      "CrossCorrelationImageMatchTerm", 
-      new CrossCorrelationImageMatchTerm(
-        img, model, img, model, 10, 1.0), 0.1));
+      "", new RadiusPenaltyTerm(0.025), 0.1));
   vt.push_back(TermInfo(
-      "RadiusPenaltyTerm", new RadiusPenaltyTerm(0.025), 0.1));
+      "", new BoundaryImageMatchTerm(model, img), 0.1));
   vt.push_back(TermInfo(
-      "BoundaryImageMatchTerm", new BoundaryImageMatchTerm(img), 0.1));
+      "", new BoundaryJacobianEnergyTerm(), 1.0e-4));
   vt.push_back(TermInfo(
-      "BoundaryJacobianEnergyTerm", new BoundaryJacobianEnergyTerm(), 1.0e-4));
+      "", new BoundaryCurvaturePenalty(model), 0.1));
   vt.push_back(TermInfo(
-      "BoundaryCurvaturePenalty", new BoundaryCurvaturePenalty(model), 0.1));
+      "", new MedialCurvaturePenalty(), 0.1));
   vt.push_back(TermInfo(
-      "MedialCurvaturePenalty", new MedialCurvaturePenalty(), 0.1));
+      "", new VolumeOverlapEnergyTerm(model, img, 4), 0.1));
   vt.push_back(TermInfo(
-      "VolumeOverlapEnergyTerm", new VolumeOverlapEnergyTerm(model, img, 4), 0.1));
+      "", new MedialBendingEnergyTerm(model), 0.1));
   vt.push_back(TermInfo(
-      "MedialBendingEnergyTerm", new MedialBendingEnergyTerm(model), 0.1));
-  vt.push_back(TermInfo(
-      "DistanceToPointSetEnergyTerm", new DistanceToPointSetEnergyTerm(
+      "", new DistanceToPointSetEnergyTerm(
         model, px.data_block(), py.data_block(), pz.data_block()), 0.1));
   vt.push_back(TermInfo(
-      "DistanceToRadiusFieldEnergyTerm", new DistanceToRadiusFieldEnergyTerm(
+      "", new DistanceToRadiusFieldEnergyTerm(
         model, rad.data_block()), 0.1));
   vt.push_back(TermInfo(
-      "MedialAnglesPenaltyTerm", new MedialAnglesPenaltyTerm(model), 1.0e-4));
+      "", new MedialAnglesPenaltyTerm(model), 1.0e-4));
   vt.push_back(TermInfo(
-      "MedialRegularityTerm", new MedialRegularityTerm(model), 0.1));
+      "", new MedialRegularityTerm(model), 0.1));
   vt.push_back(TermInfo(
-      "BoundaryGradRPenaltyTerm", new BoundaryGradRPenaltyTerm(), 0.1));
+      "", new BoundaryGradRPenaltyTerm(), 0.1));
 
   // Create an array of masks
   vector<CoefficientMapping *> vm;
-  vm.push_back(new SubsetCoefficientMapping(model->GetRadialCoefficientMask()));
   vm.push_back(new IdentityCoefficientMapping(model));
+  vm.push_back(new SubsetCoefficientMapping(model->GetRadialCoefficientMask()));
   vm.push_back(new AffineTransformCoefficientMapping(model));
 
   char *nm[] = {
-    "RadialOnlyCoefficientMapping",
-    "IdentityCoefficientMapping",
-    "AffineTransformCoefficientMapping" };
+    "IDENTY", "RADIAL", "AFFINE" };
 
-  printf("%34s  %34s : %9s  %9s  %9s  %9s  %9s  P/F\n",
-    "ENERGY TERM", "COEFFICIENT MAPPING",
-    "ENERGY VAL", 
-    "ABS ERROR", "REL ERROR", "T(AGRAD)", "T(NGRAD)");
+  printf("%12s  %12s :  %10s  %10s  %10s  %8s  %8s  P/F\n",
+    "ENERGY-TERM ", "COEF-MAP",
+    "ENERGY-VAL", 
+    "ABS-ERROR", "REL-ERROR", "T(AGRAD)", "T(NGRAD)");
 
   // Loop over both options
   size_t i, j;
@@ -841,7 +835,7 @@ int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img)
     MedialOptimizationProblem mop(mp1.GetMedialModel(), vm[j]);
     mop.AddEnergyTerm(vt[i].et, 1.0);
     iReturn += TestOptimizerGradientComputation(
-      mop, *vm[j], mp1.GetMedialModel(), vt[i].step, vt[i].name.c_str(), nm[j]);
+      mop, *vm[j], mp1.GetMedialModel(), vt[i].step, vt[i].et->GetShortName().c_str(), nm[j]);
     // iReturn += TestOptimizerGradientComputation(mop, *vm[j], model, stepsize[i]);
     }
 
@@ -1008,44 +1002,51 @@ int TestSmoothedImageSampler(const char *fn_image)
     bb_end[d] = im->GetBufferedRegion().GetSize()[d];
 
   // Create the smooth image sampler
-  SmoothedImageSampler sissy(2.0, 3.5, im->GetBufferPointer(), bb_start, bb_end);
+  SmoothedImageSampler sissy(0.8, 1.5, im->GetBufferPointer(), bb_start, bb_end);
 
   // Sample the image at some random location
-  for(size_t i = 0; i < 10; i++)
+  SMLVec3d X1, X2, dX;
+  for(size_t d = 0; d < 3; d++)
     {
-    typedef vnl_vector_fixed<double, 3> Vec;
-    Vec X, Xp, Xm, G, Gd, Ga;
+    X1[d] = bb_start[d] + rand() * (bb_end[d] - bb_start[d]) / RAND_MAX;
+    X2[d] = bb_start[d] + rand() * (bb_end[d] - bb_start[d]) / RAND_MAX;
+    }
+
+  for(double t = 0; t < 1.0; t+=0.001)
+    {
+    SMLVec3d X, Xp, Xm, G, Gd, Ga;
     double f, fp, fm;
     
-    // Create a random point and a random direction
-    for(size_t d = 0; d < 3; d++)
-      {
-      X[d] = bb_start[d] + rand() * (bb_end[d] - bb_start[d]) / RAND_MAX;
-      }
+    // Set X
+    X = X1 * (1-t) + X2 * t;
 
     // Do finite difference computation
-    double eps = 0.01;
-    sissy.Sample(X.data_block(), &f, G.data_block());
+    double eps = 0.001;
+    f = sissy.Sample(X.data_block(), G.data_block());
     for(size_t d = 0; d < 3; d++)
       {
       Xp = X; Xp[d] += eps;
       Xm = X; Xm[d] -= eps;
-      sissy.Sample(Xp.data_block(), &fp, Gd.data_block());
-      sissy.Sample(Xm.data_block(), &fm, Gd.data_block());
+      fp = sissy.Sample(Xp.data_block());
+      fm = sissy.Sample(Xm.data_block());
       Ga[d] = (fp - fm) / (2 * eps);
       }
 
     // Compute the difference
-    Vec dG = G - Ga;
+    SMLVec3d dG = G - Ga;
     double maxdiff = dG.inf_norm();
-    cout << "X : " << X << endl;
-    cout << "f : " << f << endl;
-    cout << "G : " << G << endl;
-    cout << "Ga : " << Ga << endl;
-    cout << "MaxDiff : " << maxdiff << endl;
+
+    cout << X << " " << f << " " << maxdiff << endl;
 
     if(maxdiff > eps)
+      {
+      cout << "X : " << X << endl;
+      cout << "f : " << f << endl;
+      cout << "G : " << G << endl;
+      cout << "Ga : " << Ga << endl;
+      cout << "MaxDiff : " << maxdiff << endl;
       return -1;
+      }
     }
   return 0;
 }

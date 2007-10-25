@@ -110,6 +110,11 @@ public:
   virtual double Evaluate(const SMLVec3d &x) = 0;
   virtual void ComputeGradient(const SMLVec3d &x, SMLVec3d &G)
     { G.fill(0.0); }
+  virtual double ComputeFunctionAndGradient(const SMLVec3d &x, SMLVec3d &G)
+    {
+    this->ComputeGradient(x,G);
+    return this->Evaluate(x);
+    }
 };
 
 inline double ScalarTripleProduct(

@@ -2,6 +2,7 @@
 #include "MedialAtomGrid.h"
 #include "MedialAtom.h"
 #include "ITKImageWrapper.h"
+#include "itkImage.h"
 #include <iostream>
 #include <vnl/algo/vnl_svd.h>
 #include <vnl/vnl_random.h>
@@ -10,58 +11,41 @@ using namespace std;
 
 namespace medialpde {
 
-/**
- * A simple image adapter that samples the image without applying
- * any additional processing
- */
-class FloatImageEuclideanFunctionAdapter : public EuclideanFunction
-{
-public:
-  FloatImageEuclideanFunctionAdapter(FloatImage *image)
-    { this->image = image; }
-
-  double Evaluate(const SMLVec3d &X)
-    { return (double) image->Interpolate(X); }
-  
-  void ComputeGradient(const SMLVec3d &X, SMLVec3d &G)
-    { image->InterpolateImageGradient(X, G); }
-  
-protected:
-  FloatImage *image;
-};
-
-/** A function that computes the match as (I(x) - I0)^2, where I0 is some
- * level set in the image. Used for blurred binary images */
-class FloatImageSquareValueFunctionAdapter : public EuclideanFunction
-{
-public:
-  FloatImageSquareValueFunctionAdapter(FloatImage *image, float xLevelSet = 0.0f) 
-    { this->image = image; this->xLevelSet = xLevelSet; }
-
-  double Evaluate(const SMLVec3d &X)
-    { 
-    // Get the image match from the superclass
-    double I = (double) image->Interpolate(X);
-    double d = I - xLevelSet; 
-    return d * d;
-    }
-
-  void ComputeGradient(const SMLVec3d &X, SMLVec3d &G)
-    {
-    // Get the gradient and match from the superclass
-    double I = (double) image->Interpolate(X);
-    double d = I - xLevelSet;
-    image->InterpolateImageGradient(X, G);
-    G *= 2.0 * d;
-    }
-
-private:
-  FloatImage *image;
-  float xLevelSet;
-};
-
 } // namespace
 using namespace medialpde;
+
+/*********************************************************************************
+ * EUCLIDEAN FUNCTION JUNK
+ * ******************************************************************************/
+ImageSmoothSamplingEuclideanFunction
+::ImageSmoothSamplingEuclideanFunction(
+  FloatImage *image,
+  double sigma, double cutoff)
+{
+  // Store the image
+  this->image = image;
+
+  // Get the underlying itk::Image
+  typedef FloatImage::WrapperType::ImageType ImageType;
+  ImageType::Pointer im = image->GetInternalImage()->GetInternalImage();
+
+  // Get the origin and voxel size
+  for(size_t d = 0; d < 3; d++)
+    {
+    xOrigin[d] = image->GetInternalImage()->GetImageOrigin(d);
+    xInvVoxSize[d] = 1.0 / image->GetInternalImage()->GetImageSpacing(d);
+    }
+
+  // Compute the bounding box (in pixel coordinates)
+  double bb_start[] = {0.0, 0.0, 0.0};
+  double bb_end[3];
+  for(size_t d = 0; d < 3; d++)
+    bb_end[d] = im->GetBufferedRegion().GetSize()[d];
+
+  // Create the smooth image sampler
+  sis = new SmoothedImageSampler(
+    sigma, cutoff, im->GetBufferPointer(), bb_start, bb_end);
+}
 
 /*********************************************************************************
  * SOLUTION DATA BASE CLASS
@@ -356,29 +340,7 @@ MedialIntegrationEnergyTerm
 /*********************************************************************************
  * BOUNDARY IMAGE MATCH TERM
  ********************************************************************************/
-double 
-BoundaryImageMatchTerm
-::ComputeEnergy(SolutionData *S) 
-{
-  // Create the image adapter for image / gradient interpolation
-  FloatImageSquareValueFunctionAdapter fImage(xImage);
 
-  // Integrate the image match
-  xImageMatch = IntegrateFunctionOverBoundary(
-    S->xAtomGrid, S->xAtoms, S->xBoundaryWeights, &fImage);
-
-  // Compute the adaptive match, making sure the interpolation works
-  // double xMinArea = 0.5 * S->xBoundaryArea / S->xAtomGrid->GetNumberOfBoundaryQuads();
-  // xImageMatch = AdaptivelyIntegrateFunctionOverBoundary(
-  //   S->xAtomGrid, S->xAtoms, xMinArea, &fImage);
-
-  xBoundaryArea = S->xBoundaryArea;
-  xFinalMatch = xImageMatch / xBoundaryArea;
-
-  // Scale by area
-  return xFinalMatch;
-}
-  
 // Print a verbose report
 void 
 BoundaryImageMatchTerm
@@ -390,15 +352,23 @@ BoundaryImageMatchTerm
   sout << "    ratio         : " << xFinalMatch << endl;
 }
 
+BoundaryImageMatchTerm
+::BoundaryImageMatchTerm(
+  GenericMedialModel *model, FloatImage *image)
+{
+  this->xImage = image; 
+  xGradI = new SMLVec3d[model->GetNumberOfBoundaryPoints()];
+  xImageVal = new double[model->GetNumberOfBoundaryPoints()];
+}
+
 double
-BoundaryImageMatchTerm::BeginGradientComputation(SolutionData *S)
+BoundaryImageMatchTerm::UnifiedComputeEnergy(SolutionData *S, bool gradient_mode)
 {
   // Create the image adapter for image / gradient interpolation
-  FloatImageSquareValueFunctionAdapter fImage(xImage);
+  // FloatImageSquareValueFunctionAdapter fImage(xImage);
+  ImageSmoothSamplingEuclideanFunction fImage(xImage, 2.0, 5.5);
 
   // Compute the image and image gradient at each point in the image
-  xGradI = new SMLVec3d[S->xAtomGrid->GetNumberOfBoundaryPoints()];
-  xImageVal = new double[S->xAtomGrid->GetNumberOfBoundaryPoints()];
   xImageMatch = 0.0;
 
   // Loop over all boundary points
@@ -406,10 +376,10 @@ BoundaryImageMatchTerm::BeginGradientComputation(SolutionData *S)
     {
     // Compute the image gradient
     SMLVec3d &X = GetBoundaryPoint(it, S->xAtoms).X;
-    fImage.ComputeGradient(X, xGradI[it.GetIndex()]);
-
-    // Compute the image value
-    xImageVal[it.GetIndex()] = fImage.Evaluate(X);
+    if(gradient_mode)
+      xImageVal[it.GetIndex()] = fImage.ComputeFunctionAndGradient(X, xGradI[it.GetIndex()]);
+    else
+      xImageVal[it.GetIndex()] = fImage.Evaluate(X);
 
     // Accumulate to get weighted match
     xImageMatch += xImageVal[it.GetIndex()] * S->xBoundaryWeights[it.GetIndex()];
@@ -420,7 +390,7 @@ BoundaryImageMatchTerm::BeginGradientComputation(SolutionData *S)
 
   // Compute the final match
   xFinalMatch = xImageMatch / xBoundaryArea;
-  
+
   // Return the solution
   return xFinalMatch;
 }
@@ -430,11 +400,11 @@ BoundaryImageMatchTerm
 ::ComputePartialDerivative(SolutionData *S, PartialDerivativeSolutionData *DS)
 {
   // Create the image adapter for image / gradient interpolation
-  FloatImageSquareValueFunctionAdapter fImage(xImage);
+  // FloatImageSquareValueFunctionAdapter fImage(xImage);
+  ImageSmoothSamplingEuclideanFunction fImage(xImage, 2.0, 5.5);
 
   // Accumulator for the partial derivative of the weighted match function
   double dMatchdC = 0.0;
-
 
   // Compute the partial derivative for this coefficient
   
@@ -467,7 +437,7 @@ BoundaryImageMatchTerm
   return dFinaldC;
 }
 
-void BoundaryImageMatchTerm::EndGradientComputation()
+BoundaryImageMatchTerm::~BoundaryImageMatchTerm()
 {
   // Clean up
   delete xGradI;
@@ -479,12 +449,13 @@ void BoundaryImageMatchTerm::EndGradientComputation()
  ********************************************************************************/
 CrossCorrelationImageMatchTerm::
 CrossCorrelationImageMatchTerm(
-  FloatImage *imTarget, GenericMedialModel *model,
-  FloatImage *imReference, GenericMedialModel *mdlReference,
+  EuclideanFunction *fTarget, GenericMedialModel *model,
+  EuclideanFunction *fReference, GenericMedialModel *mdlReference,
   size_t nCuts, double xiMax)
 {
   // Copy the target image
-  this->image = imTarget;
+  this->fTarget = fTarget;
+  this->fReference = fReference;
 
   // Initialize the profile array
   nSamplesPerAtom = nCuts + 2;
@@ -500,16 +471,14 @@ CrossCorrelationImageMatchTerm(
     }
 
   // Init the reference data
-  InitializeReferenceData(imReference, mdlReference);
+  InitializeReferenceData(fReference, mdlReference);
 }
 
 void
 CrossCorrelationImageMatchTerm::
-InitializeReferenceData(FloatImage *imReference, GenericMedialModel *mdlReference)
+InitializeReferenceData(
+  EuclideanFunction *fReference, GenericMedialModel *mdlReference)
 {
-  // Create an adapter for image sampling
-  FloatImageEuclideanFunctionAdapter fnref(imReference);
-
   // Sample the reference image along the reference model. It is assumed that
   // the reference and target models have exactly the same mesh characteristics.
   for(MedialBoundaryPointIterator bip(mdlReference->GetIterationContext());
@@ -534,7 +503,7 @@ InitializeReferenceData(FloatImage *imReference, GenericMedialModel *mdlReferenc
       SMLVec3d Xj = a.X + xSamples[j] * U;
 
       // Sample the image intentisy
-      double v = fnref.Evaluate(Xj);
+      double v = fReference->Evaluate(Xj);
       p.xRefImgVal[j] = v;
 
       // Accumulate
@@ -557,9 +526,6 @@ UnifiedComputeEnergy(SolutionData *S, bool gradient_mode)
   // Reset the statistical accumulators
   saPenalty.Reset();
 
-  // Function for image sampling
-  FloatImageEuclideanFunctionAdapter function(image);
-  
   // Sample the target image in the space of the target model.  
   for(MedialBoundaryPointIterator bip(S->xAtomGrid); !bip.IsAtEnd(); ++bip)
     {
@@ -582,7 +548,18 @@ UnifiedComputeEnergy(SolutionData *S, bool gradient_mode)
       SMLVec3d Xj = a.X + xSamples[j] * U;
 
       // Sample the image intentisy at the sample point
-      double v = function.Evaluate(Xj);
+      double v;
+
+      // For gradient computations, store the image value and the gradient
+      if(gradient_mode)
+        {
+        v = fTarget->ComputeFunctionAndGradient(Xj, p.xImageGrad[j]);
+        p.xImageVal[j] = v;
+        }
+      else
+        {
+        v = fTarget->Evaluate(Xj);
+        }
 
       // Compute the contribution to the covariance
       xCovAcc += v * (p.xRefImgVal[j] - p.xRefMean);
@@ -591,12 +568,6 @@ UnifiedComputeEnergy(SolutionData *S, bool gradient_mode)
       xSumSq += v * v;
       xSum += v;
 
-      // For gradient computations, store the image value and the gradient
-      if(gradient_mode)
-        {
-        p.xImageVal[j] = v;
-        function.ComputeGradient(Xj, p.xImageGrad[j]);
-        }
       }
 
     // Compute the covariance of X and Y
@@ -616,7 +587,7 @@ UnifiedComputeEnergy(SolutionData *S, bool gradient_mode)
   // Return the mean penalty scaled by the total area
   xTotalPenalty = saPenalty.GetSum() / S->xBoundaryArea;
 
-  if(!xTotalPenalty <= 1.0 || !xTotalPenalty >= -1.0)
+  if(isnan(xTotalPenalty))
     throw MedialModelException("NAN");
 
   return xTotalPenalty;
@@ -2340,11 +2311,12 @@ MedialOptimizationProblem
   S->ComputeIntegrationWeights();
 
   // Print header line
+  /*
   for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
     {
     printf("%6s   ",xTerms[iTerm]->GetShortName().c_str());
     }
-  printf("  |  TOTAL\n");
+  printf("  |  TOTAL\n");*/
   
   // Begin the gradient computation for each of the energy terms
   xLastSolutionValue = 0.0;
@@ -2355,10 +2327,10 @@ MedialOptimizationProblem
     xLastTermValues[iTerm] = xTerms[iTerm]->BeginGradientComputation(S);
     xLastSolutionValue += xWeights[iTerm] * xLastTermValues[iTerm];
     xTimers[iTerm].Stop();
-    printf("%7.2le ",xLastTermValues[iTerm]);
+    // printf("%7.2le ",xLastTermValues[iTerm]);
     }
 
-  printf("  |  %7.2le\n", xLastSolutionValue);
+  // printf("  |  %7.2le\n", xLastSolutionValue);
 
   // Iterate variation by variation to compute the gradient
   for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)

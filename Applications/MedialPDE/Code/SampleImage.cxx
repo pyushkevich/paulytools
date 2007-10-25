@@ -134,7 +134,6 @@ int main(int argc, char *argv[])
         // Compute the index
         itk::ContinuousIndex<double, 3> cidxSrc;
         img_source->GetInternalImage()->TransformPhysicalPointToContinuousIndex(ptSrc, cidxSrc);
-        cout << "Mapped " << idx << " to " << cidxSrc << " (dst = " << dist2 << ")" << endl;
 
         // Sample
         double val = 0.0;

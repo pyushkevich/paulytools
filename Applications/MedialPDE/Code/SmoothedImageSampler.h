@@ -33,7 +33,8 @@ public:
 
   ~SmoothedImageSampler();
 
-  void Sample(double *X, double *f, double *grad_f);
+  double Sample(const double *X, double *grad_f);
+  double Sample(const double *X);
 
 private:
 
@@ -47,7 +48,7 @@ private:
   double sigma, alpha;
   double bb_start[3], bb_end[3];
 
-  void compute_erf_array(
+  bool compute_erf_array(
     double *dx_erf,         // The output array of erf(p+i+1) - erf(p+i)
     int &k0, int &k1,       // The range of integration 0 <= k0 < k1 <= n
     double b,               // Lower bound of the bounding box
@@ -61,6 +62,8 @@ private:
       k1 = (int) ceil(p - b + cut);
       if(k0 < 0) k0 = 0;
       if(k1 > n) k1 = n;
+      if(k0 >= k1)
+        return false;
 
       // Start at the first voxel
       double t = (b - p + k0) * sfac;
@@ -72,10 +75,12 @@ private:
         dx_erf[i] = e_now - e_last;
         e_last = e_now;
         }
+
+      return true;
       }
 
 
-  void compute_erf_array_with_deriv(
+  bool compute_erf_array_with_deriv(
     double *dx_erf,         // The output array of erf(p+i+1) - erf(p+i)
     double *dx_erf_deriv,   // The derivative of the output array wrt x
     int &k0, int &k1,       // The range of integration 0 <= k0 < k1 <= n
@@ -90,9 +95,11 @@ private:
       k1 = (int) ceil(p - b + cut);
       if(k0 < 0) k0 = 0;
       if(k1 > n) k1 = n;
+      if(k0 >= k1)
+        return false;
 
       // Scaling factor for derivative computations
-      double dscale = sfac * 1.128379167;
+      double dscale = - sfac * 1.128379167;
 
       // Start at the first voxel
       double t = (b - p + k0) * sfac;
@@ -108,6 +115,8 @@ private:
         e_last = e_now;
         d_last = d_now;
         }
+
+      return true;
       }
 };
 

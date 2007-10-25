@@ -455,8 +455,8 @@ int TestOptimizerGradientComputation(
     double dNumeric = 0.5 * (f1 - f2) / eps;
     double xDifference = fabs(xGradient[i] - dNumeric);
     double xRelError = xDifference / (0.5 * (fabs(dNumeric) + fabs(xGradient[i])) + eps);
-    // printf("D[x_%04d](f):  AN = %+6E   CD = %+6E   AE = %+6E   RE = %+6E\n",
-    //  i, dNumeric, xGradient[i], xDifference, xRelError);
+    printf("D[x_%04d](f):  AN = %+6E   CD = %+6E   AE = %+6E   RE = %+6E\n",
+      i, dNumeric, xGradient[i], xDifference, xRelError);
 
     // Update the max error tracker
     UpdateMax(xDifference, xMaxError);
@@ -464,10 +464,10 @@ int TestOptimizerGradientComputation(
     }
 
   // Report difference in time
-  printf("%34s  %34s :", nm_term, nm_map);
-  printf("   %4.2le   %4.2le   %4.2le   %4.2le   %4.2le  %s\n",
+  printf("%12s  %12s :", nm_term, nm_map);
+  printf("   %+4.2le   %+4.2le   %+4.2le   %7.2f   %7.2f  %s\n",
     fVal, xMaxError, xMaxRelError, tAnalytic.Read(), tNumeric.Read(),
-    (xMaxError > eps ? -1 : 0) ? "FAIL" : "PASS");
+    (xMaxError > eps ? -1 : 0) ? "FAIL" : "pass");
 
   return xMaxError > eps ? -1 : 0;
 }
