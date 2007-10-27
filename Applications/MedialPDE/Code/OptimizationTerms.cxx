@@ -365,8 +365,8 @@ double
 BoundaryImageMatchTerm::UnifiedComputeEnergy(SolutionData *S, bool gradient_mode)
 {
   // Create the image adapter for image / gradient interpolation
-  // FloatImageSquareValueFunctionAdapter fImage(xImage);
-  ImageSmoothSamplingEuclideanFunction fImage(xImage, 2.0, 5.5);
+  FloatImageSquareValueFunctionAdapter fImage(xImage);
+  // ImageSmoothSamplingEuclideanFunction fImage(xImage, 2.0, 5.5);
 
   // Compute the image and image gradient at each point in the image
   xImageMatch = 0.0;
@@ -400,8 +400,8 @@ BoundaryImageMatchTerm
 ::ComputePartialDerivative(SolutionData *S, PartialDerivativeSolutionData *DS)
 {
   // Create the image adapter for image / gradient interpolation
-  // FloatImageSquareValueFunctionAdapter fImage(xImage);
-  ImageSmoothSamplingEuclideanFunction fImage(xImage, 2.0, 5.5);
+  FloatImageSquareValueFunctionAdapter fImage(xImage);
+  // ImageSmoothSamplingEuclideanFunction fImage(xImage, 2.0, 5.5);
 
   // Accumulator for the partial derivative of the weighted match function
   double dMatchdC = 0.0;

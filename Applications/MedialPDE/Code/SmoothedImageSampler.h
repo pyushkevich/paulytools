@@ -55,29 +55,7 @@ private:
     int n,                  // Size of the bounding box in steps
     double cut,             // The distance at which to cut off
     double p,               // the value p
-    double sfac)            // scaling factor 1 / (Sqrt[2] sigma)
-      {
-      // Determine the range of voxels along the line where to evaluate erf
-      k0 = (int) floor(p - b - cut);
-      k1 = (int) ceil(p - b + cut);
-      if(k0 < 0) k0 = 0;
-      if(k1 > n) k1 = n;
-      if(k0 >= k1)
-        return false;
-
-      // Start at the first voxel
-      double t = (b - p + k0) * sfac;
-      double e_last = erf(t);
-      for(int i = k0; i < k1; i++)
-        {
-        t += sfac;
-        double e_now = erf(t);
-        dx_erf[i] = e_now - e_last;
-        e_last = e_now;
-        }
-
-      return true;
-      }
+    double sfac);           // scaling factor 1 / (Sqrt[2] sigma)
 
 
   bool compute_erf_array_with_deriv(
@@ -88,36 +66,7 @@ private:
     int n,                  // Size of the bounding box in steps
     double cut,             // The distance at which to cut off
     double p,               // the value p
-    double sfac)            // scaling factor 1 / (Sqrt[2] sigma)
-      {
-      // Determine the range of voxels along the line where to evaluate erf
-      k0 = (int) floor(p - b - cut);
-      k1 = (int) ceil(p - b + cut);
-      if(k0 < 0) k0 = 0;
-      if(k1 > n) k1 = n;
-      if(k0 >= k1)
-        return false;
-
-      // Scaling factor for derivative computations
-      double dscale = - sfac * 1.128379167;
-
-      // Start at the first voxel
-      double t = (b - p + k0) * sfac;
-      double e_last = erf(t);
-      double d_last = dscale * exp(-t * t);
-      for(int i = k0; i < k1; i++)
-        {
-        t += sfac;
-        double e_now = erf(t);
-        double d_now = dscale * exp(-t * t);
-        dx_erf[i] = e_now - e_last;
-        dx_erf_deriv[i] = d_now - d_last;
-        e_last = e_now;
-        d_last = d_now;
-        }
-
-      return true;
-      }
+    double sfac);           // scaling factor 1 / (Sqrt[2] sigma)
 };
 
 #endif

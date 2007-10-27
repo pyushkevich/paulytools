@@ -49,20 +49,14 @@ float FloatImage::InterpolateNearestNeighbor(const SMLVec3d &x)
 }
 
 // Interpolate the image gradient
-void FloatImage::InterpolateImageGradient(const SMLVec3d &x, SMLVec3f &g)
-{
-  g[0] = xGradient[0]->Interpolate(x[0], x[1], x[2], 0.0f);
-  g[1] = xGradient[1]->Interpolate(x[0], x[1], x[2], 0.0f);
-  g[2] = xGradient[2]->Interpolate(x[0], x[1], x[2], 0.0f);
-}
-
-// Interpolate the image gradient
 void FloatImage::InterpolateImageGradient(const SMLVec3d &x, SMLVec3d &g)
 {
-  g[0] = xGradient[0]->Interpolate(x[0], x[1], x[2], 0.0f);
-  g[1] = xGradient[1]->Interpolate(x[0], x[1], x[2], 0.0f);
-  g[2] = xGradient[2]->Interpolate(x[0], x[1], x[2], 0.0f);
+  xImage->InterpolateGradient(x, g);
+  // g[0] = xGradient[0]->Interpolate(x[0], x[1], x[2], 0.0f);
+  // g[1] = xGradient[1]->Interpolate(x[0], x[1], x[2], 0.0f);
+  // g[2] = xGradient[2]->Interpolate(x[0], x[1], x[2], 0.0f);
 }
+
 
 
 

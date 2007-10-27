@@ -895,10 +895,15 @@ void MedialPDE
     double xiMax = r["MaximumXi"][2.0];
 
     // Create smoothing functions for source and target images
-    ImageSmoothSamplingEuclideanFunction *fReference = 
-      new ImageSmoothSamplingEuclideanFunction(&refImage, 2.0, 3.5);
-    ImageSmoothSamplingEuclideanFunction *fTarget = 
-      new ImageSmoothSamplingEuclideanFunction(imgGray, 2.0, 3.5);
+    // ImageSmoothSamplingEuclideanFunction *fReference = 
+    //   new ImageSmoothSamplingEuclideanFunction(&refImage, 2.0, 3.5);
+    // ImageSmoothSamplingEuclideanFunction *fTarget = 
+    //   new ImageSmoothSamplingEuclideanFunction(imgGray, 2.0, 3.5);
+
+    FloatImageEuclideanFunctionAdapter *fReference = 
+      new FloatImageEuclideanFunctionAdapter(&refImage);
+    FloatImageEuclideanFunctionAdapter *fTarget = 
+      new FloatImageEuclideanFunctionAdapter(imgGray);
 
     // Create a new cross-correlation term
     xCrossCorr = new CrossCorrelationImageMatchTerm(

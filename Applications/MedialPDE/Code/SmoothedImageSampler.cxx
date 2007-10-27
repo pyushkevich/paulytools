@@ -74,7 +74,6 @@ SmoothedImageSampler
     grad_f[0] = 0.0;
     grad_f[1] = 0.0;
     grad_f[2] = 0.0;
-    printf("GOUT");
     return 0.0;
     }
 
@@ -142,6 +141,10 @@ SmoothedImageSampler
   grad_f[1] = (sum_wfy - f * sum_wy) * inv_sum_w;
   grad_f[2] = (sum_wfz - f * sum_wz) * inv_sum_w;
 
+  // f = dy[48];
+  // grad_f[1] = ddy[49];
+  // grad_f[0] = grad_f[2] = 0;
+
   // Set the output value
   return f;
 }
@@ -166,7 +169,6 @@ SmoothedImageSampler
   // If we ain't inside, return 0
   if(!inside) 
     {
-    printf("GOUT");
     return 0;
     }
 
@@ -209,3 +211,123 @@ SmoothedImageSampler
   return sum_wf / sum_w;
 }
 
+
+bool SmoothedImageSampler::compute_erf_array(
+  double *dx_erf,         // The output array of erf(p+i+1) - erf(p+i)
+  int &k0, int &k1,       // The range of integration 0 <= k0 < k1 <= n
+  double b,               // Lower bound of the bounding box
+  int n,                  // Size of the bounding box in steps
+  double cut,             // The distance at which to cut off
+  double p,               // the value p
+  double sfac)            // scaling factor 1 / (Sqrt[2] sigma)
+{
+  // x is the offset of the point wrt the bounding box
+  double x = p - b;
+
+  // These variables define the range over which to integrate
+  double u0 = x - cut, u1 = x + cut;
+
+  // Squeeze these variables to the allowed range
+  if(u0 < 0.0) u0 = 0.0; if(u1 > n) u1 = n;
+
+  // Determine the range of voxels over which to integrate
+  k0 = (int) floor(u0); k1 = (int) ceil(u1);
+
+  // Squeeze the range so that it is valid
+  if(k0 >= k1) return false;
+
+  // The weight of each voxel is the integral of exp(t^2 / 2) from
+  // the beginning of the voxel to the end of the voxel. But for the
+  // first and last voxel, the integral is from u0 to the end of the
+  // voxel and from the end of the voxel to u1, correspondingly.
+
+  // Start at the first voxel, at u0
+  double e_last = erf((u0 - x) * sfac), e_now;
+
+  // Iterate over the middle voxels
+  double t = (k0 - x) * sfac;
+  for(int i = k0; i < k1-1; i++)
+    {
+    t += sfac;
+    e_now = erf(t);
+    dx_erf[i] = e_now - e_last;
+    e_last = e_now;
+    }
+
+  // Handle the last voxel
+  e_now = erf((u1 - x) * sfac);
+  dx_erf[k1-1] = e_now - e_last;
+
+  return true;
+}
+
+
+bool SmoothedImageSampler::compute_erf_array_with_deriv(
+  double *dx_erf,         // The output array of erf(p+i+1) - erf(p+i)
+  double *dx_erf_deriv,   // The derivative of the output array wrt x
+  int &k0, int &k1,       // The range of integration 0 <= k0 < k1 <= n
+  double b,               // Lower bound of the bounding box
+  int n,                  // Size of the bounding box in steps
+  double cut,             // The distance at which to cut off
+  double p,               // the value p
+  double sfac)            // scaling factor 1 / (Sqrt[2] sigma)
+{
+  // x is the offset of the point wrt the bounding box
+  double x = p - b;
+
+  // Scaling factor for derivative computations
+  double dscale = - sfac * 1.128379167;
+
+  // These variables define the range over which to integrate
+  double u0 = x - cut, u1 = x + cut;
+
+  // Squeeze these variables to the allowed range
+  if(u0 < 0.0) u0 = 0.0; if(u1 > n) u1 = n;
+
+  // Determine the range of voxels over which to integrate
+  k0 = (int) floor(u0); k1 = (int) ceil(u1);
+
+  // Squeeze the range so that it is valid
+  if(k0 >= k1) return false;
+
+  // The weight of each voxel is the integral of exp(t^2 / 2) from
+  // the beginning of the voxel to the end of the voxel. But for the
+  // first and last voxel, the integral is from u0 to the end of the
+  // voxel and from the end of the voxel to u1, correspondingly.
+
+  // Start at the first voxel, at u0
+  double t0 = (u0 - x) * sfac;
+  double e_last = erf(t0), e_now;
+  double d_last = dscale * exp(-t0 * t0), d_now;
+  d_last = 0.0;
+
+  // Iterate over the middle voxels
+  double t = (k0 - x) * sfac;
+  for(int i = k0; i < k1-1; i++)
+    {
+    t += sfac;
+
+    e_now = erf(t);
+    d_now = dscale * exp(-t * t);
+
+    dx_erf[i] = e_now - e_last;
+    dx_erf_deriv[i] = d_now - d_last;
+
+    e_last = e_now;
+    d_last = d_now;
+    }
+
+  // Handle the last voxel
+  double t1 = (u1 - x) * sfac;
+  e_now = erf(t1);
+  d_now = dscale * exp(-t1 * t1);
+  d_now = 0.0;
+
+  dx_erf[k1-1] = e_now - e_last;
+  dx_erf_deriv[k1-1] = d_now - d_last;
+  
+  // dx_erf[k0] = erf(t0);
+  // dx_erf_deriv[k0] = dscale * exp(-t0 * t0);
+
+  return true;
+}

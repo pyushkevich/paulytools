@@ -2,6 +2,7 @@
 
 #include "itkImage.h"
 #include "itkLinearInterpolateImageFunction.h"
+#include "itkBSplineInterpolateImageFunction.h"
 #include "itkNearestNeighborInterpolateImageFunction.h"
 #include "itkImageFileReader.h"
 #include "itkImageFileWriter.h"
@@ -14,8 +15,9 @@ public:
   // The typedefs for this class
   typedef ITKImageWrapper<TPixel> Superclass;
   typedef typename Superclass::ImageType ImageType;
-  typedef itk::LinearInterpolateImageFunction<ImageType, float> InterpolatorType;
-  typedef itk::NearestNeighborInterpolateImageFunction<ImageType, float> NNInterpolator;
+  // typedef itk::LinearInterpolateImageFunction<ImageType, float> InterpolatorType;
+  typedef itk::BSplineInterpolateImageFunction<ImageType> InterpolatorType;
+  typedef itk::NearestNeighborInterpolateImageFunction<ImageType, double> NNInterpolator;
   
   // Load the image from a file
   void LoadFromFile(const char *file);
@@ -27,10 +29,14 @@ public:
   void SetInternalImage(ImageType *xImage) 
     {
     if(xImage == NULL)
+      {
       this->xImage = ImageType::New();
+      }
     else
+      {
       this->xImage = xImage;
-    OnImageUpdate();
+      OnImageUpdate();
+      }
     }
 
   // Check whether an image is loaded into the wrapper
@@ -48,10 +54,13 @@ public:
     { return xImage->GetOrigin()[d]; }
 
   // Interpolate the image at a continuous index, or return background if out of bounds
-  float Interpolate(float x, float y, float z, float xBackground);
+  float Interpolate(double x, double y, double z, float xBackground);
 
   // Interpolate the image at a continuous index, or return background if out of bounds
-  float InterpolateNearestNeighbor(float x, float y, float z, float xBackground);
+  float InterpolateNearestNeighbor(double x, double y, double z, float xBackground);
+
+  // Interpolate the gradient of the image
+  void InterpolateGradient(const SMLVec3d &X, SMLVec3d &G);
 
   // Get a voxel for a point in space
   void GetVoxel(double px, double py, double pz, int &vx, int &vy, int &vz);
@@ -85,6 +94,7 @@ ITKImageWrapperImpl<TPixel>
   xImage = ImageType::New();
   fnInterpolator = InterpolatorType::New();
   fnInterpolatorNN = NNInterpolator::New();
+  fnInterpolator->SetSplineOrder(3);
 }
 
 template<typename TPixel>
@@ -93,7 +103,7 @@ ITKImageWrapperImpl<TPixel>
 ::GetVoxel(double px, double py, double pz, int &vx, int &vy, int &vz)
 {
   // Create a point with the passed in coordinates
-  itk::Point<float, 3> xPoint;
+  itk::Point<double, 3> xPoint;
   xPoint[0] = px; xPoint[1] = py; xPoint[2] = pz;
 
   // Create a continuous index from the point
@@ -117,14 +127,14 @@ ITKImageWrapperImpl<TPixel>
 template<typename TPixel>
 float
 ITKImageWrapperImpl<TPixel>
-::Interpolate(float x, float y, float z, float xBackground)
+::Interpolate(double x, double y, double z, float xBackground)
 {
   // Create a point with the passed in coordinates
-  itk::Point<float, 3> xPoint;
+  itk::Point<double, 3> xPoint;
   xPoint[0] = x; xPoint[1] = y; xPoint[2] = z;
 
   // Create a continuous index from the point
-  itk::ContinuousIndex<float, 3> xIndex;
+  itk::ContinuousIndex<double, 3> xIndex;
   xImage->TransformPhysicalPointToContinuousIndex(xPoint, xIndex);
 
   // Interpolate at the index
@@ -135,16 +145,40 @@ ITKImageWrapperImpl<TPixel>
 }
 
 template<typename TPixel>
-float
+void
 ITKImageWrapperImpl<TPixel>
-::InterpolateNearestNeighbor(float x, float y, float z, float xBackground)
+::InterpolateGradient(const SMLVec3d &X, SMLVec3d &G)
 {
   // Create a point with the passed in coordinates
-  itk::Point<float, 3> xPoint;
+  itk::Point<double, 3> xPoint;
+  xPoint[0] = X[0]; xPoint[1] = X[1]; xPoint[2] = X[2];
+
+  // Create a continuous index from the point
+  itk::ContinuousIndex<double, 3> xIndex;
+  xImage->TransformPhysicalPointToContinuousIndex(xPoint, xIndex);
+
+  // Interpolate at the index
+  if(fnInterpolator->IsInsideBuffer(xIndex))
+    {
+    typename InterpolatorType::CovariantVectorType grad = 
+      fnInterpolator->EvaluateDerivativeAtContinuousIndex(xIndex);
+    G[0] = grad[0]; G[1] = grad[1]; G[2] = grad[2];
+    }
+  else
+    { G.fill(0.0); }
+}
+
+template<typename TPixel>
+float
+ITKImageWrapperImpl<TPixel>
+::InterpolateNearestNeighbor(double x, double y, double z, float xBackground)
+{
+  // Create a point with the passed in coordinates
+  itk::Point<double, 3> xPoint;
   xPoint[0] = x; xPoint[1] = y; xPoint[2] = z;
 
   // Create a continuous index from the point
-  itk::ContinuousIndex<float, 3> xIndex;
+  itk::ContinuousIndex<double, 3> xIndex;
   xImage->TransformPhysicalPointToContinuousIndex(xPoint, xIndex);
 
   // Interpolate at the index

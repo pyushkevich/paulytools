@@ -83,9 +83,6 @@ public:
   virtual float InterpolateNearestNeighbor(const SMLVec3d &x);
 
   // Interpolate the image gradient
-  virtual void InterpolateImageGradient(const SMLVec3d &x, SMLVec3f &g);
-
-  // Interpolate the image gradient
   virtual void InterpolateImageGradient(const SMLVec3d &x, SMLVec3d &g);
 
   // Check whether the gradient information is available
