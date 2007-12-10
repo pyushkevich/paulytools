@@ -1449,6 +1449,10 @@ void MedialPDE::SampleInterior(
   // Create a file for writing the points
   ofstream fout(file, ios_base::out);
 
+  // Create a solution data object for volume element computation
+  SolutionData sd(xMedialModel->GetIterationContext(), xMedialModel->GetAtomArray());
+  sd.ComputeIntegrationWeights();
+
   // We can not simply iterate over the interior points because there may also
   // be points outside of the range -1, 1 in xi, and we don't have an iterator
   // that handles them. So we just go atom by atom, outputting the coordinates
@@ -1469,6 +1473,11 @@ void MedialPDE::SampleInterior(
       // Write rho and r values
       fout << " " << a.xLapR;
       fout << " " << a.R;
+
+      // Compute the volume element
+      double velt = sd.ComputeVolumeElement(
+        it.GetIndex(), xi, xStep, (xi == xStart || xi > xEnd - 0.5 * xStep));
+      fout << " " << velt << endl;
 
       // Write the image value as well
       if(fim) fout << " " << fim->InterpolateNearestNeighbor(x);

@@ -168,6 +168,26 @@ public:
   SolutionData(MedialIterationContext *xGrid, MedialAtom *xAtoms);
 
   void ComputeIntegrationWeights();
+
+  // Computes the volume element at atom i, value xi, given that the sampling
+  // interval in xi is delta. The last flag specifies whether xi is at the end
+  // of the spoke, in which case only the volume 'on the inside' is computed
+  // (SAME CODE AS USED IN VolumeIntegralEnergyTerm)
+  double ComputeVolumeElement(size_t iAtom, double xi, double delta, bool edge)
+    {
+    // Find the right boundary atom
+    size_t iSide = (xi < 0) ? 0 : 1;
+    size_t iBnd = xAtomGrid->GetBoundaryPointIndex(iAtom, iSide);
+
+    // Compute the volume element
+    double xi1 = abs(xi) - 0.5 * delta, xi2 = abs(xi) + 0.5 * delta;
+    SMLVec3d t1(1, xi1, xi1 * xi1), t2(1, xi2, xi2 * xi2);
+    if(edge)
+      return 0.5 * delta * dot_product(xInteriorVolumeElement[iBnd], t1);
+    else
+      return 0.5 * delta * dot_product(xInteriorVolumeElement[iBnd], t1 + t2);
+    }
+
 };
 
 class PartialDerivativeSolutionData : public SolutionDataBase

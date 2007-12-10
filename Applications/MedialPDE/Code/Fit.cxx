@@ -300,7 +300,7 @@ int main(int argc, char *argv[])
       cout << "### STAGE " << i << " ###" << endl;
 
       // Blur the image at appropriate blur level
-      if(i == 0 || stages[i].blur != stages[i-1].blur)
+      if(i == 0 || flag_one_stage || stages[i].blur != stages[i-1].blur)
         {
         cout << "Gaussian smoothing with sigma = " << stages[i].blur << endl;
         imgfloat.SetToBlurredBinary(&img, stages[i].blur);
