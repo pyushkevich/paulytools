@@ -22,6 +22,7 @@ ADD_EXECUTABLE(dumpmeshattr DumpMeshAttr.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(real2mesh RealImageToMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(WarpMeshBackward WarpMeshBackwards.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(flipmesh FlipMesh.cxx ReadWriteVTK.cxx)
+ADD_EXECUTABLE(cmrep2img CMRepMeshToImage.cxx ReadWriteVTK.cxx)
 
 ADD_EXECUTABLE(importqvoronoi 
   ImportQVoronoi.cxx
@@ -62,6 +63,7 @@ TARGET_LINK_LIBRARIES(mesh2img ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(flipmesh ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(real2mesh ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(WarpMeshBackward ${COMMON_LIBS} ${ITK_LIBS})
+TARGET_LINK_LIBRARIES(cmrep2img ${COMMON_LIBS} ${ITK_LIBS})
 
 INSTALL_TARGETS("/bin" mesh2img meshdiff avgmesh identimg scalemesh
   dumpmeshpoints)
