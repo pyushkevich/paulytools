@@ -14,6 +14,7 @@ ADD_EXECUTABLE(avgmesh AverageMeshes.cxx)
 ADD_EXECUTABLE(submesh SubdivideMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(quadcluster QuadClustering.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(smoothmesh SmoothMesh.cxx ReadWriteVTK.cxx)
+ADD_EXECUTABLE(copymesh CopyMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(avgmesharr AverageMeshArrays.cxx)
 ADD_EXECUTABLE(identimg IdentifyImage.cxx)
 ADD_EXECUTABLE(scalemesh ScaleMesh.cxx ReadWriteVTK.cxx)
@@ -52,6 +53,7 @@ TARGET_LINK_LIBRARIES(avgmesh ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(submesh ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(quadcluster ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(smoothmesh ${COMMON_LIBS})
+TARGET_LINK_LIBRARIES(copymesh ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(avgmesharr ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(identimg ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(scalemesh ${COMMON_LIBS})
@@ -65,5 +67,7 @@ TARGET_LINK_LIBRARIES(real2mesh ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(WarpMeshBackward ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(cmrep2img ${COMMON_LIBS} ${ITK_LIBS})
 
-INSTALL_TARGETS("/bin" mesh2img meshdiff avgmesh identimg scalemesh
-  dumpmeshpoints)
+INSTALL_TARGETS("/bin" meshdiff avgmesh submesh quadcluster 
+  smoothmesh copymesh avgmesharr identimg scalemesh 
+  dumpmeshpoints meshcluster dumpmeshattr importqvoronoi 
+  mesh2img flipmesh real2mesh WarpMeshBackward cmrep2img )
