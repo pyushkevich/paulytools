@@ -336,6 +336,59 @@ private:
   double *xImageVal;
 };
 
+class LocalDistanceDifferenceEnergyTerm : public EnergyTerm
+{
+public:
+  LocalDistanceDifferenceEnergyTerm(
+    GenericMedialModel *model,
+    vector<GenericMedialModel *> &mdlReference);
+
+  /** Compute the volume overlap fraction between image and m-rep */
+  double ComputeEnergy(SolutionData *data)
+    { return UnifiedComputeEnergy(data, false); }
+
+  // Initialize gradient computation and return the value of the solution
+  double BeginGradientComputation(SolutionData *data)
+    { return UnifiedComputeEnergy(data, true); }
+  
+  // Finish gradient computation, remove all temporary data
+  void EndGradientComputation() {};
+
+  /** Compute directional deriavative */
+  double ComputePartialDerivative(SolutionData *S, 
+    PartialDerivativeSolutionData *dS);
+
+  /** Print the report */
+  void PrintReport(ostream &sout);
+
+  /** Print a short name of the energy term */
+  string GetShortName() { return string("LOCDIS"); }
+
+private:
+
+  /** Compute x-correlation */
+  double UnifiedComputeEnergy(SolutionData *S, bool gradient_mode);
+
+  /** Sample the reference image */
+  void InitializeReferenceData(
+    vector<GenericMedialModel *> &mdlReference);
+
+  // Structure that holds intensity profile data
+  struct DistanceData
+    {
+    double dm[3], db0[3], db1[3], r[3];
+    };
+
+  // Array of profiles, one for each boundary point
+  std::vector<DistanceData> xRefDistData, xDistData;
+
+  // Statistical accumulators
+  StatisticsAccumulator saDist, saDistDeriv;
+
+  // Total penalty
+  double xTotalPenalty;
+};
+
 class CrossCorrelationImageMatchTerm : public EnergyTerm
 {
 public:

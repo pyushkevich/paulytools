@@ -743,7 +743,7 @@ struct TermInfo
     }
 };
 
-int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img)
+int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img, const char *fnRefMPDE = NULL)
 {
   // Return Code
   int iReturn = 0;
@@ -780,8 +780,20 @@ int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img)
     rad[i] = model->GetAtomArray()[i].R * randy.drand32(0.9, 1.1);
     }
 
+  // If the reference model is supplied, load it
+  MedialPDE *ref = NULL;
+  if(fnRefMPDE)
+    ref = new MedialPDE(fnRefMPDE);
+
   // Create an array of image match terms
   vector<TermInfo> vt;
+  if(ref)
+    {
+    vector<GenericMedialModel *> refvec;
+    refvec.push_back(ref->GetMedialModel());
+    vt.push_back(TermInfo(
+        "", new LocalDistanceDifferenceEnergyTerm(model, refvec), 0.1));
+    }
   vt.push_back(TermInfo(
       "", new RadiusPenaltyTerm(0.025), 0.1));
   vt.push_back(TermInfo(
@@ -1094,11 +1106,22 @@ int main(int argc, char *argv[])
     FloatImage *image = NULL;
     if(argc > 4)
       {
-      image = new FloatImage();
-      image->LoadFromPath(argv[3], argv[4]);
+      try
+        {
+        image = new FloatImage();
+        image->LoadFromPath(argv[3], argv[4]);
+        }
+      catch(...)
+        {
+        image = NULL;
+        cerr << "Couldn't load image; proceeding without" << endl;
+        }
       }
+    const char *refmod = NULL;
+    if(argc > 5)
+      refmod = argv[5];
 
-    return TestDerivativesWithImage(argv[2],image);
+    return TestDerivativesWithImage(argv[2],image,refmod);
     }
   else if(0 == strcmp(argv[1], "DERIV3") && argc > 2)
     return TestBasisFunctionVariation(argv[2]);

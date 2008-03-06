@@ -425,6 +425,9 @@ void my_calcf(int &n, double *x, int &nf, double &f, int *dummy1, double *dummy2
     nf = 0; 
     }
 
+  // Try to flush stdout, otherwise output is garbled
+  cout << flush;
+
   // Save a mesh
   // ExportMedialMeshToVTK(mop->GetMedialModel(), NULL, "iter.med.vtk");
   // ExportBoundaryMeshToVTK(mop->GetMedialModel(), NULL, "iter.bnd.vtk");
@@ -810,6 +813,7 @@ void MedialPDE
 
   // This is unfortunate, but some terms have to be created 'on demand'
   CrossCorrelationImageMatchTerm *xCrossCorr = NULL;
+  LocalDistanceDifferenceEnergyTerm *xLocalDist = NULL;
 
   // TODO: do this better
   // MeshRegularizationPenaltyTerm xMeshRegTerm(xMedialModel, 6, 6);
@@ -914,6 +918,35 @@ void MedialPDE
       xCrossCorr, p.xTermWeights[OptimizationParameters::CROSS_CORRELATION]);
     }
 
+  // Add the cross-correlation energy term
+  if(p.xTermWeights[OptimizationParameters::LOCAL_DISTANCE] > 0.0)
+    {
+    // Get the registry associated with the term
+    Registry &r = p.xTermParameters[OptimizationParameters::LOCAL_DISTANCE];
+    
+    // Get the array of reference models
+    Registry &mdlarray = r.Folder("ReferenceModel");
+    if(!mdlarray.GetArraySize())
+      throw MedialModelException("Missing reference model array in LocalDistancePenaltyTerm term");
+
+    // Load the reference models
+    vector<string> fnRef = mdlarray.GetArray(string(""));
+    vector<GenericMedialModel *> ref;
+    for(size_t q = 0; q < fnRef.size(); q++)
+      {
+      // TODO: delete me!!!
+      MedialPDE *refModel = new MedialPDE(fnRef[q].c_str());
+      ref.push_back(refModel->GetMedialModel());
+      }
+
+    // Create a new term
+    xLocalDist = new LocalDistanceDifferenceEnergyTerm(xMedialModel, ref);
+
+    // Add the cross-correlation term to the optimization
+    xProblem.AddEnergyTerm(
+      xLocalDist, p.xTermWeights[OptimizationParameters::LOCAL_DISTANCE]);
+    }
+
   // Initial solution report
   cout << "INITIAL SOLUTION REPORT: " << endl;
   xProblem.Evaluate(xSolution.data_block());
@@ -964,6 +997,9 @@ void MedialPDE
     delete xCrossCorr->GetTargetFunction();
     delete xCrossCorr;
     }
+
+  if(xLocalDist)
+    delete xLocalDist;
 
   // Delete the mapping
   delete xMapping;

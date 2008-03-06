@@ -29,6 +29,7 @@ OptimizationParameters
   xPenaltyTermRegMap.AddPair(RADIUS, "RadiusPenaltyTerm");
   xPenaltyTermRegMap.AddPair(MEDIAL_ANGLES, "MedialAnglesPenaltyTerm");
   xPenaltyTermRegMap.AddPair(CROSS_CORRELATION, "CrossCorrelation");
+  xPenaltyTermRegMap.AddPair(LOCAL_DISTANCE, "LocalDistancePenaltyTerm");
 
   xCTFSettingsRegMap.AddPair(COSINE_BASIS_PDE, "CosineBasisPDE");
   xCTFSettingsRegMap.AddPair(LOOP_SUBDIVISION_PDE, "LoopSubdivisionPDE");
@@ -44,6 +45,7 @@ OptimizationParameters
   xTermDefaultWeights[RADIUS] = 0.1;
   xTermDefaultWeights[MEDIAL_ANGLES] = 0.0;
   xTermDefaultWeights[CROSS_CORRELATION] = 0.0;
+  xTermDefaultWeights[LOCAL_DISTANCE] = 0.0;
 
   // Clear the settings pointer
   xCTFSettings = NULL;

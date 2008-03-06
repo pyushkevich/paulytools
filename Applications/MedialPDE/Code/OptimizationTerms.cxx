@@ -445,6 +445,174 @@ BoundaryImageMatchTerm::~BoundaryImageMatchTerm()
 }
 
 /*********************************************************************************
+ * Distance preservation term
+ ********************************************************************************/
+LocalDistanceDifferenceEnergyTerm
+::LocalDistanceDifferenceEnergyTerm(
+  GenericMedialModel *model,
+  vector<GenericMedialModel *> &mdlReference)
+{
+  // Set the size of arrays
+  xRefDistData.resize(model->GetNumberOfTriangles());
+  xDistData.resize(model->GetNumberOfTriangles());
+
+  // Compute the reference data (for speed)
+  InitializeReferenceData(mdlReference);
+
+}
+
+void
+LocalDistanceDifferenceEnergyTerm
+::InitializeReferenceData(vector<GenericMedialModel *> &mdlReference)
+{
+  assert(mdlReference.size());
+
+  // Iterate over all boundary triangles
+  size_t n = mdlReference.size();
+  for(MedialTriangleIterator mit(mdlReference[0]->GetIterationContext()); 
+      !mit.IsAtEnd(); ++mit)
+    {
+    size_t k = mit.GetIndex();
+    for(size_t i = 0; i < 3; i++)
+      {
+      size_t j1 = (i+1) % 3;
+      size_t j2 = (i+2) % 3;
+
+      double dm = 0.0;
+      double db0 = 0.0;
+      double db1 = 0.0;
+      double r = 0.0;
+
+      for(size_t z = 0; z < mdlReference.size(); z++)
+        {
+        MedialAtom &A0 = mdlReference[z]->GetAtomArray()[mit.GetAtomIndex(i)];
+        MedialAtom &A1 = mdlReference[z]->GetAtomArray()[mit.GetAtomIndex(j1)];
+        MedialAtom &A2 = mdlReference[z]->GetAtomArray()[mit.GetAtomIndex(j2)];
+
+        dm += (A1.X-A2.X).magnitude();
+        db0 += (A1.xBnd[0].X-A2.xBnd[0].X).magnitude();
+        db1 += (A1.xBnd[1].X-A2.xBnd[1].X).magnitude();
+        r += A0.R;
+        }
+
+      xRefDistData[k].dm[i] = dm / n;
+      xRefDistData[k].db0[i] = db0 / n;
+      xRefDistData[k].db1[i] = db1 / n;
+      xRefDistData[k].r[i] = r / n;
+      }
+    }
+}
+
+double
+LocalDistanceDifferenceEnergyTerm
+::UnifiedComputeEnergy(SolutionData *S, bool gradient_mode)
+{
+  // Reset the penalty counter
+  saDist.Reset();
+
+  // Iterate over all boundary triangles
+  for(MedialTriangleIterator mit(S->xAtomGrid); !mit.IsAtEnd(); ++mit)
+    {
+    size_t k = mit.GetIndex();
+    for(size_t i = 0; i < 3; i++)
+      {
+      size_t j1 = (i+1) % 3;
+      size_t j2 = (i+2) % 3;
+      MedialAtom &A0 = S->xAtoms[mit.GetAtomIndex(i)];
+      MedialAtom &A1 = S->xAtoms[mit.GetAtomIndex(j1)];
+      MedialAtom &A2 = S->xAtoms[mit.GetAtomIndex(j2)];
+
+      xDistData[k].dm[i] = (A1.X-A2.X).magnitude();
+      xDistData[k].db0[i] = (A1.xBnd[0].X-A2.xBnd[0].X).magnitude();
+      xDistData[k].db1[i] = (A1.xBnd[1].X-A2.xBnd[1].X).magnitude();
+      xDistData[k].r[i] = A0.R;
+
+      double delm =  xDistData[k].dm[i]  - xRefDistData[k].dm[i];
+      double delb0 = xDistData[k].db0[i] - xRefDistData[k].db0[i];
+      double delb1 = xDistData[k].db1[i] - xRefDistData[k].db1[i];
+      double delr =  xDistData[k].r[i]   - xRefDistData[k].r[i];
+
+      saDist.Update(delm * delm);
+      saDist.Update(delb0 * delb0);
+      saDist.Update(delb1 * delb1);
+      saDist.Update(delr * delr);
+      }
+    }
+
+  // Report mean square difference
+  xTotalPenalty = sqrt(saDist.GetMean());
+  return xTotalPenalty;
+}
+
+double
+LocalDistanceDifferenceEnergyTerm::
+ComputePartialDerivative(
+  SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  // Initialize the derivative accumulator
+  saDistDeriv.Reset();
+
+  // Iterate over all boundary triangles
+  for(MedialTriangleIterator mit(S->xAtomGrid); !mit.IsAtEnd(); ++mit)
+    {
+    size_t k = mit.GetIndex();
+
+    // If all three triangles are non-affected, we can safely set the
+    // derivative to zero and contunue
+    MedialAtom &D0 = dS->xAtoms[mit.GetAtomIndex(0)];
+    MedialAtom &D1 = dS->xAtoms[mit.GetAtomIndex(1)];
+    MedialAtom &D2 = dS->xAtoms[mit.GetAtomIndex(2)];
+    if(D0.order <= 1 || D1.order <= 1 || D2.order <= 1)
+    {
+      for(size_t i = 0; i < 3; i++)
+        {
+        size_t j1 = (i+1) % 3;
+        size_t j2 = (i+2) % 3;
+        MedialAtom &A0 = S->xAtoms[mit.GetAtomIndex(i)];
+        MedialAtom &A1 = S->xAtoms[mit.GetAtomIndex(j1)];
+        MedialAtom &A2 = S->xAtoms[mit.GetAtomIndex(j2)];
+
+        MedialAtom &dA0 = dS->xAtoms[mit.GetAtomIndex(i)];
+        MedialAtom &dA1 = dS->xAtoms[mit.GetAtomIndex(j1)];
+        MedialAtom &dA2 = dS->xAtoms[mit.GetAtomIndex(j2)];
+
+        double d_dm = dot_product(A1.X - A2.X, dA1.X - dA2.X) / xDistData[k].dm[i];
+        double d_db0 = dot_product(A1.xBnd[0].X - A2.xBnd[0].X, dA1.xBnd[0].X - dA2.xBnd[0].X) 
+          / xDistData[k].db0[i];
+        double d_db1 = dot_product(A1.xBnd[1].X - A2.xBnd[1].X, dA1.xBnd[1].X - dA2.xBnd[1].X) 
+          / xDistData[k].db1[i];
+        double d_r = dA0.R;
+
+        double delm =  xDistData[k].dm[i]  - xRefDistData[k].dm[i];
+        double delb0 = xDistData[k].db0[i] - xRefDistData[k].db0[i];
+        double delb1 = xDistData[k].db1[i] - xRefDistData[k].db1[i];
+        double delr =  xDistData[k].r[i]   - xRefDistData[k].r[i];
+
+        saDistDeriv.Update(delm * d_dm);
+        saDistDeriv.Update(delb0 * d_db0);
+        saDistDeriv.Update(delb1 * d_db1);
+        saDistDeriv.Update(delr * d_r);
+        }
+      }
+    }
+
+  return saDistDeriv.GetSum() / (saDist.GetCount() * xTotalPenalty);
+}
+
+
+void
+LocalDistanceDifferenceEnergyTerm
+::PrintReport(ostream &sout)
+{
+  sout << " Local Distance Distortion Image Match Term " << endl;
+  sout << "    total penalty  : " << xTotalPenalty << endl;
+  sout << "    min sq dist diff : " << saDist.GetMin() << endl;  
+  sout << "    max sq dist diff : " << saDist.GetMax() << endl;  
+  sout << "    avg sq dist diff : " << saDist.GetMean() << endl;  
+}
+
+
+/*********************************************************************************
  * CROSS-CORRELATION ENERGY TERM
  ********************************************************************************/
 CrossCorrelationImageMatchTerm::
