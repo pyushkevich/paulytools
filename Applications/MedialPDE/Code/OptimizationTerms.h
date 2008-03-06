@@ -1154,6 +1154,8 @@ private:
   // Data associated with the solution and its derivative
   SolutionData *S; 
   PartialDerivativeSolutionData *dS;
+
+  size_t nGradCalls, nEvalCalls;
 };
 
 #endif

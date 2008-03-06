@@ -479,7 +479,7 @@ void MedialPDE::ConjugateGradientOptimizationTOMS(
   deflt_(xAlg, iv, liv, lv, v);
   iv[mxiter_ - 1] = nSteps;
   iv[mxfcal_ - 1] = 10 * nSteps;
-  iv[19 - 1] = 1;
+  iv[19 - 1] = 0;
   iv[22 - 1] = 0;
   iv[24 - 1] = 0;
 

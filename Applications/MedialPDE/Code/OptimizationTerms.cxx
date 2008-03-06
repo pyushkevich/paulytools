@@ -2279,6 +2279,8 @@ MedialOptimizationProblem
 ::MedialOptimizationProblem(
   GenericMedialModel *xMedialModel, CoefficientMapping *xCoeff)
 {
+  nGradCalls = nEvalCalls = 0;
+
   this->xCoeff = xCoeff;
   this->xMedialModel = xMedialModel;
   this->nCoeff = xCoeff->GetNumberOfParameters();
@@ -2399,15 +2401,17 @@ double MedialOptimizationProblem::Evaluate(double *xEvalPoint)
     S->ComputeIntegrationWeights();
 
     // Evaluate each of the terms
+    ++nEvalCalls;
+    // printf("%4d   %4d   ",nGradCalls,++nEvalCalls);
     for(size_t iTerm = 0; iTerm < xTerms.size(); iTerm++)
       { 
       xTimers[iTerm].Start();
       xLastTermValues[iTerm] = xTerms[iTerm]->ComputeEnergy(S);
       xLastSolutionValue += xLastTermValues[iTerm] * xWeights[iTerm]; 
       xTimers[iTerm].Stop();
-      // printf("%7.2le ",xLastTermValues[iTerm]);
+      // printf("%7.3le  ",xLastTermValues[iTerm]);
       }
-    // printf("  |  %7.2le\n", xLastSolutionValue);
+    // printf("  |  %7.3le\n", xLastSolutionValue);
 
     // cout << "[MAP: " << (clock() - t0)/CLOCKS_PER_SEC << " s] " << endl;
     }
@@ -2479,12 +2483,17 @@ MedialOptimizationProblem
   S->ComputeIntegrationWeights();
 
   // Print header line
-  /*
-  for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
+  if((nGradCalls % 10) == 0)
     {
-    printf("%6s   ",xTerms[iTerm]->GetShortName().c_str());
+    printf("\nGRAD   EVAL  ");
+    for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
+      {
+      printf("   %7s ",xTerms[iTerm]->GetShortName().c_str());
+      }
+    printf("   |  TOTAL\n");
     }
-  printf("  |  TOTAL\n");*/
+
+  printf("%4d   %4d   ",++nGradCalls,nEvalCalls);
   
   // Begin the gradient computation for each of the energy terms
   xLastSolutionValue = 0.0;
@@ -2495,10 +2504,10 @@ MedialOptimizationProblem
     xLastTermValues[iTerm] = xTerms[iTerm]->BeginGradientComputation(S);
     xLastSolutionValue += xWeights[iTerm] * xLastTermValues[iTerm];
     xTimers[iTerm].Stop();
-    // printf("%7.2le ",xLastTermValues[iTerm]);
+    printf("%7.3le  ",xLastTermValues[iTerm]);
     }
 
-  // printf("  |  %7.2le\n", xLastSolutionValue);
+  printf("  |  %7.3le\n", xLastSolutionValue);
 
   // Iterate variation by variation to compute the gradient
   for(size_t iCoeff = 0; iCoeff < nCoeff; iCoeff++)
