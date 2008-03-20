@@ -3,6 +3,7 @@ OPTION(BUILD_SOPLEX "Build the external SoPlex library" OFF)
 OPTION(BUILD_LASPACK "Build the external LasPack library" OFF)
 
 SUBDIRS(Netlib/toms/toms611)
+SUBDIRS(tetgen1.4.2)
 
 IF(BUILD_SOPLEX)
   SUBDIRS(SoPlex)
