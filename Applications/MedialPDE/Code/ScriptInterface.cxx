@@ -12,6 +12,7 @@
 #include "MedialException.h"
 #include "PDESubdivisionMedialModel.h"
 #include "BruteForceSubdivisionMedialModel.h"
+#include "DiffeomorphicEnergyTerm.h"
 
 #include "itkImageRegionConstIteratorWithIndex.h"
 #include "itkNearestNeighborInterpolateImageFunction.h"
@@ -809,7 +810,8 @@ void MedialPDE
   MedialAnglesPenaltyTerm xTermAngles(xMedialModel);
   MedialCurvaturePenalty xTermCurvature;
   BoundaryCurvaturePenalty xTermBndCurvature(xMedialModel);
-  RadiusPenaltyTerm xTermRadius(0.025);
+  RadiusPenaltyTerm xTermRadius;
+  DiffeomorphicEnergyTerm xTermDiffeo(xMedialModel);
 
   // This is unfortunate, but some terms have to be created 'on demand'
   CrossCorrelationImageMatchTerm *xCrossCorr = NULL;
@@ -858,13 +860,22 @@ void MedialPDE
 
   // Add the radius penalty term
   if(p.xTermWeights[OptimizationParameters::RADIUS] > 0.0)
+    {
+    xTermRadius.SetParameters(p.xTermParameters[OptimizationParameters::RADIUS]);
     xProblem.AddEnergyTerm(
       &xTermRadius, p.xTermWeights[OptimizationParameters::RADIUS]);
+    }
 
   // Add the angle penalty term
   if(p.xTermWeights[OptimizationParameters::MEDIAL_ANGLES] > 0.0)
     xProblem.AddEnergyTerm(
       &xTermAngles, p.xTermWeights[OptimizationParameters::MEDIAL_ANGLES]);
+
+  // Add the diffeomorhic term
+  if(p.xTermWeights[OptimizationParameters::DIFFEOMORPHIC] > 0.0)
+    xProblem.AddEnergyTerm(
+      &xTermDiffeo, p.xTermWeights[OptimizationParameters::DIFFEOMORPHIC]);
+
 
   // Add the cross-correlation energy term
   if(p.xTermWeights[OptimizationParameters::CROSS_CORRELATION] > 0.0)

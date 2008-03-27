@@ -1,3 +1,4 @@
+#include "CodeTimer.h"
 #include "vtkPolyData.h"
 #include "vtkPointData.h"
 #include "vtkCellData.h"
@@ -306,6 +307,9 @@ void ExportBoundaryMeshToVTK(
   vtkFloatArray *lSqrMeanCrv = AddBndScalarField(pMedial, xModel, "SqrMeanCrv");
   vtkFloatArray *lCellJac = AddBndTriScalarField(pMedial, xModel, "Jacobian");
 
+  vtkFloatArray *lDiffPenalty = 
+    AddBndScalarField(pMedial, xModel, "Diffeomorphic Penalty");
+
   // Allocate the image intensity array
   bool flagImage = xImage && xImage->IsImageLoaded();
   vtkFloatArray *lImage = vtkFloatArray::New();
@@ -320,12 +324,15 @@ void ExportBoundaryMeshToVTK(
   // Get the internals of the medial model
   MedialIterationContext *xGrid = xModel->GetIterationContext();
   MedialAtom *xAtoms = xModel->GetAtomArray();
+  size_t nAtoms = xModel->GetNumberOfAtoms();
 
   // Compute certain derived terms
   SolutionData soldat(xGrid, xAtoms);
   soldat.ComputeIntegrationWeights();
   BoundaryCurvaturePenalty termBC(xModel);
   termBC.ComputeEnergy(&soldat);
+
+  CodeTimer timer;
 
   // Add all the points
   for(MedialBoundaryPointIterator it(xGrid); !it.IsAtEnd(); ++it)
@@ -347,6 +354,20 @@ void ExportBoundaryMeshToVTK(
       (soldat.xBoundaryWeights[i] * soldat.xBoundaryWeights[i]);
     lSqrMeanCrv->SetTuple1(i, H2);
 
+    // Compute the diffeomorphic penalty
+    double diffpen = 0;
+    timer.Start();
+    for(size_t ia = 0; ia < nAtoms; ia++)
+      {
+      double d = (xAtoms[ia].X - B.X).squared_magnitude();
+      if(d < xAtoms[ia].F)
+        {
+        diffpen += (xAtoms[ia].F - d) / xAtoms[ia].F;
+        }
+      }
+    timer.Stop();
+    lDiffPenalty->SetTuple1(i, sqrt(diffpen));
+
     // Sample the image along the middle
     if(flagImage)
       {
@@ -358,6 +379,8 @@ void ExportBoundaryMeshToVTK(
       }
 
     }
+
+  cout << "Diff Pen Time: " << timer.Read() << endl;
 
   // Add all the quads
   for(MedialBoundaryTriangleIterator itt(xGrid); !itt.IsAtEnd(); ++itt)
@@ -464,3 +487,126 @@ void ExportIntensityFieldToVTK(
   pMedial->Delete();
 }
 */
+
+#include "tetgen.h"
+
+void TestTetGen(GenericMedialModel *xModel)
+{
+  // Get the internals of the medial model
+  MedialIterationContext *xGrid = xModel->GetIterationContext();
+  MedialAtom *xAtoms = xModel->GetAtomArray();
+
+  // Create the tetgen structure
+  tetgenio tgin, tgout;
+
+  // Populate the node array
+  size_t nv = xGrid->GetNumberOfBoundaryPoints();
+  tgin.numberofpoints = nv + 8;
+  tgin.pointlist = new REAL[tgin.numberofpoints * 3];
+
+  // Also while we do this, compute the bounding box
+  REAL bbmin[3], bbmax[3];
+
+  // Add all the points as nodes
+  for(MedialBoundaryPointIterator it(xGrid); !it.IsAtEnd(); ++it)
+    {
+    size_t i = it.GetIndex();
+    BoundaryAtom &B = GetBoundaryPoint(it, xAtoms);
+    for(size_t k = 0; k < 3; k++)
+      {
+      tgin.pointlist[3 * i + k] = B.X[k];
+      bbmin[k] = (i == 0) ? B.X[k] : min(bbmin[k], B.X[k]);
+      bbmax[k] = (i == 0) ? B.X[k] : max(bbmax[k], B.X[k]);
+      }
+    }
+
+  // Expand the bounding box by 50%
+  double w = max(bbmax[0]-bbmin[0], max(bbmax[1]-bbmin[1],bbmax[2]-bbmin[2]));
+  for(size_t k = 0; k < 3; k++)
+    {
+    double c = 0.5 * (bbmin[k] + bbmax[k]);
+    bbmin[k] = c - w;
+    bbmax[k] = c + w;
+    cout << "BB: " << bbmin[k] << " " << bbmax[k] << endl;
+    }
+
+  // Add the cube points
+  size_t iv = nv * 3;
+  tgin.pointlist[iv++] = bbmin[0]; tgin.pointlist[iv++] = bbmin[1]; tgin.pointlist[iv++] = bbmin[2];
+  tgin.pointlist[iv++] = bbmax[0]; tgin.pointlist[iv++] = bbmin[1]; tgin.pointlist[iv++] = bbmin[2];
+  tgin.pointlist[iv++] = bbmax[0]; tgin.pointlist[iv++] = bbmax[1]; tgin.pointlist[iv++] = bbmin[2];
+  tgin.pointlist[iv++] = bbmin[0]; tgin.pointlist[iv++] = bbmax[1]; tgin.pointlist[iv++] = bbmin[2];
+  tgin.pointlist[iv++] = bbmin[0]; tgin.pointlist[iv++] = bbmin[1]; tgin.pointlist[iv++] = bbmax[2];
+  tgin.pointlist[iv++] = bbmax[0]; tgin.pointlist[iv++] = bbmin[1]; tgin.pointlist[iv++] = bbmax[2];
+  tgin.pointlist[iv++] = bbmax[0]; tgin.pointlist[iv++] = bbmax[1]; tgin.pointlist[iv++] = bbmax[2];
+  tgin.pointlist[iv++] = bbmin[0]; tgin.pointlist[iv++] = bbmax[1]; tgin.pointlist[iv++] = bbmax[2];
+
+  // Populate the facet array
+  size_t nf = xGrid->GetNumberOfBoundaryTriangles();
+  tgin.numberoffacets = nf + 6;
+  tgin.facetlist = new tetgenio::facet[tgin.numberoffacets];
+  tgin.facetmarkerlist = new int[tgin.numberoffacets];
+
+  // Generate the facets
+  for(MedialBoundaryTriangleIterator itt(xGrid); !itt.IsAtEnd(); ++itt)
+    {
+    // Work with the current facet
+    tgin.facetmarkerlist[itt.GetIndex()] = -1;
+    tetgenio::facet &f = tgin.facetlist[itt.GetIndex()];
+
+    // Initialize the poly
+    f.numberofpolygons = 1;
+    f.polygonlist = new tetgenio::polygon[1];
+    f.numberofholes = 0;
+    f.holelist = NULL;
+
+    tetgenio::polygon &p = f.polygonlist[0];
+    p.numberofvertices = 3;
+    p.vertexlist = new int[3];
+    p.vertexlist[0] = itt.GetBoundaryIndex(0);
+    p.vertexlist[1] = itt.GetBoundaryIndex(1);
+    p.vertexlist[2] = itt.GetBoundaryIndex(2);
+    }
+
+  // Generate a single hole (use one of the medial atoms)
+  tgin.numberofholes = 1;
+  tgin.holelist = new REAL[3];
+  tgin.holelist[0] = xAtoms[0].X[0];
+  tgin.holelist[1] = xAtoms[0].X[1];
+  tgin.holelist[2] = xAtoms[0].X[2];
+
+  // Generate the facets for the cube
+  size_t cubeface[6][4] = {
+      {0,1,2,3}, {2,1,5,6}, {1,0,4,5}, {0,3,7,4}, {3,2,6,7}, {7,6,5,4}};
+  for(size_t j = 0; j < 6; j++)
+    {
+    tgin.facetmarkerlist[nf + j] = 0;
+    tetgenio::facet &f = tgin.facetlist[nf + j];
+
+    // Initialize the poly
+    f.numberofpolygons = 1;
+    f.polygonlist = new tetgenio::polygon[1];
+    f.numberofholes = 0;
+    f.holelist = NULL;
+
+    tetgenio::polygon &p = f.polygonlist[0];
+    p.numberofvertices = 4;
+    p.vertexlist = new int[4];
+    for(size_t k = 0; k < 4; k++)
+      {
+      p.vertexlist[k] = cubeface[j][k] + xGrid->GetNumberOfBoundaryPoints();
+      }
+    }
+
+  // Write the objects we created
+  tgin.save_nodes("tetin");
+  tgin.save_poly("tetin");
+
+  // Run the tetrahedralization
+  tetrahedralize("pq1.412", &tgin, &tgout);
+
+  tgout.save_nodes("tetout");
+  tgout.save_elements("tetout");
+  tgout.save_faces("tetout");
+}
+

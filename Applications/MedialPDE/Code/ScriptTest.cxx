@@ -3,6 +3,7 @@
 #include "MedialAtom.h"
 #include "CartesianMedialModel.h"
 #include "OptimizationTerms.h"
+#include "DiffeomorphicEnergyTerm.h"
 #include "CoefficientMapping.h"
 #include "MedialAtomGrid.h"
 #include "PrincipalComponents.h"
@@ -22,6 +23,8 @@
 
 using namespace std;
 using namespace medialpde;
+
+void TestTetGen(GenericMedialModel *model);
 
 string dirWork = "/home/pauly/data2005/Stanley/data/";
 // string dirWork = "/mnt/data2/PUBLIC/Data/Input/StanleySchizophrenia/";
@@ -795,7 +798,9 @@ int TestDerivativesWithImage(const char *fnMPDE, FloatImage *img, const char *fn
         "", new LocalDistanceDifferenceEnergyTerm(model, refvec), 0.1));
     }
   vt.push_back(TermInfo(
-      "", new RadiusPenaltyTerm(0.025), 0.1));
+      "", new DiffeomorphicEnergyTerm(model), 0.1));
+  vt.push_back(TermInfo(
+      "", new RadiusPenaltyTerm(0.01, 4, 100, 10), 0.1));
   vt.push_back(TermInfo(
       "", new BoundaryImageMatchTerm(model, img), 0.1));
   vt.push_back(TermInfo(
@@ -1145,6 +1150,11 @@ int main(int argc, char *argv[])
       return -1;
       }
     return TestSmoothedImageSampler(argv[2]);
+    }
+  else if(0 == strcmp(argv[1], "TETGEN"))
+    {
+    MedialPDE mp(argv[2]);
+    TestTetGen(mp.GetMedialModel());
     }
 
   else 

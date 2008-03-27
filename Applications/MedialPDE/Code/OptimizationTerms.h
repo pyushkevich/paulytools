@@ -674,6 +674,41 @@ private:
   const static double xDefaultPenaltyA, xDefaultPenaltyB;
 };
 
+/**
+ * This heuristic penalty punishes angles below a certain minimum (e.g., 20 degrees)
+ * with a quadratic penalty. It should lead to quality triangulation. However, one 
+ * must be aware that limiting the triangulation quality will also limit how well a
+ * model can fit data. Ideally, this will be used with a remeshing algorithm
+ */
+class MedialMinimumTriangleAnglePenaltyTerm : public MedialIntegrationEnergyTerm
+{
+public:
+  // Initialize the term
+  MedialMinimumTriangleAnglePenaltyTerm(GenericMedialModel *model);
+
+  // Compute the energy
+  double ComputeEnergy(SolutionData *data)
+    { return this->UnifiedComputeEnergy(data, false); }
+
+  // Compute the energy and begin gradient
+  double BeginGradientComputation(SolutionData *data)
+    { return this->UnifiedComputeEnergy(data, true); }
+
+  // Compute the partial derivative term
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
+
+  // Print a verbose report
+  void PrintReport(ostream &sout);
+
+  // Print a short name
+  string GetShortName() { return string("MINANG"); }
+  
+private:
+  double UnifiedComputeEnergy(SolutionData *, bool); 
+  StatisticsAccumulator sMinAngle, sPenalty;
+};
+
 
 class MedialAnglesPenaltyTerm : public MedialIntegrationEnergyTerm
 {
@@ -972,7 +1007,7 @@ private:
 
 /**
  * Penalty for small values of the radius (phi / scale)^-8
- */
+ *
 class RadiusPenaltyTerm : public EnergyTerm
 {
 public:
@@ -991,6 +1026,46 @@ public:
     SolutionData *S, PartialDerivativeSolutionData *dS);
 private:
   double xMinR2, xTotalPenalty, xScale;
+};
+*/
+
+/**
+ * A very simple radius penalty in the form
+ *     { r > r_max:  (r - r_max)^2
+ * p = { r < r_min:  (r - r_min)^2
+ *     { 0        :  otherwise
+ */
+class RadiusPenaltyTerm : public EnergyTerm
+{
+public:
+  RadiusPenaltyTerm(
+    double bndLower = 0., double bndUpper = 1.e100, 
+    double sclLower = 1., double sclUpper = 1.)
+    {
+    rMin = bndLower;
+    rMax = bndUpper;
+    sLower = sclLower;
+    sUpper = sclUpper;
+    }
+
+  double ComputeEnergy(SolutionData *data);
+  
+  void PrintReport(ostream &sout);
+
+  // Print a short name
+  string GetShortName() { return string("RADIUS"); }
+
+  // Compute the partial derivative
+  double ComputePartialDerivative(
+    SolutionData *S, PartialDerivativeSolutionData *dS);
+
+  // Set the parameters
+  void SetParameters(Registry &R);
+
+
+private:
+  double rMin, rMax, sLower, sUpper;
+  StatisticsAccumulator saRadius, saPenLow, saPenHigh;
 };
 
 class MedialBendingEnergyTerm : public MedialIntegrationEnergyTerm
@@ -1095,7 +1170,7 @@ private:
   double xLastSolutionValue;
 
   // Value of the solution for each of the energy terms
-  Vec xLastTermValues;
+  Vec xLastTermValues, xLastGradEvalTermValues;
 
   // The value of the coefficients before optimization began
   Vec xInitialCoefficients;

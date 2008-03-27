@@ -1369,10 +1369,10 @@ void AtomBadnessTerm::PrintReport(ostream &sout)
   sout << "    total penalty            : " << xTotalPenalty << endl;
 }
 
-/*********************************************************************************
- * Angles penalty term
- ********************************************************************************/
-
+/********************************************************************************
+ * Penalty based on the minimum angle of the triangles
+ *******************************************************************************/
+//
 // Compute squared cosines of four angles in a quad
 double CosineSquareTuple(MedialAtom *A, MedialTriangleIterator &it)
 {
@@ -1452,6 +1452,69 @@ double CosineSquareTupleDerivative(MedialAtom *A, MedialAtom *dA, MedialTriangle
   // Compute the weighted sum
   return dC0 + dC1 + dC2;
 }
+
+MedialMinimumTriangleAnglePenaltyTerm
+::MedialMinimumTriangleAnglePenaltyTerm(GenericMedialModel *model)
+{
+
+}
+
+double 
+MedialMinimumTriangleAnglePenaltyTerm
+::UnifiedComputeEnergy(SolutionData *S, bool flagGradient)
+{
+  // Reset the penalty terms
+  sMinAngle.Reset(); sPenalty.Reset();
+
+  // Loop over all medial triangles
+  for(MedialTriangleIterator it(S->xAtomGrid); !it.IsAtEnd(); ++it)
+    {
+    // Get the vertices
+    const SMLVec3d &X0 = A[it.GetAtomIndex(0)].X;
+    const SMLVec3d &X1 = A[it.GetAtomIndex(1)].X;
+    const SMLVec3d &X2 = A[it.GetAtomIndex(2)].X;
+
+    // Compute the egdes
+    SMLVec3d D10 = X1 - X0;
+    SMLVec3d D21 = X2 - X1;
+    SMLVec3d D02 = X0 - X2;
+
+    // Compute the edge lengths squared
+    double L10 = dot_product(D10, D10);
+    double L21 = dot_product(D21, D21);
+    double L02 = dot_product(D02, D02);
+
+    // Compute the cosines squared
+    double A0 = dot_product(D10, D02);
+    double A1 = dot_product(D21, D10);
+    double A2 = dot_product(D02, D21);
+
+    // Compute the actual values
+    double C[3] = 
+      { (A0 * A0) / (L10 * L02), 
+        (A1 * A1) / (L21 * L10), 
+        (A2 * A2) / (L02 * L21) };
+
+    // For each cosine compare it to the threshold
+    for(size_t j = 0; k < 3; j++)
+      {
+      if(C[j] > xCosineThreshold)
+        {
+        // Assign the penalty
+        double angle = acos(sqrt(C[j]));
+        double penalty = (angle - xAngleThreshold) * (angle - xAngleThreshold);
+        sPenalty.Update(penalty);
+        }
+      }
+
+
+    }
+
+}
+
+/*********************************************************************************
+ * Angles penalty term
+ ********************************************************************************/
 
 MedialAnglesPenaltyTerm
 ::MedialAnglesPenaltyTerm(GenericMedialModel *model)
@@ -1936,10 +1999,7 @@ void MedialRegularityTerm::PrintReport(ostream &sout)
   sout << "    domain area: " << xDomainArea << endl;
 }
 
-
-/*********************************************************************************
- * MEDIAL RADIUS PENALTY TERM
- ********************************************************************************/
+/*
 double RadiusPenaltyTerm::ComputeEnergy(SolutionData *S)
 { 
   xTotalPenalty = 0.0;
@@ -1998,7 +2058,90 @@ void RadiusPenaltyTerm::PrintReport(ostream &sout)
   sout << "    total penalty            : " << xTotalPenalty << endl;
   sout << "    smallest R^2             : " << xMinR2 << endl;
 }
+*/
 
+/*********************************************************************************
+ * MEDIAL RADIUS PENALTY TERM
+ ********************************************************************************/
+double RadiusPenaltyTerm::ComputeEnergy(SolutionData *S)
+{ 
+  saRadius.Reset();
+  saPenHigh.Reset();
+  saPenLow.Reset();
+
+  for(size_t i = 0; i < S->xAtomGrid->GetNumberOfAtoms(); i++)
+    {
+    // Get the radius
+    double r = S->xAtoms[i].R;
+    saRadius.Update(r);
+
+    // Compare to min and max
+    if(r < rMin)
+      {
+      double dr = r - rMin;
+      saPenLow.Update(dr * dr);
+      }
+    if(r > rMax)
+      {
+      double dr = r - rMax;
+      saPenHigh.Update(dr * dr);
+      }
+    }
+
+  return saPenLow.GetSum() * sLower + saPenHigh.GetSum() * sUpper;
+}
+
+double RadiusPenaltyTerm
+::ComputePartialDerivative(SolutionData *S, PartialDerivativeSolutionData *dS)
+{
+  double dUpper = 0.0, dLower = 0.0;
+
+  for(size_t i = 0; i < S->xAtomGrid->GetNumberOfAtoms(); i++)
+    {
+    if(dS->xAtoms[i].order == 0)
+      {
+      // Get the radius
+      double r = S->xAtoms[i].R;
+      double d_r = dS->xAtoms[i].R;
+
+      // Compare to min and max
+      if(r < rMin)
+        {
+        dLower += (r - rMin) * d_r;
+        }
+      if(r > rMax)
+        {
+        dUpper += (r - rMax) * d_r;
+        }
+      }
+    }
+
+  return 2 * (sUpper * dUpper + sLower * dLower);
+}  
+
+void RadiusPenaltyTerm::PrintReport(ostream &sout)
+{
+  sout << "  Radius Penalty Term : " << endl;
+  sout << "    min R                    : " << saRadius.GetMin() << endl;
+  sout << "    max R                    : " << saRadius.GetMax() << endl;
+  sout << "    mean R                   : " << saRadius.GetMean() << endl;
+  sout << "    lower bound              : " << rMin << endl;
+  sout << "    upper bound              : " << rMax << endl;
+  sout << "    lower bound violations   : " << saPenLow.GetCount() << endl;
+  sout << "    lower penalty            : " << saPenLow.GetSum() << endl;
+  sout << "    upper bound violations   : " << saPenHigh.GetCount()<< endl;
+  sout << "    upper penalty            : " << saPenHigh.GetSum() << endl;
+  sout << "    total penalty            : " 
+    << saPenLow.GetSum() * sLower + saPenHigh.GetSum() * sUpper << endl;
+}
+
+void RadiusPenaltyTerm::SetParameters(Registry &R)
+{
+  rMin = R["LowerBound"][0.0];
+  rMax = R["UpperBound"][1e100];
+  sLower = R["LowerScale"][1.0];
+  sUpper = R["UpperScale"][1.0];
+}
 
 /*********************************************************************************
  * FIT TO POINT SET ENERGY TERM
@@ -2497,14 +2640,16 @@ MedialOptimizationProblem
   
   // Begin the gradient computation for each of the energy terms
   xLastSolutionValue = 0.0;
-  xLastTermValues.set_size(xTerms.size());
+  if(xLastGradEvalTermValues.size() == 0)
+    xLastGradEvalTermValues.set_size(xTerms.size());
   for(iTerm = 0; iTerm < xTerms.size(); iTerm++)
     {
     xTimers[iTerm].Start();
-    xLastTermValues[iTerm] = xTerms[iTerm]->BeginGradientComputation(S);
-    xLastSolutionValue += xWeights[iTerm] * xLastTermValues[iTerm];
+    double lval = xLastGradEvalTermValues[iTerm];
+    xLastGradEvalTermValues[iTerm] = xTerms[iTerm]->BeginGradientComputation(S);
+    xLastSolutionValue += xWeights[iTerm] * xLastGradEvalTermValues[iTerm];
     xTimers[iTerm].Stop();
-    printf("%7.3le  ",xLastTermValues[iTerm]);
+    printf("%7.3le%s ",xLastGradEvalTermValues[iTerm],(xLastGradEvalTermValues[iTerm] < lval) ? "*" : " ");
     }
 
   printf("  |  %7.3le\n", xLastSolutionValue);

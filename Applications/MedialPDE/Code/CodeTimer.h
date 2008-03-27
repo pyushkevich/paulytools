@@ -1,6 +1,9 @@
 #ifndef __CodeTimer_h_
 #define __CodeTimer_h_
 
+#include <ctime>
+#include <iostream>
+
 class CodeTimer 
 {
 public:
