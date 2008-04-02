@@ -12,6 +12,7 @@ SET(COMMON_SRCS
   Code/BruteForceSubdivisionMedialModel.cxx
   Code/CoefficientMapping.cxx
   Code/CartesianMedialModel.cxx
+  Code/DiffeomorphicEnergyTerm.cxx
   Code/GeometryDescriptor.cxx
   Code/ITKImageWrapper.cxx
   Code/MedialAtom.cxx
@@ -77,6 +78,7 @@ SET(PDE_LIBS
   ${LAPACK_OR_MKL_LIBS}
   ${GSL_LIBRARY} ${GSL_CBLAS_LIBRARY}
   toms611
+  tetgen
   )
 
 # Create a common library

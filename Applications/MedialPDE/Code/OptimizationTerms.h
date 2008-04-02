@@ -705,6 +705,8 @@ public:
   string GetShortName() { return string("MINANG"); }
   
 private:
+  // A structure that holds derivative data
+  
   double UnifiedComputeEnergy(SolutionData *, bool); 
   StatisticsAccumulator sMinAngle, sPenalty;
 };
