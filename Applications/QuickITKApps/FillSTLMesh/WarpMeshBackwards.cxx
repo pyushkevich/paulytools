@@ -17,7 +17,9 @@ int usage()
 {
   cout << "WarpMeshBackward - Applies a warp field (Brian's format) to a VTK mesh" << endl;
   cout << "usage: " << endl;
-  cout << "   WarpMeshBackward mesh.vtk warpname out.vtk " << endl;
+  cout << "   WarpMeshBackward [options] mesh.vtk warpname out.vtk " << endl;
+  cout << "options: " << endl;
+  cout << "   -e ext : Specify the extension of the warp files (default: img)" << endl;
   return -1;
 }
 
@@ -25,6 +27,17 @@ int main(int argc, char **argv)
 {
   // Check the parameters
   if(argc < 4) return usage();
+
+  // Check the extension
+  string ext = "img";
+  for(size_t iarg = 1; iarg < argc - 3; iarg++)
+    {
+    if(0 == strcmp(argv[iarg], "-e"))
+      {
+      ext = string(argv[++iarg]);
+      }
+    else return usage();
+    }
 
   // Read the mesh
   vtkPolyData *p = ReadVTKData(argv[1]);
@@ -39,7 +52,7 @@ int main(int argc, char **argv)
     ReaderType::Pointer fltReader = ReaderType::New();
     std::string xyz = "xyz";
     std::ostringstream oss;
-    oss << argv[2] << xyz[i] << "vec.img";
+    oss << argv[2] << xyz[i] << "vec." << ext;
     cout << "Reading " << oss.str() << endl;
     fltReader->SetFileName(oss.str().c_str());
     fltReader->Update();
