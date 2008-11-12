@@ -23,7 +23,11 @@ int usage()
 {
   cout << "This program performs cluster analysis on a VTK mesh" << endl;
   cout << "Usage: " << endl;
-  cout << "    meshcluster configfile.txt DataArray Threshold Suffix" << endl;
+  cout << "    meshcluster configfile.txt DataArray Threshold Suffix TypeOfTest" << endl;
+  cout << "    TypeOfTest = 0 or none means two sample t-test" << endl;
+  cout << "    TypeOfTest = 1 means correlation t-test" << endl;
+  cout << "    TypeOfTest = 2 means paired t-test" << endl;
+  cout << "    TypeOfTest = 3 means correlation with a summary measure" << endl;
   return -1;
 }
 
@@ -41,8 +45,11 @@ struct Cluster
   // p-values
   double pArea, pPower;
 
+  // t-value
+  double tvalue;
+ 
   // Dummy constructor
-  Cluster() : n(0), area(0.0), power(0.0) {};
+  Cluster() : n(0), area(0.0), power(0.0), tvalue(0.0) {};
 };
 
 typedef std::vector<Cluster> ClusterArray;
@@ -208,6 +215,7 @@ ClusterArray ComputeClusters(
     ca[region].n++;
     ca[region].area += a;
     ca[region].power += a * x;
+    ca[region].tvalue += x;
     }
 
   // Get the output if needed
@@ -275,6 +283,83 @@ void ComputeTTest(
     }
 }
 
+void ComputeCorrTest(
+  vtkPolyData *pd, 
+  const char *var, 
+  const vector<int> &labels,
+  const vector<int> &indiv_labels,
+  int l1, int l2, int ispaired, const vector<float> &corrVar)
+{
+  // Get the pointdata
+  vtkDataArray *data = pd->GetPointData()->GetArray(var);
+  vtkDataArray *ttest = pd->GetPointData()->GetArray("ttest");
+
+  // Create an r (correlation coefficient) array
+  vtkFloatArray *array = vtkFloatArray::New();
+  vtkDataArray *corrcoef ;
+  if (ispaired == 1 || ispaired == 3)
+  {
+  	array->SetName("R");
+  	array->SetNumberOfComponents(1);
+  	array->SetNumberOfTuples(pd->GetNumberOfPoints());
+  	pd->GetPointData()->AddArray(array);
+  	corrcoef = pd->GetPointData()->GetArray("R");
+  }
+
+  int n;
+  if (ispaired == 1 || ispaired == 2)
+     n = indiv_labels.size()/2;
+  else if (ispaired == 3)
+     n = indiv_labels.size();
+  // Loop over all the points
+  for(size_t i = 0; i < pd->GetNumberOfPoints(); i++)
+    {
+    // Compute class-wise sums and sums of squares
+    double s1 = 0, s2 = 0, ss1 = 0, ss2 = 0, s1s2 = 0, s12 = 0, ss12 = 0;
+    for(size_t j = 0; j < n; j++)
+      {
+      double x = data->GetComponent(i, j);
+      double y;
+      if (ispaired == 1 || ispaired == 2)
+         y = data->GetComponent(i, indiv_labels[j] + n);
+      else if (ispaired == 3)
+         y = corrVar[ indiv_labels[j] ];
+        { s1 += x; ss1 += x * x; }
+        { s2 += y; ss2 += y * y; } 
+        s1s2 += x * y;
+        if(labels[j] == l1)
+	  { s12 += x - y; ss12 += (x - y)*(x - y); }
+        else if(labels[j] == l2)
+	  { s12 += y - x; ss12 += (x - y)*(x - y); }
+	
+      }
+
+    double r = 0,t = 0;
+    // Compute t2 directly from sums and sums of squares
+    if (ispaired == 2) // paired t-test
+    {
+	double numerator = sqrt(n )*s12;
+	double denominator = sqrt(n*ss12 - s12*s12);
+	t = numerator/denominator;
+    }
+    else // paired correlation
+    {
+    	double numerator = n*s1s2 - s1 * s2;
+    	double denominator = sqrt(n*ss1 - s1 * s1) * sqrt(n*ss2 - s2 * s2);
+    	r = numerator/denominator;
+    	t = r * sqrt((n-2) / (1 - r*r)); 
+    	// If testing for negative correlation flip sign of t
+    	if (l1 == 1) t = -t;
+    }
+
+    // Add the t2 value to the array
+    ttest->SetTuple1(i, t);
+    if (ispaired == 1 || ispaired == 3)
+    	corrcoef->SetTuple1(i, r);
+    }
+}
+
+
 int main(int argc, char *argv[])
 {
   if(argc < 2)
@@ -300,10 +385,70 @@ int main(int argc, char *argv[])
   if(argc > 3) thresh = atof(argv[3]);
   cout << "Threshold: " << thresh << endl;
 
+  // Paired test desired. TODO registry ?
+  int  ispaired = 0;
+  if (argc > 5) ispaired = atoi(argv[5]);
+
+
+  // SD If a correlation is desired, assume that the true labels are in the form of 000.. 111..
+  // and that in each group the corresponding positions are paired, as in 123.. 123..
+  // In this case, the permutation needs to be done only on one of the group's individual labels 123.. 
+  // first create the individual labels with the above assumption
+  
+  
+  int groupSize, Nlabels;
+  vector<int> indiv_labels, true_indiv_labels ;
+  vector<float> corrVar;
+  if (ispaired == 1 ) // correlation between two variables 
+  {
+     Nlabels = (int)labels.size();
+     if (Nlabels % 2 !=0)
+        { cerr << "Total array size is odd, must be even for paired tests" << endl; return -1; }
+     else
+        groupSize = Nlabels/2;
+     cout << "Generating individual labels for correlation, group size is " << groupSize << endl;
+     for (int cohort = 0; cohort < 2; cohort++)
+         for (int i=0; i< groupSize; i++) 
+             indiv_labels.push_back( i ); 
+     true_indiv_labels = indiv_labels;
+  }
+  else if (ispaired == 2) // paired t-test
+  {
+     Nlabels = (int)labels.size();
+     if (Nlabels % 2 !=0)
+        { cerr << "Total array size is odd, must be even for paired tests" << endl; return -1; }
+     else
+        groupSize = Nlabels/2;
+     cout << "Generating individual labels for paired test, group size is " << groupSize << endl;
+     for (int cohort = 0; cohort < 2; cohort++)
+         for (int i=0; i< groupSize; i++)
+             indiv_labels.push_back( i );
+     true_indiv_labels = indiv_labels;
+  }
+  else if (ispaired == 3) // correlation with summary measurement
+  {
+     FILE *fd;
+     fd = fopen("variable.txt","r");
+     Nlabels = (int)labels.size();
+     groupSize = Nlabels;
+     float val;
+     cout << "Variable values: " ;
+     for (int i=0; i< groupSize; i++) 
+     {
+         indiv_labels.push_back( i );
+         fscanf(fd, "%f\n", &val);
+         corrVar.push_back( val ); 
+         cout << val << " " ; 
+     }
+     true_indiv_labels = indiv_labels;
+     cout << endl;
+  }
+
   // If the threshold is negative, simply change the direction of the test
+  string posneg("_pos");
   int l1 = 0, l2 = 1;
   if(thresh < 0)
-    { l1 = 1; l2 = 0; thresh = -thresh; }
+    { l1 = 1; l2 = 0; thresh = -thresh; posneg = "_neg";}
 
   // Load each of the meshes and create a cluster analyzer
   vector<string> fnMeshes, fnOutMeshes;
@@ -319,8 +464,21 @@ int main(int argc, char *argv[])
   if(argc > 4) 
     {
     string suffix = argv[4];
+    string teststring;
+    std::stringstream ss;
+    ss << thresh;
+    if (ispaired ==0)
+    	teststring = "ttst";
+    else if (ispaired == 1)
+        teststring = "corr";
+    else if (ispaired == 2)
+    	teststring = "ptst";
+    else if (ispaired == 3)
+    	teststring = "vcorr";
+    else
+	teststring = "unkn"; 
     for(size_t i = 0; i < fnOutMeshes.size(); i++)
-      fnOutMeshes[i] = fnOutMeshes[i] + suffix;
+      fnOutMeshes[i] = fnOutMeshes[i] + teststring + ss.str() + posneg + suffix;
     }
   
   // Read the meshes
@@ -347,11 +505,28 @@ int main(int argc, char *argv[])
     random_shuffle(labels.begin(), labels.end());
     hArea[ip] = 0; hPower[ip] = 0;
 
+    // SD shuffle individual member labels within group for correlations
+    if (ispaired == 1 || ispaired == 3)
+    {
+       vector<int>::iterator it;
+       random_shuffle(indiv_labels.begin(), indiv_labels.begin()+groupSize );
+       /*
+       for (it=indiv_labels.begin(); it!=indiv_labels.end(); ++it)
+           cout << *it << " " << flush ;
+       cout << endl;
+       return 0;
+       */
+    }    
+
     // Build up the histogram of cluster areas (and powers)
     for(size_t i = 0; i < fnMeshes.size(); i++)
       {
+      // SD paired tests
+      if (ispaired > 0)
+         ComputeCorrTest(mesh[i], sVOI.c_str(), labels, indiv_labels, l1, l2, ispaired, corrVar);
       // For each mesh, compute the t-test and the clusters
-      ComputeTTest(mesh[i], sVOI.c_str(), labels, l1, l2);
+      else
+         ComputeTTest(mesh[i], sVOI.c_str(), labels, l1, l2);
       ClusterArray ca = ComputeClusters(mesh[i], "ttest", thresh);
 
       // Now find the largest cluster
@@ -375,8 +550,12 @@ int main(int argc, char *argv[])
     {
     vtkPolyData *mout;
 
+    // SD paired tests
+    if (ispaired > 0)
+       ComputeCorrTest(mesh[i], sVOI.c_str(), true_labels, true_indiv_labels, l1, l2, ispaired, corrVar);
+    else
     // Compute the t-test for the mesh with the correct labels
-    ComputeTTest(mesh[i], sVOI.c_str(), true_labels, l1, l2);
+       ComputeTTest(mesh[i], sVOI.c_str(), true_labels, l1, l2);
 
     // Compute the clusters for the mesh with the correct labels
     ClusterArray ca = ComputeClusters(mesh[i], "ttest", thresh, &mout);
@@ -392,8 +571,8 @@ int main(int argc, char *argv[])
       ca[c].pArea = 1.0 - zArea * 1.0 / np;
       ca[c].pPower = 1.0 - zPower * 1.0 / np;
       bool sig = (ca[c].pArea <= 0.05 || ca[c].pPower <= 0.05);
-      printf("Cluster %03d:  Area = %6f (p = %6f);  Power = %6f (p = %6f); %s\n",
-        c, ca[c].area, ca[c].pArea, ca[c].power, ca[c].pPower, 
+      printf("Cluster %03d:  AvgT = %6f; Area = %6f (p = %6f);  Power = %6f (p = %6f); %s\n",
+        c, ca[c].tvalue/ca[c].n, ca[c].area, ca[c].pArea, ca[c].power, ca[c].pPower, 
         sig ? "***" : "");
       }
 
@@ -432,5 +611,6 @@ int main(int argc, char *argv[])
 
     // Save the output mesh
     WriteVTKData(mout, fnOutMeshes[i].c_str());
+    WriteVTKData(mesh[i], fnMeshes[i].c_str());
     }
 }
