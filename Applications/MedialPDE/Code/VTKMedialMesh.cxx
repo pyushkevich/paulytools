@@ -488,6 +488,7 @@ void ExportIntensityFieldToVTK(
 }
 */
 
+/*
 #include "tetgen.h"
 
 void TestTetGen(GenericMedialModel *xModel)
@@ -609,4 +610,5 @@ void TestTetGen(GenericMedialModel *xModel)
   tgout.save_elements("tetout");
   tgout.save_faces("tetout");
 }
+*/
 

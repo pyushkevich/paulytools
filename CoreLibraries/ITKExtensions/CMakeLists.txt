@@ -1,4 +1,4 @@
 SUBDIRS(WindowedSincFilter)
-SUBDIRS(WellComposed)
+#SUBDIRS(WellComposed)
 SUBDIRS(VoxBoIO)
 SUBDIRS(PovRayIO)

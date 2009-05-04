@@ -1453,6 +1453,7 @@ double CosineSquareTupleDerivative(MedialAtom *A, MedialAtom *dA, MedialTriangle
   return dC0 + dC1 + dC2;
 }
 
+/*
 MedialMinimumTriangleAnglePenaltyTerm
 ::MedialMinimumTriangleAnglePenaltyTerm(GenericMedialModel *model)
 {
@@ -1511,6 +1512,7 @@ MedialMinimumTriangleAnglePenaltyTerm
     }
 
 }
+*/
 
 /*********************************************************************************
  * Angles penalty term

@@ -24,7 +24,7 @@
 using namespace std;
 using namespace medialpde;
 
-void TestTetGen(GenericMedialModel *model);
+// void TestTetGen(GenericMedialModel *model);
 
 string dirWork = "/home/pauly/data2005/Stanley/data/";
 // string dirWork = "/mnt/data2/PUBLIC/Data/Input/StanleySchizophrenia/";
@@ -1154,7 +1154,7 @@ int main(int argc, char *argv[])
   else if(0 == strcmp(argv[1], "TETGEN"))
     {
     MedialPDE mp(argv[2]);
-    TestTetGen(mp.GetMedialModel());
+    // TestTetGen(mp.GetMedialModel());
     }
 
   else 

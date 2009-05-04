@@ -158,6 +158,7 @@ SET(PAULY_INCLUDE_DIRS
   ${PAULY_SOURCE_DIR}/CoreLibraries/BasicImaging
   ${PAULY_SOURCE_DIR}/CoreLibraries/BSpline
   ${PAULY_SOURCE_DIR}/CoreLibraries/FLTKViewers
+  ${PAULY_SOURCE_DIR}/CoreLibraries/ITKExtensions/
   ${PAULY_SOURCE_DIR}/CoreLibraries/ITKExtensions/WindowedSincFilter/
   ${PAULY_SOURCE_DIR}/CoreLibraries/ITKExtensions/VoxBoIO/
   ${PAULY_SOURCE_DIR}/CoreLibraries/ITKExtensions/PovRayIO/

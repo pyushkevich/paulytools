@@ -680,6 +680,7 @@ private:
  * must be aware that limiting the triangulation quality will also limit how well a
  * model can fit data. Ideally, this will be used with a remeshing algorithm
  */
+/*
 class MedialMinimumTriangleAnglePenaltyTerm : public MedialIntegrationEnergyTerm
 {
 public:
@@ -710,6 +711,7 @@ private:
   double UnifiedComputeEnergy(SolutionData *, bool); 
   StatisticsAccumulator sMinAngle, sPenalty;
 };
+*/
 
 
 class MedialAnglesPenaltyTerm : public MedialIntegrationEnergyTerm
