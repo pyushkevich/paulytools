@@ -10,8 +10,8 @@
  *
  *************************************************************************/
 
-#include <Fl/Fl_Window.h>
-#include <Fl/glut.h>
+#include <FL/Fl_Window.H>
+#include <FL/glut.H>
 #include <GL/glu.h>
 #include "fracviewer.h"
 #include "blobmodl.h"

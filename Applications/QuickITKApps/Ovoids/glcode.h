@@ -15,7 +15,7 @@
 
 #include "implicit.h"
 #include "blobmodl.h"
-#include <FL/Fl_Window.h>
+#include <FL/Fl_Window.H>
 
 int isurfCallback(int v1,int v2,int v3,IMP_VERTICES vv);
 int isurfCallbackColored(int v1,int v2,int v3,IMP_VERTICES vv);

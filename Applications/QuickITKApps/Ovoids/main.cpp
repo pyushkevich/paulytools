@@ -2,9 +2,9 @@
 
 #include "ui.h"
 
-#include <FL/glut.h>
-#include <FL/Fl_Color_Chooser.h>
-#include <FL/Fl_File_Chooser.h>
+#include <FL/glut.H>
+#include <FL/Fl_Color_Chooser.H>
+#include <FL/Fl_File_Chooser.H>
 #include "fracviewer.h"
 #include "glcode.h"
 #include <Registry/registry.h>

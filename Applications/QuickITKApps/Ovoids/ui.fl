@@ -8,7 +8,7 @@ Function {createUI()} {open
     label {Blob Modeller} open
     xywh {507 104 260 580} type Double box BORDER_BOX labelfont 1
     code0 {\#include <stdio.h>}
-    code1 {\#include "FL/glut.h"}
+    code1 {\#include "FL/glut.H"}
     code2 {\#include "blobmodl.h"}
     code3 {extern Model *model;} visible
   } {

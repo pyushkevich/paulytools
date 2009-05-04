@@ -10,8 +10,8 @@
  * curvature computation, models, ovoids and singular surfaces.
  *************************************************************************/
 #include "blobmodl.h"
-#include <FL/glut.h>
-#include <FL/fl_draw.h>
+#include <FL/glut.H>
+#include <FL/fl_draw.H>
 #include "glcode.h"
 #include <vnl/vnl_inverse.h>
 

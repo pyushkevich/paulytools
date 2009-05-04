@@ -12,7 +12,7 @@
  * http://www.cs.hmc.edu/people/pwinston
  */
 
-#include <Fl/glut.h>
+#include <FL/glut.H>
 #include <GL/glu.h>
 #include <stdio.h>
 #include <stdlib.h>
