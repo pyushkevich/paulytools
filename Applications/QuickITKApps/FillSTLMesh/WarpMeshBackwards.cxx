@@ -7,6 +7,7 @@
 #include <vtkPoints.h>
 #include <itkImageFileReader.h>
 #include <itkLinearInterpolateImageFunction.h>
+#include <itkOrientedRASImage.h>
 #include <itkImage.h>
 #include "ReadWriteVTK.h"
 
@@ -43,34 +44,61 @@ int main(int argc, char **argv)
   vtkPolyData *p = ReadVTKData(argv[1]);
 
   // Read the warp field
-  typedef itk::Image<double,3> ImageType;
+  typedef itk::OrientedRASImage<double,3> ImageType;
   typedef itk::ImageFileReader<ImageType> ReaderType;
   typedef itk::LinearInterpolateImageFunction<ImageType,double> FuncType;
   FuncType::Pointer warp[3];
+  ImageType::Pointer wimg[3];
   for(size_t i = 0; i < 3; i++)
     {
     ReaderType::Pointer fltReader = ReaderType::New();
     std::string xyz = "xyz";
     std::ostringstream oss;
-    oss << argv[2] << xyz[i] << "vec." << ext;
+    oss << argv[2] << xyz[i] << "vec.nii.gz";
     cout << "Reading " << oss.str() << endl;
     fltReader->SetFileName(oss.str().c_str());
     fltReader->Update();
     warp[i] = FuncType::New();
-    warp[i]->SetInputImage(fltReader->GetOutput());
+    wimg[i] = fltReader->GetOutput();
+    warp[i]->SetInputImage(wimg[i]);
     }
 
   // Update the coordinates
   for(size_t k = 0; k < p->GetNumberOfPoints(); k++)
     {
+    // Get the point (in RAS coords)
     double *pt = p->GetPoint(k);
+    ImageType::PointType itk_point;
+    itk_point[0] = pt[0]; itk_point[1] = pt[1]; itk_point[2] = pt[2];
+    
+    // Map the point to a continuous index
     FuncType::ContinuousIndexType idx;
-    idx[0] = pt[0]; idx[1] = pt[1]; idx[2] = pt[2];
-    double newpt[3];
-    double x = pt[0] + warp[0]->EvaluateAtContinuousIndex(idx);
-    double y = pt[1] + warp[1]->EvaluateAtContinuousIndex(idx);
-    double z = pt[2] + warp[2]->EvaluateAtContinuousIndex(idx);
-    p->GetPoints()->SetPoint(k, x, y, z);
+    wimg[0]->TransformRASPhysicalPointToContinuousIndex(itk_point, idx); 
+    cout << "Evaluate at index " << idx[0] << " " << idx[1] << " " << idx[2] << endl;
+
+    // Compute the transformation. We assume the transformation is in ITK
+    // physical space. 
+    vnl_vector_fixed<double, 4> w;
+    w[0] = warp[0]->EvaluateAtContinuousIndex(idx);
+    w[1] = warp[1]->EvaluateAtContinuousIndex(idx);
+    w[2] = warp[2]->EvaluateAtContinuousIndex(idx);
+    w[3] = 0.0;
+
+    // Map the transformation to RAS
+    // vnl_vector_fixed<double, 4> w_ras = 
+    //  wimg[0]->GetSpacingOriginPhysicalSpaceToRASPhysicalSpaceMatrix() * w;
+
+    // vnl_vector_fixed<double, 4> w_ras = w;
+      
+    // Assume transformation is in spacing units
+    itk::FixedArray<double, 3> aw, awras;
+    aw[0] = w[0];
+    aw[1] = w[1];
+    aw[2] = w[2];
+    wimg[0]->TransformLocalVectorToPhysicalVector(aw, awras);
+
+    p->GetPoints()->SetPoint(k, pt[0] + awras[0], pt[1] + awras[1], pt[2] + awras[2]);
+    // p->GetPoints()->SetPoint(k, pt[0] + w_ras[0], pt[1] + w_ras[1], pt[2] + w_ras[2]);
     }
     
   // Write the mesh

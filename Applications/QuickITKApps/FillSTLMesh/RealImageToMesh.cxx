@@ -1,9 +1,13 @@
 #include "itkImageFileReader.h"
-#include "itkImage.h"
+#include "itkOrientedRASImage.h"
 #include "itkVTKImageExport.h"
 #include "vtkImageImport.h"
 #include "vtkImageData.h"
 #include "vtkImageMarchingCubes.h"
+#include "vtkTransformPolyDataFilter.h"
+#include "vtkTransform.h"
+#include <vtkMatrix4x4.h>
+#include "vnl/vnl_matrix_fixed.h"
 #include "ReadWriteVTK.h"
 #include <iostream>
 
@@ -11,7 +15,7 @@ using namespace std;
 
 int usage()
 {
-  cout << "Usage: real2mesh input.img output.vtk threshold" << endl;
+  cout << "Usage: vtklevelset input.img output.vtk threshold" << endl;
   return -1;
 }
 
@@ -39,7 +43,7 @@ int main(int argc, char *argv[])
     return usage();
 
   // Read the input image
-  typedef itk::Image<float, 3> ImageType;
+  typedef itk::OrientedRASImage<float, 3> ImageType;
   typedef itk::ImageFileReader<ImageType> ReaderType;
   ReaderType::Pointer fltReader = ReaderType::New();
   fltReader->SetFileName(argv[1]);
@@ -56,7 +60,7 @@ int main(int argc, char *argv[])
     imin = std::min(imin, x);
     }
 
-  float cut = imin + (imax - imin) * atof(argv[3]);
+  float cut = atof(argv[3]);
   cout << "Image Range: [" << imin << ", " << imax << "]" << endl;
   cout << "Taking level set at " << cut << endl;
 
@@ -77,6 +81,22 @@ int main(int argc, char *argv[])
   fltMarching->SetValue(0,cut);
   fltMarching->Update();
   vtkPolyData *meshCubes = fltMarching->GetOutput();
+
+  // Map to the RAS coordinates
+  for(size_t i = 0; i < meshCubes->GetNumberOfPoints(); i++)
+    {
+    double *pvtk = meshCubes->GetPoint(i);
+    itk::ContinuousIndex<double, 3> idx;
+    idx[0] = (pvtk[0] - imgInput->GetOrigin()[0]) / imgInput->GetSpacing()[0];
+    idx[1] = (pvtk[1] - imgInput->GetOrigin()[1]) / imgInput->GetSpacing()[1];
+    idx[2] = (pvtk[2] - imgInput->GetOrigin()[2]) / imgInput->GetSpacing()[2];
+    itk::Point<double, 3> pitk;
+    imgInput->TransformContinuousIndexToRASPhysicalPoint(idx, pitk);
+    pvtk[0] = pitk[0];
+    pvtk[1] = pitk[1];
+    pvtk[2] = pitk[2];
+    meshCubes->GetPoints()->SetPoint(i, pitk[0], pitk[1], pitk[2]);
+    }
 
   // Write the output
   WriteVTKData(meshCubes, argv[2]);

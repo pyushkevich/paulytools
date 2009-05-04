@@ -6,6 +6,7 @@ SET(FILLSTLMESH_SRCS
 
 INCLUDE_DIRECTORIES(${PAULY_SOURCE_DIR}/Applications/MedialPDE/Code)
 
+ADD_EXECUTABLE(vtklevelset RealImageToMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(meshcluster SurfaceClusterAnalysis.cxx ReadWriteVTK.cxx
   ${PAULY_SOURCE_DIR}/Applications/MedialPDE/Code/Registry.cxx)
 ADD_EXECUTABLE(meshdiff CompareMeshes.cxx)
@@ -20,7 +21,6 @@ ADD_EXECUTABLE(identimg IdentifyImage.cxx)
 ADD_EXECUTABLE(scalemesh ScaleMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(dumpmeshpoints DumpMeshPoints.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(dumpmeshattr DumpMeshAttr.cxx ReadWriteVTK.cxx)
-ADD_EXECUTABLE(real2mesh RealImageToMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(WarpMeshBackward WarpMeshBackwards.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(flipmesh FlipMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(cmrep2img CMRepMeshToImage.cxx ReadWriteVTK.cxx)
@@ -29,11 +29,11 @@ ADD_EXECUTABLE(mesh_image_sample MeshImageSample.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(mesh_array_average  MeshArrayAverage.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(vtk2off  ConvertVTKtoOFF.cxx ReadWriteVTK.cxx)
 
-ADD_EXECUTABLE(importqvoronoi 
-  ImportQVoronoi.cxx
-  ReadWriteVTK.cxx
-  ${PAULY_SOURCE_DIR}/Applications/BrainTracer/Code/VTKMeshShortestDistance.cxx
-)
+### ADD_EXECUTABLE(importqvoronoi 
+###  ImportQVoronoi.cxx
+###  ReadWriteVTK.cxx
+###  ${PAULY_SOURCE_DIR}/Applications/BrainTracer/Code/VTKMeshShortestDistance.cxx
+###)
 
 SET(ITK_LIBS
   BasicImaging
@@ -64,10 +64,10 @@ TARGET_LINK_LIBRARIES(scalemesh ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(dumpmeshpoints ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(meshcluster ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(dumpmeshattr ${COMMON_LIBS})
-TARGET_LINK_LIBRARIES(importqvoronoi ${COMMON_LIBS})
+# TARGET_LINK_LIBRARIES(importqvoronoi ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(mesh2img ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(flipmesh ${COMMON_LIBS})
-TARGET_LINK_LIBRARIES(real2mesh ${COMMON_LIBS} ${ITK_LIBS})
+TARGET_LINK_LIBRARIES(vtklevelset ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(WarpMeshBackward ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(cmrep2img ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(cmrep2warp ${COMMON_LIBS} ${ITK_LIBS})
@@ -77,6 +77,6 @@ TARGET_LINK_LIBRARIES(vtk2off ${COMMON_LIBS} ${ITK_LIBS})
 
 INSTALL_TARGETS("/bin" meshdiff avgmesh submesh quadcluster 
   smoothmesh copymesh avgmesharr identimg scalemesh 
-  dumpmeshpoints meshcluster dumpmeshattr importqvoronoi 
-  mesh2img flipmesh real2mesh WarpMeshBackward cmrep2img cmrep2warp
-  mesh_image_sample mesh_array_average vtk2off)
+  dumpmeshpoints meshcluster dumpmeshattr 
+  mesh2img flipmesh vtklevelset WarpMeshBackward cmrep2img cmrep2warp
+  mesh_image_sample)
