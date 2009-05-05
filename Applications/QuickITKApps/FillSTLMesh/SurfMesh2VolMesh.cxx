@@ -4,8 +4,14 @@
 #include <set>
 
 #include <vtkPolyData.h>
+#include <vtkUnstructuredGrid.h>
+#include <vtkUnstructuredGridWriter.h>
+#include <vtkUnsignedShortArray.h>
+#include <vtkIdList.h>
 #include <vtkPoints.h>
+#include <vtkPointData.h>
 #include <vtkCell.h>
+#include <vtkCellData.h>
 #include <itkImageFileReader.h>
 #include <itkLinearInterpolateImageFunction.h>
 //#include <itkOrientedRASImage.h>
@@ -20,8 +26,8 @@ int usage()
 {
   cout << "SurfMesh2VolMesh - Converts a VTK surface mesh to a VTK volume mesh" << endl;
   cout << "usage: " << endl;
-  cout << "   SurfMesh2VolMesh [options] meshin.vtk meshout.vtk " << endl;
-  cout << "options: " << endl;
+  cout << "   SurfMesh2VolMesh meshin.vtk meshout.vtk [tetgenoptions]" << endl;
+  cout << "tetgenoptions: default is pq1.414a0.1" << endl;
   return -1;
 }
 
@@ -36,12 +42,22 @@ int main(int argc, char **argv)
   // Check the parameters
   if(argc < 3) return usage();
 
+  // tetgen option 
+  std::string optstr = std::string("");
+  if (argc > 3)
+    {
+    for(int i = 3; i < argc; i++)
+      optstr = optstr + std::string( argv[i] );
+    }
+  else
+    optstr = optstr + std::string("pq1.414a0.1");
+
 
   // Read the mesh
   vtkPolyData *mesh = ReadVTKData(argv[1]);
 
   // Cast mesh into tetgen format
-  // All indices start from 1.
+  // All indices start from 0.
   in.firstnumber = 0;
 
   // Enter the nodes
@@ -83,73 +99,98 @@ int main(int argc, char **argv)
     }
 
   // Output the PLC to files 'barin.node' and 'barin.poly'.
+  /*
   in.save_nodes("vtkin");
   in.save_poly("vtkin");
   in.save_elements("vtkin");
   in.save_faces("vtkin");
+  */
 
-  tetrahedralize("pq1.414a0.1", &in, &out);
+  //tetrahedralize("pq1.414a0.1", &in, &out);
+  tetrahedralize((char *)optstr.c_str(), &in, &out);
   
-/*
-  // Add the points to the poly data
-  vtkPoints *outpoints = vtkPoints::New();
-  outpoints->Allocate(out.numberofpoints);
-    
-  // Allocate the polydata
-  vtkPolyData *outmesh = vtkPolyData::New();
-  outmesh->Allocate(xModel->GetNumberOfTriangles());
-  outmesh->SetPoints(outpoints);
-*/
 
-  // Output mesh to files 'barout.node', 'barout.ele' and 'barout.face'.
-  out.save_nodes("vtkout");
-  in.save_poly("vtkout");
-  out.save_elements("vtkout");
-  out.save_faces("vtkout");
+  vtkPoints* outpoints = vtkPoints::New();
+  vtkUnsignedShortArray* pointarray = vtkUnsignedShortArray::New();
+  vtkUnsignedShortArray* cellarray  = vtkUnsignedShortArray::New();
+  vtkUnstructuredGrid* outmesh = vtkUnstructuredGrid::New();
 
-
-
-/*
-  // Update the coordinates
-  for(size_t k = 0; k < p->GetNumberOfPoints(); k++)
+  // Add the points 
+  outpoints->SetNumberOfPoints(out.numberofpoints);
+  pointarray->SetName ("Point array");
+  pointarray->Allocate(out.numberofpoints);
+  cout <<  out.numberofpoints << " points in tetgen mesh" << endl;
+  cout <<  out.numberoftetrahedronattributes << " cell arrays in tetgen mesh" << endl;
+  cout <<  out.numberofpointattributes << " point arrays in tetgen mesh" << endl;
+  for(size_t k = 0; k < out.numberofpoints; k++)
     {
-    // Get the point (in RAS coords)
-    double *pt = p->GetPoint(k);
-    ImageType::PointType itk_point;
-    itk_point[0] = pt[0]; itk_point[1] = pt[1]; itk_point[2] = pt[2];
+    double pt[3];
+    pt[0] = out.pointlist[ k*3 ];
+    pt[1] = out.pointlist[ k*3 + 1 ];
+    pt[2] = out.pointlist[ k*3 + 2 ];
+    outpoints->SetPoint(k, pt[0], pt[1], pt[2]);
+    pointarray->InsertNextValue(k);
+    }
+  outmesh->SetPoints(outpoints);
+  
+  if (outmesh->GetPointData())
+    {
+    outmesh->GetPointData()->AddArray(pointarray);
+    }
+
+  cout <<  outmesh->GetNumberOfPoints() << " points in output mesh" << endl;
+  // Debug
+  /*
+  for(size_t k = 0; k < outpoints->GetNumberOfPoints(); k++)
+    {
+    double *pt = outpoints->GetPoint(k);
+    cout << " point " << k << " is " << pt << endl;
+    }
+  */
+
+  // Allocate the mesh
+  outmesh->Allocate(out.numberoftetrahedra);
+  
+  cellarray->SetName ("Cell Array");
+  cellarray->Allocate(out.numberoftetrahedra);
+  // Add the cells
+  for(size_t k = 0; k < out.numberoftetrahedra; k++)
+    {
+    vtkIdList* idlist = vtkIdList::New();
+    unsigned int ids[4];
+    ids[0] = out.tetrahedronlist[ k*4 ];
+    ids[1] = out.tetrahedronlist[ k*4 + 1 ];
+    ids[2] = out.tetrahedronlist[ k*4 + 2 ];
+    ids[3] = out.tetrahedronlist[ k*4 + 3 ];
     
-    // Map the point to a continuous index
-    FuncType::ContinuousIndexType idx;
-    wimg[0]->TransformRASPhysicalPointToContinuousIndex(itk_point, idx); 
-    cout << "Evaluate at index " << idx[0] << " " << idx[1] << " " << idx[2] << endl;
-
-    // Compute the transformation. We assume the transformation is in ITK
-    // physical space. 
-    vnl_vector_fixed<double, 4> w;
-    w[0] = warp[0]->EvaluateAtContinuousIndex(idx);
-    w[1] = warp[1]->EvaluateAtContinuousIndex(idx);
-    w[2] = warp[2]->EvaluateAtContinuousIndex(idx);
-    w[3] = 0.0;
-
-    // Map the transformation to RAS
-    // vnl_vector_fixed<double, 4> w_ras = 
-    //  wimg[0]->GetSpacingOriginPhysicalSpaceToRASPhysicalSpaceMatrix() * w;
-
-    // vnl_vector_fixed<double, 4> w_ras = w;
-      
-    // Assume transformation is in spacing units
-    itk::FixedArray<double, 3> aw, awras;
-    aw[0] = w[0];
-    aw[1] = w[1];
-    aw[2] = w[2];
-    wimg[0]->TransformLocalVectorToPhysicalVector(aw, awras);
-
-    p->GetPoints()->SetPoint(k, pt[0] + awras[0], pt[1] + awras[1], pt[2] + awras[2]);
-    // p->GetPoints()->SetPoint(k, pt[0] + w_ras[0], pt[1] + w_ras[1], pt[2] + w_ras[2]);
+    idlist->InsertNextId (ids[0]);
+    idlist->InsertNextId (ids[1]);
+    idlist->InsertNextId (ids[2]);
+    idlist->InsertNextId (ids[3]);
+    outmesh->InsertNextCell (VTK_TETRA, idlist);
+    idlist->Delete();
+    cellarray->InsertNextValue(k);
+    }
+  if (outmesh->GetCellData())
+    {
+    outmesh->GetCellData()->AddArray(cellarray);
     }
     
-  // Write the mesh
-  WriteVTKData(p, argv[3]);
-*/
+  // Output mesh to files 'barout.node', 'barout.ele' and 'barout.face'.
+  /*
+  out.save_nodes("vtkout");
+  out.save_poly("vtkout");
+  out.save_elements("vtkout");
+  out.save_faces("vtkout");
+  */
+
+  // Write the vtk output
+  vtkUnstructuredGridWriter* writer = vtkUnstructuredGridWriter::New();
+  writer->SetFileName (argv[2]);
+  writer->SetInput (outmesh);
+  writer->Write();
+  writer->Delete();
+
+
   return 0;
 }
