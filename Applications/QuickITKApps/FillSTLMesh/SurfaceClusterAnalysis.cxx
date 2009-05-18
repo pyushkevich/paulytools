@@ -333,19 +333,19 @@ ClusterArray ComputeClusters(
   daArea->SetNumberOfTuples(p->GetNumberOfPoints());
   daArea->FillComponent(0, 0.0);
 
-  // Compute the area of each tetra in the cluster set
+  // Compute the volume of each tetra in the cluster set
   for(size_t k = 0; k < p->GetNumberOfCells(); k++)
     {
     vtkCell *cell = p->GetCell(k);
     if(cell->GetCellType() != VTK_TETRA)
       throw("Wrong cell type");
 
-    // Compute the area of the tetra
+    // Compute the volume of the tetra
     vtkIdType a0 = cell->GetPointId(0);
     vtkIdType a1 = cell->GetPointId(1);
     vtkIdType a2 = cell->GetPointId(2);
     vtkIdType a3 = cell->GetPointId(3);
-    double p0[3], p1[2], p2[3], p3[3];
+    double p0[3], p1[3], p2[3], p3[3];
     p->GetPoint(a0, p0);
     p->GetPoint(a1, p1);
     p->GetPoint(a2, p2);
@@ -353,7 +353,7 @@ ClusterArray ComputeClusters(
 
     double area = vtkTetra::ComputeVolume(p0, p1, p2, p3);
 
-    // Split the area between neighbors
+    // Split the volume between neighbors
     daArea->SetTuple1(a0, area / 4.0 + daArea->GetTuple1(a0));
     daArea->SetTuple1(a1, area / 4.0 + daArea->GetTuple1(a1));
     daArea->SetTuple1(a2, area / 4.0 + daArea->GetTuple1(a2));
