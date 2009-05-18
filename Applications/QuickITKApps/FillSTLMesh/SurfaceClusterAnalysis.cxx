@@ -1,13 +1,23 @@
-#include "vtkPolyData.h"
+#include <vtkPolyData.h>
+#include <vtkUnstructuredGrid.h>
+#include <vtkUnstructuredGridReader.h>
+#include <vtkUnstructuredGridWriter.h>
+#include <vtkPolyDataReader.h>
+#include <vtkPolyDataWriter.h>
+#include <vtkPoints.h>
+#include <vtkFloatArray.h>
+#include <vtkCell.h>
+#include <vtkCellData.h>
+#include <vtkTetra.h>
+#include <vtkClipDataSet.h>
+#include <vtkConnectivityFilter.h>
 #include "vtkPointData.h"
-#include "vtkFloatArray.h"
 #include "ReadWriteVTK.h"
 #include "vtkTriangleFilter.h"
 #include "vtkBandedPolyDataContourFilter.h"
 #include "vtkClipPolyData.h"
 #include "vtkThresholdPoints.h"
 #include "vtkPolyDataConnectivityFilter.h"
-#include "vtkCell.h"
 #include "vtkTriangle.h"
 
 #include "Registry.h"
@@ -21,7 +31,7 @@ using namespace std;
 
 int usage()
 {
-  cout << "This program performs cluster analysis on a VTK mesh" << endl;
+  cout << "This program performs cluster analysis on a VTK mesh (both surface and volume meshes)" << endl;
   cout << "Usage: " << endl;
   cout << "    meshcluster configfile.txt DataArray Threshold Suffix TypeOfTest" << endl;
   cout << "    TypeOfTest = 0 or none means two sample t-test" << endl;
@@ -147,11 +157,67 @@ ClusterGenerator::ComputeClusters(const char *data, const char *aelt, double thr
   return ca;
 }*/
 
+template <class TMeshType>
+TMeshType * ReadMesh(const char *fname)
+{ return NULL; }
+
+template <>
+vtkUnstructuredGrid *ReadMesh<>(const char *fname)
+{
+  vtkUnstructuredGridReader *reader = vtkUnstructuredGridReader::New();
+  reader->SetFileName(fname);
+  reader->Update();
+  return reader->GetOutput();
+}
+
+template <>
+vtkPolyData *ReadMesh<>(const char *fname)
+{
+  vtkPolyDataReader *reader = vtkPolyDataReader::New();
+  reader->SetFileName(fname);
+  reader->Update();
+  return reader->GetOutput();
+}
+
+
+template <class TMeshType>
+void WriteMesh(TMeshType *mesh, const char *fname)
+{ }
+
+template <>
+void WriteMesh<>(vtkUnstructuredGrid *mesh, const char *fname)
+{
+  vtkUnstructuredGridWriter *writer = vtkUnstructuredGridWriter::New();
+  writer->SetFileName(fname);
+  writer->SetInput(mesh);
+  writer->Update();
+}
+
+template <>
+void WriteMesh<>(vtkPolyData *mesh, const char *fname)
+{
+  vtkPolyDataWriter *writer = vtkPolyDataWriter::New();
+  writer->SetFileName(fname);
+  writer->SetInput(mesh);
+  writer->Update();
+}
+
+
+template <class TMeshType>
+ClusterArray ComputeClusters(
+  TMeshType *mesh,
+  const char *data, 
+  double thresh, 
+  TMeshType **mout = NULL)
+{ ClusterArray ca(1) ; return ca; }
+
+
+template <>
 ClusterArray ComputeClusters(
   vtkPolyData *mesh,
   const char *data, 
   double thresh, 
-  vtkPolyData **mout = NULL)
+  vtkPolyData **mout )
 {
   // Initialize mesh
   mesh->GetPointData()->SetActiveScalars(data);
@@ -236,9 +302,103 @@ ClusterArray ComputeClusters(
   return ca;
 }
 
+template <>
+ClusterArray ComputeClusters(
+  vtkUnstructuredGrid *mesh,
+  const char *data, 
+  double thresh, 
+  vtkUnstructuredGrid **mout )
+{
+  // Initialize mesh
+  mesh->GetPointData()->SetActiveScalars(data);
 
+  // Clip the data field at the threshold
+  vtkClipDataSet *fContour = vtkClipDataSet::New();
+  fContour->SetInput(mesh);
+  fContour->SetValue(thresh);
+  vtkUnstructuredGrid *f = fContour->GetOutput();
+
+  // Get the connected components
+  vtkConnectivityFilter * fConnect = vtkConnectivityFilter::New();
+  fConnect->SetInput(fContour->GetOutput());
+  fConnect->SetExtractionModeToAllRegions();
+  fConnect->ColorRegionsOn();
+  fConnect->Update();
+  vtkUnstructuredGrid *p = fConnect->GetOutput();
+
+  // Create output data arrays for computing volume element
+  vtkFloatArray *daArea = vtkFloatArray::New();
+  daArea->SetName("volume_element");
+  daArea->SetNumberOfComponents(1);
+  daArea->SetNumberOfTuples(p->GetNumberOfPoints());
+  daArea->FillComponent(0, 0.0);
+
+  // Compute the area of each tetra in the cluster set
+  for(size_t k = 0; k < p->GetNumberOfCells(); k++)
+    {
+    vtkCell *cell = p->GetCell(k);
+    if(cell->GetCellType() != VTK_TETRA)
+      throw("Wrong cell type");
+
+    // Compute the area of the tetra
+    vtkIdType a0 = cell->GetPointId(0);
+    vtkIdType a1 = cell->GetPointId(1);
+    vtkIdType a2 = cell->GetPointId(2);
+    vtkIdType a3 = cell->GetPointId(3);
+    double p0[3], p1[2], p2[3], p3[3];
+    p->GetPoint(a0, p0);
+    p->GetPoint(a1, p1);
+    p->GetPoint(a2, p2);
+    p->GetPoint(a3, p3);
+
+    double area = vtkTetra::ComputeVolume(p0, p1, p2, p3);
+
+    // Split the area between neighbors
+    daArea->SetTuple1(a0, area / 4.0 + daArea->GetTuple1(a0));
+    daArea->SetTuple1(a1, area / 4.0 + daArea->GetTuple1(a1));
+    daArea->SetTuple1(a2, area / 4.0 + daArea->GetTuple1(a2));
+    daArea->SetTuple1(a3, area / 4.0 + daArea->GetTuple1(a3));
+    }
+
+  // The the important arrays in the resulting meshes
+  vtkDataArray *daRegion = p->GetPointData()->GetScalars();
+  vtkDataArray *daData = f->GetPointData()->GetArray(data);
+
+  // Build up the cluster array
+  ClusterArray ca(fConnect->GetNumberOfExtractedRegions());
+  for(size_t i = 0; i < p->GetNumberOfPoints(); i++)
+    {
+    size_t region = (size_t) (daRegion->GetTuple1(i));
+    double x = daData->GetTuple1(i);
+    double a = daArea->GetTuple1(i);
+    ca[region].n++;
+    ca[region].area += a;
+    ca[region].power += a * x;
+    ca[region].tvalue += x;
+    }
+
+  // Get the output if needed
+  if(mout != NULL)
+    {
+    p->GetPointData()->AddArray(daArea);
+    *mout = p;
+    }
+  else
+    {
+    // Delete the intermediates
+    daArea->Delete();
+    fConnect->Delete();
+    fContour->Delete();
+    }
+
+  // Return the cluster array
+  return ca;
+}
+
+
+template <class TMeshType>
 void ComputeTTest(
-  vtkPolyData *pd, 
+  TMeshType *pd, 
   const char *var, 
   const vector<int> &labels,
   int l1, int l2)
@@ -283,8 +443,9 @@ void ComputeTTest(
     }
 }
 
+template <class TMeshType>
 void ComputeCorrTest(
-  vtkPolyData *pd, 
+  TMeshType *pd, 
   const char *var, 
   const vector<int> &labels,
   const vector<int> &indiv_labels,
@@ -360,13 +521,9 @@ void ComputeCorrTest(
 }
 
 
-int main(int argc, char *argv[])
+template <class TMeshType>
+int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
 {
-  if(argc < 2)
-    return usage();
-
-  // Read the registry file
-  Registry registry(argv[1]);
 
   // Get the number of permutations
   size_t np = registry["Analysis.NumberOfPermutations"][1000];
@@ -452,7 +609,6 @@ int main(int argc, char *argv[])
 
   // Load each of the meshes and create a cluster analyzer
   vector<string> fnMeshes, fnOutMeshes;
-  vector<vtkPolyData *> mesh;
   vector<ClusterArray> claTrue;
   fnMeshes = registry.Folder("Mesh").GetArray(string(""));
   fnOutMeshes = registry.Folder("OutputMesh").GetArray(string(""));
@@ -482,11 +638,12 @@ int main(int argc, char *argv[])
     }
   
   // Read the meshes
+  vector<TMeshType *> mesh;
   for(size_t i = 0; i < fnMeshes.size(); i++)
     {
     // Read mesh
     cout << "Reading mesh " << fnMeshes[i] << endl;
-    mesh.push_back(ReadVTKData(fnMeshes[i].c_str()));
+    mesh.push_back(ReadMesh<TMeshType>(fnMeshes[i].c_str()));
 
     // Create a t-test array
     vtkFloatArray *array = vtkFloatArray::New();
@@ -496,7 +653,7 @@ int main(int argc, char *argv[])
     mesh[i]->GetPointData()->AddArray(array);
     mesh[i]->GetPointData()->SetActiveScalars("ttest");
     }
-
+    
   // Run permutation analysis
   vector<double> hArea(np), hPower(np);
   for(size_t ip = 0; ip < np; ip++)
@@ -523,11 +680,11 @@ int main(int argc, char *argv[])
       {
       // SD paired tests
       if (ispaired > 0)
-         ComputeCorrTest(mesh[i], sVOI.c_str(), labels, indiv_labels, l1, l2, ispaired, corrVar);
+         ComputeCorrTest<TMeshType>(mesh[i], sVOI.c_str(), labels, indiv_labels, l1, l2, ispaired, corrVar);
       // For each mesh, compute the t-test and the clusters
       else
-         ComputeTTest(mesh[i], sVOI.c_str(), labels, l1, l2);
-      ClusterArray ca = ComputeClusters(mesh[i], "ttest", thresh);
+         ComputeTTest<TMeshType>(mesh[i], sVOI.c_str(), labels, l1, l2);
+      ClusterArray ca = ComputeClusters<TMeshType>(mesh[i], "ttest", thresh);
 
       // Now find the largest cluster
       for(size_t c = 0; c < ca.size(); c++)
@@ -548,17 +705,17 @@ int main(int argc, char *argv[])
   // Going back to the original meshes, assign a cluster p-value to each mesh
   for(size_t i = 0; i < fnMeshes.size(); i++)
     {
-    vtkPolyData *mout;
+    TMeshType *mout;
 
     // SD paired tests
     if (ispaired > 0)
-       ComputeCorrTest(mesh[i], sVOI.c_str(), true_labels, true_indiv_labels, l1, l2, ispaired, corrVar);
+       ComputeCorrTest<TMeshType>(mesh[i], sVOI.c_str(), true_labels, true_indiv_labels, l1, l2, ispaired, corrVar);
     else
     // Compute the t-test for the mesh with the correct labels
-       ComputeTTest(mesh[i], sVOI.c_str(), true_labels, l1, l2);
+       ComputeTTest<TMeshType>(mesh[i], sVOI.c_str(), true_labels, l1, l2);
 
     // Compute the clusters for the mesh with the correct labels
-    ClusterArray ca = ComputeClusters(mesh[i], "ttest", thresh, &mout);
+    ClusterArray ca = ComputeClusters<TMeshType>(mesh[i], "ttest", thresh, &mout);
     printf("MESH %s HAS %d CLUSTERS: \n", fnMeshes[i].c_str(), ca.size());
 
     // Assign a p-value to each cluster
@@ -609,8 +766,54 @@ int main(int argc, char *argv[])
     fClip->Update();
     */
 
-    // Save the output mesh
-    WriteVTKData(mout, fnOutMeshes[i].c_str());
-    WriteVTKData(mesh[i], fnMeshes[i].c_str());
+    // Save the output mesh 
+    cout << "save the output ************ TODO" << endl;
+    //WriteVTKData(mout, fnOutMeshes[i].c_str());
+    //WriteVTKData(mesh[i], fnMeshes[i].c_str());
+    }
+
+
+}
+
+int main(int argc, char *argv[])
+{
+  if(argc < 2)
+    return usage();
+  // Read the registry file
+  Registry registry(argv[1]);
+
+  vector<string> fnMeshes;
+  fnMeshes = registry.Folder("Mesh").GetArray(string(""));
+  if(fnMeshes.size() == 0)
+    { cerr << "Missing mesh specification" << endl; return -1; }
+
+
+  
+  // Read the meshes
+  // Check the data type of the input file
+  vtkDataReader *reader = vtkDataReader::New();
+  reader->SetFileName(fnMeshes[0].c_str());
+  reader->OpenVTKFile();
+  reader->ReadHeader();
+
+  bool isPolyData = true;
+  // Is this a polydata?
+  if(reader->IsFileUnstructuredGrid())
+    {
+    reader->Delete();
+    isPolyData = false;
+    return meshcluster<vtkUnstructuredGrid>( argc, argv, registry, isPolyData);
+    }
+  else if(reader->IsFilePolyData())
+    {
+    reader->Delete();
+    return meshcluster<vtkPolyData>( argc, argv, registry, isPolyData);
+
+    }
+  else
+    {
+    reader->Delete();
+    cerr << "Unsupported VTK data type in input file" << endl;
+    return -1;
     }
 }
