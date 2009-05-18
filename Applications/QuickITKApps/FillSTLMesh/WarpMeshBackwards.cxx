@@ -168,8 +168,9 @@ void WriteMesh<>(vtkPolyData *mesh, const char *fname)
 }
 
 template<class TMeshType>
-bool ComputeTetrahedralVolumes(TMeshType *mesh, vtkFloatArray *array)
+bool ComputeTetrahedralVolumes(TMeshType *mesh, vtkFloatArray *array, double &totalvol)
 {
+  totalvol = 0.0;
   array->Allocate(mesh->GetNumberOfCells());
   for(int j = 0; j < mesh->GetNumberOfCells(); j++)
     {
@@ -182,6 +183,7 @@ bool ComputeTetrahedralVolumes(TMeshType *mesh, vtkFloatArray *array)
         mesh->GetPoint(cell->GetPointId(2)),
         mesh->GetPoint(cell->GetPointId(3)));
       array->InsertNextValue(vol);
+      totalvol += vol;
       }
     else return false;
     }
@@ -243,7 +245,8 @@ int WarpMesh(WarpMeshParam &parm)
   // Create the volume array (cell-wise) for future jacobian computation
   vtkFloatArray *jacobian = vtkFloatArray::New();
   jacobian->SetName("Cell Jacobian");
-  bool have_tetvol = ComputeTetrahedralVolumes(mesh, jacobian);
+  double total_old_vol = 0;
+  bool have_tetvol = ComputeTetrahedralVolumes(mesh, jacobian, total_old_vol);
 
   // Update the coordinates
   for(int k = 0; k < mesh->GetNumberOfPoints(); k++)
@@ -329,7 +332,8 @@ int WarpMesh(WarpMeshParam &parm)
     // Compute the updated volumes
     vtkFloatArray *newvol = vtkFloatArray::New();
     newvol->SetName("Cell Volume");
-    ComputeTetrahedralVolumes(mesh, newvol);
+    double total_new_vol = 0;
+    ComputeTetrahedralVolumes(mesh, newvol, total_new_vol);
 
     // Compute the Jacobian
     for(int i = 0; i < mesh->GetNumberOfCells(); i++)
@@ -338,6 +342,10 @@ int WarpMesh(WarpMeshParam &parm)
     // Add both arrays
     mesh->GetCellData()->AddArray(jacobian);
     mesh->GetCellData()->AddArray(newvol);
+
+    // Report change in volume
+    printf("VOLUME_STATS: %12.8f %12.8f %12.8f\n", 
+      total_old_vol, total_new_vol, total_new_vol/total_old_vol); 
     }
 
   // Write the mesh
