@@ -254,7 +254,7 @@ ClusterArray ComputeClusters(
     vtkIdType a0 = cell->GetPointId(0);
     vtkIdType a1 = cell->GetPointId(1);
     vtkIdType a2 = cell->GetPointId(2);
-    double p0[3], p1[2], p2[3];
+    double p0[3], p1[3], p2[3];
     p->GetPoint(a0, p0);
     p->GetPoint(a1, p1);
     p->GetPoint(a2, p2);
