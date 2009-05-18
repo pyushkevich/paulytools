@@ -6,6 +6,7 @@
 #include <vtkPolyData.h>
 #include <vtkUnstructuredGrid.h>
 #include <vtkUnstructuredGridWriter.h>
+#include <vtkFloatArray.h>
 #include <vtkUnsignedShortArray.h>
 #include <vtkIdList.h>
 #include <vtkPoints.h>
@@ -16,11 +17,15 @@
 #include <itkLinearInterpolateImageFunction.h>
 //#include <itkOrientedRASImage.h>
 #include <itkImage.h>
+#include <vnl/vnl_matrix_fixed.h>
+#include <vnl/vnl_det.h>
 #include "ReadWriteVTK.h"
 #include "tetgen.h"
 
 using namespace std;
 using namespace itk;
+
+typedef vnl_matrix_fixed<double, 4, 4> MatrixType;
 
 int usage()
 {
@@ -111,13 +116,13 @@ int main(int argc, char **argv)
   
 
   vtkPoints* outpoints = vtkPoints::New();
-  vtkUnsignedShortArray* pointarray = vtkUnsignedShortArray::New();
-  vtkUnsignedShortArray* cellarray  = vtkUnsignedShortArray::New();
+  vtkFloatArray* pointarray = vtkFloatArray::New();
+  vtkFloatArray* cellarray  = vtkFloatArray::New();
   vtkUnstructuredGrid* outmesh = vtkUnstructuredGrid::New();
 
   // Add the points 
   outpoints->SetNumberOfPoints(out.numberofpoints);
-  pointarray->SetName ("Point array");
+  pointarray->SetName ("Point Volume");
   pointarray->Allocate(out.numberofpoints);
   cout <<  out.numberofpoints << " points in tetgen mesh" << endl;
   cout <<  out.numberoftetrahedronattributes << " cell arrays in tetgen mesh" << endl;
@@ -129,16 +134,10 @@ int main(int argc, char **argv)
     pt[1] = out.pointlist[ k*3 + 1 ];
     pt[2] = out.pointlist[ k*3 + 2 ];
     outpoints->SetPoint(k, pt[0], pt[1], pt[2]);
-    pointarray->InsertNextValue(k);
+    pointarray->InsertNextValue(0.0);
     }
   outmesh->SetPoints(outpoints);
   
-  if (outmesh->GetPointData())
-    {
-    outmesh->GetPointData()->AddArray(pointarray);
-    }
-
-  cout <<  outmesh->GetNumberOfPoints() << " points in output mesh" << endl;
   // Debug
   /*
   for(size_t k = 0; k < outpoints->GetNumberOfPoints(); k++)
@@ -151,9 +150,11 @@ int main(int argc, char **argv)
   // Allocate the mesh
   outmesh->Allocate(out.numberoftetrahedra);
   
-  cellarray->SetName ("Cell Array");
+  cellarray->SetName ("Cell Volume");
   cellarray->Allocate(out.numberoftetrahedra);
   // Add the cells
+  MatrixType mymat;
+  mymat.set_identity();
   for(size_t k = 0; k < out.numberoftetrahedra; k++)
     {
     vtkIdList* idlist = vtkIdList::New();
@@ -168,14 +169,38 @@ int main(int argc, char **argv)
     idlist->InsertNextId (ids[2]);
     idlist->InsertNextId (ids[3]);
     outmesh->InsertNextCell (VTK_TETRA, idlist);
+    // Calculate tet volume
+    for(size_t ivert = 0; ivert < 4; ivert++)
+       {
+       double ithvert[3];
+       outmesh->GetPoint( ids[ivert], ithvert );
+       for (size_t idir = 0; idir < 3; idir++) 
+           mymat(ivert,idir) = ithvert[idir] ;
+       mymat(ivert, 3) = 1.0;
+       
+       }
+       
+    //cout << "mat " << mymat << endl;
+    float volume = vnl_det(mymat)/6.0;   
+    cellarray->InsertNextValue(abs(volume));
+    // Distribute the volume to all vertices equally
+    for(size_t ivert = 0; ivert < 4; ivert++)
+       pointarray->SetTuple1(ids[ivert], pointarray->GetTuple1(ids[ivert]) + abs(volume)/4.0);
     idlist->Delete();
-    cellarray->InsertNextValue(k);
     }
   if (outmesh->GetCellData())
     {
+    cout << "Adding cell data.." << endl;
     outmesh->GetCellData()->AddArray(cellarray);
     }
     
+  if (outmesh->GetPointData())
+    {
+    cout << "Adding point data.." << endl;
+    outmesh->GetPointData()->AddArray(pointarray);
+    }
+
+  cout <<  outmesh->GetNumberOfPoints() << " points in output mesh" << endl;
   // Output mesh to files 'barout.node', 'barout.ele' and 'barout.face'.
   /*
   out.save_nodes("vtkout");
