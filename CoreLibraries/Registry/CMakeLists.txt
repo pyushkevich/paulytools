@@ -1,5 +1,5 @@
 SET(REGISTRY_SRCS
-    Registry.cpp
+    Registry.cxx
     registry_old.cpp
     CommandLineArgumentParser.cxx
 )
