@@ -12,6 +12,10 @@
 #include <vtkPolyDataReader.h>
 #include <vtkPolyDataWriter.h>
 #include <vtkPoints.h>
+#include <vtkFloatArray.h>
+#include <vtkCell.h>
+#include <vtkCellData.h>
+#include <vtkTetra.h>
 #include <itkImageFileReader.h>
 #include <itkLinearInterpolateImageFunction.h>
 #include <itkVectorLinearInterpolateImageFunction.h>
@@ -163,6 +167,28 @@ void WriteMesh<>(vtkPolyData *mesh, const char *fname)
   writer->Update();
 }
 
+template<class TMeshType>
+bool ComputeTetrahedralVolumes(TMeshType *mesh, vtkFloatArray *array)
+{
+  array->Allocate(mesh->GetNumberOfCells());
+  for(int j = 0; j < mesh->GetNumberOfCells(); j++)
+    {
+    vtkCell *cell =  mesh->GetCell(j);
+    if(cell->GetCellType() == VTK_TETRA)
+      {
+      double vol = vtkTetra::ComputeVolume(
+        mesh->GetPoint(cell->GetPointId(0)),
+        mesh->GetPoint(cell->GetPointId(1)),
+        mesh->GetPoint(cell->GetPointId(2)),
+        mesh->GetPoint(cell->GetPointId(3)));
+      array->InsertNextValue(vol);
+      }
+    else return false;
+    }
+
+  return true;
+}
+
 /**
  * The actual method is templated over the VTK data type (unstructured/polydata)
  */
@@ -213,6 +239,11 @@ int WarpMesh(WarpMeshParam &parm)
 
   cout << "RAS transform " << endl;
   cout << ijk2ras << endl;
+
+  // Create the volume array (cell-wise) for future jacobian computation
+  vtkFloatArray *jacobian = vtkFloatArray::New();
+  jacobian->SetName("Cell Jacobian");
+  bool have_tetvol = ComputeTetrahedralVolumes(mesh, jacobian);
 
   // Update the coordinates
   for(int k = 0; k < mesh->GetNumberOfPoints(); k++)
@@ -292,6 +323,23 @@ int WarpMesh(WarpMeshParam &parm)
     mesh->GetPoints()->SetPoint(k, y_mesh[0], y_mesh[1], y_mesh[2]);
     }
     
+  // Create the volume array (cell-wise) for future jacobian computation
+  if(have_tetvol)
+    {
+    // Compute the updated volumes
+    vtkFloatArray *newvol = vtkFloatArray::New();
+    newvol->SetName("Cell Volume");
+    ComputeTetrahedralVolumes(mesh, newvol);
+
+    // Compute the Jacobian
+    for(int i = 0; i < mesh->GetNumberOfCells(); i++)
+      jacobian->SetTuple1(i, newvol->GetTuple1(i) / jacobian->GetTuple1(i));
+
+    // Add both arrays
+    mesh->GetCellData()->AddArray(jacobian);
+    mesh->GetCellData()->AddArray(newvol);
+    }
+
   // Write the mesh
   WriteMesh<TMeshType>(mesh, parm.fnMeshOut.c_str());
   return 0;
