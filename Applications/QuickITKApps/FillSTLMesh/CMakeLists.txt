@@ -16,7 +16,6 @@ ADD_EXECUTABLE(submesh SubdivideMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(quadcluster QuadClustering.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(smoothmesh SmoothMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(copymesh CopyMesh.cxx ReadWriteVTK.cxx)
-ADD_EXECUTABLE(avgmesharr AverageMeshArrays.cxx)
 ADD_EXECUTABLE(identimg IdentifyImage.cxx)
 ADD_EXECUTABLE(scalemesh ScaleMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(dumpmeshpoints DumpMeshPoints.cxx ReadWriteVTK.cxx)
@@ -26,12 +25,10 @@ ADD_EXECUTABLE(flipmesh FlipMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(cmrep2img CMRepMeshToImage.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(cmrep2warp CMRepToWarp.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(mesh_image_sample MeshImageSample.cxx ReadWriteVTK.cxx)
-<<<<<<< CMakeLists.txt
-#ADD_EXECUTABLE(mesh_array_average  MeshArrayAverage.cxx ReadWriteVTK.cxx)
-#ADD_EXECUTABLE(vtk2off  ConvertVTKtoOFF.cxx ReadWriteVTK.cxx)
-ADD_EXECUTABLE(SurfMesh2VolMesh  SurfMesh2VolMesh.cxx ReadWriteVTK.cxx)
-=======
->>>>>>> 1.31
+ADD_EXECUTABLE(avgmesharr AverageMeshArrays.cxx)
+# ADD_EXECUTABLE(mesh_array_average  MeshArrayAverage.cxx ReadWriteVTK.cxx)
+# ADD_EXECUTABLE(vtk2off  ConvertVTKtoOFF.cxx ReadWriteVTK.cxx)
+ADD_EXECUTABLE(surf2tet SurfMesh2VolMesh.cxx ReadWriteVTK.cxx)
 
 ### ADD_EXECUTABLE(importqvoronoi 
 ###  ImportQVoronoi.cxx
@@ -56,6 +53,8 @@ SET(COMMON_LIBS
 INCLUDE_DIRECTORIES(${MYLIBS_INCLUDE_DIRS}
   ${PAULY_SOURCE_DIR}/Applications/BrainTracer/Code)
 
+INCLUDE_DIRECTORIES(${PAULY_SOURCE_DIR}/ExternalLibraries/tetgen1.4.2)
+
 TARGET_LINK_LIBRARIES(meshdiff ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(avgmesh ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(submesh ${COMMON_LIBS})
@@ -76,10 +75,12 @@ TARGET_LINK_LIBRARIES(warpmesh ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(cmrep2img ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(cmrep2warp ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(mesh_image_sample ${COMMON_LIBS} ${ITK_LIBS})
-TARGET_LINK_LIBRARIES(SurfMesh2VolMesh ${COMMON_LIBS} ${ITK_LIBS} -ltet
--L/mnt/aibs1/srdas/src/tetgen1.4.2)
+# TARGET_LINK_LIBRARIES(mesh_array_average ${COMMON_LIBS} ${ITK_LIBS})
+# TARGET_LINK_LIBRARIES(vtk2off ${COMMON_LIBS} ${ITK_LIBS})
+TARGET_LINK_LIBRARIES(surf2tet ${COMMON_LIBS} tetgen)
+
 INSTALL_TARGETS("/bin" meshdiff avgmesh submesh quadcluster 
   smoothmesh copymesh avgmesharr identimg scalemesh 
   dumpmeshpoints meshcluster dumpmeshattr 
-  mesh2img flipmesh vtklevelset WarpMeshBackward cmrep2img cmrep2warp
-  mesh_image_sample SurfMesh2VolMesh)
+  mesh2img flipmesh vtklevelset warpmesh cmrep2img cmrep2warp
+  mesh_image_sample surf2tet)
