@@ -183,7 +183,6 @@ bool ComputeTetrahedralVolumes(TMeshType *mesh, vtkFloatArray *array, double &to
       mesh->GetPoint(cell->GetPointId(2), p[2]);
       mesh->GetPoint(cell->GetPointId(3), p[3]);
       double vol = vtkTetra::ComputeVolume(p[0], p[1], p[2], p[3]);
-      cout << "VOL = " << vol << endl;
       array->InsertNextValue(vol);
       totalvol += vol;
       }
