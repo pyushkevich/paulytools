@@ -6,6 +6,11 @@
 #include <vnl/vnl_inverse.h>
 
 #include <vtkPolyData.h>
+#include <vtkUnstructuredGrid.h>
+#include <vtkUnstructuredGridReader.h>
+#include <vtkUnstructuredGridWriter.h>
+#include <vtkPolyDataReader.h>
+#include <vtkPolyDataWriter.h>
 #include <vtkPoints.h>
 #include <itkImageFileReader.h>
 #include <itkLinearInterpolateImageFunction.h>
@@ -96,33 +101,74 @@ vnl_matrix_fixed<double,4,4> ConstructVTKtoNiftiTransform(
   return vox2nii * vtk2vox;
 }
 
-int main(int argc, char **argv)
+struct WarpMeshParam
 {
-  // Check the parameters
-  if(argc < 4) return usage();
-
-  // Parse the optional parameters
-  int ch;
-  Coord mesh_coord = RAS, warp_coord = RAS;
-  while ((ch = getopt(argc, argv, "m:w:")) != -1)
+  string fnMeshIn;
+  string fnMeshOut;
+  Coord mesh_coord, warp_coord;
+  string fnWarp[3];
+  WarpMeshParam()
     {
-    switch(ch)
-      {
-    case 'm': if(!scan_coord(optarg, mesh_coord) || mesh_coord==ANTS)
-                return usage(); 
-              break;
-    case 'w': if(!scan_coord(optarg, warp_coord))
-                return usage(); 
-              break;
-    default: return usage();
-      }
+    fnMeshIn = "";
+    fnMeshOut = "";
+    for(size_t d = 0; d < 3; d++)
+      fnWarp[d] = "";
+    mesh_coord = RAS;
+    warp_coord = RAS;
     }
+};
 
-  // Parse the filenames
-  if(optind + 5 != argc) return usage();
-  string fnMeshIn = argv[optind++];
-  string fnMeshOut = argv[optind++];
+template <class TMeshType> 
+TMeshType * ReadMesh(const char *fname)
+{ return NULL; }
 
+template <>
+vtkUnstructuredGrid *ReadMesh<>(const char *fname)
+{
+  vtkUnstructuredGridReader *reader = vtkUnstructuredGridReader::New();
+  reader->SetFileName(fname);
+  reader->Update();
+  return reader->GetOutput();
+}
+
+template <>
+vtkPolyData *ReadMesh<>(const char *fname)
+{
+  vtkPolyDataReader *reader = vtkPolyDataReader::New();
+  reader->SetFileName(fname);
+  reader->Update();
+  return reader->GetOutput();
+}
+
+
+template <class TMeshType> 
+void WriteMesh(TMeshType *mesh, const char *fname)
+{ }
+
+template <>
+void WriteMesh<>(vtkUnstructuredGrid *mesh, const char *fname)
+{
+  vtkUnstructuredGridWriter *writer = vtkUnstructuredGridWriter::New();
+  writer->SetFileName(fname);
+  writer->SetInput(mesh);
+  writer->Update();
+}
+
+template <>
+void WriteMesh<>(vtkPolyData *mesh, const char *fname)
+{
+  vtkPolyDataWriter *writer = vtkPolyDataWriter::New();
+  writer->SetFileName(fname);
+  writer->SetInput(mesh);
+  writer->Update();
+}
+
+/**
+ * The actual method is templated over the VTK data type (unstructured/polydata)
+ */
+template <class TMeshType>
+int WarpMesh(WarpMeshParam &parm)
+{
   // Read warp field
   typedef itk::Image<double, 3> ImageType;
   typedef itk::ImageFileReader<ImageType> ReaderType;
@@ -136,7 +182,7 @@ int main(int argc, char **argv)
   for(size_t d = 0; d < 3; d++)
     {
     reader[d] = ReaderType::New();
-    reader[d]->SetFileName(argv[optind++]);
+    reader[d]->SetFileName(parm.fnWarp[d].c_str());
     reader[d]->Update();
     warp[d] = reader[d]->GetOutput();
     func[d] = FuncType::New();
@@ -144,7 +190,7 @@ int main(int argc, char **argv)
     }
 
   // Read the mesh
-  vtkPolyData *p = ReadVTKData(fnMeshIn.c_str());
+  TMeshType *mesh = ReadMesh<TMeshType>(parm.fnMeshIn.c_str());
 
   // Set up the transforms
   vnl_matrix_fixed<double, 4, 4> ijk2ras = ConstructNiftiSform(
@@ -169,19 +215,19 @@ int main(int argc, char **argv)
   cout << ijk2ras << endl;
 
   // Update the coordinates
-  for(int k = 0; k < p->GetNumberOfPoints(); k++)
+  for(int k = 0; k < mesh->GetNumberOfPoints(); k++)
     {
     // Get the point (in whatever format that it's stored)
     vnl_vector_fixed<double, 4> x_mesh, x_ras, x_ijk, v_warp, v_ras;
-    x_mesh[0] = p->GetPoint(k)[0]; x_mesh[1] = p->GetPoint(k)[1]; x_mesh[2] = p->GetPoint(k)[2];
+    x_mesh[0] = mesh->GetPoint(k)[0]; x_mesh[1] = mesh->GetPoint(k)[1]; x_mesh[2] = mesh->GetPoint(k)[2];
     x_mesh[3] = 1.0;
 
     // Map the point into RAS coordinates
-    if(mesh_coord == RAS)
+    if(parm.mesh_coord == RAS)
       x_ras = x_mesh;
-    else if(mesh_coord == LPS)
+    else if(parm.mesh_coord == LPS)
       x_ras = lps2ras * x_mesh;
-    else if(mesh_coord == IJKOS)
+    else if(parm.mesh_coord == IJKOS)
       x_ras = vtk2ras * x_mesh;
     else 
       x_ras = ijk2ras * x_mesh;
@@ -198,13 +244,13 @@ int main(int argc, char **argv)
     v_warp[3] = 0.0;
 
     // Compute the displacement in RAS coordinates
-    if(warp_coord == RAS)
+    if(parm.warp_coord == RAS)
       v_ras = v_warp;
-    else if(warp_coord == LPS)
+    else if(parm.warp_coord == LPS)
       v_ras = lps2ras * v_warp;
-    else if(warp_coord == IJKOS)
+    else if(parm.warp_coord == IJKOS)
       v_ras = vtk2ras * v_warp;
-    else if(warp_coord == ANTS)
+    else if(parm.warp_coord == ANTS)
       {
       // vector is multiplied by the direction matrix ??? Really???
       v_ras = lps2ras * v_warp;
@@ -217,11 +263,11 @@ int main(int argc, char **argv)
     y_ras = x_ras + v_ras;
 
     // Map new coordinate to desired system
-    if(mesh_coord == RAS)
+    if(parm.mesh_coord == RAS)
       y_mesh = y_ras;
-    else if(mesh_coord == LPS)
+    else if(parm.mesh_coord == LPS)
       y_mesh = ras2lps * y_ras;
-    else if(mesh_coord == IJKOS)
+    else if(parm.mesh_coord == IJKOS)
       y_mesh = ras2vtk * y_ras;
     else 
       y_mesh = ras2ijk * y_ras;
@@ -243,10 +289,67 @@ int main(int argc, char **argv)
     p->GetPoints()->SetPoint(k, pt[0] + awras[0], pt[1] + awras[1], pt[2] + awras[2]);
     */
 
-    p->GetPoints()->SetPoint(k, y_mesh[0], y_mesh[1], y_mesh[2]);
+    mesh->GetPoints()->SetPoint(k, y_mesh[0], y_mesh[1], y_mesh[2]);
     }
     
   // Write the mesh
-  WriteVTKData(p, fnMeshOut.c_str());
+  WriteMesh<TMeshType>(mesh, parm.fnMeshOut.c_str());
   return 0;
+}
+
+
+  
+
+int main(int argc, char **argv)
+{
+  // Check the parameters
+  if(argc < 4) return usage();
+
+  // Parse the optional parameters
+  int ch;
+  WarpMeshParam parm;
+  while ((ch = getopt(argc, argv, "m:w:")) != -1)
+    {
+    switch(ch)
+      {
+    case 'm': if(!scan_coord(optarg, parm.mesh_coord) || parm.mesh_coord==ANTS)
+                return usage(); 
+              break;
+    case 'w': if(!scan_coord(optarg, parm.warp_coord))
+                return usage(); 
+              break;
+    default: return usage();
+      }
+    }
+
+  // Parse the filenames
+  if(optind + 5 != argc) return usage();
+  parm.fnMeshIn = argv[optind++];
+  parm.fnMeshOut = argv[optind++];
+  for(size_t d = 0; d < 3; d++)
+    parm.fnWarp[d] = argv[optind++];
+
+  // Check the data type of the input file
+  vtkDataReader *reader = vtkDataReader::New();
+  reader->SetFileName(parm.fnMeshIn.c_str());
+  reader->OpenVTKFile();
+  reader->ReadHeader();
+
+  // Is this a polydata?
+  if(reader->IsFileUnstructuredGrid())
+    {
+    reader->Delete();
+    return WarpMesh<vtkUnstructuredGrid>(parm);
+    }
+  else if(reader->IsFilePolyData())
+    {
+    reader->Delete();
+    return WarpMesh<vtkPolyData>(parm);
+    }
+  else
+    {
+    reader->Delete();
+    cerr << "Unsupported VTK data type in input file" << endl;
+    return -1;
+    }
 }
