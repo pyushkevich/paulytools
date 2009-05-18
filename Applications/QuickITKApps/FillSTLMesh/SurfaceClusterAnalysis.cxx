@@ -768,8 +768,8 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
 
     // Save the output mesh 
     cout << "save the output ************ TODO" << endl;
-    //WriteVTKData(mout, fnOutMeshes[i].c_str());
-    //WriteVTKData(mesh[i], fnMeshes[i].c_str());
+    WriteMesh<TMeshType>(mout, fnOutMeshes[i].c_str());
+    WriteMesh<TMeshType>(mesh[i], fnMeshes[i].c_str());
     }
 
 
