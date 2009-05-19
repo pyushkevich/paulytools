@@ -19,6 +19,10 @@
 #include "vtkThresholdPoints.h"
 #include "vtkPolyDataConnectivityFilter.h"
 #include "vtkTriangle.h"
+#include "vnl/vnl_file_matrix.h"
+#include "vnl/vnl_rank.h"
+#include "vnl/vnl_inverse.h"
+
 
 #include "Registry.h"
 
@@ -33,11 +37,12 @@ int usage()
 {
   cout << "This program performs cluster analysis on a VTK mesh (both surface and volume meshes)" << endl;
   cout << "Usage: " << endl;
-  cout << "    meshcluster configfile.txt DataArray Threshold Suffix TypeOfTest" << endl;
+  cout << "    meshcluster configfile.txt DataArray Threshold [Suffix] [TypeOfTest] [design_mat.txt] [contrast_vec.txt]" << endl;
   cout << "    TypeOfTest = 0 or none means two sample t-test" << endl;
   cout << "    TypeOfTest = 1 means correlation t-test" << endl;
   cout << "    TypeOfTest = 2 means paired t-test" << endl;
   cout << "    TypeOfTest = 3 means correlation with a summary measure" << endl;
+  cout << "    TypeOfTest = 4 means GLM: design_mat.txt and contrast_vec.txt are required" << endl;
   return -1;
 }
 
@@ -520,10 +525,68 @@ void ComputeCorrTest(
     }
 }
 
+template <class TMeshType>
+void GeneralLinearModel(string fn_matrix, string fn_contrast, TMeshType *pd, const char *var)
+{
+  // Read the matrix from file
+  vnl_file_matrix<double> mat(fn_matrix.c_str());
+  if(!mat)
+    throw string("Unable to read matrix from file given");
+
+  // Read the contrast from file
+  vnl_file_matrix<double> con(fn_contrast.c_str());
+  if(!con)
+    throw string("Unable to read contrast from file given");
+
+  // Get the pointdata
+  vtkDataArray *data = pd->GetPointData()->GetArray(var);
+  vtkDataArray *ttest = pd->GetPointData()->GetArray("ttest");
+
+
+  // Check that the number of images matches
+  if(data->GetNumberOfComponents() != mat.rows())
+    throw string("Matrix number of rows does not match number of observations");
+
+  // Check that the columns in matrix match contrast vector
+  if(con.columns() != mat.columns())
+    throw string("Matrix and contrast vector must have same number of columns");
+
+  cout << "Running GLM on " << mat.rows() << " images" << endl;
+  cout << "  design matrix: " << mat << endl;
+  cout << "  contrast vector: " << con << endl;
+
+  // Some matrices
+  vnl_matrix<double> A = vnl_inverse(mat.transpose() * mat);
+  // vnl_matrix<double> Ax = A * mat.transpose();
+
+  // Load all images into a Y matrix (can we do this)
+  size_t n = pd->GetNumberOfPoints();
+  vnl_matrix<double> Y(mat.rows(), n);
+  for(size_t i = 0; i < mat.rows(); i++)
+    {
+    for(size_t j = 0; j < n; j++)
+      { Y(i,j) = data->GetComponent(i,j); }
+    }
+
+  // Compute bhat = Ax * Y
+  vnl_matrix<double> bhat = (A * mat.transpose()) * Y;
+
+  // Compute the contrast
+  vnl_matrix<double> res = con * bhat;
+
+  // Write the output 
+  for(size_t j = 0; j < n; j++)
+    { ttest->SetTuple1(j, res(1,j)); }
+}
+
 
 template <class TMeshType>
 int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
 {
+
+  // design matrix and contrast vector files
+  string fn_design("design_mat.txt");
+  string fn_con("contrast_vec.txt");  
 
   // Get the number of permutations
   size_t np = registry["Analysis.NumberOfPermutations"][1000];
@@ -600,6 +663,15 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
      true_indiv_labels = indiv_labels;
      cout << endl;
   }
+  else if (ispaired == 4) // GLM
+  {
+     // design matrix and contrast vector
+     if (argc == 8 ) 
+     { 
+       fn_design = string(argv[6]); 
+       fn_con = string(argv[7]);
+     } 
+  }
 
   // If the threshold is negative, simply change the direction of the test
   string posneg("_pos");
@@ -631,6 +703,8 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
     	teststring = "ptst";
     else if (ispaired == 3)
     	teststring = "vcorr";
+    else if (ispaired == 4)
+    	teststring = "glm";
     else
 	teststring = "unkn"; 
     for(size_t i = 0; i < fnOutMeshes.size(); i++)
@@ -679,8 +753,11 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
     for(size_t i = 0; i < fnMeshes.size(); i++)
       {
       // SD paired tests
-      if (ispaired > 0)
+      if (ispaired > 0 && ispaired < 4)
          ComputeCorrTest<TMeshType>(mesh[i], sVOI.c_str(), labels, indiv_labels, l1, l2, ispaired, corrVar);
+      else if (ispaired == 4)
+      // GLM
+         GeneralLinearModel<TMeshType>(fn_design, fn_con, mesh[i], sVOI.c_str());
       // For each mesh, compute the t-test and the clusters
       else
          ComputeTTest<TMeshType>(mesh[i], sVOI.c_str(), labels, l1, l2);
@@ -708,8 +785,11 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
     TMeshType *mout;
 
     // SD paired tests
-    if (ispaired > 0)
+    if (ispaired > 0 && ispaired < 4)
        ComputeCorrTest<TMeshType>(mesh[i], sVOI.c_str(), true_labels, true_indiv_labels, l1, l2, ispaired, corrVar);
+    else if (ispaired == 4)
+    // GLM
+       GeneralLinearModel<TMeshType>(fn_design, fn_con, mesh[i], sVOI.c_str());
     else
     // Compute the t-test for the mesh with the correct labels
        ComputeTTest<TMeshType>(mesh[i], sVOI.c_str(), true_labels, l1, l2);
@@ -767,7 +847,6 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
     */
 
     // Save the output mesh 
-    cout << "save the output ************ TODO" << endl;
     WriteMesh<TMeshType>(mout, fnOutMeshes[i].c_str());
     WriteMesh<TMeshType>(mesh[i], fnMeshes[i].c_str());
     }
