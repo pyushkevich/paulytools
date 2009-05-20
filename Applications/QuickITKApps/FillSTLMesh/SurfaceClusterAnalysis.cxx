@@ -540,9 +540,9 @@ void GeneralLinearModel(const vnl_matrix<double> &origmat, const vnl_matrix<doub
       for (size_t j = 0; j < origmat.cols(); j++)
           mat[i][j] = origmat[indiv_labels[i]][j];
 
-  cout << "Running GLM on " << mat.rows() << " images" << endl;
+  //cout << "Running GLM on " << mat.rows() << " images" << endl;
   //cout << "  design matrix: " << mat << endl;
-  cout << "  contrast vector: " << con << endl;
+  //cout << "  contrast vector: " << con << endl;
 
   // Some matrices
   vnl_matrix<double> A = vnl_inverse(mat.transpose() * mat);
@@ -562,7 +562,7 @@ void GeneralLinearModel(const vnl_matrix<double> &origmat, const vnl_matrix<doub
 
   // Compute the contrast
   vnl_matrix<double> res = con * bhat;
-
+  //cout << res.rows() << res.cols() << endl;
   // Write the output 
   for(size_t j = 0; j < n; j++)
     { ttest->SetTuple1(j, res[0][j]); }
@@ -681,8 +681,10 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
 
      Nlabels = (int)labels.size();
      groupSize = Nlabels;
+     cout << "GLM: group size is " << groupSize << endl;
      for (int i=0; i< groupSize; i++) 
          indiv_labels.push_back( i );
+     true_indiv_labels = indiv_labels;
   }
 
   // If the threshold is negative, simply change the direction of the test
@@ -769,6 +771,7 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
       else if (ispaired == 4)
          {
       // GLM
+         /*
          vnl_matrix<double> mymat ;
          mymat.set_size(mat.rows(), mat.cols());
          for(size_t irow=0; irow<mat.rows(); irow++)
@@ -779,7 +782,8 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
          for(size_t irow=0; irow<con.rows(); irow++)
             for(size_t jcol=0; jcol<con.cols(); jcol++)
                mycon[irow][jcol] = con[irow][jcol];
-         //cout<< mycon << mymat << endl;
+         */         
+//cout<< mycon << mymat << endl;
          GeneralLinearModel<TMeshType>(mat, con, indiv_labels, mesh[i], sVOI.c_str());
          }
       // For each mesh, compute the t-test and the clusters
