@@ -342,9 +342,11 @@ ClusterArray ComputeClusters(
   for(size_t k = 0; k < p->GetNumberOfCells(); k++)
     {
     vtkCell *cell = p->GetCell(k);
+  //  cout << cell->GetCellType() << " " << VTK_TETRA << endl;
+/* Some cells are converted to VTK_WEDGE -- TODO
     if(cell->GetCellType() != VTK_TETRA)
       throw("Wrong cell type");
-
+*/
     // Compute the volume of the tetra
     vtkIdType a0 = cell->GetPointId(0);
     vtkIdType a1 = cell->GetPointId(1);
@@ -364,7 +366,6 @@ ClusterArray ComputeClusters(
     daArea->SetTuple1(a2, area / 4.0 + daArea->GetTuple1(a2));
     daArea->SetTuple1(a3, area / 4.0 + daArea->GetTuple1(a3));
     }
-
   // The the important arrays in the resulting meshes
   vtkDataArray *daRegion = p->GetPointData()->GetScalars();
   vtkDataArray *daData = f->GetPointData()->GetArray(data);
@@ -526,7 +527,7 @@ void ComputeCorrTest(
 }
 
 template <class TMeshType>
-void GeneralLinearModel(const vnl_matrix<double> &origmat, const vnl_matrix<double> &con, const vector<int> &indiv_labels, TMeshType *pd, const char *var)
+void GeneralLinearModel(const vnl_matrix<double> &origmat, const vnl_matrix<double> &origcon, const vector<int> &indiv_labels, TMeshType *pd, const char *var)
 {
 
   // Get the pointdata
@@ -540,13 +541,14 @@ void GeneralLinearModel(const vnl_matrix<double> &origmat, const vnl_matrix<doub
       for (size_t j = 0; j < origmat.cols(); j++)
           mat[i][j] = origmat[indiv_labels[i]][j];
 
-  //cout << "Running GLM on " << mat.rows() << " images" << endl;
-  //cout << "  design matrix: " << mat << endl;
-  //cout << "  contrast vector: " << con << endl;
+  // copy contrast matrix
+  vnl_matrix<double> con;
+  con.set_size(origcon.rows(), origcon.cols());
+  for (size_t i = 0; i < origcon.rows(); i++)
+      for (size_t j = 0; j < origcon.cols(); j++)
+          con[i][j] = origcon[i][j];
 
-  // Some matrices
-  vnl_matrix<double> A = vnl_inverse(mat.transpose() * mat);
-  // vnl_matrix<double> Ax = A * mat.transpose();
+
 
   // Load all images into a Y matrix (can we do this)
   size_t n = pd->GetNumberOfPoints();
@@ -554,18 +556,58 @@ void GeneralLinearModel(const vnl_matrix<double> &origmat, const vnl_matrix<doub
   for(size_t i = 0; i < mat.rows(); i++)
     {
     for(size_t j = 0; j < n; j++)
-      { Y(i,j) = data->GetComponent(i,j); }
+      { Y(i,j) = data->GetComponent(j,i); }
     }
 
-  // Compute bhat = Ax * Y
+  //cout << "Running GLM on " << mat.rows() << " images" << endl;
+  //cout << "  design matrix: "  << endl << mat << endl;
+  //cout << "  contrast vector: " << con << endl;
+
+  // Some matrices
+  vnl_matrix<double> A = vnl_inverse(mat.transpose() * mat);
+  // Compute bhat 
   vnl_matrix<double> bhat = (A * mat.transpose()) * Y;
+
 
   // Compute the contrast
   vnl_matrix<double> res = con * bhat;
-  //cout << res.rows() << res.cols() << endl;
+
+  // error
+  vnl_matrix<double> errmat = Y - mat * bhat;
+
+  // Compute degrees of freedom
+  unsigned int rank = vnl_rank( mat, vnl_rank_row);
+  unsigned int df = Y.rows() - rank;
+  //cout << "df " << df << " A " << A << endl;
+
+  // Residual variance
+  vnl_matrix<double> resvar(1, n);
+  resvar.fill(0.0);
+  for(size_t j = 0; j < n; j++)
+     {
+     for(size_t i = 0; i < mat.rows(); i++)
+        resvar(0, j) += errmat(i,j)*errmat(i,j);
+     resvar(0,j) = resvar(0,j)/(double)df;
+     }
+
+  // t-value
+  vnl_matrix<double> tmat(1, n);
+  vnl_matrix<double> den(1, n);
+
+  den = (con * (A * con.transpose())) * resvar;
+  //den = den.apply(sqrt);
+  tmat.fill(0.0);
+  for (size_t j = 0; j < n; j++)
+      if ( den(0,j) > 0 )
+         { 
+         tmat(0,j) = res(0,j) / sqrt(den(0,j)); 
+    //     cout << tmat(0,j) << " " <<  res(0,j) << " " <<  den(0,j) << endl;
+         } 
+  //tmat = element_quotient( res, den.apply(sqrt));
+
   // Write the output 
   for(size_t j = 0; j < n; j++)
-    { ttest->SetTuple1(j, res[0][j]); }
+    { ttest->SetTuple1(j, tmat(0,j)); }
 }
 
 
@@ -576,8 +618,8 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
   // design matrix and contrast vector files
   string fn_design("design_mat.txt");
   string fn_con("contrast_vec.txt");  
-  vnl_file_matrix<double> mat("");
-  vnl_file_matrix<double> con("");
+  vnl_matrix<double> mat;
+  vnl_matrix<double> con;
 
   // Get the number of permutations
   size_t np = registry["Analysis.NumberOfPermutations"][1000];
@@ -663,14 +705,19 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
        fn_con = string(argv[7]);
      } 
      // Read the matrix from file
+     try{
      mat = vnl_file_matrix<double>(fn_design.c_str());
-     if(!mat)
-       { throw string("Unable to read matrix from file given"); return -1;}
+     }
+     catch (char * str)
+       { cout << "Unable to read matrix from file given" << endl; return -1;}
 
      // Read the contrast from file
+     try{
      con = vnl_file_matrix<double>(fn_con.c_str());
-     if(!con)
-       { throw string("Unable to read contrast from file given"); return -1;}
+     }
+     catch (char * str)
+       { cout << "Unable to read contrast from file given" << endl; return -1;}
+
      // Check that the number of images matches
      if(labels.size() != mat.rows())
        { throw string("Matrix number of rows does not match number of observations"); return -1;}
@@ -771,20 +818,10 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
       else if (ispaired == 4)
          {
       // GLM
-         /*
-         vnl_matrix<double> mymat ;
-         mymat.set_size(mat.rows(), mat.cols());
-         for(size_t irow=0; irow<mat.rows(); irow++)
-            for(size_t jcol=0; jcol<mat.cols(); jcol++)
-               mymat[irow][jcol] = mat[irow][jcol];
-         vnl_matrix<double> mycon ;
-         mycon.set_size(con.rows(), con.cols());
-         for(size_t irow=0; irow<con.rows(); irow++)
-            for(size_t jcol=0; jcol<con.cols(); jcol++)
-               mycon[irow][jcol] = con[irow][jcol];
-         */         
 //cout<< mycon << mymat << endl;
          GeneralLinearModel<TMeshType>(mat, con, indiv_labels, mesh[i], sVOI.c_str());
+    //WriteMesh<TMeshType>(mesh[i], fnMeshes[i].c_str());
+    //exit(0);
          }
       // For each mesh, compute the t-test and the clusters
       else
