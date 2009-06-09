@@ -21,7 +21,7 @@
 #include "vtkTriangle.h"
 #include "vnl/vnl_file_matrix.h"
 #include "vnl/vnl_rank.h"
-#include "vnl/vnl_inverse.h"
+#include "vnl/algo/vnl_matrix_inverse.h"
 
 
 #include "Registry.h"
@@ -322,6 +322,7 @@ ClusterArray ComputeClusters(
   fContour->SetInput(mesh);
   fContour->SetValue(thresh);
   vtkUnstructuredGrid *f = fContour->GetOutput();
+  
 
   // Get the connected components
   vtkConnectivityFilter * fConnect = vtkConnectivityFilter::New();
@@ -342,7 +343,6 @@ ClusterArray ComputeClusters(
   for(size_t k = 0; k < p->GetNumberOfCells(); k++)
     {
     vtkCell *cell = p->GetCell(k);
-  //  cout << cell->GetCellType() << " " << VTK_TETRA << endl;
 /* Some cells are converted to VTK_WEDGE -- TODO
     if(cell->GetCellType() != VTK_TETRA)
       throw("Wrong cell type");
@@ -361,10 +361,10 @@ ClusterArray ComputeClusters(
     double area = vtkTetra::ComputeVolume(p0, p1, p2, p3);
 
     // Split the volume between neighbors
-    daArea->SetTuple1(a0, area / 4.0 + daArea->GetTuple1(a0));
-    daArea->SetTuple1(a1, area / 4.0 + daArea->GetTuple1(a1));
-    daArea->SetTuple1(a2, area / 4.0 + daArea->GetTuple1(a2));
-    daArea->SetTuple1(a3, area / 4.0 + daArea->GetTuple1(a3));
+    daArea->SetTuple1(a0, abs(area) / 4.0 + daArea->GetTuple1(a0));
+    daArea->SetTuple1(a1, abs(area) / 4.0 + daArea->GetTuple1(a1));
+    daArea->SetTuple1(a2, abs(area) / 4.0 + daArea->GetTuple1(a2));
+    daArea->SetTuple1(a3, abs(area) / 4.0 + daArea->GetTuple1(a3));
     }
   // The the important arrays in the resulting meshes
   vtkDataArray *daRegion = p->GetPointData()->GetScalars();
@@ -563,11 +563,16 @@ void GeneralLinearModel(const vnl_matrix<double> &origmat, const vnl_matrix<doub
   //cout << "  design matrix: "  << endl << mat << endl;
   //cout << "  contrast vector: " << con << endl;
 
+  // Compute degrees of freedom
+  unsigned int rank = vnl_rank( mat, vnl_rank_row);
+  unsigned int df = Y.rows() - rank;
+
   // Some matrices
-  vnl_matrix<double> A = vnl_inverse(mat.transpose() * mat);
+  vnl_matrix<double> A = vnl_matrix_inverse<double>(mat.transpose() * mat).pinverse(rank);
   // Compute bhat 
   vnl_matrix<double> bhat = (A * mat.transpose()) * Y;
 
+  //cout << "df " << df << " A " << A << endl;
 
   // Compute the contrast
   vnl_matrix<double> res = con * bhat;
@@ -575,10 +580,6 @@ void GeneralLinearModel(const vnl_matrix<double> &origmat, const vnl_matrix<doub
   // error
   vnl_matrix<double> errmat = Y - mat * bhat;
 
-  // Compute degrees of freedom
-  unsigned int rank = vnl_rank( mat, vnl_rank_row);
-  unsigned int df = Y.rows() - rank;
-  //cout << "df " << df << " A " << A << endl;
 
   // Residual variance
   vnl_matrix<double> resvar(1, n);
@@ -603,7 +604,6 @@ void GeneralLinearModel(const vnl_matrix<double> &origmat, const vnl_matrix<doub
          tmat(0,j) = res(0,j) / sqrt(den(0,j)); 
     //     cout << tmat(0,j) << " " <<  res(0,j) << " " <<  den(0,j) << endl;
          } 
-  //tmat = element_quotient( res, den.apply(sqrt));
 
   // Write the output 
   for(size_t j = 0; j < n; j++)
@@ -818,15 +818,14 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
       else if (ispaired == 4)
          {
       // GLM
-//cout<< mycon << mymat << endl;
          GeneralLinearModel<TMeshType>(mat, con, indiv_labels, mesh[i], sVOI.c_str());
-    //WriteMesh<TMeshType>(mesh[i], fnMeshes[i].c_str());
-    //exit(0);
          }
       // For each mesh, compute the t-test and the clusters
       else
          ComputeTTest<TMeshType>(mesh[i], sVOI.c_str(), labels, l1, l2);
       ClusterArray ca = ComputeClusters<TMeshType>(mesh[i], "ttest", thresh);
+    //WriteMesh<TMeshType>(mesh[i], fnMeshes[i].c_str());
+    //exit(0);
 
       // Now find the largest cluster
       for(size_t c = 0; c < ca.size(); c++)
@@ -912,10 +911,12 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
     */
 
     // Save the output mesh 
+    cout << "Saving output mesh.." << endl;
     WriteMesh<TMeshType>(mout, fnOutMeshes[i].c_str());
+    cout << "Saving input mesh.." << endl;
     WriteMesh<TMeshType>(mesh[i], fnMeshes[i].c_str());
     }
-
+    return EXIT_SUCCESS;
 
 }
 
