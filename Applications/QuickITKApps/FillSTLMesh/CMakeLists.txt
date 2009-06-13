@@ -28,7 +28,8 @@ ADD_EXECUTABLE(mesh_image_sample MeshImageSample.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(avgmesharr AverageMeshArrays.cxx)
 # ADD_EXECUTABLE(mesh_array_average  MeshArrayAverage.cxx ReadWriteVTK.cxx)
 # ADD_EXECUTABLE(vtk2off  ConvertVTKtoOFF.cxx ReadWriteVTK.cxx)
-ADD_EXECUTABLE(surf2tet SurfMesh2VolMesh.cxx ReadWriteVTK.cxx)
+ADD_EXECUTABLE(surf2tet SurfMesh2VolMesh.cxx ReadWriteVTK.cxx TetraLib.cxx)
+ADD_EXECUTABLE(tetgen2vtk TetGenToVTK.cxx ReadWriteVTK.cxx TetraLib.cxx)
 
 ### ADD_EXECUTABLE(importqvoronoi 
 ###  ImportQVoronoi.cxx
@@ -78,9 +79,10 @@ TARGET_LINK_LIBRARIES(mesh_image_sample ${COMMON_LIBS} ${ITK_LIBS})
 # TARGET_LINK_LIBRARIES(mesh_array_average ${COMMON_LIBS} ${ITK_LIBS})
 # TARGET_LINK_LIBRARIES(vtk2off ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(surf2tet ${COMMON_LIBS} tetgen)
+TARGET_LINK_LIBRARIES(tetgen2vtk ${COMMON_LIBS} tetgen)
 
 INSTALL_TARGETS("/bin" meshdiff avgmesh submesh quadcluster 
   smoothmesh copymesh avgmesharr identimg scalemesh 
   dumpmeshpoints meshcluster dumpmeshattr 
   mesh2img flipmesh vtklevelset warpmesh cmrep2img cmrep2warp
-  mesh_image_sample surf2tet)
+  mesh_image_sample surf2tet tetgen2vtk)
