@@ -29,9 +29,9 @@ typedef vnl_matrix_fixed<double, 4, 4> MatrixType;
 
 int usage()
 {
-  cout << "SurfMesh2VolMesh - Converts a VTK surface mesh to a VTK volume mesh" << endl;
+  cout << "surf2tet - Converts a VTK surface mesh to a VTK volume mesh" << endl;
   cout << "usage: " << endl;
-  cout << "   SurfMesh2VolMesh meshin.vtk meshout.vtk [tetgenoptions]" << endl;
+  cout << "   surf2tet meshin.vtk meshout.vtk [tetgenoptions]" << endl;
   cout << "tetgenoptions: default is pq1.414a0.1" << endl;
   return -1;
 }
