@@ -30,6 +30,7 @@ ADD_EXECUTABLE(avgmesharr AverageMeshArrays.cxx)
 # ADD_EXECUTABLE(vtk2off  ConvertVTKtoOFF.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(surf2tet SurfMesh2VolMesh.cxx ReadWriteVTK.cxx TetraLib.cxx)
 ADD_EXECUTABLE(tetgen2vtk TetGenToVTK.cxx ReadWriteVTK.cxx TetraLib.cxx)
+ADD_EXECUTABLE(tetfill TetraFill.cxx)
 
 ### ADD_EXECUTABLE(importqvoronoi 
 ###  ImportQVoronoi.cxx
@@ -56,6 +57,7 @@ INCLUDE_DIRECTORIES(${MYLIBS_INCLUDE_DIRS}
 
 INCLUDE_DIRECTORIES(${PAULY_SOURCE_DIR}/ExternalLibraries/tetgen1.4.2)
 
+TARGET_LINK_LIBRARIES(tetfill ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(meshdiff ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(avgmesh ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(submesh ${COMMON_LIBS})
@@ -85,4 +87,4 @@ INSTALL_TARGETS("/bin" meshdiff avgmesh submesh quadcluster
   smoothmesh copymesh avgmesharr identimg scalemesh 
   dumpmeshpoints meshcluster dumpmeshattr 
   mesh2img flipmesh vtklevelset warpmesh cmrep2img cmrep2warp
-  mesh_image_sample surf2tet tetgen2vtk)
+  mesh_image_sample surf2tet tetgen2vtk tetfill)
