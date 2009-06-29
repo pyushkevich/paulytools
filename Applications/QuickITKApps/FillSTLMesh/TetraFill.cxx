@@ -37,8 +37,9 @@ int usage()
   cout << "usage: " << endl;
   cout << "   tetfill [options] tetinput.vtk refimage.nii outimage.nii" << endl;
   cout << "options: " << endl;
-  cout << "  -c Name     Use cell array 'Name' to fill the tetrahedra" << endl;
-  cout << "  -b Value    Background value (default: 0)" << endl;
+  cout << "  -c Name           Use cell array 'Name' to fill the tetrahedra" << endl;
+  cout << "  -s source.vtk     Read the cell array data from source.vtk" << endl;
+  cout << "  -b Value          Background value (default: 0)" << endl;
   return -1;
 }
 
@@ -104,13 +105,15 @@ int main(int argc, char **argv)
   // Parse the optional parameters
   int ch;
   string inCellArray = "";
+  string sourceCellArray = "";
   double inBackground = 0.0;
-  while ((ch = getopt(argc, argv, "c:b:")) != -1)
+  while ((ch = getopt(argc, argv, "c:b:s:")) != -1)
     {
     switch(ch)
       {
     case 'b': inBackground = atof(optarg); break;
     case 'c': inCellArray = optarg; break;
+    case 's': sourceCellArray = optarg; break;
     default: return usage();
       }
     }
@@ -145,8 +148,23 @@ int main(int argc, char **argv)
   // Read the data array
   vtkDataArray *da = NULL;
   if(inCellArray.length()) 
+    {
+    if(sourceCellArray.length())
+      {
+      vtkUnstructuredGridReader *sourceugreader = vtkUnstructuredGridReader::New();
+      sourceugreader->SetFileName(sourceCellArray.c_str());
+      sourceugreader->Update();
+      vtkUnstructuredGrid *sourcetet = sourceugreader->GetOutput();
+      da = sourcetet->GetCellData()->GetArray(inCellArray.c_str());
+      if (da->GetSize()!=tet->GetNumberOfCells())
+         {
+         cout << "No. of cells in source mesh should equal that in input mesh" << endl;
+         return usage();
+         }
+      }
+    else
     da = tet->GetCellData()->GetArray(inCellArray.c_str());
-
+    }
   // Scan convert each of the tetrahedra
   for(size_t ic = 0; ic < (size_t) tet->GetNumberOfCells(); ic++)
     {
