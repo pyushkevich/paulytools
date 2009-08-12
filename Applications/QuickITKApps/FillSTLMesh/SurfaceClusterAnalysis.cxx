@@ -523,12 +523,28 @@ template <class TMeshType>
 void ComputeTTest(
   TMeshType *pd, 
   const char *var, 
+  const char *domain,
   const vector<int> &labels,
   int l1, int l2, std::string VOIttest)
 {
   // Get the pointdata
-  vtkDataArray *data = pd->GetPointData()->GetArray(var);
-  vtkDataArray *ttest = pd->GetPointData()->GetArray(VOIttest.c_str());
+  vtkDataArray *data;
+  vtkDataArray *ttest;
+  // Get the pointdata
+  int NumberOfPoints;
+  if (!strcmp(domain, "Point"))
+  {  
+     data = pd->GetPointData()->GetArray(var);
+     ttest = pd->GetPointData()->GetArray(VOIttest.c_str());
+     NumberOfPoints = pd->GetNumberOfPoints();
+  }
+  else // Get the cell data
+  {  
+     data = pd->GetCellData()->GetArray(var);
+     ttest = pd->GetCellData()->GetArray(VOIttest.c_str());
+     NumberOfPoints = pd->GetNumberOfCells();
+  }
+
 
   // Get the sizes of the cohorts
   int n1 = 0, n2 = 0;
@@ -542,7 +558,7 @@ void ComputeTTest(
     }
 
   // Loop over all the points
-  for(size_t i = 0; i < pd->GetNumberOfPoints(); i++)
+  for(size_t i = 0; i < NumberOfPoints; i++)
     {
     // Compute class-wise sums and sums of squares
     double s1 = 0, s2 = 0, ss1 = 0, ss2 = 0;
@@ -570,13 +586,29 @@ template <class TMeshType>
 void ComputeCorrTest(
   TMeshType *pd, 
   const char *var, 
+  const char *domain,
   const vector<int> &labels,
   const vector<int> &indiv_labels,
   int l1, int l2, int ispaired, const vector<float> &corrVar, std::string VOIttest)
 {
   // Get the pointdata
-  vtkDataArray *data = pd->GetPointData()->GetArray(var);
-  vtkDataArray *ttest = pd->GetPointData()->GetArray(VOIttest.c_str());
+  vtkDataArray *data;
+  vtkDataArray *ttest;
+  // Get the pointdata
+  int NumberOfPoints;
+  if (!strcmp(domain, "Point"))
+  {  
+     data = pd->GetPointData()->GetArray(var);
+     ttest = pd->GetPointData()->GetArray(VOIttest.c_str());
+     NumberOfPoints = pd->GetNumberOfPoints();
+  }
+  else // Get the cell data
+  {  
+     data = pd->GetCellData()->GetArray(var);
+     ttest = pd->GetCellData()->GetArray(VOIttest.c_str());
+     NumberOfPoints = pd->GetNumberOfCells();
+  }
+
 
   // Create an r (correlation coefficient) array
   vtkFloatArray *array = vtkFloatArray::New();
@@ -585,9 +617,18 @@ void ComputeCorrTest(
   {
   	array->SetName("R");
   	array->SetNumberOfComponents(1);
-  	array->SetNumberOfTuples(pd->GetNumberOfPoints());
-  	pd->GetPointData()->AddArray(array);
-  	corrcoef = pd->GetPointData()->GetArray("R");
+  	array->SetNumberOfTuples(NumberOfPoints);
+        if (!strcmp(domain, "Point"))
+        {  
+           pd->GetPointData()->AddArray(array);
+           corrcoef = pd->GetPointData()->GetArray("R");
+        }
+        else
+        {  
+           pd->GetCellData()->AddArray(array);
+           corrcoef = pd->GetCellData()->GetArray("R");
+        }
+
   }
 
   int n;
@@ -596,7 +637,7 @@ void ComputeCorrTest(
   else if (ispaired == 3)
      n = indiv_labels.size();
   // Loop over all the points
-  for(size_t i = 0; i < pd->GetNumberOfPoints(); i++)
+  for(size_t i = 0; i < NumberOfPoints; i++)
     {
     // Compute class-wise sums and sums of squares
     double s1 = 0, s2 = 0, ss1 = 0, ss2 = 0, s1s2 = 0, s12 = 0, ss12 = 0;
@@ -961,7 +1002,7 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
       {
       // SD paired tests
       if (ispaired > 0 && ispaired < 4)
-         ComputeCorrTest<TMeshType>(mesh[i], sVOI.c_str(), labels, indiv_labels, l1, l2, ispaired, corrVar, VOIttest);
+         ComputeCorrTest<TMeshType>(mesh[i], sVOI.c_str(), domain.c_str(), labels, indiv_labels, l1, l2, ispaired, corrVar, VOIttest);
       else if (ispaired == 4)
          {
       // GLM
@@ -969,7 +1010,7 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
          }
       // For each mesh, compute the t-test and the clusters
       else
-         ComputeTTest<TMeshType>(mesh[i], sVOI.c_str(), labels, l1, l2, VOIttest);
+         ComputeTTest<TMeshType>(mesh[i], sVOI.c_str(), domain.c_str(), labels, l1, l2, VOIttest);
       ClusterArray ca = ComputeClusters<TMeshType>(mesh[i], VOIttest.c_str(), domain.c_str(), thresh);
     //WriteMesh<TMeshType>(mesh[i], fnMeshes[i].c_str());
     //exit(0);
@@ -997,13 +1038,13 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
 
     // SD paired tests
     if (ispaired > 0 && ispaired < 4)
-       ComputeCorrTest<TMeshType>(mesh[i], sVOI.c_str(), true_labels, true_indiv_labels, l1, l2, ispaired, corrVar, VOIttest);
+       ComputeCorrTest<TMeshType>(mesh[i], sVOI.c_str(), domain.c_str(), true_labels, true_indiv_labels, l1, l2, ispaired, corrVar, VOIttest);
     else if (ispaired == 4)
     // GLM
        GeneralLinearModel<TMeshType>(mat, con, true_indiv_labels, mesh[i], sVOI.c_str(), VOIttest, domain.c_str());
     else
     // Compute the t-test for the mesh with the correct labels
-       ComputeTTest<TMeshType>(mesh[i], sVOI.c_str(), true_labels, l1, l2, VOIttest);
+       ComputeTTest<TMeshType>(mesh[i], sVOI.c_str(), domain.c_str(), true_labels, l1, l2, VOIttest);
 
     // Compute the clusters for the mesh with the correct labels
     ClusterArray ca = ComputeClusters<TMeshType>(mesh[i], VOIttest.c_str(), domain.c_str(), thresh, &mout);
