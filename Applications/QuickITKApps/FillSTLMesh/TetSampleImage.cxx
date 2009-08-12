@@ -13,10 +13,13 @@
 #include <vtkPolyDataWriter.h>
 #include <vtkPoints.h>
 #include <vtkFloatArray.h>
+#include <vtkDoubleArray.h>
 #include <vtkCell.h>
 #include <vtkCellData.h>
 #include <vtkPointData.h>
 #include <vtkTetra.h>
+#include <vtkSubdivideTetra.h>
+#include <itkImageFunction.h>
 #include <itkImageFileReader.h>
 #include <itkLinearInterpolateImageFunction.h>
 #include <itkNearestNeighborInterpolateImageFunction.h>
@@ -190,6 +193,77 @@ template <class X> X mymode(X *data, int size)
   return oldmd;
 }
 
+template <class ImageType>
+class MeshImageSampler
+{
+public:
+  typedef typename itk::InterpolateImageFunction<ImageType,double> FuncType;
+
+  MeshImageSampler(FuncType *func, TetSampleParam &parm)
+    {
+    this->func = func;
+    this->parm = parm;
+
+    // Get the image
+    const ImageType *sampim = func->GetInputImage();
+
+    // Set up the transforms
+    ijk2ras = ConstructNiftiSform(
+      sampim->GetDirection().GetVnlMatrix(),
+      sampim->GetOrigin().GetVnlVector(),
+      sampim->GetSpacing().GetVnlVector());
+
+    vtk2ras = ConstructVTKtoNiftiTransform(
+      sampim->GetDirection().GetVnlMatrix(),
+      sampim->GetOrigin().GetVnlVector(),
+      sampim->GetSpacing().GetVnlVector());
+
+    vnl_matrix_fixed<double, 4, 4> lps2ras;
+    lps2ras.set_identity();
+    lps2ras(0,0) = -1; lps2ras(1,1) = -1;
+
+    ras2ijk = vnl_inverse(ijk2ras);
+    ras2vtk = vnl_inverse(vtk2ras);
+    ras2lps = vnl_inverse(lps2ras);
+
+    // Store the active transform
+    if(parm.mesh_coord == RAS)
+      mesh2ras.set_identity();
+    else if(parm.mesh_coord == LPS)
+      mesh2ras = lps2ras;
+    else if(parm.mesh_coord == IJKOS)
+      mesh2ras = vtk2ras;
+    else 
+      mesh2ras = ijk2ras;
+
+    }
+
+  float SampleImage(double *xin) 
+    {
+    vnl_vector_fixed<double, 4> x_mesh, x_ras, x_ijk, v_ras;
+
+    // Get the point (in whatever format that it's stored)
+    x_mesh[0] = xin[0]; x_mesh[1] = xin[1]; x_mesh[2] = xin[2]; x_mesh[3] = 1.0;
+
+    // Map the point into RAS coordinates
+    x_ras = mesh2ras * x_mesh;
+
+    // Map the point to IJK coordinates (continuous index)
+    x_ijk = ras2ijk * x_ras;
+    typename FuncType::ContinuousIndexType idx;
+    idx[0] = x_ijk[0]; idx[1] = x_ijk[1]; idx[2] = x_ijk[2];
+
+    // Interpolate the image at the point
+    return func->EvaluateAtContinuousIndex(idx);
+    }
+
+private:
+  typedef vnl_matrix_fixed<double, 4, 4> Mat44;
+  Mat44 ijk2ras, vtk2ras, lps2ras, ras2ijk, ras2vtk, ras2lps, mesh2ras;
+  TetSampleParam parm;
+  typename FuncType::Pointer func;
+};
+
 /**
  * The actual method is templated over the VTK data type (unstructured/polydata)
  */
@@ -216,80 +290,88 @@ int TetSample(TetSampleParam &parm)
   // Read the mesh
   TMeshType *mesh = ReadMesh<TMeshType>(parm.fnMeshIn.c_str());
 
-  // Set up the transforms
-  vnl_matrix_fixed<double, 4, 4> ijk2ras = ConstructNiftiSform(
-    sampim->GetDirection().GetVnlMatrix(),
-    sampim->GetOrigin().GetVnlVector(),
-    sampim->GetSpacing().GetVnlVector());
+  // Set up the mesh/image sampler
+  MeshImageSampler<ImageType> sampler(func, parm);
 
-  vnl_matrix_fixed<double, 4, 4> vtk2ras = ConstructVTKtoNiftiTransform(
-    sampim->GetDirection().GetVnlMatrix(),
-    sampim->GetOrigin().GetVnlVector(),
-    sampim->GetSpacing().GetVnlVector());
-
-  vnl_matrix_fixed<double, 4, 4> lps2ras;
-  lps2ras.set_identity();
-  lps2ras(0,0) = -1; lps2ras(1,1) = -1;
-
-  vnl_matrix_fixed<double, 4, 4> ras2ijk = vnl_inverse(ijk2ras);
-  vnl_matrix_fixed<double, 4, 4> ras2vtk = vnl_inverse(vtk2ras);
-  vnl_matrix_fixed<double, 4, 4> ras2lps = vnl_inverse(lps2ras);
-
-  cout << "RAS transform " << endl;
-  cout << ijk2ras << endl;
-
-  // Create the volume array (cell-wise) for future jacobian computation
-  vtkFloatArray *sampledScalarCell = vtkFloatArray::New();
-  sampledScalarCell->SetName(parm.scalarName.c_str());
-  sampledScalarCell->Allocate(mesh->GetNumberOfCells());
-  
+  // Create the sample point arrays
   vtkFloatArray *sampledScalarPoint = vtkFloatArray::New();
   sampledScalarPoint->SetName(parm.scalarName.c_str());
   sampledScalarPoint->Allocate(mesh->GetNumberOfPoints());
 
-  // Update the coordinates
+  // Sample the image at vertices
   for(int k = 0; k < mesh->GetNumberOfPoints(); k++)
     {
     // Get the point (in whatever format that it's stored)
-    vnl_vector_fixed<double, 4> x_mesh, x_ras, x_ijk, v_ras;
-    float v_image;
-    x_mesh[0] = mesh->GetPoint(k)[0]; x_mesh[1] = mesh->GetPoint(k)[1]; x_mesh[2] = mesh->GetPoint(k)[2];
-    x_mesh[3] = 1.0;
-
-    // Map the point into RAS coordinates
-    if(parm.mesh_coord == RAS)
-      x_ras = x_mesh;
-    else if(parm.mesh_coord == LPS)
-      x_ras = lps2ras * x_mesh;
-    else if(parm.mesh_coord == IJKOS)
-      x_ras = vtk2ras * x_mesh;
-    else 
-      x_ras = ijk2ras * x_mesh;
-
-    // Map the point to IJK coordinates (continuous index)
-    x_ijk = ras2ijk * x_ras;
-    FuncType::ContinuousIndexType idx;
-    idx[0] = x_ijk[0]; idx[1] = x_ijk[1]; idx[2] = x_ijk[2];
-
-    // Interpolate the image at the point
-    v_image = func->EvaluateAtContinuousIndex(idx);
-
-    sampledScalarPoint->InsertNextValue( static_cast<float>(v_image));
-    // cout << "Evaluate at index " << idx[0] << " " << idx[1] << " " << idx[2] << " " << v_image << " " <<  sampledScalarPoint->GetTuple1(k) << endl;
-
+    float v_image = sampler.SampleImage(mesh->GetPoint(k));
+    sampledScalarPoint->InsertNextValue(v_image);
     }
-    
-  // Assign cell labels as well TODO do it in a sensible way like mode of the point values
+
+  // Create an array for cell integration
+  vtkDoubleArray *sampledScalarCell = vtkDoubleArray::New();
+  sampledScalarCell->SetName(parm.scalarName.c_str());
+  sampledScalarCell->Allocate(mesh->GetNumberOfCells());
+
+  // Temporary array for volume values
+  vtkDoubleArray *tempvol = vtkDoubleArray::New();
+  tempvol->Allocate(mesh->GetNumberOfCells());
+  
+  // Fill the array
   for(int i = 0; i < mesh->GetNumberOfCells(); i++)
     {
-      vtkCell *cell =  mesh->GetCell(i);
-      float *arr ;
-      arr = (float *)malloc(sizeof(float)*cell->GetNumberOfPoints());
-      for (int j = 0; j < cell->GetNumberOfPoints(); j++)
-          arr[j] = sampledScalarPoint->GetTuple1(cell->GetPointId(j));
-      sampledScalarCell->InsertNextValue(mymode<float>(arr, cell->GetNumberOfPoints()));
+    tempvol->InsertNextValue(0);
+    sampledScalarCell->InsertNextValue(0);
+    }
 
+  // Subdivide the tetrahedra in the mesh N times
+  const size_t nsub = 3;
+  TMeshType *subs[nsub];
+  subs[0] = mesh;
+  int celldiv = 1;
+  for(size_t isub = 1; isub < nsub; isub++)
+    {
+    vtkSubdivideTetra *st = vtkSubdivideTetra::New();
+    st->SetInput(subs[isub-1]);
+    st->Update();
+    subs[isub] = st->GetOutput();
+    celldiv *= 12;
+    }
 
+  // Get the finest-level mesh
+  TMeshType *msub = subs[nsub-1];
+
+  // Loop over subdivided cells
+  for(size_t i = 0; i < (size_t)msub->GetNumberOfCells(); i++)
+    {
+    // Get the corners
+    double x[4][3];
+    vtkCell *cell = msub->GetCell(i);
+    for(size_t j=0;j<4;j++)
+      msub->GetPoint(cell->GetPointId(j), x[j]);
+
+    // Compute cell volume
+    double v = fabs(vtkTetra::ComputeVolume(x[0],x[1],x[2],x[3]));
+
+    // Compute cell center
+    vnl_vector_fixed<double, 3> tet_center;
+    vtkTetra::TetraCenter(x[0],x[1],x[2],x[3],
+      tet_center.data_block());
+
+    // Sample image at the cell center
+    // cout << "Tetcenter " << tet_center;
+    float val = sampler.SampleImage(tet_center.data_block());
+    // cout <<"; Value = " << val << endl;
+
+    // Accumulate these values
+    int target_id = i / celldiv;
+    sampledScalarCell->SetTuple1(target_id, sampledScalarCell->GetTuple1(target_id) + val * v);
+    tempvol->SetTuple1(target_id, tempvol->GetTuple1(target_id) + v);
+    // cout << "Target " << target_id << " gets " << v << " and " << val * v << endl;
+    }
+
+  // Divide by the total volumes
+  for(size_t i = 0; i < (size_t) mesh->GetNumberOfCells(); i++)
+    {
+    sampledScalarCell->SetTuple1(i, sampledScalarCell->GetTuple1(i) / tempvol->GetTuple1(i));
     }
 
   // Add both arrays
@@ -297,7 +379,6 @@ int TetSample(TetSampleParam &parm)
   mesh->GetPointData()->AddArray(sampledScalarPoint);
   mesh->GetCellData()->SetActiveScalars(parm.scalarName.c_str());
   mesh->GetPointData()->SetActiveScalars(parm.scalarName.c_str());
- 
 
   // Write the mesh
   WriteMesh<TMeshType>(mesh, parm.fnMeshOut.c_str());
@@ -351,7 +432,8 @@ int main(int argc, char **argv)
   else if(reader->IsFilePolyData())
     {
     reader->Delete();
-    return TetSample<vtkPolyData>(parm);
+    cerr << "PolyData not supported, sorry!" << endl;
+    // return TetSample<vtkPolyData>(parm);
     }
   else
     {

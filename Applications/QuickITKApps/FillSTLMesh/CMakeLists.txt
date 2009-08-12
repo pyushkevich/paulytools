@@ -6,6 +6,7 @@ SET(FILLSTLMESH_SRCS
 
 INCLUDE_DIRECTORIES(${PAULY_SOURCE_DIR}/Applications/MedialPDE/Code)
 
+ADD_EXECUTABLE(tetmergearr MergeVTKArrays.cxx)
 ADD_EXECUTABLE(vtklevelset RealImageToMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(meshcluster SurfaceClusterAnalysis.cxx ReadWriteVTK.cxx
   ${PAULY_SOURCE_DIR}/Applications/MedialPDE/Code/Registry.cxx)
@@ -31,6 +32,8 @@ ADD_EXECUTABLE(avgmesharr AverageMeshArrays.cxx)
 ADD_EXECUTABLE(surf2tet SurfMesh2VolMesh.cxx ReadWriteVTK.cxx TetraLib.cxx)
 ADD_EXECUTABLE(tetgen2vtk TetGenToVTK.cxx ReadWriteVTK.cxx TetraLib.cxx)
 ADD_EXECUTABLE(tetfill TetraFill.cxx)
+ADD_EXECUTABLE(tetsample TetSampleImage.cxx)
+ADD_EXECUTABLE(tetjac TetJacobian.cxx)
 
 ### ADD_EXECUTABLE(importqvoronoi 
 ###  ImportQVoronoi.cxx
@@ -82,9 +85,12 @@ TARGET_LINK_LIBRARIES(mesh_image_sample ${COMMON_LIBS} ${ITK_LIBS})
 # TARGET_LINK_LIBRARIES(vtk2off ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(surf2tet ${COMMON_LIBS} tetgen)
 TARGET_LINK_LIBRARIES(tetgen2vtk ${COMMON_LIBS} tetgen)
+TARGET_LINK_LIBRARIES(tetsample ${COMMON_LIBS} ${ITK_LIBS})
+TARGET_LINK_LIBRARIES(tetjac ${COMMON_LIBS})
+TARGET_LINK_LIBRARIES(tetmergearr ${COMMON_LIBS})
 
 INSTALL_TARGETS("/bin" meshdiff avgmesh submesh quadcluster 
   smoothmesh copymesh avgmesharr identimg scalemesh 
   dumpmeshpoints meshcluster dumpmeshattr 
   mesh2img flipmesh vtklevelset warpmesh cmrep2img cmrep2warp
-  mesh_image_sample surf2tet tetgen2vtk tetfill)
+  mesh_image_sample surf2tet tetgen2vtk tetfill tetjac tetmergearr tetsample)

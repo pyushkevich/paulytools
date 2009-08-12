@@ -33,6 +33,7 @@ int usage()
   cout << "warpmesh - Applies a warp field (Brian's format) to a VTK mesh" << endl;
   cout << "usage: " << endl;
   cout << "   warpmesh [options] mesh.vtk out.vtk warp_images" << endl;
+  cout << "   warpmesh [options] mesh.vtk out.vtk affine_matrix" << endl;
   cout << "options: " << endl;
   cout << "   -w spec    : Warp coordinate specification. The warp field gives " << endl;
   cout << "                 a displacement in some coordinate space. It can be " << endl;
@@ -112,12 +113,16 @@ struct WarpMeshParam
   string fnMeshOut;
   Coord mesh_coord, warp_coord;
   string fnWarp[3];
+  string fnAffine;
+  bool flagWarp;
   WarpMeshParam()
     {
     fnMeshIn = "";
     fnMeshOut = "";
+    fnAffine = "";
     for(size_t d = 0; d < 3; d++)
       fnWarp[d] = "";
+    flagWarp = true;
     mesh_coord = RAS;
     warp_coord = RAS;
     }
@@ -199,6 +204,25 @@ bool ComputeTetrahedralVolumes(TMeshType *mesh, vtkFloatArray *cellarray, vtkFlo
   return true;
 }
 
+
+void ReadMatrix(const char *fname, itk::Matrix<double,4,4> &mat)
+  {
+  ifstream fin(fname);
+  for(size_t i = 0; i < 4; i++)
+    for(size_t j = 0; j < 4; j++)
+      if(fin.good())
+        {
+        fin >> mat[i][j];
+        }
+      else
+        {
+        throw itk::ExceptionObject("Unable to read matrix");
+        }
+  fin.close();
+  }
+
+
+
 /**
  * The actual method is templated over the VTK data type (unstructured/polydata)
  */
@@ -214,34 +238,46 @@ int WarpMesh(WarpMeshParam &parm)
   ImageType::Pointer warp[3];
   ReaderType::Pointer reader[3];
   FuncType::Pointer func[3];
-  
-  for(size_t d = 0; d < 3; d++)
+  itk::Matrix<double,4,4> affine;
+
+  vnl_matrix_fixed<double, 4, 4> ijk2ras, vtk2ras, lps2ras;
+  ijk2ras.set_identity();
+  vtk2ras.set_identity();
+  lps2ras.set_identity();
+  lps2ras(0,0) = -1; lps2ras(1,1) = -1;
+
+  if(parm.flagWarp)
     {
-    reader[d] = ReaderType::New();
-    reader[d]->SetFileName(parm.fnWarp[d].c_str());
-    reader[d]->Update();
-    warp[d] = reader[d]->GetOutput();
-    func[d] = FuncType::New();
-    func[d]->SetInputImage(warp[d]);
+    // Read in the warps
+    for(size_t d = 0; d < 3; d++)
+      {
+      reader[d] = ReaderType::New();
+      reader[d]->SetFileName(parm.fnWarp[d].c_str());
+      reader[d]->Update();
+      warp[d] = reader[d]->GetOutput();
+      func[d] = FuncType::New();
+      func[d]->SetInputImage(warp[d]);
+      }
+
+    // Set up the transforms
+    ijk2ras = ConstructNiftiSform(
+      warp[0]->GetDirection().GetVnlMatrix(),
+      warp[0]->GetOrigin().GetVnlVector(),
+      warp[0]->GetSpacing().GetVnlVector());
+
+    vtk2ras = ConstructVTKtoNiftiTransform(
+      warp[0]->GetDirection().GetVnlMatrix(),
+      warp[0]->GetOrigin().GetVnlVector(),
+      warp[0]->GetSpacing().GetVnlVector());
+    }
+  else
+    {
+    ReadMatrix(parm.fnAffine.c_str(), affine);
     }
 
   // Read the mesh
   TMeshType *mesh = ReadMesh<TMeshType>(parm.fnMeshIn.c_str());
 
-  // Set up the transforms
-  vnl_matrix_fixed<double, 4, 4> ijk2ras = ConstructNiftiSform(
-    warp[0]->GetDirection().GetVnlMatrix(),
-    warp[0]->GetOrigin().GetVnlVector(),
-    warp[0]->GetSpacing().GetVnlVector());
-
-  vnl_matrix_fixed<double, 4, 4> vtk2ras = ConstructVTKtoNiftiTransform(
-    warp[0]->GetDirection().GetVnlMatrix(),
-    warp[0]->GetOrigin().GetVnlVector(),
-    warp[0]->GetSpacing().GetVnlVector());
-
-  vnl_matrix_fixed<double, 4, 4> lps2ras;
-  lps2ras.set_identity();
-  lps2ras(0,0) = -1; lps2ras(1,1) = -1;
 
   vnl_matrix_fixed<double, 4, 4> ras2ijk = vnl_inverse(ijk2ras);
   vnl_matrix_fixed<double, 4, 4> ras2vtk = vnl_inverse(vtk2ras);
@@ -263,6 +299,7 @@ int WarpMesh(WarpMeshParam &parm)
     {
     // Get the point (in whatever format that it's stored)
     vnl_vector_fixed<double, 4> x_mesh, x_ras, x_ijk, v_warp, v_ras;
+    vnl_vector_fixed<double, 4> y_ras, y_mesh;
     x_mesh[0] = mesh->GetPoint(k)[0]; x_mesh[1] = mesh->GetPoint(k)[1]; x_mesh[2] = mesh->GetPoint(k)[2];
     x_mesh[3] = 1.0;
 
@@ -276,35 +313,42 @@ int WarpMesh(WarpMeshParam &parm)
     else 
       x_ras = ijk2ras * x_mesh;
 
-    // Map the point to IJK coordinates (continuous index)
-    x_ijk = ras2ijk * x_ras;
-    FuncType::ContinuousIndexType idx;
-    idx[0] = x_ijk[0]; idx[1] = x_ijk[1]; idx[2] = x_ijk[2];
-
-    // Interpolate the warp at the point
-    // cout << "Evaluate at index " << idx[0] << " " << idx[1] << " " << idx[2] << endl;
-    for(size_t d = 0; d < 3; d++)
-      v_warp[d] = func[d]->EvaluateAtContinuousIndex(idx);
-    v_warp[3] = 0.0;
-
-    // Compute the displacement in RAS coordinates
-    if(parm.warp_coord == RAS)
-      v_ras = v_warp;
-    else if(parm.warp_coord == LPS)
-      v_ras = lps2ras * v_warp;
-    else if(parm.warp_coord == IJKOS)
-      v_ras = vtk2ras * v_warp;
-    else if(parm.warp_coord == ANTS)
+    if(parm.flagWarp)
       {
-      // vector is multiplied by the direction matrix ??? Really???
-      v_ras = lps2ras * v_warp;
-      }
-    else 
-      v_ras = ijk2ras * v_warp;
+      // Map the point to IJK coordinates (continuous index)
+      x_ijk = ras2ijk * x_ras;
+      FuncType::ContinuousIndexType idx;
+      idx[0] = x_ijk[0]; idx[1] = x_ijk[1]; idx[2] = x_ijk[2];
 
-    // Add displacement
-    vnl_vector_fixed<double, 4> y_ras, y_mesh;
-    y_ras = x_ras + v_ras;
+      // Interpolate the warp at the point
+      // cout << "Evaluate at index " << idx[0] << " " << idx[1] << " " << idx[2] << endl;
+      for(size_t d = 0; d < 3; d++)
+        v_warp[d] = func[d]->EvaluateAtContinuousIndex(idx);
+      v_warp[3] = 0.0;
+
+      // Compute the displacement in RAS coordinates
+      if(parm.warp_coord == RAS)
+        v_ras = v_warp;
+      else if(parm.warp_coord == LPS)
+        v_ras = lps2ras * v_warp;
+      else if(parm.warp_coord == IJKOS)
+        v_ras = vtk2ras * v_warp;
+      else if(parm.warp_coord == ANTS)
+        {
+        // vector is multiplied by the direction matrix ??? Really???
+        v_ras = lps2ras * v_warp;
+        }
+      else 
+        v_ras = ijk2ras * v_warp;
+
+      // Add displacement
+      y_ras = x_ras + v_ras;
+      }
+    else
+      {
+      vnl_matrix_fixed<double, 4,4> M = affine.GetVnlMatrix();
+      y_ras = M * x_ras;
+      }
 
     // Map new coordinate to desired system
     if(parm.mesh_coord == RAS)
@@ -395,11 +439,20 @@ int main(int argc, char **argv)
     }
 
   // Parse the filenames
-  if(optind + 5 != argc) return usage();
+  if(optind + 5 != argc && optind + 3 != argc) return usage();
   parm.fnMeshIn = argv[optind++];
   parm.fnMeshOut = argv[optind++];
-  for(size_t d = 0; d < 3; d++)
-    parm.fnWarp[d] = argv[optind++];
+  if(optind + 3 == argc)
+    {
+    parm.flagWarp = true;
+    for(size_t d = 0; d < 3; d++)
+      parm.fnWarp[d] = argv[optind++];
+    }
+  else
+    {
+    parm.flagWarp = false;
+    parm.fnAffine = argv[optind++];
+    }
 
   // Check the data type of the input file
   vtkDataReader *reader = vtkDataReader::New();
