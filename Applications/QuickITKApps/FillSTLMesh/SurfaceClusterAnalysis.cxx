@@ -213,6 +213,7 @@ template <class TMeshType>
 ClusterArray ComputeClusters(
   TMeshType *mesh,
   const char *data, 
+  const char *domain,
   double thresh, 
   TMeshType **mout = NULL)
 { ClusterArray ca(1) ; return ca; }
@@ -222,6 +223,7 @@ template <>
 ClusterArray ComputeClusters(
   vtkPolyData *mesh,
   const char *data, 
+  const char *domain,
   double thresh, 
   vtkPolyData **mout )
 {
@@ -312,10 +314,13 @@ ClusterArray ComputeClusters(
 template <>
 ClusterArray ComputeClusters(
   vtkUnstructuredGrid *mesh,
-  const char *data, 
+  const char *data,
+  const char *domain, 
   double thresh, 
   vtkUnstructuredGrid **mout )
 {
+
+/*** Segment 1 old code begin 
   // Initialize mesh
   mesh->GetPointData()->SetActiveScalars(data);
 
@@ -324,21 +329,75 @@ ClusterArray ComputeClusters(
   fContour->SetInput(mesh);
   fContour->SetValue(thresh);
   vtkUnstructuredGrid *f = fContour->GetOutput();
+ Segment 1 old code end ****/
   
+/*** Segment 1 new code begin ****/
+  vtkClipDataSet *fContour;
+  vtkThreshold *fThresh;
+//    cout << "creating " << fThresh ;
+  vtkUnstructuredGrid *f;
+  int NumberOfPoints;
+  if (!strcmp(domain, "Point"))
+  {  
+     // Initialize mesh
+     mesh->GetPointData()->SetActiveScalars(data);
+     fContour = vtkClipDataSet::New();
+
+     // Clip the data field at the threshold
+     fContour->SetInput(mesh);
+     fContour->SetValue(thresh);
+     fContour->Update();
+     f = fContour->GetOutput();
+  }
+  else
+  {  
+     // Initialize mesh
+     mesh->GetCellData()->SetActiveScalars(data);
+     fThresh = vtkThreshold::New();
+
+     // Threshold the cell data field
+     fThresh->SetAttributeModeToUseCellData();
+     fThresh->SetInput(mesh);
+     fThresh->ThresholdByUpper(thresh);
+     fThresh->Update();
+     f = fThresh->GetOutput();
+  }
+/*** Segment 1 new code end ****/
+
 
   // Get the connected components
   vtkConnectivityFilter * fConnect = vtkConnectivityFilter::New();
+/*** Segment 2 old code begin 
   fConnect->SetInput(fContour->GetOutput());
+ Segment 2 old code end ****/
+/*** Segment 2 new code begin ****/
+  if (!strcmp(domain, "Point"))
+     fConnect->SetInput(fContour->GetOutput());
+  else
+     fConnect->SetInput(fThresh->GetOutput());
+/*** Segment 2 new code end ****/
+
   fConnect->SetExtractionModeToAllRegions();
   fConnect->ColorRegionsOn();
   fConnect->Update();
   vtkUnstructuredGrid *p = fConnect->GetOutput();
 
+/*** Segment 3 new code begin ****/
+  if (!strcmp(domain, "Point"))
+     NumberOfPoints = p->GetNumberOfPoints();
+  else
+     NumberOfPoints = p->GetNumberOfCells();
+/*** Segment 3 new code end ****/
+
+
   // Create output data arrays for computing volume element
   vtkFloatArray *daArea = vtkFloatArray::New();
   daArea->SetName("volume_element");
   daArea->SetNumberOfComponents(1);
-  daArea->SetNumberOfTuples(p->GetNumberOfPoints());
+// Segment 4 old code
+//  daArea->SetNumberOfTuples(p->GetNumberOfPoints());
+// Segment 4 new code
+  daArea->SetNumberOfTuples(NumberOfPoints);
   daArea->FillComponent(0, 0.0);
 
   // Compute the volume of each tetra in the cluster set
@@ -362,19 +421,56 @@ ClusterArray ComputeClusters(
 
     double area = vtkTetra::ComputeVolume(p0, p1, p2, p3);
 
+/**** Segment 5 old code begin
     // Split the volume between neighbors
     daArea->SetTuple1(a0, abs(area) / 4.0 + daArea->GetTuple1(a0));
     daArea->SetTuple1(a1, abs(area) / 4.0 + daArea->GetTuple1(a1));
     daArea->SetTuple1(a2, abs(area) / 4.0 + daArea->GetTuple1(a2));
     daArea->SetTuple1(a3, abs(area) / 4.0 + daArea->GetTuple1(a3));
+ Segment 5 old code end ****/
+/**** Segment 5 new code begin ***/
+    if (!strcmp(domain, "Point"))
+    {  
+       // Split the volume between neighbors
+       daArea->SetTuple1(a0, abs(area) / 4.0 + daArea->GetTuple1(a0));
+       daArea->SetTuple1(a1, abs(area) / 4.0 + daArea->GetTuple1(a1));
+       daArea->SetTuple1(a2, abs(area) / 4.0 + daArea->GetTuple1(a2));
+       daArea->SetTuple1(a3, abs(area) / 4.0 + daArea->GetTuple1(a3));
     }
+    else // No need to split, working with cells
+       daArea->SetTuple1(k, abs(area));
+
+/**** Segment 5 new code end ***/
+    }
+
+/**** Segment 6 old code begin 
   // The the important arrays in the resulting meshes
   vtkDataArray *daRegion = p->GetPointData()->GetScalars();
   vtkDataArray *daData = f->GetPointData()->GetArray(data);
+ Segment 6 old code end ***/
+/**** Segment 6 new code begin ***/
+  vtkDataArray *daRegion;
+  vtkDataArray *daData;
+  if (!strcmp(domain, "Point"))
+  {  
+     // The important arrays in the resulting meshes
+     daRegion = p->GetPointData()->GetScalars();
+     daData = f->GetPointData()->GetArray(data);
+  }
+  else
+  {  
+     daRegion = p->GetCellData()->GetScalars();
+     daData = f->GetCellData()->GetArray(data);
+  }
+/**** Segment 6 new code end ***/
+
 
   // Build up the cluster array
   ClusterArray ca(fConnect->GetNumberOfExtractedRegions());
-  for(size_t i = 0; i < p->GetNumberOfPoints(); i++)
+// Segment 7 old code
+//  for(size_t i = 0; i < p->GetNumberOfPoints(); i++)
+// Segment 7 new code
+  for(size_t i = 0; i < NumberOfPoints; i++)
     {
     size_t region = (size_t) (daRegion->GetTuple1(i));
     double x = daData->GetTuple1(i);
@@ -388,7 +484,16 @@ ClusterArray ComputeClusters(
   // Get the output if needed
   if(mout != NULL)
     {
+/**** Segment 8 old code begin 
     p->GetPointData()->AddArray(daArea);
+ Segment 8 old code end ***/
+/**** Segment 8 new code begin ***/
+    if (!strcmp(domain, "Point"))
+       p->GetPointData()->AddArray(daArea);
+    else
+       p->GetCellData()->AddArray(daArea);
+/**** Segment 8 new code end ***/
+
     *mout = p;
     }
   else
@@ -396,7 +501,16 @@ ClusterArray ComputeClusters(
     // Delete the intermediates
     daArea->Delete();
     fConnect->Delete();
+/**** Segment 9 old code begin 
     fContour->Delete();
+ Segment 9 old code end ****/
+/**** Segment 9 new code begin ****/
+    if (!strcmp(domain, "Point"))
+       fContour->Delete();
+    else
+       fThresh->Delete();
+/**** Segment 9 new code end ****/ 
+
     }
 
   // Return the cluster array
@@ -855,7 +969,7 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
       // For each mesh, compute the t-test and the clusters
       else
          ComputeTTest<TMeshType>(mesh[i], sVOI.c_str(), labels, l1, l2, VOIttest);
-      ClusterArray ca = ComputeClusters<TMeshType>(mesh[i], VOIttest.c_str(), thresh);
+      ClusterArray ca = ComputeClusters<TMeshType>(mesh[i], VOIttest.c_str(), domain.c_str(), thresh);
     //WriteMesh<TMeshType>(mesh[i], fnMeshes[i].c_str());
     //exit(0);
 
@@ -891,7 +1005,7 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
        ComputeTTest<TMeshType>(mesh[i], sVOI.c_str(), true_labels, l1, l2, VOIttest);
 
     // Compute the clusters for the mesh with the correct labels
-    ClusterArray ca = ComputeClusters<TMeshType>(mesh[i], VOIttest.c_str(), thresh, &mout);
+    ClusterArray ca = ComputeClusters<TMeshType>(mesh[i], VOIttest.c_str(), domain.c_str(), thresh, &mout);
     printf("MESH %s HAS %d CLUSTERS: \n", fnMeshes[i].c_str(), ca.size());
 
     // Assign a p-value to each cluster
