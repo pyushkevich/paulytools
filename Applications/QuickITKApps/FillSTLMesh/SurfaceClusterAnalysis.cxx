@@ -356,7 +356,8 @@ ClusterArray ComputeClusters(
      fThresh = vtkThreshold::New();
 
      // Threshold the cell data field
-     fThresh->SetAttributeModeToUseCellData();
+     //fThresh->SetAttributeModeToUseCellData();
+     fThresh->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, vtkDataSetAttributes::SCALARS); 
      fThresh->SetInput(mesh);
      fThresh->ThresholdByUpper(thresh);
      fThresh->Update();
