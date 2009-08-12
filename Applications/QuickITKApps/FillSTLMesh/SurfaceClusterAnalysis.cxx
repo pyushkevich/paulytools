@@ -10,6 +10,7 @@
 #include <vtkCellData.h>
 #include <vtkTetra.h>
 #include <vtkClipDataSet.h>
+#include <vtkThreshold.h>
 #include <vtkConnectivityFilter.h>
 #include "vtkPointData.h"
 #include "ReadWriteVTK.h"
@@ -249,7 +250,7 @@ ClusterArray ComputeClusters(
   daArea->FillComponent(0, 0.0);
 
   // Compute the area of each triangle in the cluster set
-  for(size_t k = 0; k < p->GetNumberOfCells(); k++)
+  for(int k = 0; k < p->GetNumberOfCells(); k++)
     {
     vtkCell *cell = p->GetCell(k);
     if(cell->GetCellType() != VTK_TRIANGLE)
@@ -276,9 +277,10 @@ ClusterArray ComputeClusters(
   vtkDataArray *daRegion = p->GetPointData()->GetScalars();
   vtkDataArray *daData = f->GetPointData()->GetArray(data);
 
+
   // Build up the cluster array
   ClusterArray ca(fConnect->GetNumberOfExtractedRegions());
-  for(size_t i = 0; i < p->GetNumberOfPoints(); i++)
+  for(int i = 0; i < p->GetNumberOfPoints(); i++)
     {
     size_t region = (size_t) (daRegion->GetTuple1(i));
     double x = daData->GetTuple1(i);
@@ -407,11 +409,11 @@ void ComputeTTest(
   TMeshType *pd, 
   const char *var, 
   const vector<int> &labels,
-  int l1, int l2)
+  int l1, int l2, std::string VOIttest)
 {
   // Get the pointdata
   vtkDataArray *data = pd->GetPointData()->GetArray(var);
-  vtkDataArray *ttest = pd->GetPointData()->GetArray("ttest");
+  vtkDataArray *ttest = pd->GetPointData()->GetArray(VOIttest.c_str());
 
   // Get the sizes of the cohorts
   int n1 = 0, n2 = 0;
@@ -455,11 +457,11 @@ void ComputeCorrTest(
   const char *var, 
   const vector<int> &labels,
   const vector<int> &indiv_labels,
-  int l1, int l2, int ispaired, const vector<float> &corrVar)
+  int l1, int l2, int ispaired, const vector<float> &corrVar, std::string VOIttest)
 {
   // Get the pointdata
   vtkDataArray *data = pd->GetPointData()->GetArray(var);
-  vtkDataArray *ttest = pd->GetPointData()->GetArray("ttest");
+  vtkDataArray *ttest = pd->GetPointData()->GetArray(VOIttest.c_str());
 
   // Create an r (correlation coefficient) array
   vtkFloatArray *array = vtkFloatArray::New();
@@ -527,12 +529,25 @@ void ComputeCorrTest(
 }
 
 template <class TMeshType>
-void GeneralLinearModel(const vnl_matrix<double> &origmat, const vnl_matrix<double> &origcon, const vector<int> &indiv_labels, TMeshType *pd, const char *var)
+void GeneralLinearModel(const vnl_matrix<double> &origmat, const vnl_matrix<double> &origcon, const vector<int> &indiv_labels, TMeshType *pd, const char *var, std::string VOIttest, const char *domain)
 {
 
+  vtkDataArray *data;
+  vtkDataArray *ttest;
   // Get the pointdata
-  vtkDataArray *data = pd->GetPointData()->GetArray(var);
-  vtkDataArray *ttest = pd->GetPointData()->GetArray("ttest");
+  int NumberOfPoints;
+  if (!strcmp(domain, "Point"))
+  {  
+     data = pd->GetPointData()->GetArray(var);
+     ttest = pd->GetPointData()->GetArray(VOIttest.c_str());
+     NumberOfPoints = pd->GetNumberOfPoints();
+  }
+  else // Get the cell data
+  {  
+     data = pd->GetCellData()->GetArray(var);
+     ttest = pd->GetCellData()->GetArray(VOIttest.c_str());
+     NumberOfPoints = pd->GetNumberOfCells();
+  }
 
   vnl_matrix<double> mat;
   mat.set_size(origmat.rows(), origmat.cols());
@@ -632,6 +647,10 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
   string sVOI = registry["Analysis.TestVariable"][""];
   if(argc > 2) sVOI = argv[2];
   cout << "Variable of Interest: " << sVOI << endl;
+
+  // Get the clustering domain
+  string domain = registry["Analysis.ClusterDomain"][""];
+  cout << "Cluster Domain: " << domain << endl;
 
   // Get the clustering threshold
   double thresh = registry["Analysis.ClusteringThreshold"][0.0];
@@ -739,6 +758,7 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
   int l1 = 0, l2 = 1;
   if(thresh < 0)
     { l1 = 1; l2 = 0; thresh = -thresh; posneg = "_neg";}
+  string VOIttest = sVOI + "ttest" + posneg;
 
   // Load each of the meshes and create a cluster analyzer
   vector<string> fnMeshes, fnOutMeshes;
@@ -782,11 +802,23 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
 
     // Create a t-test array
     vtkFloatArray *array = vtkFloatArray::New();
-    array->SetName("ttest");
+    array->SetName(VOIttest.c_str());
     array->SetNumberOfComponents(1);
-    array->SetNumberOfTuples(mesh[i]->GetNumberOfPoints());
-    mesh[i]->GetPointData()->AddArray(array);
-    mesh[i]->GetPointData()->SetActiveScalars("ttest");
+    // cell or point based analysis ?
+    if (!strcmp(domain.c_str(), "Point"))
+    {
+       array->SetNumberOfTuples(mesh[i]->GetNumberOfPoints());
+       mesh[i]->GetPointData()->AddArray(array);
+       mesh[i]->GetPointData()->SetActiveScalars(VOIttest.c_str());
+    }
+    else if (!strcmp(domain.c_str(), "Cell"))
+    {
+       array->SetNumberOfTuples(mesh[i]->GetNumberOfCells());
+       mesh[i]->GetCellData()->AddArray(array);
+       mesh[i]->GetCellData()->SetActiveScalars(VOIttest.c_str());
+    }
+    else
+    { cerr << "Unknown clustering domain: must be Point or Cell" << endl; return -1; }
     }
     
   // Run permutation analysis
@@ -814,16 +846,16 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
       {
       // SD paired tests
       if (ispaired > 0 && ispaired < 4)
-         ComputeCorrTest<TMeshType>(mesh[i], sVOI.c_str(), labels, indiv_labels, l1, l2, ispaired, corrVar);
+         ComputeCorrTest<TMeshType>(mesh[i], sVOI.c_str(), labels, indiv_labels, l1, l2, ispaired, corrVar, VOIttest);
       else if (ispaired == 4)
          {
       // GLM
-         GeneralLinearModel<TMeshType>(mat, con, indiv_labels, mesh[i], sVOI.c_str());
+         GeneralLinearModel<TMeshType>(mat, con, indiv_labels, mesh[i], sVOI.c_str(), VOIttest, domain.c_str());
          }
       // For each mesh, compute the t-test and the clusters
       else
-         ComputeTTest<TMeshType>(mesh[i], sVOI.c_str(), labels, l1, l2);
-      ClusterArray ca = ComputeClusters<TMeshType>(mesh[i], "ttest", thresh);
+         ComputeTTest<TMeshType>(mesh[i], sVOI.c_str(), labels, l1, l2, VOIttest);
+      ClusterArray ca = ComputeClusters<TMeshType>(mesh[i], VOIttest.c_str(), thresh);
     //WriteMesh<TMeshType>(mesh[i], fnMeshes[i].c_str());
     //exit(0);
 
@@ -850,16 +882,16 @@ int meshcluster(int argc, char *argv[], Registry registry, bool isPolyData)
 
     // SD paired tests
     if (ispaired > 0 && ispaired < 4)
-       ComputeCorrTest<TMeshType>(mesh[i], sVOI.c_str(), true_labels, true_indiv_labels, l1, l2, ispaired, corrVar);
+       ComputeCorrTest<TMeshType>(mesh[i], sVOI.c_str(), true_labels, true_indiv_labels, l1, l2, ispaired, corrVar, VOIttest);
     else if (ispaired == 4)
     // GLM
-       GeneralLinearModel<TMeshType>(mat, con, true_indiv_labels, mesh[i], sVOI.c_str());
+       GeneralLinearModel<TMeshType>(mat, con, true_indiv_labels, mesh[i], sVOI.c_str(), VOIttest, domain.c_str());
     else
     // Compute the t-test for the mesh with the correct labels
-       ComputeTTest<TMeshType>(mesh[i], sVOI.c_str(), true_labels, l1, l2);
+       ComputeTTest<TMeshType>(mesh[i], sVOI.c_str(), true_labels, l1, l2, VOIttest);
 
     // Compute the clusters for the mesh with the correct labels
-    ClusterArray ca = ComputeClusters<TMeshType>(mesh[i], "ttest", thresh, &mout);
+    ClusterArray ca = ComputeClusters<TMeshType>(mesh[i], VOIttest.c_str(), thresh, &mout);
     printf("MESH %s HAS %d CLUSTERS: \n", fnMeshes[i].c_str(), ca.size());
 
     // Assign a p-value to each cluster
