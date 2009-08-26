@@ -6,7 +6,7 @@ SET(FILLSTLMESH_SRCS
 
 INCLUDE_DIRECTORIES(${PAULY_SOURCE_DIR}/Applications/MedialPDE/Code)
 
-ADD_EXECUTABLE(tetmergearr MergeVTKArrays.cxx)
+ADD_EXECUTABLE(tetdumpattr TetDumpAttr.cxx)
 ADD_EXECUTABLE(vtklevelset RealImageToMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(meshcluster SurfaceClusterAnalysis.cxx ReadWriteVTK.cxx
   ${PAULY_SOURCE_DIR}/Applications/MedialPDE/Code/Registry.cxx)
@@ -87,10 +87,10 @@ TARGET_LINK_LIBRARIES(surf2tet ${COMMON_LIBS} tetgen)
 TARGET_LINK_LIBRARIES(tetgen2vtk ${COMMON_LIBS} tetgen)
 TARGET_LINK_LIBRARIES(tetsample ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(tetjac ${COMMON_LIBS})
-TARGET_LINK_LIBRARIES(tetmergearr ${COMMON_LIBS})
+TARGET_LINK_LIBRARIES(tetdumpattr ${COMMON_LIBS})
 
 INSTALL_TARGETS("/bin" meshdiff avgmesh submesh quadcluster 
   smoothmesh copymesh avgmesharr identimg scalemesh 
   dumpmeshpoints meshcluster dumpmeshattr 
   mesh2img flipmesh vtklevelset warpmesh cmrep2img cmrep2warp
-  mesh_image_sample surf2tet tetgen2vtk tetfill tetjac tetmergearr tetsample)
+  mesh_image_sample surf2tet tetgen2vtk tetfill tetjac tetdumpattr tetsample)
