@@ -3,6 +3,8 @@
 #include "itkVTKImageExport.h"
 #include "vtkImageImport.h"
 #include "vtkImageData.h"
+#include "vtkPointData.h"
+#include "vtkDataArray.h"
 #include "vtkMarchingCubes.h"
 #include "vtkTransformPolyDataFilter.h"
 #include "vtkTransform.h"
