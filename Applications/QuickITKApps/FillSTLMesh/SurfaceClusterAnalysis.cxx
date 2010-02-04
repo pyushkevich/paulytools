@@ -227,28 +227,65 @@ ClusterArray ComputeClusters(
   double thresh, 
   vtkPolyData **mout )
 {
-  // Initialize mesh
-  mesh->GetPointData()->SetActiveScalars(data);
+  vtkClipPolyData *fContour;
+  vtkThresholdPoints *fThresh;
+//    cout << "creating " << fThresh ; 
+  vtkPolyData *f; 
+  int NumberOfPoints;
+  if (!strcmp(domain, "Point"))
+  {
+     // Initialize mesh
+     mesh->GetPointData()->SetActiveScalars(data);
+     fContour = vtkClipPolyData::New();
 
-  // Clip the data field at the threshold
-  vtkClipPolyData *fContour = vtkClipPolyData::New();
-  fContour->SetInput(mesh);
-  fContour->SetValue(thresh);
-  vtkPolyData *f = fContour->GetOutput();
+     // Clip the data field at the threshold
+     fContour->SetInput(mesh);
+     fContour->SetValue(thresh);
+     fContour->Update();
+     f = fContour->GetOutput();
+  } 
+  else
+  {  
+     cerr << "*********polydata clustering based on cell attribute arrays not supported yet**********" << endl;
+     throw("polydata with cells not supported");
+     // Initialize mesh
+     mesh->GetCellData()->SetActiveScalars(data);
+     fThresh = vtkThresholdPoints::New();
+    
+     // Threshold the cell data field
+     //fThresh->SetAttributeModeToUseCellData();
+     fThresh->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, data);
+     fThresh->SetInput(mesh);
+     fThresh->ThresholdByUpper(thresh);
+     fThresh->Update();
+     f = fThresh->GetOutput();
+  } 
+
 
   // Get the connected components
   vtkPolyDataConnectivityFilter * fConnect = vtkPolyDataConnectivityFilter::New();
-  fConnect->SetInput(fContour->GetOutput());
+  if (!strcmp(domain, "Point"))
+     fConnect->SetInput(fContour->GetOutput());
+  else
+     fConnect->SetInput(fThresh->GetOutput());
   fConnect->SetExtractionModeToAllRegions();
   fConnect->ColorRegionsOn();
   fConnect->Update();
   vtkPolyData *p = fConnect->GetOutput();
+//WriteMesh<vtkPolyData>(mesh, "input.vtk");
+//WriteMesh<vtkPolyData>(f, "output.vtk");
+
+  if (!strcmp(domain, "Point"))
+     NumberOfPoints = p->GetNumberOfPoints();
+  else
+     NumberOfPoints = p->GetNumberOfCells();
+
 
   // Create output data arrays for computing area element
   vtkFloatArray *daArea = vtkFloatArray::New();
   daArea->SetName("area_element");
   daArea->SetNumberOfComponents(1);
-  daArea->SetNumberOfTuples(p->GetNumberOfPoints());
+  daArea->SetNumberOfTuples(NumberOfPoints);
   daArea->FillComponent(0, 0.0);
 
   // Compute the area of each triangle in the cluster set
@@ -256,8 +293,9 @@ ClusterArray ComputeClusters(
     {
     vtkCell *cell = p->GetCell(k);
     if(cell->GetCellType() != VTK_TRIANGLE)
+{cout << "Warning: cell type " << cell->GetCellType() ;
       throw("Wrong cell type");
-
+}
     // Compute the area of the triangle
     vtkIdType a0 = cell->GetPointId(0);
     vtkIdType a1 = cell->GetPointId(1);
@@ -269,20 +307,37 @@ ClusterArray ComputeClusters(
 
     double area = vtkTriangle::TriangleArea(p0, p1, p2);
 
-    // Split the area between neighbors
-    daArea->SetTuple1(a0, area / 3.0 + daArea->GetTuple1(a0));
-    daArea->SetTuple1(a1, area / 3.0 + daArea->GetTuple1(a1));
-    daArea->SetTuple1(a2, area / 3.0 + daArea->GetTuple1(a2));
+    if (!strcmp(domain, "Point"))
+    {  
+       // Split the volume between neighbors
+       daArea->SetTuple1(a0, area / 3.0 + daArea->GetTuple1(a0));
+       daArea->SetTuple1(a1, area / 3.0 + daArea->GetTuple1(a1));
+       daArea->SetTuple1(a2, area / 3.0 + daArea->GetTuple1(a2));
+    }
+    else // No need to split, working with cells
+       daArea->SetTuple1(k, area);
+
     }
 
   // The the important arrays in the resulting meshes
-  vtkDataArray *daRegion = p->GetPointData()->GetScalars();
-  vtkDataArray *daData = f->GetPointData()->GetArray(data);
+  vtkDataArray *daRegion;
+  vtkDataArray *daData;
+  if (!strcmp(domain, "Point"))
+  {  
+     // The important arrays in the resulting meshes
+     daRegion = p->GetPointData()->GetScalars();
+     daData = f->GetPointData()->GetArray(data);
+  }
+  else
+  {
+     daRegion = p->GetCellData()->GetScalars();
+     daData = f->GetCellData()->GetArray(data);
+  }
 
 
   // Build up the cluster array
   ClusterArray ca(fConnect->GetNumberOfExtractedRegions());
-  for(int i = 0; i < p->GetNumberOfPoints(); i++)
+  for(int i = 0; i < NumberOfPoints; i++)
     {
     size_t region = (size_t) (daRegion->GetTuple1(i));
     double x = daData->GetTuple1(i);
@@ -296,7 +351,11 @@ ClusterArray ComputeClusters(
   // Get the output if needed
   if(mout != NULL)
     {
-    p->GetPointData()->AddArray(daArea);
+    if (!strcmp(domain, "Point"))
+       p->GetPointData()->AddArray(daArea);
+    else
+       p->GetCellData()->AddArray(daArea);
+
     *mout = p;
     }
   else
@@ -304,7 +363,11 @@ ClusterArray ComputeClusters(
     // Delete the intermediates
     daArea->Delete();
     fConnect->Delete();
-    fContour->Delete();
+    if (!strcmp(domain, "Point"))
+       fContour->Delete();
+    else
+       fThresh->Delete();
+
     }
 
   // Return the cluster array
