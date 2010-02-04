@@ -27,3 +27,7 @@ Analysis.NumberOfPermutations = 1000
 
 # Clustering threshold
 Analysis.ClusteringThreshold = 4.0
+
+# Clustering domain
+Analysis.ClusterDomain = "Point"
+
