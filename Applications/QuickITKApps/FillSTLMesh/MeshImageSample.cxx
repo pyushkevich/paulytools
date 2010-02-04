@@ -1,6 +1,13 @@
 #include "itkImageFileReader.h"
 #include "itkImage.h"
 #include "itkLinearInterpolateImageFunction.h"
+#include "itkNearestNeighborInterpolateImageFunction.h"
+#include <vtkPolyData.h>
+#include <vtkUnstructuredGrid.h>
+#include <vtkUnstructuredGridReader.h>
+#include <vtkUnstructuredGridWriter.h>
+#include <vtkPolyDataReader.h>
+#include <vtkPolyDataWriter.h>
 #include "vtkPointData.h"
 #include "vtkFloatArray.h"
 #include "ReadWriteVTK.h"
@@ -18,40 +25,61 @@ int usage()
   return -1;
 }
 
-int main(int argc, char *argv[])
-{
-  if(argc < 5)
-    return usage();
+template <class TMeshType>
+TMeshType * ReadMesh(const char *fname)
+{ return NULL; }
 
-  // Read optional parameters
-  size_t irms = 0, nrms = 0;
-  for(size_t ip = 1; ip < argc-4; ip++)
-    {
-    if(strcmp(argv[ip], "-rms") == 0)
-      {
-      if(ip + 2 < argc-4)
-        {
-        irms = atoi(argv[++ip]);
-        nrms = atoi(argv[++ip]);
-        }
-      else
-        {
-        cerr << "error: -rms flag needs two parameters" << endl;
-        return usage();
-        }
-      }
-    else
-      {
-      cerr << "error: unrecognized parameter " << argv[ip] << endl;
-      return usage();
-      }
-    }
-  
+template <>
+vtkUnstructuredGrid *ReadMesh<>(const char *fname)
+{
+  vtkUnstructuredGridReader *reader = vtkUnstructuredGridReader::New();
+  reader->SetFileName(fname);
+  reader->Update();
+  return reader->GetOutput();
+}
+
+template <>
+vtkPolyData *ReadMesh<>(const char *fname)
+{
+  vtkPolyDataReader *reader = vtkPolyDataReader::New();
+  reader->SetFileName(fname);
+  reader->Update();
+  return reader->GetOutput();
+}
+
+
+template <class TMeshType>
+void WriteMesh(TMeshType *mesh, const char *fname)
+{ }
+
+template <>
+void WriteMesh<>(vtkUnstructuredGrid *mesh, const char *fname)
+{
+  vtkUnstructuredGridWriter *writer = vtkUnstructuredGridWriter::New();
+  writer->SetFileName(fname);
+  writer->SetInput(mesh);
+  writer->Update();
+}
+
+template <>
+void WriteMesh<>(vtkPolyData *mesh, const char *fname)
+{
+  vtkPolyDataWriter *writer = vtkPolyDataWriter::New();
+  writer->SetFileName(fname);
+  writer->SetInput(mesh);
+  writer->Update();
+}
+
+template <class TMeshType>
+int MeshImageSample(int argc, char *argv[], size_t irms, size_t nrms)
+{
+
+
   // Read the input mesh
-  vtkPolyData *mesh = ReadVTKData(argv[argc-4]);
+  TMeshType *mesh = ReadMesh<TMeshType>(argv[argc-4]);
 
   // Read the input image
-  typedef itk::Image<float, 3> ImageType;
+  typedef itk::RASOrientedImage<float, 3> ImageType;
   typedef itk::ImageFileReader<ImageType> ReaderType;
   ReaderType::Pointer fltReader = ReaderType::New();
   fltReader->SetFileName(argv[argc-3]);
@@ -59,7 +87,8 @@ int main(int argc, char *argv[])
   ImageType::Pointer imgInput = fltReader->GetOutput();
 
   // Create an interpolation function
-  typedef itk::LinearInterpolateImageFunction<ImageType, double> InterpType;
+  //typedef itk::LinearInterpolateImageFunction<ImageType, double> InterpType;
+  typedef itk::NearestNeighborInterpolateImageFunction<ImageType, double> InterpType;
   InterpType::Pointer interp = InterpType::New();
   interp->SetInputImage(imgInput);
 
@@ -118,5 +147,65 @@ int main(int argc, char *argv[])
   pdat->AddArray(array);
 
   // Write the output
-  WriteVTKData(mesh, argv[argc - 2]);
+  WriteMesh<TMeshType>(mesh, argv[argc - 2]);
+  return EXIT_SUCCESS;
 }
+
+int main(int argc, char *argv[])
+{
+  if(argc < 5)
+    return usage();
+
+  // Read optional parameters
+  size_t irms = 0, nrms = 0;
+  for(size_t ip = 1; ip < argc-4; ip++)
+    {
+    if(strcmp(argv[ip], "-rms") == 0)
+      {
+      if(ip + 2 < argc-4)
+        {
+        irms = atoi(argv[++ip]);
+        nrms = atoi(argv[++ip]);
+        }
+      else
+        {
+        cerr << "error: -rms flag needs two parameters" << endl;
+        return usage();
+        }
+      }
+    else
+      {
+      cerr << "error: unrecognized parameter " << argv[ip] << endl;
+      return usage();
+      }
+    }
+  
+  // Read the meshes
+  // Check the data type of the input file
+  vtkDataReader *reader = vtkDataReader::New();
+  reader->SetFileName(argv[argc-4]);
+  reader->OpenVTKFile();
+  reader->ReadHeader();
+
+  bool isPolyData = true;
+  // Is this a polydata?
+  if(reader->IsFileUnstructuredGrid())
+    {
+    reader->Delete();
+    isPolyData = false;
+    return MeshImageSample<vtkUnstructuredGrid>( argc, argv, irms, nrms);
+    }
+  else if(reader->IsFilePolyData())
+    {
+    reader->Delete();
+    return MeshImageSample<vtkPolyData>( argc, argv, irms, nrms);
+
+    }
+  else
+    {
+    reader->Delete();
+    cerr << "Unsupported VTK data type in input file" << endl;
+    return -1;
+    }
+}
+
