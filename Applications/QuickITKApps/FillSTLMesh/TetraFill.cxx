@@ -15,6 +15,7 @@
 #include <vtkCellData.h>
 #include <vtkCell.h>
 #include <vtkCellData.h>
+#include <vtkDataArray.h>
 #include <vnl/vnl_matrix_fixed.h>
 #include <vnl/vnl_det.h>
 #include "ReadWriteVTK.h"
@@ -163,7 +164,10 @@ int main(int argc, char **argv)
          }
       }
     else
-    da = tet->GetCellData()->GetArray(inCellArray.c_str());
+    {
+      cout << "\"" << inCellArray << "\"" << endl;
+      da = tet->GetCellData()->GetArray(inCellArray.c_str());
+    }
     }
   // Scan convert each of the tetrahedra
   for(size_t ic = 0; ic < (size_t) tet->GetNumberOfCells(); ic++)
