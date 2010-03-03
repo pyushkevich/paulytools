@@ -28,11 +28,17 @@
 
 #include "itkImageBase.h"
 #include "itkTransform.h"
+#include "itkMatrixOffsetTransformBase.h"
 #include "itkInterpolateImageFunction.h"
 #include "itkSingleValuedCostFunction.h"
+#include "itkResampleImageFilter.h"
 #include "itkExceptionObject.h"
 #include "itkGradientRecursiveGaussianImageFilter.h"
 #include "itkSpatialObject.h"
+#include "vnl/vnl_matrix_fixed.h"
+#include "vnl/vnl_det.h"
+#include "vnl/vnl_inverse.h"
+
 
 namespace itk
 {
@@ -69,32 +75,49 @@ public:
   /** Type used for representing point components  */
   typedef typename Superclass::ParametersValueType CoordinateRepresentationType;
 
+  /** Method for creation through the object factory. */
+  itkNewMacro(Self);
+
+
   /** Run-time type information (and related methods). */
   itkTypeMacro(SymmetricImageToImageMetric, SingleValuedCostFunction);
 
   /**  Type of the moving Image. */
   typedef TMovingImage                               MovingImageType;
   typedef typename TMovingImage::PixelType           MovingImagePixelType;
-  typedef typename MovingImageType::ConstPointer     MovingImageConstPointer;
+  typedef typename MovingImageType::Pointer     MovingImagePointer;
 
   /**  Type of the fixed Image. */
   typedef TFixedImage                                FixedImageType;
-  typedef typename FixedImageType::ConstPointer      FixedImageConstPointer;
+  typedef typename FixedImageType::Pointer      FixedImagePointer;
   typedef typename FixedImageType::RegionType        FixedImageRegionType;
+
+  /**  Type of the halfway Image. */
+  typedef TFixedImage                                HalfwayImageType;
+  typedef typename HalfwayImageType::Pointer      HalfwayImagePointer;
+  typedef typename HalfwayImageType::RegionType        HalfwayImageRegionType;
+
+  /** Matrix type for RAS transform */
+  typedef vnl_matrix_fixed<double, TFixedImage::ImageDimension + 1, TFixedImage::ImageDimension + 1> MatrixType;
 
   /** Constants for the image dimensions */
   itkStaticConstMacro(MovingImageDimension, 
                       unsigned int,
                       TMovingImage::ImageDimension);
   itkStaticConstMacro(FixedImageDimension, 
-                      unsigned int,
+                     unsigned int,
                       TFixedImage::ImageDimension);
   
   /**  Type of the Transform Base class */
-  typedef Transform<CoordinateRepresentationType, 
-                    itkGetStaticConstMacro(MovingImageDimension),
-                    itkGetStaticConstMacro(FixedImageDimension)> 
+  //typedef itk::MatrixOffsetTransformBase<CoordinateRepresentationType, 
+   //                 itkGetStaticConstMacro(MovingImageDimension),
+    //                itkGetStaticConstMacro(FixedImageDimension)> 
+     //                                                TransformType;
+  typedef itk::MatrixOffsetTransformBase<CoordinateRepresentationType, 
+                    MovingImageDimension,
+                    FixedImageDimension> 
                                                      TransformType;
+  
 
   typedef typename TransformType::Pointer            TransformPointer;
   typedef typename TransformType::InputPointType     InputPointType;
@@ -112,10 +135,12 @@ public:
   typedef typename NumericTraits<MovingImagePixelType>::RealType 
                                                      RealType;
   typedef CovariantVector<RealType,
-                          itkGetStaticConstMacro(MovingImageDimension)>
+                          //itkGetStaticConstMacro(MovingImageDimension)>
+                          MovingImageDimension>
                                                      GradientPixelType;
   typedef Image<GradientPixelType,
-                itkGetStaticConstMacro(MovingImageDimension)> 
+                //itkGetStaticConstMacro(MovingImageDimension)> 
+                MovingImageDimension> 
                                                      GradientImageType;
   typedef SmartPointer<GradientImageType>            GradientImagePointer;
   typedef GradientRecursiveGaussianImageFilter< MovingImageType,
@@ -129,7 +154,8 @@ public:
 
   /**  Type for the mask of the fixed image. Only pixels that are "inside"
        this mask will be considered for the computation of the metric */
-  typedef SpatialObject< itkGetStaticConstMacro(FixedImageDimension) >
+  //typedef SpatialObject< itkGetStaticConstMacro(FixedImageDimension) >
+  typedef SpatialObject< FixedImageDimension >
                                                      FixedImageMaskType;
   typedef typename FixedImageMaskType::Pointer       FixedImageMaskPointer;
   typedef typename FixedImageMaskType::ConstPointer  FixedImageMaskConstPointer;
@@ -137,7 +163,8 @@ public:
 
   /**  Type for the mask of the moving image. Only pixels that are "inside"
        this mask will be considered for the computation of the metric */
-  typedef SpatialObject< itkGetStaticConstMacro(MovingImageDimension) >
+ // typedef SpatialObject< itkGetStaticConstMacro(MovingImageDimension) >
+  typedef SpatialObject< MovingImageDimension >
                                                      MovingImageMaskType;
   typedef typename MovingImageMaskType::Pointer      MovingImageMaskPointer;
   typedef typename MovingImageMaskType::ConstPointer MovingImageMaskConstPointer;
@@ -153,22 +180,28 @@ public:
   typedef typename Superclass::ParametersType                 ParametersType;
 
   /** Connect the Fixed Image.  */
-  itkSetConstObjectMacro( FixedImage, FixedImageType );
+  itkSetObjectMacro( FixedImage, FixedImageType );
 
   /** Get the Fixed Image. */
-  itkGetConstObjectMacro( FixedImage, FixedImageType );
+  itkGetObjectMacro( FixedImage, FixedImageType );
 
   /** Connect the Moving Image.  */
-  itkSetConstObjectMacro( MovingImage, MovingImageType );
+  itkSetObjectMacro( MovingImage, MovingImageType );
 
   /** Get the Moving Image. */
-  itkGetConstObjectMacro( MovingImage, MovingImageType );
+  itkGetObjectMacro( MovingImage, MovingImageType );
+
+  /** Connect the Fixed Image.  */
+  itkSetObjectMacro( HalfwayImage, HalfwayImageType );
+
+  /** Get the Fixed Image. */
+  itkGetObjectMacro( HalfwayImage, HalfwayImageType );
 
   /** Connect the Transform. */
   itkSetObjectMacro( Transform, TransformType );
 
   /** Get a pointer to the Transform.  */
-  itkGetConstObjectMacro( Transform, TransformType );
+  itkGetObjectMacro( Transform, TransformType );
  
   /** Connect the Interpolator. */
   itkSetObjectMacro( Interpolator, InterpolatorType );
@@ -216,8 +249,22 @@ public:
   /** Get Gradient Image. */
   itkGetConstObjectMacro( GradientImage, GradientImageType );
 
+  // Stuff regarding the asymmetric metric
+    /**  Type of the metric. */
+  typedef itk::ImageToImageMetric<FixedImageType, MovingImageType>  AsymmetricMetricType;
+  typedef typename AsymmetricMetricType::Pointer                AsymmetricMetricPointer;
+
+  /** Set/Get the Metric. */
+  itkSetObjectMacro( AsymMetric, AsymmetricMetricType );
+  itkGetObjectMacro( AsymMetric, AsymmetricMetricType );
+  typedef typename AsymmetricMetricType::ParametersType AsymParametersType;
+
   /** Set the parameters defining the Transform. */
   void SetTransformParameters( const ParametersType & parameters ) const;
+
+  /** Get the parameters defining the Transform. */
+  ParametersType GetTransformParameters()
+  { return m_Transform->GetParameters(); }
 
   /** Return the number of parameters required by the Transform */
   unsigned int GetNumberOfParameters(void) const 
@@ -225,29 +272,34 @@ public:
 
   /** Initialize the Metric by making sure that all the components
    *  are present and plugged together correctly     */
-  virtual void Initialize(void) throw ( ExceptionObject );
+  void Initialize(void) throw ( ExceptionObject );
 
-  // Stuff related to the asymmetric metric
+  // Stuff related to the symmetric metric
   /**  Get the value for single valued optimizers. */
+
   MeasureType GetValue( const TransformParametersType & parameters ) const;
 
-  /** Type of the Cost Function   */
-  typedef  SingleValuedCostFunction         CostFunctionType;
-  typedef  CostFunctionType::Pointer        CostFunctionPointer;
+  //void GetHalfTransform( void );
+  void GetHalfTransform( MatrixType  Z, TransformPointer atran ) const;
+  void CreateHalfwayImageSpace(void);
 
-  /**  Measure type.
-   *  It defines a type used to return the cost function value.  */
-  typedef CostFunctionType::MeasureType   MeasureType;
 
-  /**  Derivative type.
-   *  It defines a type used to return the cost function derivative. */
-  typedef CostFunctionType::DerivativeType DerivativeType;
+  /** This method returns the derivative of the cost function corresponding
+    * to the specified parameters.   */
+  virtual void GetDerivative( const ParametersType & parameters,
+                              DerivativeType & derivative ) const
+    { derivative = 0;}
 
-  /** Set the cost function. */
-  virtual void SetCostFunction( CostFunctionType * costFunction );
+  /** This method returns the value and derivative of the cost function corresponding
+    * to the specified parameters    */
+  virtual void GetValueAndDerivative( const ParametersType & parameters,
+                                      MeasureType & value,
+                                      DerivativeType & derivative ) const
+    {
+    value = this->GetValue( parameters );
+    this->GetDerivative( parameters, derivative );
+    }
 
-  /** Get the cost function. */
-  itkGetConstObjectMacro( CostFunction, CostFunctionType );
 
 
 
@@ -256,10 +308,14 @@ protected:
   virtual ~SymmetricImageToImageMetric();
   void PrintSelf(std::ostream& os, Indent indent) const;
 
+  void PrintMatrix(vnl_matrix<double> mat, const char *fmt, const char *prefix);
+
   mutable unsigned long       m_NumberOfPixelsCounted;
 
-  FixedImageConstPointer      m_FixedImage;
-  MovingImageConstPointer     m_MovingImage;
+  FixedImagePointer      m_FixedImage;
+  MovingImagePointer     m_MovingImage;
+
+  HalfwayImagePointer         m_HalfwayImage;
 
   mutable TransformPointer    m_Transform;
   InterpolatorPointer         m_Interpolator;
@@ -275,8 +331,9 @@ protected:
   mutable MovingImageMaskPointer  m_MovingImageMask;
 #endif
 
-  // Stuff related to the asymmetric metric
-  CostFunctionPointer           m_CostFunction;
+
+  // Stuff regarding the asymmetric metric
+  mutable AsymmetricMetricPointer                    m_AsymMetric;
 
 private:
   SymmetricImageToImageMetric(const Self&); //purposely not implemented

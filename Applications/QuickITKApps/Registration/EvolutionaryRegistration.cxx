@@ -12,6 +12,7 @@
 #include "itkNormalizedCorrelationImageToImageMetric.h"
 #include "itkLinearInterpolateImageFunction.h"
 #include "itkOnePlusOneEvolutionaryOptimizer.h"
+#include "itkSymmetricImageToImageMetric.h"
 #include <iostream>
 #include <cctype>
 #include <string>
@@ -282,7 +283,9 @@ EvolutionaryRegistration(int argc, char * argv[])
                                     FixedImageType,
                                     MovingImageType    > RegistrationType;
   // Create registration
-  typename RegistrationType::Pointer   registration  = RegistrationType::New();
+  //typename RegistrationType::Pointer   registration  = RegistrationType::New();
+  typedef itk::SymmetricImageToImageMetric< FixedImageType,MovingImageType> SymmetricImageToImageMetricType;
+  typename SymmetricImageToImageMetricType::Pointer   symmmetric  = SymmetricImageToImageMetricType::New();
 
   // Create optimizer
   typename OptimizerType::Pointer      optimizer     = OptimizerType::New();
@@ -294,12 +297,16 @@ EvolutionaryRegistration(int argc, char * argv[])
   fixedImageReader->SetFileName(  argv[1] );
   movingImageReader->SetFileName( argv[2] );
 
-  registration->SetFixedImage(    fixedImageReader->GetOutput()    );
-  registration->SetMovingImage(   movingImageReader->GetOutput()   );
+  //registration->SetFixedImage(    fixedImageReader->GetOutput()    );
+  //registration->SetMovingImage(   movingImageReader->GetOutput()   );
+  symmmetric->SetFixedImage(    fixedImageReader->GetOutput()    );
+  symmmetric->SetMovingImage(   movingImageReader->GetOutput()   );
 
   fixedImageReader->Update();
 
-  registration->SetFixedImageRegion( 
+  //registration->SetFixedImageRegion( 
+  //     fixedImageReader->GetOutput()->GetBufferedRegion() );
+  symmmetric->SetFixedImageRegion( 
        fixedImageReader->GetOutput()->GetBufferedRegion() );
 
   typename FixedImageType::SizeType fixedsize = fixedImageReader->GetOutput()->GetLargestPossibleRegion().GetSize(); 
@@ -317,25 +324,29 @@ EvolutionaryRegistration(int argc, char * argv[])
     metric = MattesMutualInformationImageToImageMetricType::New();
     //metric->SetNumberOfHistogramBins( 40 );
     //metric->SetNumberOfSpatialSamples( 10000 );
-    registration->SetMetric( metric  );
+    //registration->SetMetric( metric  );
+    symmmetric->SetAsymMetric( metric  );
     optimizer->MaximizeOff();
     }
   else if(!strcmp(metric_name.c_str(),"nmi"))
     {
     metric = NormalizedMutualInformationHistogramImageToImageMetricType::New();
-    registration->SetMetric( metric  );
+    //registration->SetMetric( metric  );
+    symmmetric->SetAsymMetric( metric  );
     optimizer->MaximizeOn();
     }
   else if(!strcmp(metric_name.c_str(),"msq"))
     {
     metric = MeanSquaresImageToImageMetricType::New();
-    registration->SetMetric( metric  );
+    //registration->SetMetric( metric  );
+    symmmetric->SetAsymMetric( metric  );
     optimizer->MaximizeOff();
     }
   else if(!strcmp(metric_name.c_str(),"ncc"))
     {
     metric = NormalizedCorrelationImageToImageMetricType::New();
-    registration->SetMetric( metric  );
+    //registration->SetMetric( metric  );
+    symmmetric->SetAsymMetric( metric  );
     optimizer->MaximizeOff();
     }
   else 
@@ -374,7 +385,8 @@ EvolutionaryRegistration(int argc, char * argv[])
       }
     else
       cout << "Initial Transform set to identity" << endl;
-    registration->SetTransform(     transform     );
+    //registration->SetTransform(     transform     );
+    symmmetric->SetTransform(     transform     );
     nParameters = transform->GetNumberOfParameters();
     initialParameters.SetSize( nParameters );
     paramScales.SetSize( nParameters );
@@ -382,6 +394,7 @@ EvolutionaryRegistration(int argc, char * argv[])
     atmp.update(transform->GetOffset().GetVnlVector(), 0);
     amat.set_column(VDim, atmp);
     initialParameters = transform->GetParameters();
+  std::cout << "After setting N = " << symmmetric->GetTransform()->GetNumberOfParameters() << std::endl << " params: " << symmmetric->GetTransformParameters() << std::endl;
     for (size_t i=0; i < VDim; i++)
       paramScales[i] = 1.0;
     // 0.01 radian of rotation is set equivalent to 0.1*voxel size
@@ -400,7 +413,8 @@ EvolutionaryRegistration(int argc, char * argv[])
       }
     else
       cout << "Initial Transform set to identity" << endl;
-    registration->SetTransform(     transform     );
+    //registration->SetTransform(     transform     );
+    symmmetric->SetTransform(     transform     );
     nParameters = transform->GetNumberOfParameters();
     initialParameters.SetSize( nParameters );
     paramScales.SetSize( nParameters );
@@ -426,20 +440,26 @@ EvolutionaryRegistration(int argc, char * argv[])
   typename InterpolatorType::Pointer   interpolator  = InterpolatorType::New();
 
 
-  registration->SetOptimizer(     optimizer     );
-  registration->SetInterpolator(  interpolator  );
+  //registration->SetOptimizer(     optimizer     );
+  //registration->SetInterpolator(  interpolator  );
+  symmmetric->SetInterpolator(  interpolator  );
   
   optimizer->SetScales( paramScales );
-  registration->SetInitialTransformParameters( initialParameters );
+  //registration->SetInitialTransformParameters( initialParameters );
+  symmmetric->SetTransformParameters( initialParameters );
 
   
   
   // Output some information about initial transform and parameters
   PrintMatrix( amat, "%12.5f ", "    ");
-  std::cout << "N = " << nParameters << std::endl << " params: " << registration->GetInitialTransformParameters() << std::endl;
+  std::cout << "N = " << nParameters << std::endl << " params: " << symmmetric->GetTransformParameters() << std::endl;
   std::cout << "param scales are: " << optimizer->GetScales() << std::endl;
 //std::cout << "Fixed paramaters are " ;
 //if (ttype.compare(ttype.size()-3,3,"rig") == 0)  cout << rigidtransform->GetFixedParameters() ; else cout << affinetransform->GetFixedParameters(); std::endl;
+
+  optimizer->SetCostFunction( symmmetric );
+  symmmetric->Initialize();
+  optimizer->SetInitialPosition( symmmetric->GetTransformParameters() );
 
   typedef itk::Statistics::NormalVariateGenerator  GeneratorType;
 
@@ -464,10 +484,12 @@ EvolutionaryRegistration(int argc, char * argv[])
   try 
     { 
     std::cout << "Registration starts!" << std::endl;
-    registration->StartRegistration(); 
+    //registration->StartRegistration();
+    optimizer->StartOptimization(); 
     std::cout << "Registration completed!" << std::endl;
     std::cout << "Optimizer stop condition: "
-              << registration->GetOptimizer()->GetStopConditionDescription()
+              //<< registration->GetOptimizer()->GetStopConditionDescription()
+              << optimizer->GetStopConditionDescription()
               << std::endl;
     } 
   catch( itk::ExceptionObject & err ) 
@@ -477,7 +499,8 @@ EvolutionaryRegistration(int argc, char * argv[])
     return EXIT_FAILURE;
     } 
 
-  typename RegistrationType::ParametersType finalParameters = registration->GetLastTransformParameters();
+  //typename RegistrationType::ParametersType finalParameters = registration->GetLastTransformParameters();
+  typename OptimizerType::ParametersType finalParameters = optimizer->GetCurrentPosition();
   
   
   unsigned int numberOfIterations = optimizer->GetCurrentIteration();
