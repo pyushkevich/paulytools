@@ -283,6 +283,11 @@ public:
   void GetHalfTransform( MatrixType  Z, TransformPointer atran ) const;
   void CreateHalfwayImageSpace(void);
 
+  // use symmetric or not
+  itkSetMacro(UseSymmetric,bool);
+  itkGetConstReferenceMacro(UseSymmetric,bool);
+  itkBooleanMacro(UseSymmetric);
+
 
   /** This method returns the derivative of the cost function corresponding
     * to the specified parameters.   */
@@ -340,7 +345,7 @@ private:
   void operator=(const Self&); //purposely not implemented
   
   FixedImageRegionType        m_FixedImageRegion;  
-
+  bool             m_UseSymmetric;
 };
 
 } // end namespace itk

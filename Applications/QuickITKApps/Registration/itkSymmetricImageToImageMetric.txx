@@ -49,6 +49,7 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
   m_Transform     = 0; // has to be provided by the user.
   m_Interpolator  = 0; // has to be provided by the user.
   m_GradientImage = 0; // will receive the output of the filter;
+  m_UseSymmetric     = true; // use symmetric metric
   m_ComputeGradient = true; // metric computes gradient by default
   m_NumberOfPixelsCounted = 0; // initialize to zero
   m_GradientImage = NULL; // computed at initialization
@@ -82,84 +83,88 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
     throw ex;
     }
 
-  typedef typename itk::ResampleImageFilter< TMovingImage, HalfwayImageType >    ResampleMovingFilterType;
-  typedef typename itk::ResampleImageFilter< TFixedImage, HalfwayImageType >    ResampleFixedFilterType;
-  typename ResampleMovingFilterType::Pointer resamplemoving = ResampleMovingFilterType::New();
-  typename ResampleFixedFilterType::Pointer resamplefixed = ResampleFixedFilterType::New();
-
-  resamplemoving->SetInput( m_MovingImage );
-  resamplefixed->SetInput( m_FixedImage );
-  
-  // This is the callback function, so everytime we are called,
-  // we need to contrsuct the transform and then split it in half
-
   this->SetTransformParameters( parameters );
 
-  MatrixType amat(0.0);
-  vnl_vector_fixed<double, FixedImageDimension+1> atmp(1.0);
-  amat.update(m_Transform->GetMatrix().GetVnlMatrix(), 0, 0);
-  atmp.update(m_Transform->GetOffset().GetVnlVector(), 0);
-  amat.set_column(FixedImageDimension, atmp);
-
-  // Peform Denman-Beavers iteration to compute half and half inverse transforms
-  MatrixType Z, Y = amat;
-  Z.set_identity();
-
-  for(size_t i = 0; i < 16; i++)
+  if (!m_UseSymmetric)
     {
-    MatrixType Ynext = 0.5 * (Y + vnl_inverse(Z));
-    MatrixType Znext = 0.5 * (Z + vnl_inverse(Y));
-    Y = Ynext;
-    Z = Znext;
+    m_AsymMetric->SetTransformParameters( parameters );
     }
+  else
+    {
+    typedef typename itk::ResampleImageFilter< TMovingImage, HalfwayImageType >    ResampleMovingFilterType;
+    typedef typename itk::ResampleImageFilter< TFixedImage, HalfwayImageType >    ResampleFixedFilterType;
+    typename ResampleMovingFilterType::Pointer resamplemoving = ResampleMovingFilterType::New();
+    typename ResampleFixedFilterType::Pointer resamplefixed = ResampleFixedFilterType::New();
+
+    resamplemoving->SetInput( m_MovingImage );
+    resamplefixed->SetInput( m_FixedImage );
+  
+    // This is the callback function, so everytime we are called,
+    // we need to construct the transform and then split it in half
+
+    MatrixType amat(0.0);
+    vnl_vector_fixed<double, FixedImageDimension+1> atmp(1.0);
+    amat.update(m_Transform->GetMatrix().GetVnlMatrix(), 0, 0);
+    atmp.update(m_Transform->GetOffset().GetVnlVector(), 0);
+    amat.set_column(FixedImageDimension, atmp);
+
+    // Peform Denman-Beavers iteration to compute half and half inverse transforms
+    MatrixType Z, Y = amat;
+    Z.set_identity();
+
+    for(size_t i = 0; i < 16; i++)
+      {
+      MatrixType Ynext = 0.5 * (Y + vnl_inverse(Z));
+      MatrixType Znext = 0.5 * (Z + vnl_inverse(Y));
+      Y = Ynext;
+      Z = Znext;
+      }
  
-  MatrixType Zinv = vnl_inverse( Z );
+    MatrixType Zinv = vnl_inverse( Z );
 
-  TransformPointer fixedtran = TransformType::New();
-  TransformPointer movingtran = TransformType::New();
-  //fixedtran.SetIdentity();
-  //movingtran.SetIdentity();
+    TransformPointer fixedtran = TransformType::New();
+    TransformPointer movingtran = TransformType::New();
+    //fixedtran.SetIdentity();
+    //movingtran.SetIdentity();
   
-  this->GetHalfTransform( Z, movingtran);
-  this->GetHalfTransform( Zinv, fixedtran);
+    this->GetHalfTransform( Z, movingtran);
+    this->GetHalfTransform( Zinv, fixedtran);
   
   
-  itkDebugMacro(  "Callback for parameters: " << parameters );
-  itkDebugMacro( "Fixed half transform parameters are: " << fixedtran->GetParameters() );
-  itkDebugMacro( "Moving half transform parameters are: " << movingtran->GetParameters() );
+    itkDebugMacro(  "Callback for parameters: " << parameters );
+    itkDebugMacro( "Fixed half transform parameters are: " << fixedtran->GetParameters() );
+    itkDebugMacro( "Moving half transform parameters are: " << movingtran->GetParameters() );
 
-  resamplefixed->SetTransform( fixedtran );
-  resamplemoving->SetTransform( movingtran );
-  resamplefixed->SetDefaultPixelValue( 0.0 );
-  resamplemoving->SetDefaultPixelValue( 0.0 );
+    resamplefixed->SetTransform( fixedtran );
+    resamplemoving->SetTransform( movingtran );
+    resamplefixed->SetDefaultPixelValue( 0.0 );
+    resamplemoving->SetDefaultPixelValue( 0.0 );
 
-  resamplefixed->UseReferenceImageOn();
-  resamplefixed->SetReferenceImage(m_HalfwayImage);
-  resamplemoving->UseReferenceImageOn();
-  resamplemoving->SetReferenceImage(m_HalfwayImage);
+    resamplefixed->UseReferenceImageOn();
+    resamplefixed->SetReferenceImage(m_HalfwayImage);
+    resamplemoving->UseReferenceImageOn();
+    resamplemoving->SetReferenceImage(m_HalfwayImage);
 
-  FixedImagePointer fixedhalfim = resamplefixed->GetOutput();  
-  MovingImagePointer movinghalfim = resamplemoving->GetOutput();  
+    FixedImagePointer fixedhalfim = resamplefixed->GetOutput();  
+    MovingImagePointer movinghalfim = resamplemoving->GetOutput();  
 
-  resamplefixed->Update();
-  resamplemoving->Update();
+    resamplefixed->Update();
+    resamplemoving->Update();
 
-  //TransformPointer idtran = TransformType::New();
-  //idtran->SetIdentity();
-  //m_AsymMetric->SetTransform (idtran);
-  m_AsymMetric->SetFixedImage( fixedhalfim );
-  m_AsymMetric->SetMovingImage( movinghalfim );
-  m_AsymMetric->SetFixedImageRegion(
-       fixedhalfim->GetLargestPossibleRegion() );
-  //m_AsymMetric->SetInterpolator( m_Interpolator );
-  if (this->GetDebug())
-    m_AsymMetric->DebugOn();
+    //TransformPointer idtran = TransformType::New();
+    //idtran->SetIdentity();
+    //m_AsymMetric->SetTransform (idtran);
+    m_AsymMetric->SetFixedImage( fixedhalfim );
+    m_AsymMetric->SetMovingImage( movinghalfim );
+    m_AsymMetric->SetFixedImageRegion(
+         fixedhalfim->GetLargestPossibleRegion() );
   
-  // MattesMutualInformationImageToImageMetric requires initialization every time
-  if (!strcmp( m_AsymMetric->GetNameOfClass(), "MattesMutualInformationImageToImageMetric"))
-    {
-    m_AsymMetric->Initialize();
-    }
+    // MattesMutualInformationImageToImageMetric requires initialization every time
+    if (!strcmp( m_AsymMetric->GetNameOfClass(), "MattesMutualInformationImageToImageMetric"))
+      {
+      m_AsymMetric->Initialize();
+      }
+  }
   MeasureType metric = m_AsymMetric->GetValue( m_AsymMetric->GetTransform()->GetParameters() );
   //if (this->GetDebug())
     std::cout << "metric " << metric << " parameters: " << parameters << std::endl; 
@@ -286,14 +291,22 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
 
   if( !m_HalfwayImage )
     {
-    this->CreateHalfwayImageSpace();
-    itkDebugMacro( "Halfway image space created" );
+    if (m_UseSymmetric)
+      {
+      this->CreateHalfwayImageSpace();
+      itkDebugMacro( "Halfway image space created" );
+      }
     }
 
   // Initialize the slave metric
   TransformPointer idtran = TransformType::New();
   idtran->SetIdentity();
-  m_AsymMetric->SetTransform (idtran);
+  if (this->GetDebug())
+    m_AsymMetric->DebugOn();
+  if (m_UseSymmetric)
+    m_AsymMetric->SetTransform (idtran);
+  else
+    m_AsymMetric->SetTransform( this->GetTransform() );
   m_AsymMetric->SetFixedImage( m_FixedImage );
   m_AsymMetric->SetMovingImage( m_MovingImage );
   m_AsymMetric->SetFixedImageRegion(

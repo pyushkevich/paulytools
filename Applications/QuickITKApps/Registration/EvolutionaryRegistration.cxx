@@ -316,6 +316,20 @@ EvolutionaryRegistration(int argc, char * argv[])
   typename MetricType::Pointer metric;
 
 
+  std::string reg_symm( argv[7] );
+  if(!strcmp(reg_symm.c_str(),"symm"))
+    symmmetric->UseSymmetricOn();
+  else if (!strcmp(reg_symm.c_str(),"asym"))
+    symmmetric->UseSymmetricOff();
+ else
+    {
+    cerr << "Unknown symmetry type " << reg_symm << endl;
+    return EXIT_FAILURE;
+    };
+
+    
+
+
   std::string metric_name( argv[6] );
 
   if(!strcmp(metric_name.c_str(),"mmi"))
@@ -469,9 +483,9 @@ EvolutionaryRegistration(int argc, char * argv[])
   generator->Initialize(12345);
 
   optimizer->SetNormalVariateGenerator( generator );
-  optimizer->Initialize( atof(argv[7]), atof(argv[8]), atof(argv[9]) );
-  optimizer->SetEpsilon( atof(argv[10]) );
-  optimizer->SetMaximumIteration( atoi(argv[11]) );
+  optimizer->Initialize( atof(argv[8]), atof(argv[9]), atof(argv[10]) );
+  optimizer->SetEpsilon( atof(argv[11]) );
+  optimizer->SetMaximumIteration( atoi(argv[12]) );
 
 
   // Create the Command observer and register it with the optimizer.
