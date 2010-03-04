@@ -201,9 +201,10 @@ ReadTransformFile(typename TAffine::Pointer atran, char * fn, bool isrigid)
         // Force orthogonality
         //PrintMatrix( amat.GetVnlMatrix(), "%12.12f ", "    ");
         //double det = vnl_determinant( amat.GetVnlMatrix() );
-        //amat = amat / det;
-        PrintMatrix( amat.GetVnlMatrix(), "%12.5f ", "    ");
-        //if (MatrixIsOrthogonal<double,VDim>( amat, 1e-5 ))
+        //double normfactor = vcl_pow( 1.0/det, 1/(double) VDim ); 
+        //amat = normfactor * amat.GetVnlMatrix();
+        //PrintMatrix( amat.GetVnlMatrix(), "%12.12f ", "    ");
+        //if (MatrixIsOrthogonal<double,VDim>( amat, 1e-10 ))
         //  cout << "orthogonal" << endl;
         //else
         //  cout << "nooooooooooooooo" << endl;
@@ -595,13 +596,27 @@ int main( int argc, char *argv[] )
     std::cerr << "Missing Parameters " << std::endl;
     std::cerr << "Usage: " << argv[0];
     std::cerr << " fixedImageFile  movingImageFile ";
-    std::cerr << "outputImagefile ";
+    std::cerr << "outputNaming ";
     std::cerr << "InitialTransformFile(none for no initial) ";
     std::cerr << "RegType(rig or aff) ";
     std::cerr << "Metric ";
-    std::cerr << "InitialRadius Grow Shrink Epsilon MaxIter ";
+    std::cerr << "Symmetry ";
+    std::cerr << "InitialRadius Grow Shrink Epsilon MaxIter "<< std::endl;
     return EXIT_FAILURE;
     }
+
+  std::cout << "fixedImageFile   : " << argv[1] << std::endl;
+  std::cout << "movingImageFile  : " << argv[2] << std::endl;
+  std::cout << "outputNaming     : " << argv[3] << std::endl;
+  std::cout << "Initial Transform: " << argv[4] << std::endl;
+  std::cout << "Registration Type: " << argv[5] << std::endl;
+  std::cout << "Metric Type      : " << argv[6] << std::endl;
+  std::cout << "Symmetry Type    : " << argv[7] << std::endl;
+  std::cout << "Initial Radius   : " << argv[8] << std::endl;
+  std::cout << "Growth Factor    : " << argv[9] << std::endl;
+  std::cout << "Shrink Factor    : " << argv[10] << std::endl;
+  std::cout << "Convergence Eps  : " << argv[11] << std::endl;
+  std::cout << "Max Iteration    : " << argv[12] << std::endl;
 
     return EvolutionaryRegistration<double,3>(argc, argv);
   
