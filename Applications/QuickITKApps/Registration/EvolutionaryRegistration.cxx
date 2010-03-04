@@ -93,6 +93,19 @@ void PrintMatrix(vnl_matrix<double> mat, const char *fmt, const char *prefix)
     }
 }
 
+void ras_write(vnl_matrix<double> mat, const char *fname)
+{
+  
+
+  ofstream fout(fname);
+  for(size_t i = 0; i < mat.rows(); i++)
+    for(size_t j = 0; j < mat.columns(); j++)
+      fout << mat[i][j] << (j < mat.columns()-1 ? " " : "\n");
+
+  fout.close();
+}
+
+
 // Check if input matrix is orthogonal to within tolerance
 template<class TScalarType, unsigned int VDim>
 bool
@@ -234,7 +247,7 @@ ReadTransformFile(typename TAffine::Pointer atran, char * fn, bool isrigid)
     // Put the values in the transform
     if (isrigid)
       {
-      PrintMatrix( amatorig.GetVnlMatrix(), "%12.5f ", "    ");
+      //PrintMatrix( amatorig.GetVnlMatrix(), "%12.5f ", "    ");
       //if (MatrixIsOrthogonal<double,VDim>( amatorig, 1e-5 ))
       //  cout << "orthogonal" << endl;
       //else
@@ -282,8 +295,6 @@ EvolutionaryRegistration(int argc, char * argv[])
   typedef itk::ImageRegistrationMethod<
                                     FixedImageType,
                                     MovingImageType    > RegistrationType;
-  // Create registration
-  //typename RegistrationType::Pointer   registration  = RegistrationType::New();
   typedef itk::SymmetricImageToImageMetric< FixedImageType,MovingImageType> SymmetricImageToImageMetricType;
   typename SymmetricImageToImageMetricType::Pointer   symmmetric  = SymmetricImageToImageMetricType::New();
 
@@ -297,15 +308,11 @@ EvolutionaryRegistration(int argc, char * argv[])
   fixedImageReader->SetFileName(  argv[1] );
   movingImageReader->SetFileName( argv[2] );
 
-  //registration->SetFixedImage(    fixedImageReader->GetOutput()    );
-  //registration->SetMovingImage(   movingImageReader->GetOutput()   );
   symmmetric->SetFixedImage(    fixedImageReader->GetOutput()    );
   symmmetric->SetMovingImage(   movingImageReader->GetOutput()   );
 
   fixedImageReader->Update();
 
-  //registration->SetFixedImageRegion( 
-  //     fixedImageReader->GetOutput()->GetBufferedRegion() );
   symmmetric->SetFixedImageRegion( 
        fixedImageReader->GetOutput()->GetBufferedRegion() );
 
@@ -338,28 +345,24 @@ EvolutionaryRegistration(int argc, char * argv[])
     metric = MattesMutualInformationImageToImageMetricType::New();
     //metric->SetNumberOfHistogramBins( 40 );
     //metric->SetNumberOfSpatialSamples( 10000 );
-    //registration->SetMetric( metric  );
     symmmetric->SetAsymMetric( metric  );
     optimizer->MaximizeOff();
     }
   else if(!strcmp(metric_name.c_str(),"nmi"))
     {
     metric = NormalizedMutualInformationHistogramImageToImageMetricType::New();
-    //registration->SetMetric( metric  );
     symmmetric->SetAsymMetric( metric  );
     optimizer->MaximizeOn();
     }
   else if(!strcmp(metric_name.c_str(),"msq"))
     {
     metric = MeanSquaresImageToImageMetricType::New();
-    //registration->SetMetric( metric  );
     symmmetric->SetAsymMetric( metric  );
     optimizer->MaximizeOff();
     }
   else if(!strcmp(metric_name.c_str(),"ncc"))
     {
     metric = NormalizedCorrelationImageToImageMetricType::New();
-    //registration->SetMetric( metric  );
     symmmetric->SetAsymMetric( metric  );
     optimizer->MaximizeOff();
     }
@@ -399,7 +402,6 @@ EvolutionaryRegistration(int argc, char * argv[])
       }
     else
       cout << "Initial Transform set to identity" << endl;
-    //registration->SetTransform(     transform     );
     symmmetric->SetTransform(     transform     );
     nParameters = transform->GetNumberOfParameters();
     initialParameters.SetSize( nParameters );
@@ -408,7 +410,6 @@ EvolutionaryRegistration(int argc, char * argv[])
     atmp.update(transform->GetOffset().GetVnlVector(), 0);
     amat.set_column(VDim, atmp);
     initialParameters = transform->GetParameters();
-  std::cout << "After setting N = " << symmmetric->GetTransform()->GetNumberOfParameters() << std::endl << " params: " << symmmetric->GetTransformParameters() << std::endl;
     for (size_t i=0; i < VDim; i++)
       paramScales[i] = 1.0;
     // 0.01 radian of rotation is set equivalent to 0.1*voxel size
@@ -427,7 +428,6 @@ EvolutionaryRegistration(int argc, char * argv[])
       }
     else
       cout << "Initial Transform set to identity" << endl;
-    //registration->SetTransform(     transform     );
     symmmetric->SetTransform(     transform     );
     nParameters = transform->GetNumberOfParameters();
     initialParameters.SetSize( nParameters );
@@ -454,22 +454,18 @@ EvolutionaryRegistration(int argc, char * argv[])
   typename InterpolatorType::Pointer   interpolator  = InterpolatorType::New();
 
 
-  //registration->SetOptimizer(     optimizer     );
-  //registration->SetInterpolator(  interpolator  );
   symmmetric->SetInterpolator(  interpolator  );
   
   optimizer->SetScales( paramScales );
-  //registration->SetInitialTransformParameters( initialParameters );
   symmmetric->SetTransformParameters( initialParameters );
 
   
   
   // Output some information about initial transform and parameters
-  PrintMatrix( amat, "%12.5f ", "    ");
+  std::cout << "Initial Transform: " << std::endl;
+  PrintMatrix( amat, "%12.5f ", "   ");
   std::cout << "N = " << nParameters << std::endl << " params: " << symmmetric->GetTransformParameters() << std::endl;
   std::cout << "param scales are: " << optimizer->GetScales() << std::endl;
-//std::cout << "Fixed paramaters are " ;
-//if (ttype.compare(ttype.size()-3,3,"rig") == 0)  cout << rigidtransform->GetFixedParameters() ; else cout << affinetransform->GetFixedParameters(); std::endl;
 
   optimizer->SetCostFunction( symmmetric );
   symmmetric->Initialize();
@@ -494,15 +490,12 @@ EvolutionaryRegistration(int argc, char * argv[])
   optimizer->AddObserver( itk::IterationEvent(), observer );
  
   optimizer->DebugOn();
-  //cout << "Debug state of optimizer is " << optimizer->GetDebug() << endl;
   try 
     { 
     std::cout << "Registration starts!" << std::endl;
-    //registration->StartRegistration();
     optimizer->StartOptimization(); 
     std::cout << "Registration completed!" << std::endl;
     std::cout << "Optimizer stop condition: "
-              //<< registration->GetOptimizer()->GetStopConditionDescription()
               << optimizer->GetStopConditionDescription()
               << std::endl;
     } 
@@ -513,7 +506,6 @@ EvolutionaryRegistration(int argc, char * argv[])
     return EXIT_FAILURE;
     } 
 
-  //typename RegistrationType::ParametersType finalParameters = registration->GetLastTransformParameters();
   typename OptimizerType::ParametersType finalParameters = optimizer->GetCurrentPosition();
   
   
@@ -553,6 +545,20 @@ EvolutionaryRegistration(int argc, char * argv[])
     
     }
 
+  vnl_matrix_fixed<double, VDim+1, VDim+1> finalmat(0.0);
+  vnl_vector_fixed<double, VDim+1> finaltmp(1.0);
+  finalmat.update(transform->GetMatrix().GetVnlMatrix(), 0, 0);
+  finaltmp.update(transform->GetOffset().GetVnlVector(), 0);
+  finalmat.set_column(VDim, finaltmp);
+  std::cout << "Final Transform:" << std::endl;
+  PrintMatrix( finalmat, "%12.5f ", "   ");
+  std::string outname( argv[3] );
+  std::string outmatname = outname + ".mat";
+  std::string outimname = outname + ".nii.gz";
+
+  ras_write( finalmat, outmatname.c_str() );
+
+
   resample->SetInput( movingImageReader->GetOutput() );
 
   typename FixedImageType::Pointer fixedImage = fixedImageReader->GetOutput();
@@ -573,7 +579,7 @@ EvolutionaryRegistration(int argc, char * argv[])
   typename WriterType::Pointer      writer =  WriterType::New();
   typename CastFilterType::Pointer  caster =  CastFilterType::New();
 
-  writer->SetFileName( argv[3] );
+  writer->SetFileName( outimname.c_str() );
 
   caster->SetInput( resample->GetOutput() );
   writer->SetInput( caster->GetOutput()   );
