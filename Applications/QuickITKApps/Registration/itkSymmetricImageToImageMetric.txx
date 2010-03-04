@@ -351,18 +351,58 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
 
 
   // Create the image
-  HalfwayImagePointer hwimg = HalfwayImageType::New();
-  hwimg->SetLargestPossibleRegion(this->m_FixedImage->GetLargestPossibleRegion());
+  FixedImagePointer hwspaceimg = FixedImageType::New();
+  hwspaceimg->SetLargestPossibleRegion(this->m_FixedImage->GetLargestPossibleRegion());
   // Set the voxel size
-  hwimg->SetSpacing(m_FixedImage->GetSpacing());
-  hwimg->Allocate();
-  hwimg->FillBuffer( 0.0 );
-
+  hwspaceimg->SetSpacing(m_FixedImage->GetSpacing());
+  hwspaceimg->Allocate();
+  hwspaceimg->FillBuffer( 0.0 );
 
   // Set the matrix
-  hwimg->SetVoxelSpaceToRASPhysicalSpaceMatrix( mhalf );
+  hwspaceimg->SetVoxelSpaceToRASPhysicalSpaceMatrix( mhalf );
+
+  // Now apply half transform to fixed image and resample to this space, thus creating halfway reference image
+  typedef typename itk::ResampleImageFilter< FixedImageType, HalfwayImageType >    ResampleFixedFilterType;
+  typename ResampleFixedFilterType::Pointer resamplefixed = ResampleFixedFilterType::New();
+
+  resamplefixed->SetInput( m_FixedImage );
+
+  MatrixType amat(0.0);
+  vnl_vector_fixed<double, FixedImageDimension+1> atmp(1.0);
+  amat.update(m_Transform->GetMatrix().GetVnlMatrix(), 0, 0);
+  atmp.update(m_Transform->GetOffset().GetVnlVector(), 0);
+  amat.set_column(FixedImageDimension, atmp);
+
+  // Peform Denman-Beavers iteration to compute half and half inverse transforms
+  Y = amat;
+  Z.set_identity();
+
+  for(size_t i = 0; i < 16; i++)
+    {
+    MatrixType Ynext = 0.5 * (Y + vnl_inverse(Z));
+    MatrixType Znext = 0.5 * (Z + vnl_inverse(Y));
+    Y = Ynext;
+    Z = Znext;
+    }
+
+  MatrixType Zinv = vnl_inverse( Z );
+
+  TransformPointer fixedtran = TransformType::New();
+
+  this->GetHalfTransform( Zinv, fixedtran);
+
+  resamplefixed->SetTransform( fixedtran );
+  resamplefixed->SetDefaultPixelValue( 0.0 );
+
+  resamplefixed->UseReferenceImageOn();
+  resamplefixed->SetReferenceImage( hwspaceimg);
+
+  HalfwayImagePointer hwimg = resamplefixed->GetOutput();
+
+  resamplefixed->Update();
 
   this->SetHalfwayImage( hwimg );
+
   itkDebugMacro( "Fixed image sform is " );
     if (this->GetDebug())
   PrintMatrix( mfixed, "%12.5f ", "    ");

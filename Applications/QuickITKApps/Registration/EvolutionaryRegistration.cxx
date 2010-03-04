@@ -556,6 +556,7 @@ EvolutionaryRegistration(int argc, char * argv[])
   std::string outname( argv[3] );
   std::string outmatname = outname + ".mat";
   std::string outimname = outname + ".nii.gz";
+  std::string outhwname = outname + "hwdef.nii.gz";
 
   ras_write( finalmat, outmatname.c_str() );
 
@@ -571,6 +572,7 @@ EvolutionaryRegistration(int argc, char * argv[])
   resample->SetDefaultPixelValue( 0 );
 
 
+  // Write output image
   typedef ImageType OutputImageType;
   typedef itk::CastImageFilter< 
                         FixedImageType,
@@ -585,6 +587,13 @@ EvolutionaryRegistration(int argc, char * argv[])
   caster->SetInput( resample->GetOutput() );
   writer->SetInput( caster->GetOutput()   );
   writer->Update();
+
+  // Write halfway image
+  typename WriterType::Pointer      hwwriter =  WriterType::New();
+  hwwriter->SetInput( symmmetric->GetHalfwayImage() );
+  hwwriter->SetFileName( outhwname.c_str() );
+  hwwriter->Update();
+  
 
   return EXIT_SUCCESS;
 };
