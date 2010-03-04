@@ -588,11 +588,14 @@ EvolutionaryRegistration(int argc, char * argv[])
   writer->SetInput( caster->GetOutput()   );
   writer->Update();
 
-  // Write halfway image
-  typename WriterType::Pointer      hwwriter =  WriterType::New();
-  hwwriter->SetInput( symmmetric->GetHalfwayImage() );
-  hwwriter->SetFileName( outhwname.c_str() );
-  hwwriter->Update();
+  if (symmmetric->GetHalfwayImage())
+    {
+    // Write halfway image
+    typename WriterType::Pointer      hwwriter =  WriterType::New();
+    hwwriter->SetInput( symmmetric->GetHalfwayImage() );
+    hwwriter->SetFileName( outhwname.c_str() );
+    hwwriter->Update();
+    }
   
 
   return EXIT_SUCCESS;
