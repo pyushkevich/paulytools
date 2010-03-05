@@ -57,7 +57,26 @@ namespace itk
  * non-grid positions resulting from mapping points through 
  * the Transform.
  * 
- *
+ * This is a wrapper class for ImageToImageMetric that allows
+ * for computation of metric in a symmetric fashion.
+ * The halfway space between the pair of images is computed and
+ * and both images are resampled in this space after applying
+ * the half transform. Metric is computed between these two
+ * resampled images. This ensures that both images undergo
+ * similar amount of resampling and global transformation
+ * which may be useful for unbiased estimates of longitudinal
+ * change in DBM style methods.
+ * 
+ * This class should be used as a cost function for an optimizer.
+ * Moving and fixed images, initial transform and interpolator
+ * should be set like any image to image metric.
+ * In addition, the slave metric should be defined by
+ * SetAsymMetric(), followed by a call to Initialize().
+ * If desired, the halfway image to be used for metric computation
+ * can be defined by SetHalfwayImage();
+ * 
+ * Mask image and optimizers requiring derivatives are not yet supported.
+ * This class is primarily meant to be used for an evolutionary optimizer.
  * \ingroup RegistrationMetrics
  *
  */
@@ -314,13 +333,17 @@ protected:
   void PrintSelf(std::ostream& os, Indent indent) const;
 
   void PrintMatrix(vnl_matrix<double> mat, const char *fmt, const char *prefix) const;
-  void Flip_LPS_to_RAS(itk::Matrix<double,FixedImageDimension+1,FixedImageDimension+1> &matrix, itk::Matrix<double,FixedImageDimension,FixedImageDimension> &amat, itk::Vector<double, FixedImageDimension> &aoff) const;
-  void Flip_RAS_to_LPS(itk::Matrix<double,FixedImageDimension+1,FixedImageDimension+1> &matrix, itk::Matrix<double,FixedImageDimension,FixedImageDimension> &amat, itk::Vector<double, FixedImageDimension> &aoff) const;
+  void Flip_LPS_to_RAS( itk::Matrix<double,FixedImageDimension+1,FixedImageDimension+1> &matrix, 
+                        itk::Matrix<double,FixedImageDimension,FixedImageDimension> &amat, 
+                        itk::Vector<double, FixedImageDimension> &aoff) const;
+  void Flip_RAS_to_LPS( itk::Matrix<double,FixedImageDimension+1,FixedImageDimension+1> &matrix, 
+                        itk::Matrix<double,FixedImageDimension,FixedImageDimension> &amat, 
+                        itk::Vector<double, FixedImageDimension> &aoff) const;
 
   mutable unsigned long       m_NumberOfPixelsCounted;
 
-  FixedImagePointer      m_FixedImage;
-  MovingImagePointer     m_MovingImage;
+  FixedImagePointer           m_FixedImage;
+  MovingImagePointer          m_MovingImage;
 
   HalfwayImagePointer         m_HalfwayImage;
 
