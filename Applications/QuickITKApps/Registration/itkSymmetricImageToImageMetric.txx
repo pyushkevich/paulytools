@@ -187,7 +187,7 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
 
   matrix.GetVnlMatrix().update( m , 0, 0);  
   itkDebugMacro( "Halfinv right before flipping: " );
-  if this->GetDebug()
+  if (this->GetDebug())
     this->PrintMatrix( matrix.GetVnlMatrix(), "%12.5f ", "    ");
   Flip_RAS_to_LPS(matrix, amat, aoff);
   atran->SetMatrix(amat);
