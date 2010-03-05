@@ -33,9 +33,6 @@
 namespace itk
 {
 
-
-
-
 /**
  * Constructor
  */
@@ -73,13 +70,13 @@ typename SymmetricImageToImageMetric <TFixedImage,TMovingImage>
 SymmetricImageToImageMetric <TFixedImage,TMovingImage>
 ::GetValue( const TransformParametersType & parameters ) const
 {
-  itkDebugMacro("Computing CostFunction value at " <<  parameters);
+  itkDebugMacro("Computing Cost Function value at " <<  parameters);
 
   if(!m_AsymMetric)
     {
     ExceptionObject ex;
     ex.SetLocation(__FILE__);
-    ex.SetDescription("The costfunction must be set prior to calling GetValue");
+    ex.SetDescription("The cost function must be set prior to calling GetValue");
     throw ex;
     }
 
@@ -162,15 +159,20 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
     m_AsymMetric->SetMovingImage( movinghalfim );
     m_AsymMetric->SetFixedImageRegion(
          fixedhalfim->GetLargestPossibleRegion() );
+    TransformPointer idtran = TransformType::New();
+    idtran->SetIdentity();
+    m_AsymMetric->SetTransform (idtran);
+
   
-    // MattesMutualInformationImageToImageMetric requires initialization every time
-    if (!strcmp( m_AsymMetric->GetNameOfClass(), "MattesMutualInformationImageToImageMetric"))
-      {
-      m_AsymMetric->Initialize();
-      }
+    // MattesMutualInformationImageToImageMetric requires initialization every time. may be all of them do ?
+    //if (!strcmp( m_AsymMetric->GetNameOfClass(), "MattesMutualInformationImageToImageMetric"))
+    //  {
+    //  m_AsymMetric->Initialize();
+    //  }
+    m_AsymMetric->Initialize();
   }
   MeasureType metric = m_AsymMetric->GetValue( m_AsymMetric->GetTransform()->GetParameters() );
-  //if (this->GetDebug())
+  if (this->GetDebug())
     std::cout << "metric " << metric << " parameters: " << parameters << std::endl; 
   return metric;
 }
@@ -466,7 +468,9 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
 template <class TFixedImage, class TMovingImage> 
 void
 SymmetricImageToImageMetric<TFixedImage,TMovingImage>
-::Flip_LPS_to_RAS(itk::Matrix<double,FixedImageDimension+1,FixedImageDimension+1> &matrix, itk::Matrix<double,FixedImageDimension,FixedImageDimension> &amat, itk::Vector<double, FixedImageDimension> &aoff) const
+::Flip_LPS_to_RAS(  itk::Matrix<double,FixedImageDimension+1,FixedImageDimension+1> &matrix, 
+                    itk::Matrix<double,FixedImageDimension,FixedImageDimension> &amat, 
+                    itk::Vector<double, FixedImageDimension> &aoff) const
 {   
 
     // Convert lps to ras
@@ -494,7 +498,9 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
 template <class TFixedImage, class TMovingImage> 
 void
 SymmetricImageToImageMetric<TFixedImage,TMovingImage>
-::Flip_RAS_to_LPS(itk::Matrix<double,FixedImageDimension+1,FixedImageDimension+1> &matrix, itk::Matrix<double,FixedImageDimension,FixedImageDimension> &amat, itk::Vector<double, FixedImageDimension> &aoff) const
+::Flip_RAS_to_LPS(  itk::Matrix<double,FixedImageDimension+1,FixedImageDimension+1> &matrix, 
+                    itk::Matrix<double,FixedImageDimension,FixedImageDimension> &amat, 
+                    itk::Vector<double, FixedImageDimension> &aoff) const
 {
 
     amat.GetVnlMatrix().update(
@@ -503,7 +509,7 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
       matrix.GetVnlMatrix().get_column(FixedImageDimension).extract(FixedImageDimension));
 
 
-    // Extrernal matrices are assumed to be RAS to RAS, so we must convert to LPS to LPS
+    // External matrices are assumed to be RAS to RAS, so we must convert to LPS to LPS
     vnl_vector<double> v_lps_to_ras(FixedImageDimension, 1.0);
     v_lps_to_ras[0] = v_lps_to_ras[1] = -1.0;
     vnl_diag_matrix<double> m_lps_to_ras(v_lps_to_ras);
@@ -528,9 +534,10 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
   os << indent << "ComputeGradient: "
      << static_cast<typename NumericTraits<bool>::PrintType>(m_ComputeGradient)
      << std::endl;
-  os << indent << "Moving Image: " << m_MovingImage.GetPointer()  << std::endl;
-  os << indent << "Fixed  Image: " << m_FixedImage.GetPointer()   << std::endl;
-  os << indent << "Gradient Image: " << m_GradientImage.GetPointer() 
+  os << indent << "Moving   Image: " << m_MovingImage.GetPointer()  << std::endl;
+  os << indent << "Fixed    Image: " << m_FixedImage.GetPointer()   << std::endl;
+  os << indent << "Halfway  Image: " << m_FixedImage.GetPointer()   << std::endl;
+  os << indent << "Gradient Image: " << m_HalfwayImage.GetPointer() 
      << std::endl;
   os << indent << "Transform:    " << m_Transform.GetPointer()    << std::endl;
   os << indent << "Interpolator: " << m_Interpolator.GetPointer() << std::endl;
