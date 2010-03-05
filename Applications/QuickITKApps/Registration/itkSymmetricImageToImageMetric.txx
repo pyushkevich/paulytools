@@ -102,14 +102,16 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
     // This is the callback function, so everytime we are called,
     // we need to construct the transform and then split it in half
 
-    MatrixType amat(0.0);
-    vnl_vector_fixed<double, FixedImageDimension+1> atmp(1.0);
-    amat.update(m_Transform->GetMatrix().GetVnlMatrix(), 0, 0);
-    atmp.update(m_Transform->GetOffset().GetVnlVector(), 0);
-    amat.set_column(FixedImageDimension, atmp);
+
+    itk::Matrix<double, FixedImageDimension + 1, FixedImageDimension +1 > amat;
+    itk::Matrix<double, FixedImageDimension, FixedImageDimension> tmat = m_Transform->GetMatrix();
+    itk::Vector<double, FixedImageDimension> toff = m_Transform->GetOffset();
+    Flip_LPS_to_RAS( amat, tmat, toff);
+
 
     // Peform Denman-Beavers iteration to compute half and half inverse transforms
-    MatrixType Z, Y = amat;
+    MatrixType Y, Z;
+    Y = amat.GetVnlMatrix();
     Z.set_identity();
 
     for(size_t i = 0; i < 16; i++)
@@ -119,16 +121,18 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
       Y = Ynext;
       Z = Znext;
       }
- 
-    MatrixType Zinv = vnl_inverse( Z );
+
+    MatrixType Yinv = vnl_inverse( Y );
+
+
 
     TransformPointer fixedtran = TransformType::New();
     TransformPointer movingtran = TransformType::New();
     //fixedtran.SetIdentity();
     //movingtran.SetIdentity();
   
-    this->GetHalfTransform( Z, movingtran);
-    this->GetHalfTransform( Zinv, fixedtran);
+    this->GetHalfTransform( Y, movingtran);
+    this->GetHalfTransform( Yinv, fixedtran);
   
   
     itkDebugMacro(  "Callback for parameters: " << parameters );
@@ -174,39 +178,20 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
 template <class TFixedImage, class TMovingImage>
 void
 SymmetricImageToImageMetric<TFixedImage,TMovingImage>
-::GetHalfTransform( MatrixType  Z, TransformPointer atran ) const
+::GetHalfTransform( MatrixType  m, TransformPointer atran ) const
 {
 
- itk::Matrix<double,FixedImageDimension,FixedImageDimension> amat, amatorig;
-  itk::Vector<double, FixedImageDimension> aoff, aofforig;
-     amat.GetVnlMatrix().update(
-      Z.extract(FixedImageDimension, FixedImageDimension));
-    aoff.GetVnlVector().update(
-      Z.get_column(FixedImageDimension).extract(FixedImageDimension));
+  itk::Matrix<double,FixedImageDimension + 1,FixedImageDimension + 1> matrix;
+  itk::Matrix<double,FixedImageDimension,FixedImageDimension> amat;
+  itk::Vector<double, FixedImageDimension> aoff;
 
-
-    amatorig.GetVnlMatrix().update(
-      Z.extract(FixedImageDimension, FixedImageDimension));
-    aofforig.GetVnlVector().update(
-      Z.get_column(FixedImageDimension).extract(FixedImageDimension));
-
-    // Extrernal matrices are assumed to be RAS to RAS, so we must convert to LPS to LPS
-    vnl_vector<double> v_lps_to_ras(FixedImageDimension, 1.0);
-    v_lps_to_ras[0] = v_lps_to_ras[1] = -1.0;
-    vnl_diag_matrix<double> m_lps_to_ras(v_lps_to_ras);
-    vnl_matrix<double> mold = amat.GetVnlMatrix();
-    amat.GetVnlMatrix().update(m_lps_to_ras * mold * m_lps_to_ras);
-    aoff.GetVnlVector().update(m_lps_to_ras * aoff.GetVnlVector());
-
-    // Put the values in the transform
-    // rigid
-    if (m_Transform->GetNumberOfParameters() == 6)
-      {
-      atran->SetMatrix(amatorig);
-      }
-    else // affine
-      atran->SetMatrix(amat);
-    atran->SetOffset(aoff);
+  matrix.GetVnlMatrix().update( m , 0, 0);  
+  itkDebugMacro( "Halfinv right before flipping: " );
+  if this->GetDebug()
+    this->PrintMatrix( matrix.GetVnlMatrix(), "%12.5f ", "    ");
+  Flip_RAS_to_LPS(matrix, amat, aoff);
+  atran->SetMatrix(amat);
+  atran->SetOffset(aoff);
 
 
 }
@@ -291,7 +276,7 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
 
   if( !m_HalfwayImage )
     {
-    if (m_UseSymmetric)
+    //if (m_UseSymmetric)
       {
       this->CreateHalfwayImageSpace();
       itkDebugMacro( "Halfway image space created" );
@@ -367,14 +352,19 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
 
   resamplefixed->SetInput( m_FixedImage );
 
-  MatrixType amat(0.0);
-  vnl_vector_fixed<double, FixedImageDimension+1> atmp(1.0);
-  amat.update(m_Transform->GetMatrix().GetVnlMatrix(), 0, 0);
-  atmp.update(m_Transform->GetOffset().GetVnlVector(), 0);
-  amat.set_column(FixedImageDimension, atmp);
+
+
+  itk::Matrix<double, FixedImageDimension + 1, FixedImageDimension +1 > amat;
+  itk::Matrix<double, FixedImageDimension, FixedImageDimension> tmat = m_Transform->GetMatrix();
+  itk::Vector<double, FixedImageDimension> toff = m_Transform->GetOffset();
+  Flip_LPS_to_RAS( amat, tmat, toff);
+
+  itkDebugMacro( "Full transform: " );
+  if (this->GetDebug())
+    PrintMatrix( amat.GetVnlMatrix(), "%12.5f ", "    ");
 
   // Peform Denman-Beavers iteration to compute half and half inverse transforms
-  Y = amat;
+  Y = amat.GetVnlMatrix();
   Z.set_identity();
 
   for(size_t i = 0; i < 16; i++)
@@ -385,11 +375,14 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
     Z = Znext;
     }
 
-  MatrixType Zinv = vnl_inverse( Z );
+  MatrixType Yinv = vnl_inverse( Y );
 
   TransformPointer fixedtran = TransformType::New();
 
-  this->GetHalfTransform( Zinv, fixedtran);
+  this->GetHalfTransform( Yinv, fixedtran);
+  itkDebugMacro( "Halfinv transform: " );
+  if (this->GetDebug())
+    PrintMatrix( Yinv, "%12.5f ", "    ");
 
   resamplefixed->SetTransform( fixedtran );
   resamplefixed->SetDefaultPixelValue( 0.0 );
@@ -404,14 +397,14 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
   this->SetHalfwayImage( hwimg );
 
   itkDebugMacro( "Fixed image sform is " );
-    if (this->GetDebug())
-  PrintMatrix( mfixed, "%12.5f ", "    ");
+  if (this->GetDebug())
+    PrintMatrix( mfixed, "%12.5f ", "    ");
   itkDebugMacro( "Moving image sform is " );
-    if (this->GetDebug())
-  PrintMatrix( mmoving, "%12.5f ", "    ");
+  if (this->GetDebug())
+    PrintMatrix( mmoving, "%12.5f ", "    ");
   itkDebugMacro( "Halfway image sform is " );
-    if (this->GetDebug())
-  PrintMatrix( m_HalfwayImage->GetVoxelSpaceToRASPhysicalSpaceMatrix().GetVnlMatrix(), "%12.5f ", "    ");
+  if (this->GetDebug())
+    PrintMatrix( m_HalfwayImage->GetVoxelSpaceToRASPhysicalSpaceMatrix().GetVnlMatrix(), "%12.5f ", "    ");
   
 
 }
@@ -454,7 +447,7 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
 template <class TFixedImage, class TMovingImage> 
 void
 SymmetricImageToImageMetric<TFixedImage,TMovingImage>
-::PrintMatrix(vnl_matrix<double> mat, const char *fmt, const char *prefix)
+::PrintMatrix(vnl_matrix<double> mat, const char *fmt, const char *prefix) const
 {
   // Print each row and column of the matrix
   char buffer[256];
@@ -469,6 +462,58 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
     std::cout << std::endl;
     }
 }
+
+template <class TFixedImage, class TMovingImage> 
+void
+SymmetricImageToImageMetric<TFixedImage,TMovingImage>
+::Flip_LPS_to_RAS(itk::Matrix<double,FixedImageDimension+1,FixedImageDimension+1> &matrix, itk::Matrix<double,FixedImageDimension,FixedImageDimension> &amat, itk::Vector<double, FixedImageDimension> &aoff) const
+{   
+
+    // Convert lps to ras
+    vnl_vector<double> v_ras_to_lps(FixedImageDimension, 1.0);
+    v_ras_to_lps[0] = v_ras_to_lps[1] = -1.0;
+    vnl_diag_matrix<double> m_ras_to_lps(v_ras_to_lps);
+
+    vnl_matrix<double> amatvnl = amat.GetVnlMatrix();
+    amatvnl = m_ras_to_lps * amatvnl * m_ras_to_lps;
+    vnl_vector_fixed<double, FixedImageDimension > aoffs ;
+    vnl_vector_fixed<double, FixedImageDimension + 1> aoffl ;
+    aoffs = m_ras_to_lps * aoff.GetVnlVector();
+    aoffl.fill(1.0);
+    for (size_t i=0; i<FixedImageDimension; i++)
+      aoffl(i) = aoffs(i);    
+
+    matrix.GetVnlMatrix().set_identity();
+    matrix.GetVnlMatrix().update( amatvnl, 0, 0); 
+    matrix.GetVnlMatrix().set_column(FixedImageDimension, aoffl);
+
+
+}
+
+
+template <class TFixedImage, class TMovingImage> 
+void
+SymmetricImageToImageMetric<TFixedImage,TMovingImage>
+::Flip_RAS_to_LPS(itk::Matrix<double,FixedImageDimension+1,FixedImageDimension+1> &matrix, itk::Matrix<double,FixedImageDimension,FixedImageDimension> &amat, itk::Vector<double, FixedImageDimension> &aoff) const
+{
+
+    amat.GetVnlMatrix().update(
+      matrix.GetVnlMatrix().extract(FixedImageDimension, FixedImageDimension));
+    aoff.GetVnlVector().update(
+      matrix.GetVnlMatrix().get_column(FixedImageDimension).extract(FixedImageDimension));
+
+
+    // Extrernal matrices are assumed to be RAS to RAS, so we must convert to LPS to LPS
+    vnl_vector<double> v_lps_to_ras(FixedImageDimension, 1.0);
+    v_lps_to_ras[0] = v_lps_to_ras[1] = -1.0;
+    vnl_diag_matrix<double> m_lps_to_ras(v_lps_to_ras);
+    vnl_matrix<double> mold = amat.GetVnlMatrix();
+    amat.GetVnlMatrix().update(m_lps_to_ras * mold * m_lps_to_ras);
+    aoff.GetVnlVector().update(m_lps_to_ras * aoff.GetVnlVector());
+
+
+}
+
 
 
 /**

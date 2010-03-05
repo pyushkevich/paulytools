@@ -313,7 +313,9 @@ protected:
   virtual ~SymmetricImageToImageMetric();
   void PrintSelf(std::ostream& os, Indent indent) const;
 
-  void PrintMatrix(vnl_matrix<double> mat, const char *fmt, const char *prefix);
+  void PrintMatrix(vnl_matrix<double> mat, const char *fmt, const char *prefix) const;
+  void Flip_LPS_to_RAS(itk::Matrix<double,FixedImageDimension+1,FixedImageDimension+1> &matrix, itk::Matrix<double,FixedImageDimension,FixedImageDimension> &amat, itk::Vector<double, FixedImageDimension> &aoff) const;
+  void Flip_RAS_to_LPS(itk::Matrix<double,FixedImageDimension+1,FixedImageDimension+1> &matrix, itk::Matrix<double,FixedImageDimension,FixedImageDimension> &amat, itk::Vector<double, FixedImageDimension> &aoff) const;
 
   mutable unsigned long       m_NumberOfPixelsCounted;
 

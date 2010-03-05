@@ -143,6 +143,53 @@ void ReadMatrix(const char *fname, itk::Matrix<double,VDim+1,VDim+1> &mat)
   }
 
 
+template<unsigned int VDim>
+void Flip_LPS_to_RAS(itk::Matrix<double,VDim+1,VDim+1> &matrix, itk::Matrix<double,VDim,VDim> &amat, itk::Vector<double, VDim> &aoff)
+{   
+
+    // Convert lps to ras
+    vnl_vector<double> v_ras_to_lps(VDim, 1.0);
+    v_ras_to_lps[0] = v_ras_to_lps[1] = -1.0;
+    vnl_diag_matrix<double> m_ras_to_lps(v_ras_to_lps);
+
+    vnl_matrix<double> amatvnl = amat.GetVnlMatrix();
+    amatvnl = m_ras_to_lps * amatvnl * m_ras_to_lps;
+    vnl_vector_fixed<double, VDim > aoffs ;
+    vnl_vector_fixed<double, VDim + 1> aoffl ;
+    aoffs = m_ras_to_lps * aoff.GetVnlVector();
+    aoffl.fill(1.0);
+    for (size_t i=0; i<VDim; i++)
+      aoffl(i) = aoffs(i);    
+
+    matrix.GetVnlMatrix().set_identity();
+    matrix.GetVnlMatrix().update( amatvnl, 0, 0);
+    matrix.GetVnlMatrix().set_column(VDim, aoffl);
+
+
+}
+
+
+template<unsigned int VDim>
+void Flip_RAS_to_LPS(itk::Matrix<double,VDim+1,VDim+1> &matrix, itk::Matrix<double,VDim,VDim> &amat, itk::Vector<double, VDim> &aoff)
+{
+
+    amat.GetVnlMatrix().update(
+      matrix.GetVnlMatrix().extract(VDim, VDim));
+    aoff.GetVnlVector().update(
+      matrix.GetVnlMatrix().get_column(VDim).extract(VDim));
+
+
+    // Extrernal matrices are assumed to be RAS to RAS, so we must convert to LPS to LPS
+    vnl_vector<double> v_lps_to_ras(VDim, 1.0);
+    v_lps_to_ras[0] = v_lps_to_ras[1] = -1.0;
+    vnl_diag_matrix<double> m_lps_to_ras(v_lps_to_ras);
+    vnl_matrix<double> mold = amat.GetVnlMatrix();
+    amat.GetVnlMatrix().update(m_lps_to_ras * mold * m_lps_to_ras);
+    aoff.GetVnlVector().update(m_lps_to_ras * aoff.GetVnlVector());
+
+
+}
+
 template <typename TAffine, unsigned int VDim>
 void 
 ReadTransformFile(typename TAffine::Pointer atran, char * fn, bool isrigid)
@@ -176,20 +223,21 @@ ReadTransformFile(typename TAffine::Pointer atran, char * fn, bool isrigid)
 
     if(motb)
       {
-      if (isrigid)
+/*      if (isrigid)
         {
 
         // get rotation matrix
-        vnl_matrix_fixed<double, 4, 4> mat;
+        vnl_matrix_fixed<double, VDim + 1, VDim + 1> mat;
         {
-        for(size_t r = 0; r < 3; r++)
+        for(size_t r = 0; r < VDim; r++)
           {
-          for(size_t c = 0; c < 3; c++)
+          for(size_t c = 0; c < VDim; c++)
             {
             mat(r,c) = motb->GetMatrix()(r,c);
           }
-          mat(r,3) = motb->GetOffset()[r];
+          mat(r,VDim) = motb->GetOffset()[r];
           }
+        // TODO Generalize with VDim
         mat(2,0) *= -1; mat(2,1) *= -1;
         mat(0,2) *= -1; mat(1,2) *= -1;
         mat(0,3) *= -1; mat(1,3) *= -1;
@@ -211,7 +259,7 @@ ReadTransformFile(typename TAffine::Pointer atran, char * fn, bool isrigid)
 
         atran->SetMatrix(amat);
         }
-        else
+        else */
           atran->SetMatrix(motb->GetMatrix());
         atran->SetOffset(motb->GetOffset());
         }
@@ -222,30 +270,16 @@ ReadTransformFile(typename TAffine::Pointer atran, char * fn, bool isrigid)
     cout << "Matrix transform file " << fn << endl;
     // Read the matrix
     itk::Matrix<double,VDim+1,VDim+1> matrix;
-    itk::Matrix<double,VDim,VDim> amat, amatorig;
-    itk::Vector<double, VDim> aoff, aofforig;
+    itk::Matrix<double,VDim,VDim> amat ;
+    itk::Vector<double, VDim> aoff ;
 
     ReadMatrix<VDim>(fn, matrix);
-    amat.GetVnlMatrix().update(
-      matrix.GetVnlMatrix().extract(VDim, VDim));
-    aoff.GetVnlVector().update(
-      matrix.GetVnlMatrix().get_column(VDim).extract(VDim));
+    //cout << "matrix after reading.. " << endl;
+    //  PrintMatrix( matrix.GetVnlMatrix(), "%12.5f ", "    ");
 
-    amatorig.GetVnlMatrix().update(
-      matrix.GetVnlMatrix().extract(VDim, VDim));
-    aofforig.GetVnlVector().update(
-      matrix.GetVnlMatrix().get_column(VDim).extract(VDim));
-    
-
-    // Extrernal matrices are assumed to be RAS to RAS, so we must convert to LPS to LPS
-    vnl_vector<double> v_lps_to_ras(VDim, 1.0);
-    v_lps_to_ras[0] = v_lps_to_ras[1] = -1.0;
-    vnl_diag_matrix<double> m_lps_to_ras(v_lps_to_ras);
-    vnl_matrix<double> mold = amat.GetVnlMatrix();
-    amat.GetVnlMatrix().update(m_lps_to_ras * mold * m_lps_to_ras);
-    aoff.GetVnlVector().update(m_lps_to_ras * aoff.GetVnlVector());
-
+    Flip_RAS_to_LPS(matrix, amat, aoff);
     // Put the values in the transform
+/*
     if (isrigid)
       {
       //PrintMatrix( amatorig.GetVnlMatrix(), "%12.5f ", "    ");
@@ -256,6 +290,7 @@ ReadTransformFile(typename TAffine::Pointer atran, char * fn, bool isrigid)
       atran->SetMatrix(amatorig);
       }
     else
+*/
       atran->SetMatrix(amat);
     atran->SetOffset(aoff);
     }
@@ -313,6 +348,7 @@ EvolutionaryRegistration(int argc, char * argv[])
   symmmetric->SetMovingImage(   movingImageReader->GetOutput()   );
 
   fixedImageReader->Update();
+  movingImageReader->Update();
 
   symmmetric->SetFixedImageRegion( 
        fixedImageReader->GetOutput()->GetBufferedRegion() );
@@ -386,8 +422,7 @@ EvolutionaryRegistration(int argc, char * argv[])
   std::string transform_name( argv[5] );
 
   int nParameters;
-  vnl_matrix_fixed<double, VDim+1, VDim+1> amat(0.0);
-  vnl_vector_fixed<double, VDim+1> atmp(1.0);
+  itk::Matrix<double, VDim+1, VDim+1> amat;
 
   typename RegistrationType::ParametersType initialParameters;
   typename OptimizerType::ScalesType paramScales;
@@ -399,7 +434,8 @@ EvolutionaryRegistration(int argc, char * argv[])
     if (isinit)
       {
       ReadTransformFile<MOTBType, VDim>( transform, argv[4], true);
-      cout << "Transform file " << fn << " read" << endl;
+      //cout << "Transform file " << fn << " read" << endl;
+      //std::cout << "Just after reading params: " << transform->GetParameters() << std::endl;
       }
     else
       cout << "Initial Transform set to identity" << endl;
@@ -407,10 +443,10 @@ EvolutionaryRegistration(int argc, char * argv[])
     nParameters = transform->GetNumberOfParameters();
     initialParameters.SetSize( nParameters );
     paramScales.SetSize( nParameters );
-    amat.update(transform->GetMatrix().GetVnlMatrix(), 0, 0);
-    atmp.update(transform->GetOffset().GetVnlVector(), 0);
-    amat.set_column(VDim, atmp);
     initialParameters = transform->GetParameters();
+    itk::Matrix<double, VDim, VDim> tmat = transform->GetMatrix();
+    itk::Vector<double, VDim> toff = transform->GetOffset();
+    Flip_LPS_to_RAS( amat, tmat, toff);
     for (size_t i=0; i < VDim; i++)
       paramScales[i] = 1.0;
     // 0.01 radian of rotation is set equivalent to 0.1*voxel size
@@ -425,7 +461,7 @@ EvolutionaryRegistration(int argc, char * argv[])
     if (isinit)
       {
       ReadTransformFile<MOTBType, VDim>( transform, argv[4], false);
-      cout << "Transform file " << fn << " read" << endl;
+      //cout << "Transform file " << fn << " read" << endl;
       }
     else
       cout << "Initial Transform set to identity" << endl;
@@ -433,10 +469,10 @@ EvolutionaryRegistration(int argc, char * argv[])
     nParameters = transform->GetNumberOfParameters();
     initialParameters.SetSize( nParameters );
     paramScales.SetSize( nParameters );
-    amat.update(transform->GetMatrix().GetVnlMatrix(), 0, 0);
-    atmp.update(transform->GetOffset().GetVnlVector(), 0);
-    amat.set_column(VDim, atmp);
     initialParameters = transform->GetParameters();
+    itk::Matrix<double, VDim, VDim> tmat = transform->GetMatrix();
+    itk::Vector<double, VDim> toff = transform->GetOffset();
+    Flip_LPS_to_RAS( amat, tmat, toff);
     paramScales.fill(1.0);
     for (size_t i=0; i < VDim; i++)
       paramScales[i*VDim + i] = 1.0;
@@ -464,8 +500,8 @@ EvolutionaryRegistration(int argc, char * argv[])
   
   // Output some information about initial transform and parameters
   std::cout << "Initial Transform: " << std::endl;
-  PrintMatrix( amat, "%12.5f ", "   ");
-  std::cout << "N = " << nParameters << std::endl << " params: " << symmmetric->GetTransformParameters() << std::endl;
+  PrintMatrix( amat.GetVnlMatrix(), "%12.5f ", "   ");
+  std::cout << "N = " << nParameters << std::endl << "params: " << symmmetric->GetTransformParameters() << std::endl;
   std::cout << "param scales are: " << optimizer->GetScales() << std::endl;
 
   optimizer->SetCostFunction( symmmetric );
@@ -528,13 +564,16 @@ EvolutionaryRegistration(int argc, char * argv[])
                             MovingImageType, 
                             FixedImageType >    ResampleFilterType;
 
-  typename AffineTransformType::Pointer finalaffineTransform = AffineTransformType::New();
   typename ResampleFilterType::Pointer resample = ResampleFilterType::New();
 
+  itk::Matrix<double, VDim+1, VDim+1> finalmat;
   if(!strcmp(transform_name.c_str(),"rig"))
     {
     finaltransform = VersorRigid3DTransformType::New();
     finaltransform->SetParameters( finalParameters );
+    itk::Matrix<double, VDim, VDim> tmat = finaltransform->GetMatrix();
+    itk::Vector<double, VDim> toff = finaltransform->GetOffset();
+    Flip_LPS_to_RAS( finalmat, tmat, toff);
     resample->SetTransform( finaltransform );
   
     }
@@ -542,50 +581,41 @@ EvolutionaryRegistration(int argc, char * argv[])
     {
     finaltransform = AffineTransformType::New();
     finaltransform->SetParameters( finalParameters );
+    itk::Matrix<double, VDim, VDim> tmat = finaltransform->GetMatrix();
+    itk::Vector<double, VDim> toff = finaltransform->GetOffset();
+    Flip_LPS_to_RAS( finalmat, tmat, toff);
+
     resample->SetTransform( finaltransform );
     
     }
 
-  vnl_matrix_fixed<double, VDim+1, VDim+1> finalmat(0.0);
-  vnl_vector_fixed<double, VDim+1> finaltmp(1.0);
-  finalmat.update(transform->GetMatrix().GetVnlMatrix(), 0, 0);
-  finaltmp.update(transform->GetOffset().GetVnlVector(), 0);
-  finalmat.set_column(VDim, finaltmp);
   std::cout << "Final Transform:" << std::endl;
-  PrintMatrix( finalmat, "%12.5f ", "   ");
+  PrintMatrix( finalmat.GetVnlMatrix(), "%12.5f ", "   ");
   std::string outname( argv[3] );
   std::string outmatname = outname + ".mat";
   std::string outimname = outname + ".nii.gz";
   std::string outhwname = outname + "hwdef.nii.gz";
 
-  ras_write( finalmat, outmatname.c_str() );
+  ras_write( finalmat.GetVnlMatrix(), outmatname.c_str() );
 
 
-  resample->SetInput( movingImageReader->GetOutput() );
 
   typename FixedImageType::Pointer fixedImage = fixedImageReader->GetOutput();
 
-  resample->SetSize(    fixedImage->GetLargestPossibleRegion().GetSize() );
-  resample->SetOutputOrigin(  fixedImage->GetOrigin() );
-  resample->SetOutputSpacing( fixedImage->GetSpacing() );
-  resample->SetOutputDirection( fixedImage->GetDirection() );
-  resample->SetDefaultPixelValue( 0 );
+
+  resample->SetInput( symmmetric->GetMovingImage() );
+  resample->SetInterpolator( interpolator );
+  resample->SetDefaultPixelValue( 0.0 );
+  resample->UseReferenceImageOn();
+  resample->SetReferenceImage(symmmetric->GetFixedImage());
 
 
   // Write output image
-  typedef ImageType OutputImageType;
-  typedef itk::CastImageFilter< 
-                        FixedImageType,
-                        OutputImageType > CastFilterType;
-  typedef itk::ImageFileWriter< OutputImageType >  WriterType;
-
+  typedef itk::ImageFileWriter< FixedImageType > WriterType;
   typename WriterType::Pointer      writer =  WriterType::New();
-  typename CastFilterType::Pointer  caster =  CastFilterType::New();
 
   writer->SetFileName( outimname.c_str() );
-
-  caster->SetInput( resample->GetOutput() );
-  writer->SetInput( caster->GetOutput()   );
+  writer->SetInput( resample->GetOutput() );
   writer->Update();
 
   if (symmmetric->GetHalfwayImage())
