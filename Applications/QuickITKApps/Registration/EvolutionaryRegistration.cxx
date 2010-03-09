@@ -271,7 +271,7 @@ ReadTransformFile(typename TAffine::Pointer atran, char * fn, bool isrigid)
     // Read the matrix
     itk::Matrix<double,VDim+1,VDim+1> matrix;
     itk::Matrix<double,VDim,VDim> amat ;
-    itk::Vector<double, VDim> aoff ;
+    itk::Vector<double, VDim> aoff, rtran ;
 
     ReadMatrix<VDim>(fn, matrix);
     //cout << "matrix after reading.. " << endl;
@@ -291,8 +291,30 @@ ReadTransformFile(typename TAffine::Pointer atran, char * fn, bool isrigid)
       }
     else
 */
+    if (atran->GetDebug())
+      {
+      //rtran[0]=1.5;rtran[1]=2.5;rtran[2]=3.5;
+      //cout << "calling transform print after setting random tranalation"<< endl;
+      //atran->SetTranslation( rtran );
+      //atran->Print( std::cout );
+      typename TAffine::InputPointType rcenter;
+      //rcenter[0]=11.5;rcenter[1]=0.5;rcenter[2]=7.5;
+      //atran->SetCenter( rcenter );
+      //cout << "calling transform print after setting random center"<< endl;
+      //atran->Print( std::cout );
+      }
       atran->SetMatrix(amat);
+    if (atran->GetDebug())
+      {
+      cout << "calling transform print after setting matrix"<< endl;
+      atran->Print( std::cout );
+      }
     atran->SetOffset(aoff);
+    if (atran->GetDebug())
+      {
+      cout << "calling transform print after setting offset"<< endl;
+      atran->Print( std::cout );
+      }
     }
 
 
@@ -354,6 +376,7 @@ EvolutionaryRegistration(int argc, char * argv[])
        fixedImageReader->GetOutput()->GetBufferedRegion() );
 
   typename FixedImageType::SizeType fixedsize = fixedImageReader->GetOutput()->GetLargestPossibleRegion().GetSize(); 
+  typename FixedImageType::SpacingType fixedspacing = fixedImageReader->GetOutput()->GetSpacing();
 
   // Create the appropriate metric
   typedef itk::ImageToImageMetric<FixedImageType, MovingImageType> MetricType;
@@ -373,10 +396,9 @@ EvolutionaryRegistration(int argc, char * argv[])
 
     
 
-
   std::string metric_name( argv[6] );
 
-  if(!strcmp(metric_name.c_str(),"mmi"))
+  if(!strcmp(metric_name.c_str(),"mutualinfo"))
     {
     //MattesMutualInformationImageToImageMetricType *metric = dynamic_cast<MattesMutualInformationImageToImageMetricType *>( basemetric);
     metric = MattesMutualInformationImageToImageMetricType::New();
@@ -385,19 +407,19 @@ EvolutionaryRegistration(int argc, char * argv[])
     symmmetric->SetAsymMetric( metric  );
     optimizer->MaximizeOff();
     }
-  else if(!strcmp(metric_name.c_str(),"nmi"))
+  else if(!strcmp(metric_name.c_str(),"normmi"))
     {
     metric = NormalizedMutualInformationHistogramImageToImageMetricType::New();
     symmmetric->SetAsymMetric( metric  );
     optimizer->MaximizeOn();
     }
-  else if(!strcmp(metric_name.c_str(),"msq"))
+  else if(!strcmp(metric_name.c_str(),"leastsq"))
     {
     metric = MeanSquaresImageToImageMetricType::New();
     symmmetric->SetAsymMetric( metric  );
     optimizer->MaximizeOff();
     }
-  else if(!strcmp(metric_name.c_str(),"ncc"))
+  else if(!strcmp(metric_name.c_str(),"normcorr"))
     {
     metric = NormalizedCorrelationImageToImageMetricType::New();
     symmmetric->SetAsymMetric( metric  );
@@ -443,20 +465,28 @@ EvolutionaryRegistration(int argc, char * argv[])
     nParameters = transform->GetNumberOfParameters();
     initialParameters.SetSize( nParameters );
     paramScales.SetSize( nParameters );
+    //transform->DebugOn();
     initialParameters = transform->GetParameters();
     itk::Matrix<double, VDim, VDim> tmat = transform->GetMatrix();
     itk::Vector<double, VDim> toff = transform->GetOffset();
+    if (transform->GetDebug())
+      {
+      cout << "calling transform print after setting all"<< endl;
+      transform->Print( std::cout );
+      }
     Flip_LPS_to_RAS( amat, tmat, toff);
     for (size_t i=0; i < VDim; i++)
       paramScales[i] = 1.0;
-    // 0.01 radian of rotation is set equivalent to 0.1*voxel size
+    // 1 degree of rotation is set equivalent to 1 voxel translation
     for (size_t i=0; i < VDim ; i++)
-      paramScales[VDim + i] = fixedsize[i] * 0.1/0.01;
+      //paramScales[VDim + i] = fixedspacing[i] * (180/3.14159);
+      paramScales[VDim + i] = (fixedspacing[i]) ;
 
     }
   else if(!strcmp(transform_name.c_str(),"aff"))
     {
     transform = AffineTransformType::New();
+    //transform->DebugOn();
     transform->SetIdentity();
     if (isinit)
       {
@@ -472,13 +502,19 @@ EvolutionaryRegistration(int argc, char * argv[])
     initialParameters = transform->GetParameters();
     itk::Matrix<double, VDim, VDim> tmat = transform->GetMatrix();
     itk::Vector<double, VDim> toff = transform->GetOffset();
+    if (transform->GetDebug())
+      {
+      cout << "calling transform print after setting all"<< endl;
+      transform->Print( std::cout );
+      }
     Flip_LPS_to_RAS( amat, tmat, toff);
     paramScales.fill(1.0);
     for (size_t i=0; i < VDim; i++)
       paramScales[i*VDim + i] = 1.0;
-    // 0.01 radian of rotation is set equivalent to 0.1*voxel size
+    // 1 degree of rotation is set equivalent to 1 voxel translation
     for (size_t i=0; i < VDim ; i++)
-      paramScales[VDim*VDim + i] = fixedsize[i] * 0.1/0.01;
+      //paramScales[VDim*VDim + i] = fixedspacing[i] * (180/3.14159);
+      paramScales[VDim*VDim + i] = (fixedspacing[i]);
 
     }
   else 
