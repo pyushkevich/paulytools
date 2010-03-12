@@ -98,6 +98,7 @@ void ras_write(vnl_matrix<double> mat, const char *fname)
   
 
   ofstream fout(fname);
+  fout.precision(12);
   for(size_t i = 0; i < mat.rows(); i++)
     for(size_t j = 0; j < mat.columns(); j++)
       fout << mat[i][j] << (j < mat.columns()-1 ? " " : "\n");
@@ -400,28 +401,35 @@ EvolutionaryRegistration(int argc, char * argv[])
 
   if(!strcmp(metric_name.c_str(),"mutualinfo"))
     {
-    //MattesMutualInformationImageToImageMetricType *metric = dynamic_cast<MattesMutualInformationImageToImageMetricType *>( basemetric);
-    metric = MattesMutualInformationImageToImageMetricType::New();
-    //metric->SetNumberOfHistogramBins( 40 );
-    //metric->SetNumberOfSpatialSamples( 10000 );
+    typename MattesMutualInformationImageToImageMetricType::Pointer 
+      typedmetric = MattesMutualInformationImageToImageMetricType::New();
+    //typedmetric->SetNumberOfHistogramBins( 40 );
+    //typedmetric->SetNumberOfSpatialSamples( 10000 );
+    metric = typedmetric;
     symmmetric->SetAsymMetric( metric  );
     optimizer->MaximizeOff();
     }
   else if(!strcmp(metric_name.c_str(),"normmi"))
     {
-    metric = NormalizedMutualInformationHistogramImageToImageMetricType::New();
+    typename NormalizedMutualInformationHistogramImageToImageMetricType::Pointer 
+      typedmetric = NormalizedMutualInformationHistogramImageToImageMetricType::New();
+    metric = typedmetric;
     symmmetric->SetAsymMetric( metric  );
     optimizer->MaximizeOn();
     }
   else if(!strcmp(metric_name.c_str(),"leastsq"))
     {
-    metric = MeanSquaresImageToImageMetricType::New();
+    typename MeanSquaresImageToImageMetricType::Pointer 
+      typedmetric = MeanSquaresImageToImageMetricType::New();
+    metric = typedmetric;
     symmmetric->SetAsymMetric( metric  );
     optimizer->MaximizeOff();
     }
   else if(!strcmp(metric_name.c_str(),"normcorr"))
     {
-    metric = NormalizedCorrelationImageToImageMetricType::New();
+    typename NormalizedCorrelationImageToImageMetricType::Pointer 
+      typedmetric = NormalizedCorrelationImageToImageMetricType::New();
+    metric = typedmetric;
     symmmetric->SetAsymMetric( metric  );
     optimizer->MaximizeOff();
     }
@@ -538,6 +546,7 @@ EvolutionaryRegistration(int argc, char * argv[])
   std::cout << "Initial Transform: " << std::endl;
   PrintMatrix( amat.GetVnlMatrix(), "%12.5f ", "   ");
   std::cout << "N = " << nParameters << std::endl << "params: " << symmmetric->GetTransformParameters() << std::endl;
+  std::cout << "fixed params: " << symmmetric->GetTransform()->GetFixedParameters() << std::endl;
   std::cout << "param scales are: " << optimizer->GetScales() << std::endl;
 
   optimizer->SetCostFunction( symmmetric );
@@ -552,7 +561,6 @@ EvolutionaryRegistration(int argc, char * argv[])
   generator->Initialize(12345);
 
   optimizer->SetNormalVariateGenerator( generator );
-  optimizer->Initialize( atof(argv[8]), atof(argv[9]), atof(argv[10]) );
   optimizer->SetEpsilon( atof(argv[11]) );
   optimizer->SetMaximumIteration( atoi(argv[12]) );
 
@@ -563,6 +571,7 @@ EvolutionaryRegistration(int argc, char * argv[])
   optimizer->AddObserver( itk::IterationEvent(), observer );
  
   optimizer->DebugOn();
+  optimizer->Initialize( atof(argv[8]), atof(argv[9]), atof(argv[10]) );
   try 
     { 
     std::cout << "Registration starts!" << std::endl;
@@ -601,14 +610,20 @@ EvolutionaryRegistration(int argc, char * argv[])
                             FixedImageType >    ResampleFilterType;
 
   typename ResampleFilterType::Pointer resample = ResampleFilterType::New();
+  resample->DebugOn();
+  resample->SetInput(  movingImageReader->GetOutput() );
 
   itk::Matrix<double, VDim+1, VDim+1> finalmat;
+  itk::Matrix<double, VDim, VDim> tmat;
+  itk::Vector<double, VDim> toff;
+  
   if(!strcmp(transform_name.c_str(),"rig"))
     {
     finaltransform = VersorRigid3DTransformType::New();
     finaltransform->SetParameters( finalParameters );
-    itk::Matrix<double, VDim, VDim> tmat = finaltransform->GetMatrix();
-    itk::Vector<double, VDim> toff = finaltransform->GetOffset();
+    finaltransform->SetFixedParameters( transform->GetFixedParameters() );
+    tmat = finaltransform->GetMatrix();
+    toff = finaltransform->GetOffset();
     Flip_LPS_to_RAS( finalmat, tmat, toff);
     resample->SetTransform( finaltransform );
   
@@ -617,14 +632,18 @@ EvolutionaryRegistration(int argc, char * argv[])
     {
     finaltransform = AffineTransformType::New();
     finaltransform->SetParameters( finalParameters );
-    itk::Matrix<double, VDim, VDim> tmat = finaltransform->GetMatrix();
-    itk::Vector<double, VDim> toff = finaltransform->GetOffset();
+    finaltransform->SetFixedParameters( transform->GetFixedParameters() );
+    tmat = finaltransform->GetMatrix();
+    toff = finaltransform->GetOffset();
     Flip_LPS_to_RAS( finalmat, tmat, toff);
 
     resample->SetTransform( finaltransform );
     
     }
 
+  std::cout << "Final tmat: " << tmat << std::endl;
+  std::cout << "Final toff: " << toff << std::endl;
+  std::cout << "Final Paramaters from final transform: " << finaltransform->GetParameters() <<  std::endl;
   std::cout << "Final Transform:" << std::endl;
   PrintMatrix( finalmat.GetVnlMatrix(), "%12.5f ", "   ");
   std::string outname( argv[3] );
@@ -639,13 +658,15 @@ EvolutionaryRegistration(int argc, char * argv[])
   typename FixedImageType::Pointer fixedImage = fixedImageReader->GetOutput();
 
 
-  resample->SetInput( symmmetric->GetMovingImage() );
-  resample->SetInterpolator( interpolator );
   resample->SetDefaultPixelValue( 0.0 );
+  resample->SetInterpolator( interpolator );
   resample->UseReferenceImageOn();
-  resample->SetReferenceImage(symmmetric->GetFixedImage());
+  resample->SetReferenceImage( fixedImageReader->GetOutput() );
 
+  std::cout << "Resamplefilter transform parameters: " << resample->GetTransform()->GetParameters() << endl;
+  std::cout << "Resamplefilter transform fixed parameters: " << resample->GetTransform()->GetFixedParameters() << endl;
 
+  resample->Update();
   // Write output image
   typedef itk::ImageFileWriter< FixedImageType > WriterType;
   typename WriterType::Pointer      writer =  WriterType::New();
@@ -653,6 +674,76 @@ EvolutionaryRegistration(int argc, char * argv[])
   writer->SetFileName( outimname.c_str() );
   writer->SetInput( resample->GetOutput() );
   writer->Update();
+
+  // Debugging why metric is poor outside, although optimization result looks good
+  
+  typename MOTBType::Pointer idtran;
+  idtran = VersorRigid3DTransformType::New();
+  idtran->SetIdentity();
+
+  typedef itk::ImageToImageMetric<FixedImageType, MovingImageType> MetricType;
+  typename MetricType::Pointer finalmetric;
+
+  if(!strcmp(metric_name.c_str(),"mutualinfo"))
+    {
+    typename MattesMutualInformationImageToImageMetricType::Pointer
+      typedmetric = MattesMutualInformationImageToImageMetricType::New();
+    finalmetric = typedmetric;
+    }
+  else if(!strcmp(metric_name.c_str(),"normmi"))
+    {
+    typename NormalizedMutualInformationHistogramImageToImageMetricType::Pointer
+      typedmetric = NormalizedMutualInformationHistogramImageToImageMetricType::New();
+    finalmetric = typedmetric;
+    }
+  else if(!strcmp(metric_name.c_str(),"leastsq"))
+    {
+    typename MeanSquaresImageToImageMetricType::Pointer
+      typedmetric = MeanSquaresImageToImageMetricType::New();
+    finalmetric = typedmetric;
+    }
+  else if(!strcmp(metric_name.c_str(),"normcorr"))
+    {
+    typename NormalizedCorrelationImageToImageMetricType::Pointer
+      typedmetric = NormalizedCorrelationImageToImageMetricType::New();
+    finalmetric = typedmetric;
+    }
+  else
+    {
+    cerr << "Unknown metric type " << metric_name << endl;
+    return EXIT_FAILURE;
+    };
+
+
+  finalmetric->DebugOn();
+  finalmetric->SetFixedImage( fixedImageReader->GetOutput() );
+  finalmetric->SetMovingImage( resample->GetOutput() );
+  finalmetric->SetFixedImageRegion(
+       fixedImageReader->GetOutput()->GetBufferedRegion() );
+  finalmetric->SetInterpolator( interpolator );
+  finalmetric->SetTransform( idtran );
+  finalmetric->Initialize();
+  std::cout << "metric transform parameters with identity: " << finalmetric->GetTransform()->GetParameters() << endl;
+  std::cout << "metric transform fixed parameters with identity: " << finalmetric->GetTransform()->GetFixedParameters() << endl;
+  cout << "Calculating final metric outside of optimization with already resliced image: " << finalmetric->GetValue( idtran->GetParameters() ) <<endl;
+  finalmetric->SetMovingImage( movingImageReader->GetOutput() );
+  finalmetric->SetTransform( finaltransform );
+  finalmetric->Initialize();
+  std::cout << "finalmetric transform parameters: " << finalmetric->GetTransform()->GetParameters() << endl;
+  std::cout << "finalmetric transform fixed parameters : " << finalmetric->GetTransform()->GetFixedParameters() << endl;
+  cout << "Calculating final metric outside of optimization with the transform applied by metric: " << finalmetric->GetValue( finaltransform->GetParameters() ) <<endl;
+
+  // Debug -- write out the fixed and moving images used in the metric -- can we then find out why the mtric is different here than outside ?
+/*
+    typename WriterType::Pointer      xwriter =  WriterType::New();
+    xwriter->SetInput( fixedImageReader->GetOutput() );
+    xwriter->SetFileName( "ibn_work_L/evolreg/fixedinmetric.nii.gz" );
+    xwriter->Update();
+    typename WriterType::Pointer      ywriter =  WriterType::New();
+    ywriter->SetInput(  movingImageReader->GetOutput() );
+    ywriter->SetFileName( "ibn_work_L/evolreg/movinginmetric.nii.gz" );
+    ywriter->Update();
+  */
 
   if (symmmetric->GetHalfwayImage())
     {

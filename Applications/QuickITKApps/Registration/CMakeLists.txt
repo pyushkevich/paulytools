@@ -2,6 +2,7 @@ PROJECT(Registration)
 
 
 INCLUDE_DIRECTORIES(${PAULY_SOURCE_DIR}/Applications/MedialPDE/Code)
+INCLUDE_DIRECTORIES(${PAULY_SOURCE_DIR}/CoreLibraries/ITKExtensions)
 
 ADD_EXECUTABLE(evolreg EvolutionaryRegistration.cxx)
 

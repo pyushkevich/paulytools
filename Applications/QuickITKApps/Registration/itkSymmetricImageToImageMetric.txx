@@ -28,6 +28,7 @@
 #else
 
 #include "itkSymmetricImageToImageMetric.h"
+#include "itkImageFileWriter.h"
 
 
 namespace itk
@@ -84,7 +85,16 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
 
   if (!m_UseSymmetric)
     {
-    m_AsymMetric->SetTransformParameters( parameters );
+    //m_AsymMetric->SetTransformParameters( parameters );
+    m_AsymMetric->SetTransform( m_Transform );
+    m_AsymMetric->SetFixedImage( m_FixedImage );
+    m_AsymMetric->SetMovingImage( m_MovingImage );
+    m_AsymMetric->SetFixedImageRegion(
+       m_FixedImage->GetLargestPossibleRegion() );
+    m_AsymMetric->SetInterpolator( m_Interpolator );
+
+    
+    
     }
   else
     {
@@ -158,7 +168,8 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
     m_AsymMetric->SetFixedImage( fixedhalfim );
     m_AsymMetric->SetMovingImage( movinghalfim );
     m_AsymMetric->SetFixedImageRegion(
-         fixedhalfim->GetLargestPossibleRegion() );
+         fixedhalfim->GetBufferedRegion() );
+    m_AsymMetric->SetInterpolator( m_Interpolator );
     TransformPointer idtran = TransformType::New();
     idtran->SetIdentity();
     m_AsymMetric->SetTransform (idtran);
@@ -169,11 +180,50 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
     //  {
     //  m_AsymMetric->Initialize();
     //  }
-    m_AsymMetric->Initialize();
   }
-  MeasureType metric = m_AsymMetric->GetValue( m_AsymMetric->GetTransform()->GetParameters() );
-  if (this->GetDebug())
+  m_AsymMetric->Initialize();
+  //MeasureType metric = m_AsymMetric->GetValue( m_AsymMetric->GetTransform()->GetParameters() );
+  MeasureType metric = m_AsymMetric->GetValue( parameters );
+  //if (this->GetDebug())
     std::cout << "metric " << metric << " parameters: " << parameters << std::endl; 
+    //TransformParametersType finalparam(6) ;
+    //finalparam[0] = 0.0289415;
+    //finalparam[1] = 0.00178908;
+    //finalparam[2] = -0.0275856;
+    //finalparam[3] = -5.94439;
+    //finalparam[4] = -14.5248;
+    //finalparam[5] = 6.53772;
+    //if ( finalparam[0]  parameters[0] && finalparam[1] == parameters[1] && finalparam[2] == parameters[2] && finalparam[3] == parameters[3] && finalparam[4] == parameters[4] && finalparam[5] == parameters[5] )
+/*
+    if (fabs(metric -  -1.16884) < 0.0001)
+    { 
+    // Debug -- what is the resampled image here ?
+std::cout << "This is the optimal parameter" << std::endl;
+    typedef typename itk::ResampleImageFilter< TMovingImage, TFixedImage >    ResampleFilterType;
+    typename ResampleFilterType::Pointer resample = ResampleFilterType::New();
+    itk::Matrix<double, FixedImageDimension + 1, FixedImageDimension +1 > amat;
+    itk::Matrix<double, FixedImageDimension, FixedImageDimension> tmat = m_Transform->GetMatrix();
+    itk::Vector<double, FixedImageDimension> toff = m_Transform->GetOffset();
+    TransformPointer tran = TransformType::New();
+    tran->SetMatrix( tmat );
+    tran->SetOffset( toff );
+    resample->SetInput( m_MovingImage );
+    resample->SetTransform( tran );
+    resample->SetDefaultPixelValue( 0.0 );
+
+    resample->UseReferenceImageOn();
+    resample->SetReferenceImage(m_FixedImage);
+
+    resample->Update();
+    MovingImagePointer movingtranim = resample->GetOutput();  
+    typedef typename itk::ImageFileWriter< TFixedImage > WriterType;
+    typename WriterType::Pointer      writer =  WriterType::New();
+
+    writer->SetFileName( "resampled.nii.gz" );
+    writer->SetInput( resample->GetOutput() );
+    writer->Update();
+    }
+*/
   return metric;
 }
 
@@ -297,7 +347,7 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
   m_AsymMetric->SetFixedImage( m_FixedImage );
   m_AsymMetric->SetMovingImage( m_MovingImage );
   m_AsymMetric->SetFixedImageRegion(
-       m_FixedImage->GetLargestPossibleRegion() );
+       m_FixedImage->GetBufferedRegion() );
   m_AsymMetric->SetInterpolator( m_Interpolator );
   m_AsymMetric->Initialize();
 
@@ -339,7 +389,7 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
 
   // Create the image
   FixedImagePointer hwspaceimg = FixedImageType::New();
-  hwspaceimg->SetLargestPossibleRegion(this->m_FixedImage->GetLargestPossibleRegion());
+  hwspaceimg->SetBufferedRegion(this->m_FixedImage->GetBufferedRegion());
   // Set the voxel size
   hwspaceimg->SetSpacing(m_FixedImage->GetSpacing());
   hwspaceimg->Allocate();
