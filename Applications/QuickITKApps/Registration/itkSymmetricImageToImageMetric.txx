@@ -29,6 +29,8 @@
 
 #include "itkSymmetricImageToImageMetric.h"
 #include "itkImageFileWriter.h"
+#include "itkImageRegionConstIteratorWithIndex.h"
+#include "itkImageRegionIteratorWithIndex.h"
 
 
 namespace itk
@@ -43,15 +45,20 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
 {
   m_FixedImage    = 0; // has to be provided by the user.
   m_MovingImage   = 0; // has to be provided by the user.
-  m_HalfwayImage  = 0; // has to be provided by the user.
+  m_HalfwayImage  = 0; // may to be provided by the user.
   m_Transform     = 0; // has to be provided by the user.
+  m_FixedTransform  = 0; // internally computed.
+  m_MovingTransform = 0; // internally computed.
   m_Interpolator  = 0; // has to be provided by the user.
+  m_FixedInterpolator  = 0; // has to be provided by the user.
   m_GradientImage = 0; // will receive the output of the filter;
-  m_UseSymmetric     = true; // use symmetric metric
+  m_UseSymmetric    = true; // use symmetric metric
+  m_UseSlaveMetric  = true; // use slave metric
   m_ComputeGradient = true; // metric computes gradient by default
   m_NumberOfPixelsCounted = 0; // initialize to zero
   m_GradientImage = NULL; // computed at initialization
   m_AsymMetric = NULL; 
+  m_SubtractMean = false;
 }
 
 /**
@@ -61,6 +68,312 @@ template <class TFixedImage, class TMovingImage>
 SymmetricImageToImageMetric<TFixedImage,TMovingImage>
 ::~SymmetricImageToImageMetric()
 {
+
+}
+
+// * Get the cost function value at the given parameters
+template <class TFixedImage, class TMovingImage> 
+typename SymmetricImageToImageMetric <TFixedImage,TMovingImage>
+::MeasureType
+SymmetricImageToImageMetric <TFixedImage,TMovingImage>
+::GetValueInternalSymmetric( const TransformParametersType & parameters ) const
+{
+
+  MeasureType measure = NumericTraits< MeasureType >::Zero;
+  if (!strcmp( m_AsymMetric->GetNameOfClass(), "MeanSquaresImageToImageMetric"))
+    {
+    //std::cerr << "Internal method: " << parameters << std::endl;
+    typedef  itk::ImageRegionConstIteratorWithIndex< TFixedImage > FixedIteratorType;
+    typedef  itk::ImageRegionConstIteratorWithIndex< HalfwayImageType > HalfwayIteratorType;
+
+    HalfwayIteratorType ti( m_HalfwayImage , m_HalfwayImage->GetLargestPossibleRegion() );
+
+    typename HalfwayImageType::IndexType index;
+
+
+    this->m_NumberOfPixelsCounted = 0;
+
+
+    while(!ti.IsAtEnd())
+      {
+
+      index = ti.GetIndex();
+
+      InputPointType inputPoint;
+      m_HalfwayImage->TransformIndexToPhysicalPoint( index, inputPoint );
+
+      OutputPointType transformedFixedPoint = this->m_FixedTransform->TransformPoint( inputPoint );
+
+      if( this->m_FixedImageMask && !this->m_FixedImageMask->IsInside( transformedFixedPoint ) )
+        {
+        ++ti;
+        continue;
+        }
+
+      OutputPointType transformedMovingPoint = this->m_MovingTransform->TransformPoint( inputPoint );
+
+      if( this->m_MovingImageMask && !this->m_MovingImageMask->IsInside( transformedMovingPoint ) )
+        {
+        ++ti;
+        continue;
+        }
+
+      if( this->m_Interpolator->IsInsideBuffer( transformedMovingPoint ) &&
+          this->m_FixedInterpolator->IsInsideBuffer( transformedFixedPoint ))
+        {
+        const RealType movingValue  = this->m_Interpolator->Evaluate( transformedMovingPoint );
+        const RealType fixedValue   = this->m_FixedInterpolator->Evaluate( transformedFixedPoint );
+        this->m_NumberOfPixelsCounted++;
+        const RealType diff = movingValue - fixedValue;
+        measure += diff * diff;
+        }
+
+      ++ti;
+      }
+
+    if( !this->m_NumberOfPixelsCounted )
+      {
+      itkExceptionMacro(<<"All the points mapped to outside of the moving image");
+      }
+    else
+      {
+      measure /= this->m_NumberOfPixelsCounted;
+      }
+    }
+  else if (!strcmp( m_AsymMetric->GetNameOfClass(), "NormalizedCorrelationImageToImageMetric"))
+    {
+
+    typedef  itk::ImageRegionConstIteratorWithIndex< HalfwayImageType > HalfwayIteratorType;
+
+
+    HalfwayIteratorType ti( m_HalfwayImage , m_HalfwayImage->GetLargestPossibleRegion() );
+
+    typename HalfwayImageType::IndexType index;
+
+
+    this->m_NumberOfPixelsCounted = 0;
+
+
+    typedef  typename NumericTraits< MeasureType >::AccumulateType AccumulateType;
+
+    AccumulateType sff = NumericTraits< AccumulateType >::Zero;
+    AccumulateType smm = NumericTraits< AccumulateType >::Zero;
+    AccumulateType sfm = NumericTraits< AccumulateType >::Zero;
+    AccumulateType sf  = NumericTraits< AccumulateType >::Zero;
+    AccumulateType sm  = NumericTraits< AccumulateType >::Zero;
+
+    while(!ti.IsAtEnd())
+      {
+
+      index = ti.GetIndex();
+
+      InputPointType inputPoint;
+      m_HalfwayImage->TransformIndexToPhysicalPoint( index, inputPoint );
+
+      OutputPointType transformedFixedPoint = this->m_FixedTransform->TransformPoint( inputPoint );
+
+      if( this->m_FixedImageMask && !this->m_FixedImageMask->IsInside( transformedFixedPoint ) )
+        {
+        ++ti;
+        continue;
+        }
+
+      OutputPointType transformedMovingPoint = this->m_MovingTransform->TransformPoint( inputPoint );
+
+      if( this->m_MovingImageMask && !this->m_MovingImageMask->IsInside( transformedMovingPoint ) )
+        {
+        ++ti;
+        continue;
+        }
+
+      if( this->m_Interpolator->IsInsideBuffer( transformedMovingPoint ) &&
+          this->m_FixedInterpolator->IsInsideBuffer( transformedFixedPoint ))
+        {
+        const RealType movingValue  = this->m_Interpolator->Evaluate( transformedMovingPoint );
+        const RealType fixedValue   = this->m_FixedInterpolator->Evaluate( transformedFixedPoint );
+
+        sff += fixedValue  * fixedValue;
+        smm += movingValue * movingValue;
+        sfm += fixedValue  * movingValue;
+        if ( this->m_SubtractMean )
+          {
+          sf += fixedValue;
+          sm += movingValue;
+          }
+        this->m_NumberOfPixelsCounted++;
+        }
+
+      ++ti;
+      }
+
+    if ( this->m_SubtractMean && this->m_NumberOfPixelsCounted > 0 )
+      {
+      sff -= ( sf * sf / this->m_NumberOfPixelsCounted );
+      smm -= ( sm * sm / this->m_NumberOfPixelsCounted );
+      sfm -= ( sf * sm / this->m_NumberOfPixelsCounted );
+      }
+
+    const RealType denom = -1.0 * vcl_sqrt(sff * smm );
+
+    if( this->m_NumberOfPixelsCounted > 0 && denom != 0.0)
+      {
+      measure = sfm / denom;
+      }
+    else
+      {
+      measure = NumericTraits< MeasureType >::Zero;
+      }
+ 
+    }
+  return measure;
+
+}
+
+
+// * Get the cost function value at the given parameters
+template <class TFixedImage, class TMovingImage> 
+typename SymmetricImageToImageMetric <TFixedImage,TMovingImage>
+::MeasureType
+SymmetricImageToImageMetric <TFixedImage,TMovingImage>
+::GetValueInternal( const TransformParametersType & parameters ) const
+{
+
+  MeasureType measure = NumericTraits< MeasureType >::Zero;
+  if (!strcmp( m_AsymMetric->GetNameOfClass(), "MeanSquaresImageToImageMetric"))
+    {
+    typedef  itk::ImageRegionConstIteratorWithIndex< TFixedImage > FixedIteratorType;
+
+    FixedIteratorType ti( m_FixedImage , this->GetFixedImageRegion() );
+
+    typename TFixedImage::IndexType index;
+
+
+    this->m_NumberOfPixelsCounted = 0;
+
+
+    while(!ti.IsAtEnd())
+      {
+
+      index = ti.GetIndex();
+
+      InputPointType inputPoint;
+      m_FixedImage->TransformIndexToPhysicalPoint( index, inputPoint );
+
+      if( this->m_FixedImageMask && !this->m_FixedImageMask->IsInside( inputPoint ) )
+        {
+        ++ti;
+        continue;
+        }
+
+      OutputPointType transformedPoint = this->m_Transform->TransformPoint( inputPoint );
+
+      if( this->m_MovingImageMask && !this->m_MovingImageMask->IsInside( transformedPoint ) )
+        {
+        ++ti;
+        continue;
+        }
+
+      if( this->m_Interpolator->IsInsideBuffer( transformedPoint ) )
+        {
+        const RealType movingValue  = this->m_Interpolator->Evaluate( transformedPoint );
+        const RealType fixedValue   = ti.Get();
+        this->m_NumberOfPixelsCounted++;
+        const RealType diff = movingValue - fixedValue;
+        measure += diff * diff;
+        }
+
+      ++ti;
+      }
+
+    if( !this->m_NumberOfPixelsCounted )
+      {
+      itkExceptionMacro(<<"All the points mapped to outside of the moving image");
+      }
+    else
+      {
+      measure /= this->m_NumberOfPixelsCounted;
+      }
+    }
+  if (!strcmp( m_AsymMetric->GetNameOfClass(), "NormalizedCorrelationImageToImageMetric"))
+    {
+    typedef  itk::ImageRegionConstIteratorWithIndex< TFixedImage > FixedIteratorType;
+
+    FixedIteratorType ti( m_FixedImage, this->GetFixedImageRegion() );
+
+    typename TFixedImage::IndexType index;
+
+
+    this->m_NumberOfPixelsCounted = 0;
+
+
+    typedef  typename NumericTraits< MeasureType >::AccumulateType AccumulateType;
+
+    AccumulateType sff = NumericTraits< AccumulateType >::Zero;
+    AccumulateType smm = NumericTraits< AccumulateType >::Zero;
+    AccumulateType sfm = NumericTraits< AccumulateType >::Zero;
+    AccumulateType sf  = NumericTraits< AccumulateType >::Zero;
+    AccumulateType sm  = NumericTraits< AccumulateType >::Zero;
+
+    while(!ti.IsAtEnd())
+      {
+
+      index = ti.GetIndex();
+
+      InputPointType inputPoint;
+      m_FixedImage->TransformIndexToPhysicalPoint( index, inputPoint );
+
+      if( this->m_FixedImageMask && !this->m_FixedImageMask->IsInside( inputPoint ) )
+        {
+        ++ti;
+        continue;
+        }
+
+      OutputPointType transformedPoint = this->m_Transform->TransformPoint( inputPoint );
+
+      if( this->m_MovingImageMask && !this->m_MovingImageMask->IsInside( transformedPoint ) )
+        {
+        ++ti;
+        continue;
+        }
+
+      if( this->m_Interpolator->IsInsideBuffer( transformedPoint ) )
+        {
+        const RealType movingValue  = this->m_Interpolator->Evaluate( transformedPoint );
+        const RealType fixedValue   = ti.Get();
+        sff += fixedValue  * fixedValue;
+        smm += movingValue * movingValue;
+        sfm += fixedValue  * movingValue;
+        if ( this->m_SubtractMean )
+          {
+          sf += fixedValue;
+          sm += movingValue;
+          }
+        this->m_NumberOfPixelsCounted++;
+        }
+
+      ++ti;
+      }
+    if ( this->m_SubtractMean && this->m_NumberOfPixelsCounted > 0 )
+      {
+      sff -= ( sf * sf / this->m_NumberOfPixelsCounted );
+      smm -= ( sm * sm / this->m_NumberOfPixelsCounted );
+      sfm -= ( sf * sm / this->m_NumberOfPixelsCounted );
+      }
+
+    const RealType denom = -1.0 * vcl_sqrt(sff * smm );
+
+    if( this->m_NumberOfPixelsCounted > 0 && denom != 0.0)
+      {
+      measure = sfm / denom;
+      }
+    else
+      {
+      measure = NumericTraits< MeasureType >::Zero;
+      }
+
+    }
+
+  return measure;
 
 }
 
@@ -82,59 +395,38 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
     }
 
   this->SetTransformParameters( parameters );
+  MeasureType metric;
 
-  if (!m_UseSymmetric)
+  if ( !m_UseSymmetric )
     {
-    typename InternalFixedImageMaskType::Pointer fixedimageMask = InternalFixedImageMaskType::New();
-    typename InternalFixedImageMaskType::RegionType fixedRegion;
-    fixedRegion.SetSize( m_FixedImage->GetLargestPossibleRegion().GetSize() );
-    fixedimageMask->SetRegions( fixedRegion );
-    fixedimageMask->Allocate();
-    fixedimageMask->SetOrigin(  m_FixedImage->GetOrigin() );
-    fixedimageMask->SetSpacing( m_FixedImage->GetSpacing() );
-    fixedimageMask->SetDirection( m_FixedImage->GetDirection() );
-    fixedimageMask->FillBuffer(1);
 
-    typename itk::ImageMaskSpatialObject< FixedImageDimension >::Pointer  fixedMask = itk::ImageMaskSpatialObject< FixedImageDimension >::New();
-    fixedMask->SetImage( fixedimageMask );
-  
-    typename InternalMovingImageMaskType::Pointer movingimageMask = InternalMovingImageMaskType::New();
-    typename InternalMovingImageMaskType::RegionType movingRegion;
-    movingRegion.SetSize( m_MovingImage->GetLargestPossibleRegion().GetSize() );
-    movingimageMask->SetRegions( movingRegion );
-    movingimageMask->Allocate();
-    movingimageMask->SetOrigin(  m_MovingImage->GetOrigin() );
-    movingimageMask->SetSpacing( m_MovingImage->GetSpacing() );
-    movingimageMask->SetDirection( m_MovingImage->GetDirection() );
-    movingimageMask->FillBuffer(1);
-
-    typename itk::ImageMaskSpatialObject< MovingImageDimension >::Pointer  movingMask = itk::ImageMaskSpatialObject< MovingImageDimension >::New();
-    movingMask->SetImage( movingimageMask );
-
-    //m_AsymMetric->SetTransformParameters( parameters );
-    m_AsymMetric->SetTransform( m_Transform );
-    m_AsymMetric->SetFixedImage( m_FixedImage );
-    m_AsymMetric->SetMovingImage( m_MovingImage );
-    m_AsymMetric->SetFixedImageRegion(
-       m_FixedImage->GetLargestPossibleRegion() );
-    m_AsymMetric->SetFixedImageMask(
-       fixedMask );
-    m_AsymMetric->SetMovingImageMask(
-       movingMask );
-    m_AsymMetric->SetInterpolator( m_Interpolator );
-
+    if ( m_UseSlaveMetric )
+      {
+      //m_AsymMetric->SetTransformParameters( parameters );
+      m_AsymMetric->SetTransform( m_Transform );
+      m_AsymMetric->SetFixedImage( m_FixedImage );
+      m_AsymMetric->SetMovingImage( m_MovingImage );
+      m_AsymMetric->SetFixedImageRegion(
+        m_FixedImage->GetLargestPossibleRegion() );
+      if ( m_FixedImageMask )
+        m_AsymMetric->SetFixedImageMask(
+          m_FixedImageMask );
+      if ( m_MovingImageMask )
+        m_AsymMetric->SetMovingImageMask(
+          m_MovingImageMask );
+      m_AsymMetric->SetInterpolator( m_Interpolator );
+      m_AsymMetric->Initialize();
+      metric = m_AsymMetric->GetValue( parameters );
+      }
+    else
+      {
+      metric =  this->GetValueInternal( parameters );    
+      }
     
     
     }
   else
     {
-    typedef typename itk::ResampleImageFilter< TMovingImage, HalfwayImageType >    ResampleMovingFilterType;
-    typedef typename itk::ResampleImageFilter< TFixedImage, HalfwayImageType >    ResampleFixedFilterType;
-    typename ResampleMovingFilterType::Pointer resamplemoving = ResampleMovingFilterType::New();
-    typename ResampleFixedFilterType::Pointer resamplefixed = ResampleFixedFilterType::New();
-
-    resamplemoving->SetInput( m_MovingImage );
-    resamplefixed->SetInput( m_FixedImage );
   
     // This is the callback function, so everytime we are called,
     // we need to construct the transform and then split it in half
@@ -163,57 +455,66 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
 
 
 
-    TransformPointer fixedtran = TransformType::New();
-    TransformPointer movingtran = TransformType::New();
-    //fixedtran.SetIdentity();
-    //movingtran.SetIdentity();
+    m_FixedTransform = TransformType::New();
+    m_MovingTransform = TransformType::New();
   
-    this->GetHalfTransform( Y, movingtran);
-    this->GetHalfTransform( Yinv, fixedtran);
+    this->GetHalfTransform( Y, m_MovingTransform);
+    this->GetHalfTransform( Yinv, m_FixedTransform);
   
   
     itkDebugMacro(  "Callback for parameters: " << parameters );
-    itkDebugMacro( "Fixed half transform parameters are: " << fixedtran->GetParameters() );
-    itkDebugMacro( "Moving half transform parameters are: " << movingtran->GetParameters() );
+    itkDebugMacro( "Fixed half transform parameters are: " << m_FixedTransform->GetParameters() );
+    itkDebugMacro( "Moving half transform parameters are: " << m_MovingTransform->GetParameters() );
 
-    resamplefixed->SetTransform( fixedtran );
-    resamplemoving->SetTransform( movingtran );
-    resamplefixed->SetDefaultPixelValue( 0.0 );
-    resamplemoving->SetDefaultPixelValue( 0.0 );
+    if ( m_UseSlaveMetric )
+      {
+      typedef typename itk::ResampleImageFilter< TMovingImage, HalfwayImageType >    ResampleMovingFilterType;
+      typedef typename itk::ResampleImageFilter< TFixedImage, HalfwayImageType >    ResampleFixedFilterType;
+      typename ResampleMovingFilterType::Pointer resamplemoving = ResampleMovingFilterType::New();
+      typename ResampleFixedFilterType::Pointer resamplefixed = ResampleFixedFilterType::New();
 
-    resamplefixed->UseReferenceImageOn();
-    resamplefixed->SetReferenceImage(m_HalfwayImage);
-    resamplemoving->UseReferenceImageOn();
-    resamplemoving->SetReferenceImage(m_HalfwayImage);
+      resamplemoving->SetInput( m_MovingImage );
+      resamplefixed->SetInput( m_FixedImage );
+      resamplefixed->SetTransform( m_FixedTransform );
+      resamplemoving->SetTransform( m_MovingTransform );
+      resamplefixed->SetDefaultPixelValue( 0.0 );
+      resamplemoving->SetDefaultPixelValue( 0.0 );
 
-    FixedImagePointer fixedhalfim = resamplefixed->GetOutput();  
-    MovingImagePointer movinghalfim = resamplemoving->GetOutput();  
+      resamplefixed->UseReferenceImageOn();
+      resamplefixed->SetReferenceImage(m_HalfwayImage);
+      resamplemoving->UseReferenceImageOn();
+      resamplemoving->SetReferenceImage(m_HalfwayImage);
 
-    resamplefixed->Update();
-    resamplemoving->Update();
+      FixedImagePointer fixedhalfim = resamplefixed->GetOutput();  
+      MovingImagePointer movinghalfim = resamplemoving->GetOutput();  
 
-    //TransformPointer idtran = TransformType::New();
-    //idtran->SetIdentity();
-    //m_AsymMetric->SetTransform (idtran);
-    m_AsymMetric->SetFixedImage( fixedhalfim );
-    m_AsymMetric->SetMovingImage( movinghalfim );
-    m_AsymMetric->SetFixedImageRegion(
+      resamplefixed->Update();
+      resamplemoving->Update();
+
+      //TransformPointer idtran = TransformType::New();
+      //idtran->SetIdentity();
+      //m_AsymMetric->SetTransform (idtran);
+      m_AsymMetric->SetFixedImage( fixedhalfim );
+      m_AsymMetric->SetMovingImage( movinghalfim );
+      m_AsymMetric->SetFixedImageRegion(
          fixedhalfim->GetBufferedRegion() );
-    m_AsymMetric->SetInterpolator( m_Interpolator );
-    TransformPointer idtran = TransformType::New();
-    idtran->SetIdentity();
-    m_AsymMetric->SetTransform (idtran);
+      m_AsymMetric->SetInterpolator( m_Interpolator );
+      TransformPointer idtran = TransformType::New();
+      idtran->SetIdentity();
+      m_AsymMetric->SetTransform (idtran);
 
   
-    // MattesMutualInformationImageToImageMetric requires initialization every time. may be all of them do ?
-    //if (!strcmp( m_AsymMetric->GetNameOfClass(), "MattesMutualInformationImageToImageMetric"))
-    //  {
-    //  m_AsymMetric->Initialize();
-    //  }
+      m_AsymMetric->Initialize();
+      metric = m_AsymMetric->GetValue( parameters );
+      }
+    else
+      {
+      metric = this->GetValueInternalSymmetric( parameters );
+      }
+    // Why deleting produces segfault even though New() is used next time ? TODO
+    //m_FixedTransform->Delete();
+    //m_MovingTransform->Delete();
   }
-  m_AsymMetric->Initialize();
-  //MeasureType metric = m_AsymMetric->GetValue( m_AsymMetric->GetTransform()->GetParameters() );
-  MeasureType metric = m_AsymMetric->GetValue( parameters );
   if (this->GetDebug())
     std::cout << "metric " << metric << " parameters: " << parameters << std::endl; 
     //TransformParametersType finalparam(6) ;
@@ -371,13 +672,96 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
   if (this->GetDebug())
     m_AsymMetric->DebugOn();
   if (m_UseSymmetric)
+    {
     m_AsymMetric->SetTransform (idtran);
+    if ( !m_UseSlaveMetric )
+      if( !m_FixedInterpolator )
+      {
+      itkExceptionMacro(<<"Interpolator is not present");
+      }
+      m_FixedInterpolator->SetInputImage( m_FixedImage ); 
+    }
   else
+    {
     m_AsymMetric->SetTransform( this->GetTransform() );
+    }
   m_AsymMetric->SetFixedImage( m_FixedImage );
   m_AsymMetric->SetMovingImage( m_MovingImage );
   m_AsymMetric->SetFixedImageRegion(
        m_FixedImage->GetBufferedRegion() );
+
+  if ( m_InternalFixedImageMask )
+    {
+    itkDebugMacro( "Setting fixed image mask from internal mask" );
+    if ( m_FixedImageMask )
+      m_AsymMetric->SetFixedImageMask( m_FixedImageMask );
+    else
+      {
+      typename InternalFixedImageBinaryMaskType::Pointer fixedimageMask = InternalFixedImageBinaryMaskType::New();
+      typename InternalFixedImageMaskType::RegionType fixedRegion;
+      fixedRegion.SetSize( m_InternalFixedImageMask->GetLargestPossibleRegion().GetSize() );
+      fixedimageMask->SetRegions( fixedRegion );
+      fixedimageMask->Allocate();
+      fixedimageMask->SetOrigin(  m_InternalFixedImageMask->GetOrigin() );
+      fixedimageMask->SetSpacing( m_InternalFixedImageMask->GetSpacing() );
+      fixedimageMask->SetDirection( m_InternalFixedImageMask->GetDirection() );
+      fixedimageMask->FillBuffer(1);
+      typedef  typename itk::ImageRegionIteratorWithIndex<InternalFixedImageMaskType> InternalFixedImageMaskIteratorType;
+      typedef  typename itk::ImageRegionIteratorWithIndex<InternalFixedImageBinaryMaskType> InternalFixedImageBinaryMaskIteratorType;
+      InternalFixedImageMaskIteratorType itsource( m_InternalFixedImageMask, m_InternalFixedImageMask->GetLargestPossibleRegion() );
+      InternalFixedImageBinaryMaskIteratorType ittarget( fixedimageMask, fixedimageMask->GetLargestPossibleRegion() );
+      while(!itsource.IsAtEnd())
+        {
+        if (itsource.Get() < 0.5)
+            ittarget.Set( 0 );
+        ++itsource;
+        ++ittarget;
+        }
+      typename itk::ImageMaskSpatialObject< FixedImageDimension >::Pointer  fixedMask = itk::ImageMaskSpatialObject< FixedImageDimension >::New();
+      fixedMask->SetImage( fixedimageMask );
+      m_AsymMetric->SetFixedImageMask(
+         fixedMask );
+      }
+    }
+
+  if ( m_InternalMovingImageMask )
+    {
+    itkDebugMacro( "Setting moving image mask from internal mask" );
+    if ( m_MovingImageMask )
+      m_AsymMetric->SetMovingImageMask( m_MovingImageMask );
+    else
+      {
+      typename InternalMovingImageBinaryMaskType::Pointer movingimageMask = InternalMovingImageBinaryMaskType::New();
+      typename InternalMovingImageMaskType::RegionType movingRegion;
+      movingRegion.SetSize( m_InternalMovingImageMask->GetLargestPossibleRegion().GetSize() );
+      movingimageMask->SetRegions( movingRegion );
+      movingimageMask->Allocate();
+      movingimageMask->SetOrigin(  m_InternalMovingImageMask->GetOrigin() );
+      movingimageMask->SetSpacing( m_InternalMovingImageMask->GetSpacing() );
+      movingimageMask->SetDirection( m_InternalMovingImageMask->GetDirection() );
+      movingimageMask->FillBuffer(1);
+      typedef  typename itk::ImageRegionIteratorWithIndex<InternalMovingImageMaskType> InternalMovingImageMaskIteratorType;
+      typedef  typename itk::ImageRegionIteratorWithIndex<InternalMovingImageBinaryMaskType> InternalMovingImageBinaryMaskIteratorType;
+      InternalMovingImageMaskIteratorType itsource( m_InternalMovingImageMask, m_InternalMovingImageMask->GetLargestPossibleRegion() );
+      InternalMovingImageBinaryMaskIteratorType ittarget( movingimageMask, movingimageMask->GetLargestPossibleRegion() );
+      while(!itsource.IsAtEnd())
+        {
+        if (itsource.Get() < 0.5)
+            ittarget.Set( 0 );
+        ++itsource;
+        ++ittarget;
+        }
+      typename itk::ImageMaskSpatialObject< MovingImageDimension >::Pointer  movingMask = itk::ImageMaskSpatialObject< MovingImageDimension >::New();
+      movingMask->SetImage( movingimageMask );
+      m_AsymMetric->SetMovingImageMask(
+         movingMask );
+      }
+    }
+
+
+
+      
+  
   m_AsymMetric->SetInterpolator( m_Interpolator );
   m_AsymMetric->Initialize();
 
@@ -621,10 +1005,15 @@ SymmetricImageToImageMetric<TFixedImage,TMovingImage>
      << std::endl;
   os << indent << "Transform:    " << m_Transform.GetPointer()    << std::endl;
   os << indent << "Interpolator: " << m_Interpolator.GetPointer() << std::endl;
+  os << indent << "Fixed Interpolator: " << m_FixedInterpolator.GetPointer() << std::endl;
   os << indent << "FixedImageRegion: " << m_FixedImageRegion << std::endl;
   os << indent << "Moving Image Mask: " << m_MovingImageMask.GetPointer() 
      << std::endl;
   os << indent << "Fixed Image Mask: " << m_FixedImageMask.GetPointer() 
+     << std::endl;
+  os << indent << "Moving Image Internal Mask: " << m_InternalMovingImageMask.GetPointer() 
+     << std::endl;
+  os << indent << "Fixed Image Internal Mask: " << m_InternalFixedImageMask.GetPointer() 
      << std::endl;
   os << indent << "Number of Pixels Counted: " << m_NumberOfPixelsCounted 
      << std::endl;

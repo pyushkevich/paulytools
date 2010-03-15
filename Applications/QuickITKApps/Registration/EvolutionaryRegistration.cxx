@@ -363,19 +363,42 @@ EvolutionaryRegistration(int argc, char * argv[])
   // Create readers
   typename FixedImageReaderType::Pointer  fixedImageReader  = FixedImageReaderType::New();
   typename MovingImageReaderType::Pointer movingImageReader = MovingImageReaderType::New();
+  typename FixedImageReaderType::Pointer  fixedMaskImageReader  = FixedImageReaderType::New();
+  typename MovingImageReaderType::Pointer movingMaskImageReader = MovingImageReaderType::New();
 
+  // Set up fixed and moving images
   fixedImageReader->SetFileName(  argv[1] );
   movingImageReader->SetFileName( argv[2] );
 
+  //symmmetric->DebugOn();
   symmmetric->SetFixedImage(    fixedImageReader->GetOutput()    );
   symmmetric->SetMovingImage(   movingImageReader->GetOutput()   );
-
+  
   fixedImageReader->Update();
   movingImageReader->Update();
 
   symmmetric->SetFixedImageRegion( 
        fixedImageReader->GetOutput()->GetBufferedRegion() );
 
+  // Set up mask images
+  std::string fixedmaskfn( argv[3] );
+  std::string movingmaskfn( argv[4] );
+  if (fixedmaskfn.compare(fixedmaskfn.size()-4,4,"none") != 0)
+    {
+    fixedMaskImageReader->SetFileName(  argv[3] );
+    symmmetric->SetInternalFixedImageMask(    fixedMaskImageReader->GetOutput()    );
+    fixedMaskImageReader->Update();
+    }
+  if (movingmaskfn.compare(movingmaskfn.size()-4,4,"none") != 0)
+    {
+    movingMaskImageReader->SetFileName(  argv[4] );
+    symmmetric->SetInternalMovingImageMask(    movingMaskImageReader->GetOutput()    );
+    movingMaskImageReader->Update();
+    }
+    
+
+
+  // Get spacing and size for parameter scaling later
   typename FixedImageType::SizeType fixedsize = fixedImageReader->GetOutput()->GetLargestPossibleRegion().GetSize(); 
   typename FixedImageType::SpacingType fixedspacing = fixedImageReader->GetOutput()->GetSpacing();
 
@@ -384,7 +407,7 @@ EvolutionaryRegistration(int argc, char * argv[])
   typename MetricType::Pointer metric;
 
 
-  std::string reg_symm( argv[7] );
+  std::string reg_symm( argv[9] );
   if(!strcmp(reg_symm.c_str(),"symm"))
     symmmetric->UseSymmetricOn();
   else if (!strcmp(reg_symm.c_str(),"asym"))
@@ -395,9 +418,21 @@ EvolutionaryRegistration(int argc, char * argv[])
     return EXIT_FAILURE;
     };
 
+  // Use slave metric or not 
+  std::string masterslave( argv[10] );
+  if(!strcmp(masterslave.c_str(),"master"))
+    symmmetric->UseSlaveMetricOff();
+  else if (!strcmp(masterslave.c_str(),"slave"))
+    symmmetric->UseSlaveMetricOn();
+ else
+    {
+    cerr << "Unknown master/slave type " << masterslave << endl;
+    return EXIT_FAILURE;
+    };
+
     
 
-  std::string metric_name( argv[6] );
+  std::string metric_name( argv[8] );
 
   if(!strcmp(metric_name.c_str(),"mutualinfo"))
     {
@@ -447,9 +482,9 @@ EvolutionaryRegistration(int argc, char * argv[])
   typedef itk::MatrixOffsetTransformBase<double, VDim, VDim> MOTBType;
   typename MOTBType::Pointer transform, finaltransform;
   
-  std::string fn( argv[4] );
+  std::string fn( argv[6] );
   bool isinit = (fn.compare(fn.size()-4,4,"none") != 0);
-  std::string transform_name( argv[5] );
+  std::string transform_name( argv[7] );
 
   int nParameters;
   itk::Matrix<double, VDim+1, VDim+1> amat;
@@ -463,7 +498,7 @@ EvolutionaryRegistration(int argc, char * argv[])
     transform->SetIdentity();
     if (isinit)
       {
-      ReadTransformFile<MOTBType, VDim>( transform, argv[4], true);
+      ReadTransformFile<MOTBType, VDim>( transform, argv[6], true);
       //cout << "Transform file " << fn << " read" << endl;
       //std::cout << "Just after reading params: " << transform->GetParameters() << std::endl;
       }
@@ -498,7 +533,7 @@ EvolutionaryRegistration(int argc, char * argv[])
     transform->SetIdentity();
     if (isinit)
       {
-      ReadTransformFile<MOTBType, VDim>( transform, argv[4], false);
+      ReadTransformFile<MOTBType, VDim>( transform, argv[6], false);
       //cout << "Transform file " << fn << " read" << endl;
       }
     else
@@ -533,9 +568,11 @@ EvolutionaryRegistration(int argc, char * argv[])
 
 
   typename InterpolatorType::Pointer   interpolator  = InterpolatorType::New();
+  typename InterpolatorType::Pointer   fixedinterpolator  = InterpolatorType::New();
 
 
   symmmetric->SetInterpolator(  interpolator  );
+  symmmetric->SetFixedInterpolator(  fixedinterpolator  );
   
   optimizer->SetScales( paramScales );
   symmmetric->SetTransformParameters( initialParameters );
@@ -561,8 +598,8 @@ EvolutionaryRegistration(int argc, char * argv[])
   generator->Initialize(12345);
 
   optimizer->SetNormalVariateGenerator( generator );
-  optimizer->SetEpsilon( atof(argv[11]) );
-  optimizer->SetMaximumIteration( atoi(argv[12]) );
+  optimizer->SetEpsilon( atof(argv[14]) );
+  optimizer->SetMaximumIteration( atoi(argv[15]) );
 
 
   // Create the Command observer and register it with the optimizer.
@@ -571,7 +608,7 @@ EvolutionaryRegistration(int argc, char * argv[])
   optimizer->AddObserver( itk::IterationEvent(), observer );
  
   optimizer->DebugOn();
-  optimizer->Initialize( atof(argv[8]), atof(argv[9]), atof(argv[10]) );
+  optimizer->Initialize( atof(argv[11]), atof(argv[12]), atof(argv[13]) );
   try 
     { 
     std::cout << "Registration starts!" << std::endl;
@@ -646,7 +683,7 @@ EvolutionaryRegistration(int argc, char * argv[])
   std::cout << "Final Paramaters from final transform: " << finaltransform->GetParameters() <<  std::endl;
   std::cout << "Final Transform:" << std::endl;
   PrintMatrix( finalmat.GetVnlMatrix(), "%12.5f ", "   ");
-  std::string outname( argv[3] );
+  std::string outname( argv[5] );
   std::string outmatname = outname + ".mat";
   std::string outimname = outname + ".nii.gz";
   std::string outhwname = outname + "hwdef.nii.gz";
@@ -765,27 +802,32 @@ int main( int argc, char *argv[] )
     std::cerr << "Missing Parameters " << std::endl;
     std::cerr << "Usage: " << argv[0];
     std::cerr << " fixedImageFile  movingImageFile ";
+    std::cerr << " fixedImageMask  movingImageMask ";
     std::cerr << "outputNaming ";
     std::cerr << "InitialTransformFile(none for no initial) ";
     std::cerr << "RegType(rig or aff) ";
     std::cerr << "Metric ";
     std::cerr << "Symmetry ";
+    std::cerr << "Master/Slave ";
     std::cerr << "InitialRadius Grow Shrink Epsilon MaxIter "<< std::endl;
     return EXIT_FAILURE;
     }
 
   std::cout << "fixedImageFile   : " << argv[1] << std::endl;
   std::cout << "movingImageFile  : " << argv[2] << std::endl;
-  std::cout << "outputNaming     : " << argv[3] << std::endl;
-  std::cout << "Initial Transform: " << argv[4] << std::endl;
-  std::cout << "Registration Type: " << argv[5] << std::endl;
-  std::cout << "Metric Type      : " << argv[6] << std::endl;
-  std::cout << "Symmetry Type    : " << argv[7] << std::endl;
-  std::cout << "Initial Radius   : " << argv[8] << std::endl;
-  std::cout << "Growth Factor    : " << argv[9] << std::endl;
-  std::cout << "Shrink Factor    : " << argv[10] << std::endl;
-  std::cout << "Convergence Eps  : " << argv[11] << std::endl;
-  std::cout << "Max Iteration    : " << argv[12] << std::endl;
+  std::cout << "fixedImageMask   : " << argv[3] << std::endl;
+  std::cout << "movingImageMask  : " << argv[4] << std::endl;
+  std::cout << "outputNaming     : " << argv[5] << std::endl;
+  std::cout << "Initial Transform: " << argv[6] << std::endl;
+  std::cout << "Registration Type: " << argv[7] << std::endl;
+  std::cout << "Metric Type      : " << argv[8] << std::endl;
+  std::cout << "Symmetry Type    : " << argv[9] << std::endl;
+  std::cout << "Master/Slave     : " << argv[10] << std::endl;
+  std::cout << "Initial Radius   : " << argv[11] << std::endl;
+  std::cout << "Growth Factor    : " << argv[12] << std::endl;
+  std::cout << "Shrink Factor    : " << argv[13] << std::endl;
+  std::cout << "Convergence Eps  : " << argv[14] << std::endl;
+  std::cout << "Max Iteration    : " << argv[15] << std::endl;
 
     return EvolutionaryRegistration<double,3>(argc, argv);
   

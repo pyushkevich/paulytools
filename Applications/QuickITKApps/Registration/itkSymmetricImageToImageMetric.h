@@ -131,10 +131,19 @@ public:
                       TFixedImage::ImageDimension);
 
   /* Internal mask image types */  
-  typedef typename itk::Image<unsigned char, MovingImageDimension> InternalMovingImageMaskType;
-  typedef typename itk::Image<unsigned char, FixedImageDimension> InternalFixedImageMaskType;
-  typedef typename itk::Image<unsigned char, FixedImageDimension> InternalHalfwayImageMaskType;
+  typedef TMovingImage InternalMovingImageMaskType;
+  typedef TFixedImage InternalFixedImageMaskType;
+  typedef HalfwayImageType InternalHalfwayImageMaskType;
+  typedef itk::Image<unsigned char, MovingImageDimension> InternalMovingImageBinaryMaskType;
+  typedef itk::Image<unsigned char, FixedImageDimension> InternalFixedImageBinaryMaskType;
+  typedef itk::Image<unsigned char, FixedImageDimension> InternalHalfwayImageBinaryMaskType;
 
+  typedef typename InternalFixedImageMaskType::Pointer       InternalFixedImageMaskPointer;
+  typedef typename InternalFixedImageMaskType::ConstPointer  InternalFixedImageMaskConstPointer;
+  typedef typename InternalMovingImageMaskType::Pointer       InternalMovingImageMaskPointer;
+  typedef typename InternalMovingImageMaskType::ConstPointer  InternalMovingImageMaskConstPointer;
+  typedef typename InternalHalfwayImageMaskType::Pointer       InternalHalfwayImageMaskPointer;
+  typedef typename InternalHalfwayImageMaskType::ConstPointer  InternalHalfwayImageMaskConstPointer;
   /**  Type of the Transform Base class */
   //typedef itk::MatrixOffsetTransformBase<CoordinateRepresentationType, 
    //                 itkGetStaticConstMacro(MovingImageDimension),
@@ -156,6 +165,9 @@ public:
   typedef InterpolateImageFunction<
     MovingImageType,
     CoordinateRepresentationType > InterpolatorType;
+  typedef InterpolateImageFunction<
+    FixedImageType,
+    CoordinateRepresentationType > FixedInterpolatorType;
 
 
   /** Gaussian filter to compute the gradient of the Moving Image */
@@ -177,6 +189,7 @@ public:
 
 
   typedef typename InterpolatorType::Pointer         InterpolatorPointer;
+  typedef typename FixedInterpolatorType::Pointer    FixedInterpolatorPointer;
 
 
   /**  Type for the mask of the fixed image. Only pixels that are "inside"
@@ -236,6 +249,12 @@ public:
   /** Get a pointer to the Interpolator.  */
   itkGetConstObjectMacro( Interpolator, InterpolatorType );
 
+  /** Connect the Fixed Interpolator. */
+  itkSetObjectMacro( FixedInterpolator, FixedInterpolatorType );
+
+  /** Get a pointer to the Interpolator.  */
+  itkGetConstObjectMacro( FixedInterpolator, FixedInterpolatorType );
+
   /** Get the number of pixels considered in the computation. */
   itkGetConstReferenceMacro( NumberOfPixelsCounted, unsigned long );
 
@@ -255,6 +274,16 @@ public:
 #endif
   itkGetConstObjectMacro( MovingImageMask, MovingImageMaskType );
 
+  /** Set/Get the internal moving image mask. */
+  itkSetObjectMacro( InternalMovingImageMask, InternalMovingImageMaskType );
+#ifdef ITK_LEGACY_REMOVE
+  itkSetConstObjectMacro( InternalMovingImageMask, InternalMovingImageMaskType );
+#else
+  virtual void SetInternalMovingImageMask( const InternalMovingImageMaskType* mask )
+    { this->SetInternalMovingImageMask(const_cast<InternalMovingImageMaskType*>(mask)); }
+#endif
+  itkGetConstObjectMacro( InternalMovingImageMask, InternalMovingImageMaskType );
+
   /** Set/Get the fixed image mask. */
   itkSetObjectMacro( FixedImageMask, FixedImageMaskType );
 #ifdef ITK_LEGACY_REMOVE
@@ -264,6 +293,16 @@ public:
     { this->SetFixedImageMask(const_cast<FixedImageMaskType*>(mask)); }
 #endif
   itkGetConstObjectMacro( FixedImageMask, FixedImageMaskType );
+
+  /** Set/Get the internal fixed image mask. */
+  itkSetObjectMacro( InternalFixedImageMask, InternalFixedImageMaskType );
+#ifdef ITK_LEGACY_REMOVE
+  itkSetConstObjectMacro( InternalFixedImageMask, InternalFixedImageMaskType );
+#else
+  virtual void SetInternalFixedImageMask( const InternalFixedImageMaskType* mask )
+    { this->SetInternalFixedImageMask(const_cast<InternalFixedImageMaskType*>(mask)); }
+#endif
+  itkGetConstObjectMacro( InternalFixedImageMask, InternalFixedImageMaskType );
 
   /** Set/Get gradient computation. */
   itkSetMacro( ComputeGradient, bool);
@@ -305,6 +344,8 @@ public:
   /**  Get the value for single valued optimizers. */
 
   MeasureType GetValue( const TransformParametersType & parameters ) const;
+  MeasureType GetValueInternal( const TransformParametersType & parameters ) const;
+  MeasureType GetValueInternalSymmetric( const TransformParametersType & parameters ) const;
 
   //void GetHalfTransform( void );
   void GetHalfTransform( MatrixType  Z, TransformPointer atran ) const;
@@ -314,6 +355,11 @@ public:
   itkSetMacro(UseSymmetric,bool);
   itkGetConstReferenceMacro(UseSymmetric,bool);
   itkBooleanMacro(UseSymmetric);
+
+  // use slave metric or not
+  itkSetMacro(UseSlaveMetric,bool);
+  itkGetConstReferenceMacro(UseSlaveMetric,bool);
+  itkBooleanMacro(UseSlaveMetric);
 
 
   /** This method returns the derivative of the cost function corresponding
@@ -356,7 +402,10 @@ protected:
   HalfwayImagePointer         m_HalfwayImage;
 
   mutable TransformPointer    m_Transform;
+  mutable TransformPointer    m_FixedTransform;
+  mutable TransformPointer    m_MovingTransform;
   InterpolatorPointer         m_Interpolator;
+  FixedInterpolatorPointer    m_FixedInterpolator;
 
   bool                        m_ComputeGradient;
   GradientImagePointer        m_GradientImage;
@@ -364,9 +413,13 @@ protected:
 #ifdef ITK_LEGACY_REMOVE
   FixedImageMaskConstPointer  m_FixedImageMask;
   MovingImageMaskConstPointer m_MovingImageMask;
+  InternalFixedImageMaskConstPointer  m_InternalFixedImageMask;
+  InternalMovingImageMaskConstPointer m_InternalMovingImageMask;
 #else
   mutable FixedImageMaskPointer   m_FixedImageMask;
   mutable MovingImageMaskPointer  m_MovingImageMask;
+  mutable InternalFixedImageMaskPointer   m_InternalFixedImageMask;
+  mutable InternalMovingImageMaskPointer  m_InternalMovingImageMask;
 #endif
 
 
@@ -379,6 +432,8 @@ private:
   
   FixedImageRegionType        m_FixedImageRegion;  
   bool             m_UseSymmetric;
+  bool             m_UseSlaveMetric;
+  bool             m_SubtractMean;
 };
 
 } // end namespace itk
