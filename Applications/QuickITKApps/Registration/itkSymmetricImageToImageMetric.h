@@ -35,6 +35,9 @@
 #include "itkExceptionObject.h"
 #include "itkGradientRecursiveGaussianImageFilter.h"
 #include "itkSpatialObject.h"
+#include "itkImage.h"
+#include "itkImageSpatialObject.h"
+#include "itkImageMaskSpatialObject.h"
 #include "vnl/vnl_matrix_fixed.h"
 #include "vnl/vnl_det.h"
 #include "vnl/vnl_inverse.h"
@@ -101,17 +104,17 @@ public:
   /** Run-time type information (and related methods). */
   itkTypeMacro(SymmetricImageToImageMetric, SingleValuedCostFunction);
 
-  /**  Type of the moving Image. */
+  /**  Type of the moving Image . */
   typedef TMovingImage                               MovingImageType;
   typedef typename TMovingImage::PixelType           MovingImagePixelType;
   typedef typename MovingImageType::Pointer     MovingImagePointer;
 
-  /**  Type of the fixed Image. */
+  /**  Type of the fixed Image . */
   typedef TFixedImage                                FixedImageType;
   typedef typename FixedImageType::Pointer      FixedImagePointer;
   typedef typename FixedImageType::RegionType        FixedImageRegionType;
 
-  /**  Type of the halfway Image. */
+  /**  Type of the halfway Image . */
   typedef TFixedImage                                HalfwayImageType;
   typedef typename HalfwayImageType::Pointer      HalfwayImagePointer;
   typedef typename HalfwayImageType::RegionType        HalfwayImageRegionType;
@@ -126,7 +129,12 @@ public:
   itkStaticConstMacro(FixedImageDimension, 
                      unsigned int,
                       TFixedImage::ImageDimension);
-  
+
+  /* Internal mask image types */  
+  typedef typename itk::Image<unsigned char, MovingImageDimension> InternalMovingImageMaskType;
+  typedef typename itk::Image<unsigned char, FixedImageDimension> InternalFixedImageMaskType;
+  typedef typename itk::Image<unsigned char, FixedImageDimension> InternalHalfwayImageMaskType;
+
   /**  Type of the Transform Base class */
   //typedef itk::MatrixOffsetTransformBase<CoordinateRepresentationType, 
    //                 itkGetStaticConstMacro(MovingImageDimension),

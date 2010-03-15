@@ -85,12 +85,42 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
 
   if (!m_UseSymmetric)
     {
+    typename InternalFixedImageMaskType::Pointer fixedimageMask = InternalFixedImageMaskType::New();
+    typename InternalFixedImageMaskType::RegionType fixedRegion;
+    fixedRegion.SetSize( m_FixedImage->GetLargestPossibleRegion().GetSize() );
+    fixedimageMask->SetRegions( fixedRegion );
+    fixedimageMask->Allocate();
+    fixedimageMask->SetOrigin(  m_FixedImage->GetOrigin() );
+    fixedimageMask->SetSpacing( m_FixedImage->GetSpacing() );
+    fixedimageMask->SetDirection( m_FixedImage->GetDirection() );
+    fixedimageMask->FillBuffer(1);
+
+    typename itk::ImageMaskSpatialObject< FixedImageDimension >::Pointer  fixedMask = itk::ImageMaskSpatialObject< FixedImageDimension >::New();
+    fixedMask->SetImage( fixedimageMask );
+  
+    typename InternalMovingImageMaskType::Pointer movingimageMask = InternalMovingImageMaskType::New();
+    typename InternalMovingImageMaskType::RegionType movingRegion;
+    movingRegion.SetSize( m_MovingImage->GetLargestPossibleRegion().GetSize() );
+    movingimageMask->SetRegions( movingRegion );
+    movingimageMask->Allocate();
+    movingimageMask->SetOrigin(  m_MovingImage->GetOrigin() );
+    movingimageMask->SetSpacing( m_MovingImage->GetSpacing() );
+    movingimageMask->SetDirection( m_MovingImage->GetDirection() );
+    movingimageMask->FillBuffer(1);
+
+    typename itk::ImageMaskSpatialObject< MovingImageDimension >::Pointer  movingMask = itk::ImageMaskSpatialObject< MovingImageDimension >::New();
+    movingMask->SetImage( movingimageMask );
+
     //m_AsymMetric->SetTransformParameters( parameters );
     m_AsymMetric->SetTransform( m_Transform );
     m_AsymMetric->SetFixedImage( m_FixedImage );
     m_AsymMetric->SetMovingImage( m_MovingImage );
     m_AsymMetric->SetFixedImageRegion(
        m_FixedImage->GetLargestPossibleRegion() );
+    m_AsymMetric->SetFixedImageMask(
+       fixedMask );
+    m_AsymMetric->SetMovingImageMask(
+       movingMask );
     m_AsymMetric->SetInterpolator( m_Interpolator );
 
     
@@ -184,7 +214,7 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
   m_AsymMetric->Initialize();
   //MeasureType metric = m_AsymMetric->GetValue( m_AsymMetric->GetTransform()->GetParameters() );
   MeasureType metric = m_AsymMetric->GetValue( parameters );
-  //if (this->GetDebug())
+  if (this->GetDebug())
     std::cout << "metric " << metric << " parameters: " << parameters << std::endl; 
     //TransformParametersType finalparam(6) ;
     //finalparam[0] = 0.0289415;
