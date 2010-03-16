@@ -415,6 +415,7 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
         m_AsymMetric->SetMovingImageMask(
           m_MovingImageMask );
       m_AsymMetric->SetInterpolator( m_Interpolator );
+      // TODO Not all metrics require initialization -- take this out
       m_AsymMetric->Initialize();
       metric = m_AsymMetric->GetValue( parameters );
       }
@@ -504,6 +505,7 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
       m_AsymMetric->SetTransform (idtran);
 
   
+      // TODO Not all metrics require initialization -- take this out
       m_AsymMetric->Initialize();
       metric = m_AsymMetric->GetValue( parameters );
       }
@@ -511,9 +513,6 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
       {
       metric = this->GetValueInternalSymmetric( parameters );
       }
-    // Why deleting produces segfault even though New() is used next time ? TODO
-    //m_FixedTransform->Delete();
-    //m_MovingTransform->Delete();
   }
   if (this->GetDebug())
     std::cout << "metric " << metric << " parameters: " << parameters << std::endl; 
