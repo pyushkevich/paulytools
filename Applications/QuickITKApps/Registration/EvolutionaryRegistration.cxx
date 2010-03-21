@@ -21,6 +21,7 @@
 #include <map>
 #include <algorithm>
 #include <cstdlib>
+#include <signal.h>
 
 
 #include "itkImageFileReader.h"
@@ -34,6 +35,7 @@ using namespace std;
 using namespace itk;
 
 enum InitType { UNCHANGED, FULLRAND, IDENTITY, ROTRAND };
+
 
 //  The following section of code implements a Command observer
 //  used to monitor the evolution of the registration process.
@@ -910,6 +912,15 @@ EvolutionaryRegistration(int argc, char * argv[])
   return EXIT_SUCCESS;
 };
 
+void sigproc(int signum)
+{          signal(SIGUSR1, sigproc); /*  */
+          /* NOTE some versions of UNIX will reset signal to default
+          after each call. So for portability reset signal each time */
+  
+          printf("you have pressed ctrl-c \n");
+          return;
+}
+
 int main( int argc, char *argv[] )
 {
   if( argc < 3 )
@@ -946,6 +957,8 @@ int main( int argc, char *argv[] )
   std::cout << "Convergence Eps  : " << argv[15] << std::endl;
   std::cout << "Max Iteration    : " << argv[16] << std::endl;
 
-    return EvolutionaryRegistration<double,3>(argc, argv);
+  signal(SIGUSR1, sigproc);
+
+  return EvolutionaryRegistration<double,3>(argc, argv);
   
 }
