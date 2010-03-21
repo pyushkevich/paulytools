@@ -133,7 +133,8 @@ SymmetricImageToImageMetric <TFixedImage,TMovingImage>
 
     if( !this->m_NumberOfPixelsCounted )
       {
-      itkExceptionMacro(<<"All the points mapped to outside of the moving image");
+      //itkExceptionMacro(<<"All the points mapped to outside of the moving image");
+      std::cerr << "WARNING: All the points mapped to outside of the moving image" << std::endl;
       }
     else
       {

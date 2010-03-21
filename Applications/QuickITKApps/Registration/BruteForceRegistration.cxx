@@ -12,7 +12,7 @@
 #include "itkMeanSquaresImageToImageMetric.h"
 #include "itkNormalizedCorrelationImageToImageMetric.h"
 #include "itkLinearInterpolateImageFunction.h"
-#include "itkOnePlusOneEvolutionaryOptimizer.h"
+#include "itkExhaustiveOptimizer.h"
 #include "itkSymmetricImageToImageMetric.h"
 #include <iostream>
 #include <cctype>
@@ -28,7 +28,6 @@
 
 #include "itkResampleImageFilter.h"
 #include "itkCastImageFilter.h"
-#include "itkNormalVariateGenerator.h"
 
 using namespace std;
 using namespace itk;
@@ -38,6 +37,7 @@ enum InitType { UNCHANGED, FULLRAND, IDENTITY, ROTRAND };
 //  The following section of code implements a Command observer
 //  used to monitor the evolution of the registration process.
 //
+
 #include "itkCommand.h"
 class CommandIterationUpdate : public itk::Command 
 {
@@ -47,10 +47,11 @@ public:
   typedef itk::SmartPointer<Self>   Pointer;
   itkNewMacro( Self );
 protected:
-  CommandIterationUpdate() { m_LastMetricValue = 0.0; };
+  CommandIterationUpdate() { m_BestMetricValue = 0.0; m_CurrentIteration = 0; };
 public:
-  typedef itk::OnePlusOneEvolutionaryOptimizer     OptimizerType;
+  typedef itk::ExhaustiveOptimizer     OptimizerType;
   typedef   const OptimizerType *                  OptimizerPointer;
+  int    m_CurrentIteration;
 
   void Execute(itk::Object *caller, const itk::EventObject & event)
     {
@@ -65,18 +66,14 @@ public:
         {
         return;
         }
-      double currentValue = optimizer->GetValue();
-      // Only print out when the Metric value changes
-      if( vcl_fabs( m_LastMetricValue - currentValue ) > 1e-7 )
-        { 
-        std::cout << optimizer->GetCurrentIteration() << "   ";
-        std::cout << currentValue << "   ";
-        std::cout << optimizer->GetCurrentPosition() << std::endl;
-        m_LastMetricValue = currentValue;
-        }
+      double currentValue = optimizer->GetCurrentValue();
+      m_CurrentIteration++;
+      std::cout << m_CurrentIteration << "   ";
+      std::cout << currentValue << "   ";
+      std::cout << optimizer->GetCurrentPosition() << std::endl;
     }
 private:
-  double m_LastMetricValue;
+  double m_BestMetricValue;
 };
 
 void PrintMatrix(vnl_matrix<double> mat, const char *fmt, const char *prefix)
@@ -421,7 +418,7 @@ ReadTransformFile(typename TAffine::Pointer atran, char * fn, InitType init, boo
 
 template <class TPixel, unsigned int VDim>
 int
-EvolutionaryRegistration(int argc, char * argv[])
+BruteForceRegistration(int argc, char * argv[])
 {
   typedef  TPixel  PixelType;
 
@@ -445,7 +442,7 @@ EvolutionaryRegistration(int argc, char * argv[])
   typedef itk::NormalizedMutualInformationHistogramImageToImageMetric< FixedImageType,MovingImageType> NormalizedMutualInformationHistogramImageToImageMetricType;
   typedef itk::MeanSquaresImageToImageMetric< FixedImageType,MovingImageType> MeanSquaresImageToImageMetricType;
   typedef itk::NormalizedCorrelationImageToImageMetric< FixedImageType,MovingImageType> NormalizedCorrelationImageToImageMetricType;
-  typedef itk::OnePlusOneEvolutionaryOptimizer           OptimizerType;
+  typedef itk::ExhaustiveOptimizer           OptimizerType;
   typedef itk::LinearInterpolateImageFunction<
                                     MovingImageType,
                                     double             > InterpolatorType;
@@ -531,6 +528,7 @@ EvolutionaryRegistration(int argc, char * argv[])
     
 
   std::string metric_name( argv[9] );
+  double isMaximize = true;
 
   if(!strcmp(metric_name.c_str(),"mutualinfo"))
     {
@@ -540,7 +538,7 @@ EvolutionaryRegistration(int argc, char * argv[])
     //typedmetric->SetNumberOfSpatialSamples( 10000 );
     metric = typedmetric;
     symmmetric->SetAsymMetric( metric  );
-    optimizer->MaximizeOff();
+    isMaximize = false;
     }
   else if(!strcmp(metric_name.c_str(),"normmi"))
     {
@@ -548,7 +546,7 @@ EvolutionaryRegistration(int argc, char * argv[])
       typedmetric = NormalizedMutualInformationHistogramImageToImageMetricType::New();
     metric = typedmetric;
     symmmetric->SetAsymMetric( metric  );
-    optimizer->MaximizeOn();
+    isMaximize = true;
     }
   else if(!strcmp(metric_name.c_str(),"leastsq"))
     {
@@ -556,7 +554,7 @@ EvolutionaryRegistration(int argc, char * argv[])
       typedmetric = MeanSquaresImageToImageMetricType::New();
     metric = typedmetric;
     symmmetric->SetAsymMetric( metric  );
-    optimizer->MaximizeOff();
+    isMaximize = false;
     }
   else if(!strcmp(metric_name.c_str(),"normcorr"))
     {
@@ -564,7 +562,7 @@ EvolutionaryRegistration(int argc, char * argv[])
       typedmetric = NormalizedCorrelationImageToImageMetricType::New();
     metric = typedmetric;
     symmmetric->SetAsymMetric( metric  );
-    optimizer->MaximizeOff();
+    isMaximize = false;
     }
   else 
     {
@@ -638,7 +636,7 @@ EvolutionaryRegistration(int argc, char * argv[])
     // 1 degree of rotation is set equivalent to 1 voxel translation
     for (size_t i=0; i < VDim ; i++)
       //paramScales[VDim + i] = fixedspacing[i] * (180/3.14159);
-      paramScales[VDim + i] = (fixedspacing[i]) ;
+      paramScales[VDim + i] = (100*fixedspacing[i]) ;
 
     }
   else if(!strcmp(transform_name.c_str(),"aff"))
@@ -669,10 +667,11 @@ EvolutionaryRegistration(int argc, char * argv[])
     paramScales.fill(1.0);
     for (size_t i=0; i < VDim; i++)
       paramScales[i*VDim + i] = 1.0;
-    // 1 degree of rotation is set equivalent to 1 voxel translation
+    // 1 degree of rotation is set equivalent to 1 voxel translation 
+    // Make sure because here the parameters are not quarternion
     for (size_t i=0; i < VDim ; i++)
       //paramScales[VDim*VDim + i] = fixedspacing[i] * (180/3.14159);
-      paramScales[VDim*VDim + i] = (fixedspacing[i]);
+      paramScales[VDim*VDim + i] = (100*fixedspacing[i]);
 
     }
   else 
@@ -682,48 +681,60 @@ EvolutionaryRegistration(int argc, char * argv[])
     }; 
 
 
-  typename InterpolatorType::Pointer   interpolator  = InterpolatorType::New();
-  typename InterpolatorType::Pointer   fixedinterpolator  = InterpolatorType::New();
-
-
-  symmmetric->SetInterpolator(  interpolator  );
-  symmmetric->SetFixedInterpolator(  fixedinterpolator  );
-  
-  optimizer->SetScales( paramScales );
-  symmmetric->SetTransformParameters( initialParameters );
-
-  
-  
-  // Output some information about initial transform and parameters
-  std::cout << "Initial Transform: " << std::endl;
-  PrintMatrix( amat.GetVnlMatrix(), "%12.5f ", "   ");
-  std::cout << "N = " << nParameters << std::endl << "params: " << symmmetric->GetTransformParameters() << std::endl;
-  std::cout << "fixed params: " << symmmetric->GetTransform()->GetFixedParameters() << std::endl;
-  std::cout << "param scales are: " << optimizer->GetScales() << std::endl;
-
-  optimizer->SetCostFunction( symmmetric );
-  symmmetric->Initialize();
-  optimizer->SetInitialPosition( symmmetric->GetTransformParameters() );
-
-  typedef itk::Statistics::NormalVariateGenerator  GeneratorType;
-
-  typename GeneratorType::Pointer generator = GeneratorType::New();
-
-
-  generator->Initialize(12345);
-
-  optimizer->SetNormalVariateGenerator( generator );
-  optimizer->SetEpsilon( atof(argv[15]) );
-  optimizer->SetMaximumIteration( atoi(argv[16]) );
-
-
   // Create the Command observer and register it with the optimizer.
   //
   typename CommandIterationUpdate::Pointer observer = CommandIterationUpdate::New();
   optimizer->AddObserver( itk::IterationEvent(), observer );
  
   optimizer->DebugOn();
-  optimizer->Initialize( atof(argv[12]), atof(argv[13]), atof(argv[14]) );
+  typename InterpolatorType::Pointer   interpolator  = InterpolatorType::New();
+  typename InterpolatorType::Pointer   fixedinterpolator  = InterpolatorType::New();
+
+
+  symmmetric->SetInterpolator(  interpolator  );
+  symmmetric->SetFixedInterpolator(  fixedinterpolator  );
+  symmmetric->SetTransformParameters( initialParameters );
+  symmmetric->Initialize();
+
+  optimizer->SetCostFunction( symmmetric );
+  
+  double steplength = atof(argv[13] );
+  OptimizerType::StepsType nsteps( symmmetric->GetNumberOfParameters() );
+  for ( size_t i = 0; i < symmmetric->GetNumberOfParameters(); i++ )
+    nsteps[i] = atoi(argv[12]);
+  typename OptimizerType::ParametersType boundaryParameters = symmmetric->GetTransformParameters();
+  for (size_t i=0; i<symmmetric->GetNumberOfParameters(); i++)
+    boundaryParameters[i] = boundaryParameters[i] + 0.5*nsteps[i]*steplength*paramScales[i];
+
+  
+  
+  optimizer->SetInitialPosition( boundaryParameters );
+  optimizer->SetScales( paramScales );
+  
+  
+  transform->SetParameters( boundaryParameters );
+  itk::Matrix<double, VDim, VDim> bmat = transform->GetMatrix();
+  itk::Vector<double, VDim> boff = transform->GetOffset();
+  if (transform->GetDebug())
+    {
+    cout << "calling transform print after setting boundary position"<< endl;
+    transform->Print( std::cout );
+    }
+  Flip_LPS_to_RAS( amat, bmat, boff);
+  // Output some information about initial transform and parameters
+  std::cout << "Initial Transform: " << std::endl;
+  PrintMatrix( amat.GetVnlMatrix(), "%12.5f ", "   ");
+  std::cout << "N = " << nParameters << std::endl << "params: " << optimizer->GetInitialPosition() << std::endl;
+  std::cout << "fixed params: " << transform->GetFixedParameters() << std::endl;
+  std::cout << "param scales are: " << optimizer->GetScales() << std::endl;
+
+
+
+  optimizer->SetStepLength( steplength );
+  optimizer->SetNumberOfSteps( nsteps );
+
+
+  optimizer->Print(std::cerr);
   try 
     { 
     std::cout << "Registration starts!" << std::endl;
@@ -732,6 +743,7 @@ EvolutionaryRegistration(int argc, char * argv[])
     std::cout << "Optimizer stop condition: "
               << optimizer->GetStopConditionDescription()
               << std::endl;
+
     } 
   catch( itk::ExceptionObject & err ) 
     { 
@@ -740,13 +752,22 @@ EvolutionaryRegistration(int argc, char * argv[])
     return EXIT_FAILURE;
     } 
 
-  typename OptimizerType::ParametersType finalParameters = optimizer->GetCurrentPosition();
+  double bestValue;
+  typename OptimizerType::ParametersType finalParameters;
+  if ( isMaximize )
+    {
+    bestValue = optimizer->GetMaximumMetricValue();
+    finalParameters = optimizer->GetMaximumMetricValuePosition();
+    }
+  else
+    {
+    bestValue = optimizer->GetMinimumMetricValue();
+    finalParameters = optimizer->GetMinimumMetricValuePosition();
+    }
+  
+  unsigned int numberOfIterations = observer->m_CurrentIteration;
   
   
-  unsigned int numberOfIterations = optimizer->GetCurrentIteration();
-  
-  double bestValue = optimizer->GetValue();
-
 
   // Print out results
   //
@@ -925,7 +946,7 @@ int main( int argc, char *argv[] )
     std::cerr << "Metric ";
     std::cerr << "Symmetry ";
     std::cerr << "Master/Slave ";
-    std::cerr << "InitialRadius Grow Shrink Epsilon MaxIter "<< std::endl;
+    std::cerr << "NoOfSteps StepLength"<< std::endl;
     return EXIT_FAILURE;
     }
 
@@ -940,12 +961,9 @@ int main( int argc, char *argv[] )
   std::cout << "Metric Type      : " << argv[9] << std::endl;
   std::cout << "Symmetry Type    : " << argv[10] << std::endl;
   std::cout << "Master/Slave     : " << argv[11] << std::endl;
-  std::cout << "Initial Radius   : " << argv[12] << std::endl;
-  std::cout << "Growth Factor    : " << argv[13] << std::endl;
-  std::cout << "Shrink Factor    : " << argv[14] << std::endl;
-  std::cout << "Convergence Eps  : " << argv[15] << std::endl;
-  std::cout << "Max Iteration    : " << argv[16] << std::endl;
+  std::cout << "No. of Steps     : " << argv[12] << std::endl;
+  std::cout << "Step Length      : " << argv[13] << std::endl;
 
-    return EvolutionaryRegistration<double,3>(argc, argv);
+    return BruteForceRegistration<double,3>(argc, argv);
   
 }
