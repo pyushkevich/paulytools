@@ -21,8 +21,10 @@
 #include <vtkSubdivideTetra.h>
 #include <itkImageFunction.h>
 #include <itkImageFileReader.h>
+#include <itkInterpolateImageFunction.h>
 #include <itkLinearInterpolateImageFunction.h>
 #include <itkNearestNeighborInterpolateImageFunction.h>
+#include "itkGaussianInterpolateImageFunction.h"
 #include <itkVectorLinearInterpolateImageFunction.h>
 #include <itkImage.h>
 #include <itkVectorImage.h>
@@ -42,10 +44,14 @@ int usage()
   cout << "                 voxel space (ijk), scaled+offset voxel space (ijkos) " << endl;
   cout << "                 lps or ras. " << endl;
   cout << "   -m spec    : Mesh coordinate specification" << endl;
+  cout << "   -r interp  : Interpolation Type (nn, linear, gauss)" << endl;
+  cout << "   -s sigma   : Sigma for Gaussian interpolator" << endl;
+  cout << "   -a alpha   : Alpha for Gaussian interpolator" << endl;
   return -1;
 }
 
 enum Coord { IJK, IJKOS, LPS, RAS, ANTS };
+enum Interp { NN, LINEAR, GAUSS };
 
 bool scan_coord(const char *text, Coord &val)
 {
@@ -57,6 +63,23 @@ bool scan_coord(const char *text, Coord &val)
   else return false;
   return true;
 }
+
+bool get_interp(const char *text, Interp &val)
+{
+  if(!strcmp(text, "nn")) val = NN;
+  else if(!strcmp(text, "linear")) val = LINEAR;
+  else if(!strcmp(text, "gauss")) val = GAUSS;
+  else return false;
+  return true;
+}
+
+bool get_interp_params(const char *text, double &val)
+{
+  if ((val=atof( text ))==0.0)
+  return false;
+  else return true;
+}
+
 
 /** 
  * This static function constructs a NIFTI matrix from the ITK direction
@@ -116,6 +139,9 @@ struct TetSampleParam
   Coord mesh_coord, warp_coord;
   string fnImage;
   string scalarName;
+  Interp interptype;
+  double interpsigma;
+  double interpalpha;
   TetSampleParam()
     {
     fnMeshIn = "";
@@ -124,6 +150,9 @@ struct TetSampleParam
     scalarName = "";
     mesh_coord = RAS;
     warp_coord = RAS;
+    interptype = NN;
+    interpsigma = 3.0;
+    interpalpha = 4.0;
     }
 };
 
@@ -273,18 +302,42 @@ int TetSample(TetSampleParam &parm)
   // Read warp field
   typedef itk::Image<double, 3> ImageType;
   typedef itk::ImageFileReader<ImageType> ReaderType;
-  typedef itk::NearestNeighborInterpolateImageFunction<ImageType> FuncType;
+  typedef itk::InterpolateImageFunction<ImageType> FuncType;
+  typedef itk::NearestNeighborInterpolateImageFunction<ImageType> NNFuncType;
+  typedef itk::LinearInterpolateImageFunction<ImageType> LinearFuncType;
+  typedef itk::GaussianInterpolateImageFunction<ImageType> GaussianFuncType;
 
+  FuncType::Pointer func;
+  if (parm.interptype == NN)
+    {
+    NNFuncType:: Pointer typedfunc = NNFuncType::New();
+    func = typedfunc;
+    }
+  else if (parm.interptype == LINEAR) 
+    {
+    LinearFuncType:: Pointer typedfunc = LinearFuncType::New();
+    func = typedfunc;
+    }
+  else if (parm.interptype == GAUSS) 
+    {
+    GaussianFuncType:: Pointer typedfunc = GaussianFuncType::New();
+    double sigma[3];
+    for (size_t i=0; i<3; i++)
+      sigma[i] = parm.interpsigma;
+    typedfunc->SetParameters(sigma, parm.interpalpha);
+    cout << "Setting sigma=" << parm.interpsigma << " , alpha="<< parm.interpalpha << endl; 
+    func = typedfunc;
+    }
+  else
+    std::cerr << "Unknown interpolator" << std::endl;
   // Read each of the images in turn
   ImageType::Pointer sampim;
   ReaderType::Pointer reader;
-  FuncType::Pointer func;
   
   reader = ReaderType::New();
   reader->SetFileName(parm.fnImage.c_str());
   reader->Update();
   sampim = reader->GetOutput();
-  func = FuncType::New();
   func->SetInputImage(sampim);
 
   // Read the mesh
@@ -396,7 +449,7 @@ int main(int argc, char **argv)
   // Parse the optional parameters
   int ch;
   TetSampleParam parm;
-  while ((ch = getopt(argc, argv, "m:i:")) != -1)
+  while ((ch = getopt(argc, argv, "m:i:r:s:a:")) != -1)
     {
     switch(ch)
       {
@@ -404,6 +457,15 @@ int main(int argc, char **argv)
                 return usage(); 
               break;
     case 'i': if(!scan_coord(optarg, parm.warp_coord))
+                return usage(); 
+              break;
+    case 'r': if(!get_interp(optarg, parm.interptype))
+                return usage(); 
+              break;
+    case 's': if(!get_interp_params(optarg, parm.interpsigma))
+                return usage(); 
+              break;
+    case 'a': if(!get_interp_params(optarg, parm.interpalpha))
                 return usage(); 
               break;
     default: return usage();

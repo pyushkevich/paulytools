@@ -35,6 +35,7 @@ using namespace std;
 using namespace itk;
 
 enum InitType { UNCHANGED, FULLRAND, IDENTITY, ROTRAND };
+volatile sig_atomic_t sflag = 0;
 
 
 //  The following section of code implements a Command observer
@@ -68,12 +69,18 @@ public:
         return;
         }
       double currentValue = optimizer->GetValue();
+      if (sflag == 1)
+        {
+        std::cout << "Huh! Need to do some work" << std::endl;
+        sflag = 0;
+        }
       // Only print out when the Metric value changes
       if( vcl_fabs( m_LastMetricValue - currentValue ) > 1e-7 )
         { 
         std::cout << optimizer->GetCurrentIteration() << "   ";
         std::cout << currentValue << "   ";
-        std::cout << optimizer->GetCurrentPosition() << std::endl;
+        std::cout << optimizer->GetCurrentPosition() ;
+        std::cout << std::endl;
         m_LastMetricValue = currentValue;
         }
     }
@@ -501,6 +508,11 @@ EvolutionaryRegistration(int argc, char * argv[])
   // Get spacing and size for parameter scaling later
   typename FixedImageType::SizeType fixedsize = fixedImageReader->GetOutput()->GetLargestPossibleRegion().GetSize(); 
   typename FixedImageType::SpacingType fixedspacing = fixedImageReader->GetOutput()->GetSpacing();
+  double minspacing = fixedspacing[0];
+  for (size_t i=0; i< VDim; i++)
+    if ( fixedspacing[i] < minspacing )
+      minspacing = fixedspacing[i];
+
 
   // Create the appropriate metric
   typedef itk::ImageToImageMetric<FixedImageType, MovingImageType> MetricType;
@@ -639,8 +651,8 @@ EvolutionaryRegistration(int argc, char * argv[])
       paramScales[i] = 1.0;
     // 1 degree of rotation is set equivalent to 1 voxel translation
     for (size_t i=0; i < VDim ; i++)
-      //paramScales[VDim + i] = fixedspacing[i] * (180/3.14159);
-      paramScales[VDim + i] = (fixedspacing[i]) ;
+      //paramScales[VDim + i] = (fixedspacing[i]) ;
+      paramScales[VDim + i] = 1.0/(minspacing*100.0);
 
     }
   else if(!strcmp(transform_name.c_str(),"aff"))
@@ -673,8 +685,8 @@ EvolutionaryRegistration(int argc, char * argv[])
       paramScales[i*VDim + i] = 1.0;
     // 1 degree of rotation is set equivalent to 1 voxel translation
     for (size_t i=0; i < VDim ; i++)
-      //paramScales[VDim*VDim + i] = fixedspacing[i] * (180/3.14159);
-      paramScales[VDim*VDim + i] = (fixedspacing[i]);
+      //paramScales[VDim*VDim + i] = (fixedspacing[i]);
+      paramScales[VDim*VDim + i] = 1.0/(minspacing*100.0);
 
     }
   else 
@@ -917,7 +929,8 @@ void sigproc(int signum)
           /* NOTE some versions of UNIX will reset signal to default
           after each call. So for portability reset signal each time */
   
-          printf("you have pressed ctrl-c \n");
+          printf("Signal received \n");
+          sflag = 1;
           return;
 }
 

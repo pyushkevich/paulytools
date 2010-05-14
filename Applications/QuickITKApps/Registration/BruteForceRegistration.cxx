@@ -496,6 +496,11 @@ BruteForceRegistration(int argc, char * argv[])
   // Get spacing and size for parameter scaling later
   typename FixedImageType::SizeType fixedsize = fixedImageReader->GetOutput()->GetLargestPossibleRegion().GetSize(); 
   typename FixedImageType::SpacingType fixedspacing = fixedImageReader->GetOutput()->GetSpacing();
+  double minspacing = fixedspacing[0];
+  for (size_t i=0; i< VDim; i++)
+    if ( fixedspacing[i] < minspacing )
+      minspacing = fixedspacing[i];
+
 
   // Create the appropriate metric
   typedef itk::ImageToImageMetric<FixedImageType, MovingImageType> MetricType;
@@ -636,7 +641,8 @@ BruteForceRegistration(int argc, char * argv[])
     // 1 degree of rotation is set equivalent to 1 voxel translation
     for (size_t i=0; i < VDim ; i++)
       //paramScales[VDim + i] = fixedspacing[i] * (180/3.14159);
-      paramScales[VDim + i] = (100*fixedspacing[i]) ;
+      //paramScales[VDim + i] = (100*fixedspacing[i]) ;
+      paramScales[VDim + i] = 100*minspacing;
 
     }
   else if(!strcmp(transform_name.c_str(),"aff"))
@@ -671,7 +677,8 @@ BruteForceRegistration(int argc, char * argv[])
     // Make sure because here the parameters are not quarternion
     for (size_t i=0; i < VDim ; i++)
       //paramScales[VDim*VDim + i] = fixedspacing[i] * (180/3.14159);
-      paramScales[VDim*VDim + i] = (100*fixedspacing[i]);
+      //paramScales[VDim*VDim + i] = (100*fixedspacing[i]);
+      paramScales[VDim*VDim + i] = 100*minspacing;
 
     }
   else 
@@ -690,7 +697,6 @@ BruteForceRegistration(int argc, char * argv[])
   typename InterpolatorType::Pointer   interpolator  = InterpolatorType::New();
   typename InterpolatorType::Pointer   fixedinterpolator  = InterpolatorType::New();
 
-
   symmmetric->SetInterpolator(  interpolator  );
   symmmetric->SetFixedInterpolator(  fixedinterpolator  );
   symmmetric->SetTransformParameters( initialParameters );
@@ -698,26 +704,28 @@ BruteForceRegistration(int argc, char * argv[])
 
   optimizer->SetCostFunction( symmmetric );
   
-  double steplength = atof(argv[13] );
+  double steplength = atof(argv[14] );
   OptimizerType::StepsType nsteps( symmmetric->GetNumberOfParameters() );
+  int tsteps[3];
   for ( size_t i = 0; i < symmmetric->GetNumberOfParameters(); i++ )
     nsteps[i] = atoi(argv[12]);
-  typename OptimizerType::ParametersType boundaryParameters = symmmetric->GetTransformParameters();
-  for (size_t i=0; i<symmmetric->GetNumberOfParameters(); i++)
-    boundaryParameters[i] = boundaryParameters[i] + 0.5*nsteps[i]*steplength*paramScales[i];
+  // Last 3 parameters are translation, setting steps for these
+  for ( size_t i = symmmetric->GetNumberOfParameters() - 3; i < symmmetric->GetNumberOfParameters(); i++ )
+    tsteps[i-3] = atoi(argv[13]);
+  for (size_t i=symmmetric->GetNumberOfParameters()-3; i<symmmetric->GetNumberOfParameters(); i++)
+    {
+    nsteps[i] = tsteps[i - symmmetric->GetNumberOfParameters() + 3];
+    }
 
-  
-  
-  optimizer->SetInitialPosition( boundaryParameters );
+  optimizer->SetInitialPosition( initialParameters );
   optimizer->SetScales( paramScales );
   
-  
-  transform->SetParameters( boundaryParameters );
+  transform->SetParameters( initialParameters );
   itk::Matrix<double, VDim, VDim> bmat = transform->GetMatrix();
   itk::Vector<double, VDim> boff = transform->GetOffset();
   if (transform->GetDebug())
     {
-    cout << "calling transform print after setting boundary position"<< endl;
+    cout << "calling transform print after setting optimizer initial condition"<< endl;
     transform->Print( std::cout );
     }
   Flip_LPS_to_RAS( amat, bmat, boff);
@@ -728,11 +736,8 @@ BruteForceRegistration(int argc, char * argv[])
   std::cout << "fixed params: " << transform->GetFixedParameters() << std::endl;
   std::cout << "param scales are: " << optimizer->GetScales() << std::endl;
 
-
-
   optimizer->SetStepLength( steplength );
   optimizer->SetNumberOfSteps( nsteps );
-
 
   optimizer->Print(std::cerr);
   try 
@@ -946,7 +951,7 @@ int main( int argc, char *argv[] )
     std::cerr << "Metric ";
     std::cerr << "Symmetry ";
     std::cerr << "Master/Slave ";
-    std::cerr << "NoOfSteps StepLength"<< std::endl;
+    std::cerr << "NoOfAngleSteps NoOfTranslationSteps StepLength"<< std::endl;
     return EXIT_FAILURE;
     }
 
@@ -961,8 +966,9 @@ int main( int argc, char *argv[] )
   std::cout << "Metric Type      : " << argv[9] << std::endl;
   std::cout << "Symmetry Type    : " << argv[10] << std::endl;
   std::cout << "Master/Slave     : " << argv[11] << std::endl;
-  std::cout << "No. of Steps     : " << argv[12] << std::endl;
-  std::cout << "Step Length      : " << argv[13] << std::endl;
+  std::cout << "#anglesteps      : " << argv[12] << std::endl;
+  std::cout << "#translatesteps  : " << argv[13] << std::endl;
+  std::cout << "Step Length      : " << argv[14] << std::endl;
 
     return BruteForceRegistration<double,3>(argc, argv);
   

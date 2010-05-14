@@ -5,5 +5,6 @@ SUBDIRS(
   FillSTLMesh
   Ovoids
   OneTimeJunk
+  Registration
   Stackem
 )
