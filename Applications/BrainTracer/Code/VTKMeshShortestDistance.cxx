@@ -80,7 +80,8 @@ VTKMeshShortestDistance
 {
   // Ugly VTK
   vtkFloatingPointType v1[3], v2[3], ptLine[3], pCoords[3];
-  vtkIdType subId;
+  int subId;
+  vtkIdType cellid;
   vtkFloatingPointType t; 
 
   v1[0] = xStart[0]; v1[1] = xStart[1]; v1[2] = xStart[2];
@@ -88,7 +89,7 @@ VTKMeshShortestDistance
 
   // Compute the intersection with the line
   int rc = fltCellLocator->IntersectWithLine( 
-    v1,v2, 0.001, t, ptLine, pCoords, subId, point);
+    v1,v2, 0.001, t, ptLine, pCoords, subId, cellid);
 
   return subId == 0;
 }

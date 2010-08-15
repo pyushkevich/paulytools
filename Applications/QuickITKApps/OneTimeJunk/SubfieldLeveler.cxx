@@ -65,17 +65,34 @@ int main(int argc, char *argv[])
     }
 
   // Report statistics
+  cout << "Slice Partition: ";
+  size_t iLastHead = 0;
   for(size_t i = 0; i < n_slices; i++)
     {
-    cout << "Slice " << i << " belongs to ";
     if(nTail[i] > nHead[i] + nBody[i])
-      cout << "TAIL";
+      cout << "T";
     if(nHead[i] > nBody[i] + nTail[i])
-      cout << "HEAD";
+      { cout << "H"; iLastHead = i; }
     if(nBody[i] > nHead[i] + nTail[i])
-      cout << "BODY";
-    cout << endl;
+      cout << "B";
     }
+  cout << endl;
+
+  // Flag slices as ERC or not
+  vector<bool> iERC(n_slices,false);
+  for(size_t i = iLastHead-1; i < iLastHead+2; i++)
+    iERC[i] = true;
+
+  // Report statistics
+  cout << "                 ";
+  for(size_t i = 0; i < n_slices; i++)
+    {
+    if(iERC[i])
+      cout << "E";
+    else
+      cout << " ";
+    }
+  cout << endl;
 
   // Compute the distance transforms from the source segmentation
   typedef itk::Image<float, 3> FloatImageType;
@@ -105,10 +122,11 @@ int main(int argc, char *argv[])
     size_t i = idx[slice_dim];
     short v = it.Value();
     size_t cand_tail[] = {6, 8, 9, 10};
-    size_t cand_head[] = {5, 8, 9, 10};
+    size_t cand_head[] = {5, 9, 10};
     size_t cand_body[] = {1, 2, 3, 4, 8, 9, 10};
     size_t *mycand = NULL, n_mycand = 0;
 
+    
     if(nTail[i] > nHead[i] + nBody[i])
       {
       if(v==1 || v==2 || v==3 || v==4 || v==5 || v==7)
@@ -116,8 +134,8 @@ int main(int argc, char *argv[])
       }
     if(nHead[i] > nBody[i] + nTail[i])
       {
-      if(v==1 || v==2 || v==3 || v==4 || v==6 || v==7)
-        { mycand = cand_head; n_mycand = 4; cout << "Voxel " << idx << " label " << v << " is in the head ";}
+      if(v==1 || v==2 || v==3 || v==4 || v==6 || v==7 || v==8)
+        { mycand = cand_head; n_mycand = 3; cout << "Voxel " << idx << " label " << v << " is in the head ";}
       }
     if(nBody[i] > nHead[i] + nTail[i])
       {
@@ -138,6 +156,17 @@ int main(int argc, char *argv[])
         }
       it.Set(closest);
       cout << ", became " << closest << endl;
+      }
+
+    if(iERC[i] && v==10)
+      {
+      it.Set(9);
+      cout << "Voxel " << idx << " label " << v << " is in ERC slices, became " << 9 << endl;
+      }
+    else if(!iERC[i] && v==9)
+      {
+      it.Set(10);
+      cout << "Voxel " << idx << " label " << v << " is in PHG slices, became " << 10 << endl;
       }
     }
 

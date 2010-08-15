@@ -5,7 +5,7 @@ using namespace std;
 
 int usage()
 {
-  cout << "usage: smoothmesh input.vtk output.vtk pass_band" << endl;
+  cout << "usage: copymesh input.vtk output.vtk" << endl;
   return -1;
 }
 
