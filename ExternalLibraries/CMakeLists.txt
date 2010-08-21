@@ -4,6 +4,7 @@ OPTION(BUILD_LASPACK "Build the external LasPack library" OFF)
 
 SUBDIRS(Netlib/toms/toms611)
 SUBDIRS(tetgen1.4.2)
+SUBDIRS(triangle)
 
 IF(BUILD_SOPLEX)
   SUBDIRS(SoPlex)
