@@ -17,6 +17,7 @@
 #include <vtkCellData.h>
 #include <vtkPointData.h>
 #include <vtkTetra.h>
+#include <vtkTriangle.h>
 #include <itkImageFileReader.h>
 #include <itkLinearInterpolateImageFunction.h>
 #include <itkVectorLinearInterpolateImageFunction.h>
@@ -174,8 +175,9 @@ void WriteMesh<>(vtkPolyData *mesh, const char *fname)
 }
 
 template<class TMeshType>
-bool ComputeTetrahedralVolumes(TMeshType *mesh, vtkFloatArray *cellarray, vtkFloatArray *pointarray, double &totalvol)
+int ComputeVolumeOrArea(TMeshType *mesh, vtkFloatArray *cellarray, vtkFloatArray *pointarray, double &totalvol)
 {
+  int celltype;
   totalvol = 0.0;
   cellarray->Allocate(mesh->GetNumberOfCells());
   pointarray->Allocate(mesh->GetNumberOfPoints());
@@ -196,13 +198,29 @@ bool ComputeTetrahedralVolumes(TMeshType *mesh, vtkFloatArray *cellarray, vtkFlo
       totalvol += vol;
       for(size_t ivert = 0; ivert < 4; ivert++)
          pointarray->SetTuple1(cell->GetPointId(ivert), pointarray->GetTuple1(cell->GetPointId(ivert)) + vol/4.0);
+      celltype = VTK_TETRA;
 
       }
-    else return false;
+    else if (cell->GetCellType() == VTK_TRIANGLE)
+      {
+      double p[3][3];
+      mesh->GetPoint(cell->GetPointId(0), p[0]);
+      mesh->GetPoint(cell->GetPointId(1), p[1]);
+      mesh->GetPoint(cell->GetPointId(2), p[2]);
+      double vol = vtkTriangle::TriangleArea(p[0], p[1], p[2]);
+      cellarray->InsertNextValue(vol);
+      totalvol += vol;
+      for(size_t ivert = 0; ivert < 3; ivert++)
+         pointarray->SetTuple1(cell->GetPointId(ivert), pointarray->GetTuple1(cell->GetPointId(ivert)) + vol/3.0);
+
+      celltype = VTK_TRIANGLE;
+      }
+    else return VTK_EMPTY_CELL;
     }
 
-  return true;
+  return celltype;
 }
+
 
 
 void ReadMatrix(const char *fname, itk::Matrix<double,4,4> &mat)
@@ -292,7 +310,7 @@ int WarpMesh(WarpMeshParam &parm)
   vtkFloatArray *pointjacobian = vtkFloatArray::New();
   pointjacobian->SetName("Point Jacobian");
   double total_old_vol = 0;
-  bool have_tetvol = ComputeTetrahedralVolumes(mesh, jacobian, pointjacobian, total_old_vol);
+  int celltype = ComputeVolumeOrArea(mesh, jacobian, pointjacobian, total_old_vol);
 
   // Update the coordinates
   for(int k = 0; k < mesh->GetNumberOfPoints(); k++)
@@ -381,15 +399,23 @@ int WarpMesh(WarpMeshParam &parm)
     }
     
   // Create the volume array (cell-wise) for future jacobian computation
-  if(have_tetvol)
+  if(celltype != VTK_EMPTY_CELL)
     {
     // Compute the updated volumes
     vtkFloatArray *newvol = vtkFloatArray::New();
-    newvol->SetName("Cell Volume");
     vtkFloatArray *newpointvol = vtkFloatArray::New();
-    newpointvol->SetName("Point Volume");
+    if (celltype == VTK_TETRA)
+    {
+      newvol->SetName("Cell Volume");
+      newpointvol->SetName("Point Volume");
+    }
+    else // VTK_TRIANGLE
+    {
+      newvol->SetName("Cell Area");
+      newpointvol->SetName("Point Area");
+    }
     double total_new_vol = 0;
-    ComputeTetrahedralVolumes(mesh, newvol, newpointvol, total_new_vol);
+    ComputeVolumeOrArea(mesh, newvol, newpointvol, total_new_vol);
 
     // Compute the Jacobian
     for(int i = 0; i < mesh->GetNumberOfCells(); i++)
@@ -403,9 +429,13 @@ int WarpMesh(WarpMeshParam &parm)
     mesh->GetPointData()->AddArray(pointjacobian);
     mesh->GetPointData()->AddArray(newpointvol);
 
-    // Report change in volume
-    printf("VOLUME_STATS: %12.8f %12.8f %12.8f\n", 
-      total_old_vol, total_new_vol, total_new_vol/total_old_vol); 
+    // Report change in volume/area
+    if (celltype == VTK_TETRA)
+      printf("VOLUME_STATS: %12.8f %12.8f %12.8f\n", 
+        total_old_vol, total_new_vol, total_new_vol/total_old_vol); 
+    else
+      printf("AREA_STATS: %12.8f %12.8f %12.8f\n", 
+        total_old_vol, total_new_vol, total_new_vol/total_old_vol); 
     }
 
   // Write the mesh
