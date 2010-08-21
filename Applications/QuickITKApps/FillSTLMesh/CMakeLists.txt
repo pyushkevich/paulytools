@@ -24,6 +24,7 @@ ADD_EXECUTABLE(importqvoronoi ImportQVoronoi.cxx ReadWriteVTK.cxx
   ${PAULY_SOURCE_DIR}/Applications/BrainTracer/Code/VTKMeshShortestDistance.cxx)
 ADD_EXECUTABLE(dumpmeshattr DumpMeshAttr.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(warpmesh WarpMeshBackwards.cxx ReadWriteVTK.cxx)
+ADD_EXECUTABLE(warpmesh2 WarpMeshBackwards2.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(flipmesh FlipMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(cmrep2img CMRepMeshToImage.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(cmrep2warp CMRepToWarp.cxx ReadWriteVTK.cxx)
@@ -33,6 +34,7 @@ ADD_EXECUTABLE(mesharrstat  MeshArrayStats.cxx ReadWriteVTK.cxx)
 # ADD_EXECUTABLE(mesh_array_average  MeshArrayAverage.cxx ReadWriteVTK.cxx)
 # ADD_EXECUTABLE(vtk2off  ConvertVTKtoOFF.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(surf2tet SurfMesh2VolMesh.cxx ReadWriteVTK.cxx TetraLib.cxx)
+ADD_EXECUTABLE(contour2surf ContourMesh2SurfMesh.cxx ReadWriteVTK.cxx) 
 ADD_EXECUTABLE(tetgen2vtk TetGenToVTK.cxx ReadWriteVTK.cxx TetraLib.cxx)
 ADD_EXECUTABLE(tetfill TetraFill.cxx)
 ADD_EXECUTABLE(tetsample TetSampleImage.cxx)
@@ -63,6 +65,7 @@ INCLUDE_DIRECTORIES(${MYLIBS_INCLUDE_DIRS}
   ${PAULY_SOURCE_DIR}/Applications/BrainTracer/Code)
 
 INCLUDE_DIRECTORIES(${PAULY_SOURCE_DIR}/ExternalLibraries/tetgen1.4.2)
+INCLUDE_DIRECTORIES(${PAULY_SOURCE_DIR}/ExternalLibraries/triangle)
 INCLUDE_DIRECTORIES(${PAULY_SOURCE_DIR}/CoreLibraries/ITKExtensions)
 
 TARGET_LINK_LIBRARIES(tetfill ${COMMON_LIBS})
@@ -84,21 +87,24 @@ TARGET_LINK_LIBRARIES(mesh2img ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(flipmesh ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(vtklevelset ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(warpmesh ${COMMON_LIBS} ${ITK_LIBS})
+TARGET_LINK_LIBRARIES(warpmesh2 ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(cmrep2img ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(cmrep2warp ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(mesh_image_sample ${COMMON_LIBS} ${ITK_LIBS})
 # TARGET_LINK_LIBRARIES(mesh_array_average ${COMMON_LIBS} ${ITK_LIBS})
 # TARGET_LINK_LIBRARIES(vtk2off ${COMMON_LIBS} ${ITK_LIBS})
+TARGET_LINK_LIBRARIES(contour2surf ${COMMON_LIBS} triangle)
 TARGET_LINK_LIBRARIES(surf2tet ${COMMON_LIBS} tetgen)
 TARGET_LINK_LIBRARIES(tetgen2vtk ${COMMON_LIBS} tetgen)
 TARGET_LINK_LIBRARIES(tetsample ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(tetjac ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(tetdumpattr ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(tetmergearr ${COMMON_LIBS})
+# SET_TARGET_PROPERTIES(contour2surf PROPERTIES LINK_FLAGS -ltriangle)
 
 INSTALL_TARGETS("/bin" meshdiff avgmesh submesh quadcluster 
   smoothmesh copymesh avgmesharr identimg scalemesh 
   dumpmeshpoints meshcluster dumpmeshattr 
-  mesh2img flipmesh vtklevelset warpmesh cmrep2img cmrep2warp
-  mesh_image_sample surf2tet tetgen2vtk tetfill tetjac tetdumpattr tetsample
+  mesh2img flipmesh vtklevelset warpmesh warpmesh2 cmrep2img cmrep2warp
+  mesh_image_sample contour2surf surf2tet tetgen2vtk tetfill tetjac tetdumpattr tetsample
 tetmergearr)
