@@ -24,7 +24,6 @@ ADD_EXECUTABLE(importqvoronoi ImportQVoronoi.cxx ReadWriteVTK.cxx
   ${PAULY_SOURCE_DIR}/Applications/BrainTracer/Code/VTKMeshShortestDistance.cxx)
 ADD_EXECUTABLE(dumpmeshattr DumpMeshAttr.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(warpmesh WarpMeshBackwards.cxx ReadWriteVTK.cxx)
-ADD_EXECUTABLE(warpmesh2 WarpMeshBackwards2.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(flipmesh FlipMesh.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(cmrep2img CMRepMeshToImage.cxx ReadWriteVTK.cxx)
 ADD_EXECUTABLE(cmrep2warp CMRepToWarp.cxx ReadWriteVTK.cxx)
@@ -87,7 +86,6 @@ TARGET_LINK_LIBRARIES(mesh2img ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(flipmesh ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(vtklevelset ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(warpmesh ${COMMON_LIBS} ${ITK_LIBS})
-TARGET_LINK_LIBRARIES(warpmesh2 ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(cmrep2img ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(cmrep2warp ${COMMON_LIBS} ${ITK_LIBS})
 TARGET_LINK_LIBRARIES(mesh_image_sample ${COMMON_LIBS} ${ITK_LIBS})
@@ -105,6 +103,6 @@ TARGET_LINK_LIBRARIES(tetmergearr ${COMMON_LIBS})
 INSTALL_TARGETS("/bin" meshdiff avgmesh submesh quadcluster 
   smoothmesh copymesh avgmesharr identimg scalemesh 
   dumpmeshpoints meshcluster dumpmeshattr 
-  mesh2img flipmesh vtklevelset warpmesh warpmesh2 cmrep2img cmrep2warp
+  mesh2img flipmesh vtklevelset warpmesh cmrep2img cmrep2warp
   mesh_image_sample contour2surf surf2tet tetgen2vtk tetfill tetjac tetdumpattr tetsample
 tetmergearr)

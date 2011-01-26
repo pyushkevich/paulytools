@@ -38,7 +38,7 @@ int usage()
   cout << "contour2surf - Converts a VTK contour mesh to a VTK surface mesh" << endl;
   cout << "usage: " << endl;
   cout << "   contour2surf meshin.vtk meshout.vtk [triangleoptions]" << endl;
-  cout << "triangleoptions: default is zpq1.414a0.1" << endl;
+  cout << "triangleoptions: default is zpq32a160" << endl;
   return -1;
 }
 
@@ -214,6 +214,7 @@ int main(int argc, char **argv)
   out.edgemarkerlist = (int *) NULL;   /* Needed if -e used and -B not used. */
 
 
+  cout << "Options are: " << optstr << endl;
   triangulate((char *)optstr.c_str(), &in, &out, &vor);
   
 

@@ -167,6 +167,12 @@ int main(int argc, char **argv)
     {
       cout << "\"" << inCellArray << "\"" << endl;
       da = tet->GetCellData()->GetArray(inCellArray.c_str());
+      if (da->GetSize()!=tet->GetNumberOfCells())
+      {
+         cout << "No. of cells in input mesh is not equal to isize of cell data array" << endl;
+         return usage();
+      }
+
     }
     }
   // Scan convert each of the tetrahedra
@@ -194,7 +200,14 @@ int main(int argc, char **argv)
       }
 
     // Get the fill value
-    double fillval = da ? da->GetTuple1(ic) : 1.0;
+    double fillval; 
+    //  fillval = da ? da->GetTuple1(ic) : 1.0;
+    if (da !=NULL) 
+    {
+      fillval = da->GetTuple1(ic) ;
+    }
+    else
+      fillval = 1.0;
     ScanTetrahedron(q[0], q[1], q[2], q[3], out, fillval);
     }
 
