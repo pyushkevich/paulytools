@@ -1,5 +1,6 @@
 PROJECT(ONE_TIME_JUNK)
 
+ADD_EXECUTABLE(ashs_affine_vol2slice ASHSAffineVolumeToSlice.cxx)
 ADD_EXECUTABLE(subfield_mask_slices SubfieldSliceMask.cxx)
 ADD_EXECUTABLE(subfield_leveler SubfieldLeveler.cxx)
 ADD_EXECUTABLE(unc_mart2sean UNCConvertMartinImageToSeanImage.cxx)
@@ -32,8 +33,10 @@ TARGET_LINK_LIBRARIES(maskmunge ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(findpeaks ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(coordinate_images ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(pmatlas_ibn_origin_shift ${COMMON_LIBS})
+TARGET_LINK_LIBRARIES(ashs_affine_vol2slice ${COMMON_LIBS})
 
 INSTALL_TARGETS("/bin" 
   convert3d coordinate_images randfx 
   tempfile maskmunge findpeaks
-  overlaps pmatlas_ibn_origin_shift subfield_leveler subfield_mask_slices)
+  overlaps pmatlas_ibn_origin_shift subfield_leveler subfield_mask_slices
+  ashs_affine_vol2slice)
