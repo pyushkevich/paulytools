@@ -1,0 +1,22 @@
+# Example rules file for SubfieldSliceRules.cxx
+#
+# Three classes into which we partition the slices
+CLASS body = 1,2,3,4
+CLASS head = 5
+CLASS tail = 6
+CLASS erc = 9
+CLASS phg = 10
+
+# These classes form a single mutually exclusive group
+GROUP body, head, tail
+GROUP erc, phg
+
+# Additional exclusion rules applied
+RULE head EXCLUDES 8 body tail
+RULE body EXCLUDES head tail
+RULE tail EXCLUDES head body
+
+# Additional range rules for ERC and PHG
+RANGE_RULE END TO head:LAST-2 EXCLUDES 9
+RANGE_RULE head:LAST+2 TO END EXCLUDES 9
+RANGE_RULE head:LAST-1 TO head:LAST+1 EXCLUDES 10

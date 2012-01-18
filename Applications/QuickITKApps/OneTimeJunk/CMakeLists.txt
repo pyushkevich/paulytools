@@ -1,5 +1,6 @@
 PROJECT(ONE_TIME_JUNK)
 
+ADD_EXECUTABLE(eraseme eraseme.cxx)
 ADD_EXECUTABLE(subfield_slice_rules SubfieldSliceRules.cxx)
 ADD_EXECUTABLE(ashs_affine_vol2slice ASHSAffineVolumeToSlice.cxx)
 ADD_EXECUTABLE(subfield_mask_slices SubfieldSliceMask.cxx)
@@ -23,6 +24,7 @@ SET(COMMON_LIBS
   ITKStatistics
   ITKVoxBoIO)
 
+TARGET_LINK_LIBRARIES(eraseme ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(subfield_slice_rules ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(subfield_mask_slices ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(subfield_leveler ${COMMON_LIBS})

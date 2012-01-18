@@ -3,14 +3,20 @@
 #include <itkImageRegionIteratorWithIndex.h>
 #include <itkSignedMaurerDistanceMapImageFilter.h>
 #include <itkUnaryFunctorImageFilter.h>
+#include <string>
 #include <vector>
 #include <set>
+#include <list>
 #include <map>
 #include <iostream>
+#include <algorithm>
+
+// Regular expression support
+#include <itksys/RegularExpression.hxx>
 
 using namespace std;
 
-// Dimension of the slices
+
 static const unsigned int slice_dim = 2;
 
 // Mapper functions for thresholding body, head, tail
@@ -26,25 +32,318 @@ public:
     { return dummy.x != x; }
 };
 
+class Exc : public exception {
+protected:
+  string m_SimpleMessage;
+
+public:
+  Exc();
+  Exc(const char *message, ...) : exception()
+    {
+    char buffer[1024];
+    va_list args;
+    va_start(args, message);
+    vsprintf(buffer,message,args);
+    va_end (args);
+    m_SimpleMessage = buffer;
+    }
+
+  virtual ~Exc() throw() {};
+
+  virtual const char * what() const throw() { return m_SimpleMessage.c_str(); }
+
+  operator const char *() { return this->what(); }
+};
+
 int usage()
 {
   printf(
     "subfield_slice_rules: generate exclusion priors from segmentation and rules\n"
     "usage:\n"
     "  subfield_slice_rules input_seg.nii rules.txt output_pattern.nii\n"
+    "or\n"
+    "  subfield_slice_rules --check-rules rules.txt\n"
     "parameters:\n"
     "  input_seg.nii        Input multi-label segmentation\n"
     "  rules.txt            Text file containing rules\n"
     "  output_pattern.nii   Output pattern (printf format, e.g. out_%%02d.nii.gz\n"
     "rules file format:\n"
-    "  Each line in the rules file specifies exclusion rules in the form \n"
-    "    X : Y\n"
-    "  meaning 'if a slice contains any of the labels in the set X, it may \n"
-    "  not contain any of the labels in the set Y' \n"
-    "  For example: \n"
-    "    5: 1 2 3 4\n"
-    "    1 2 3 4: 5\n");
+    "The rules file consists of lines of text, each being one of three possible\n"
+    "declarations: CLASS, GROUP, RULE, and RANGE_RULE.\n"
+    "\n"
+    "CLASS declaration\n"
+    "=================\n"
+    "\n"
+    "The CLASS declaration states that a set of labels forms a named class:\n"
+    "\n"
+    "    CLASS class_name = labels\n"
+    "\n"
+    "where class_name is an identifier, and labels is a number or a comma separated\n"
+    "list of numbers. For example, \n"
+    "\n"
+    "    CLASS body = 1,2,3,4\n"
+    "\n"
+    "Each slice will be assigned to one of the classes specified, based on the\n"
+    "prevalence of voxels with that class in the slice. If there are no voxels of any\n"
+    "class in a slice, the slice is assigned the NULL class.\n"
+    "\n"
+    "GROUP declaration\n"
+    "=================\n"
+    "\n"
+    "The GROUP declaration states that a list of classes are exclusive, i.e., a slice\n"
+    "can only belong to one of the classes in the group. There can be multiple groups\n"
+    "\n"
+    "    GROUP class_names\n"
+    "\n"
+    "where class_names is a comma-separated list. Rules (see below) are automatically \n"
+    "generated for classes in a group\n"
+    "\n"                                                                            
+    "RULE declaration\n"
+    "================\n"
+    "\n"
+    "The RULE declaration states that if a slice belongs to a certain class, then\n"
+    "voxels in that slice are not allowed to have certain labels:\n"
+    "\n"
+    "    RULE class_name EXCLUDES labels\n"
+    "\n"
+    "where class_name must be declared in one of the CLASS declarations and labels is\n"
+    "a single label, single class, or a comma-separated list of labels and classes.\n"
+    "For example:\n"
+    "\n"
+    "    RULE body EXCLUDES head, tail, 8\n"
+    "\n"
+    "means that voxels in slices belonging to the body class are not allowed to have\n"
+    "labels in classes head, tail, and the label 8.\n"
+    "\n"
+    "RANGE_RULE declaration\n"
+    "======================\n"
+    "\n"
+    "The RANGE_RULE declaration applies exclusions based on the position of the slice\n"
+    "relative to the extents of a class. It has the following format:\n"
+    "\n"
+    "    RANGE_RULE range_start TO range_end EXCLUDES labels\n"
+    "\n"
+    "Where range_start and range_end are specifications in the form. NO SPACES!\n"
+    "\n"
+    "    <class_name:<FIRST|LAST>[<+|->offset]|END>\n"
+    "\n"
+    "For example:\n"
+    "\n"
+    "    RANGE_RULE body:FIRST+1 TO body:LAST-1 EXCLUDES 9\n"
+    "    RANGE_RULE END TO body:LAST EXCLUDES 8\n");
+
   return -1;
+}
+
+using namespace std;
+using namespace itksys;
+
+typedef set<int> LabelSet;
+typedef LabelSet::iterator LabelSetIter;
+
+typedef map<string, LabelSet> ClassMap;
+typedef set<string> ClassGroup;
+
+enum RelPos { NA, FIRST, LAST };
+
+struct RangeLimit
+{
+  bool end;
+  RelPos pos;
+  string cls;
+  int offset;
+  RangeLimit() : end(true), pos(NA), offset(0) {}
+};
+
+struct Rule
+{
+  // What is excluded
+  LabelSet rhs;
+
+  // The class that is matched, or "" if a range rule
+  string cls;
+
+  // The lower and upper range specs
+  RangeLimit rl, ru;
+};
+
+struct RuleCollection
+{
+  // Set of classes in the rules
+  ClassMap cls;
+
+  // Set of groups formed by the classes
+  list<ClassGroup> grp;
+
+  // Set of rules
+  list<Rule> rules;
+};
+
+list<string> ReadCommaSeparatedList(const char *text)
+{
+  list<string> matches;
+  RegularExpression re(" *([a-zA-Z0-9]+) *,*");
+  while(re.find(text))
+    {
+    matches.push_back(re.match(1));
+    text += re.end();
+    }
+  return matches;
+}
+
+set<int> ReadCommaSeparatedIntegerSet(const char *text)
+{
+  set<int> matches;
+  RegularExpression re(" *([0-9]+) *,*");
+  while(re.find(text))
+    {
+    matches.insert(atoi(re.match(1).c_str()));
+    text += re.end();
+    }
+  return matches;
+}
+
+set<int> ReadCommaSeparatedIntegerAndClassSet(const char *text, ClassMap &cls)
+{
+  set<int> matches;
+  RegularExpression re(" *([a-zA-Z0-9]+) *,*");
+  while(re.find(text))
+    {
+    string match = re.match(1);
+    if(cls.find(match) != cls.end())
+      {
+      for(LabelSet::iterator it = cls[match].begin(); it != cls[match].end(); it++)
+        matches.insert(*it);
+      }
+    else
+      {
+      int k = atoi(match.c_str());
+      if(k == 0)
+        throw Exc("Bad label expression %s in rule right hand side %s", match.c_str(), text);
+      matches.insert(k);
+      }
+    text += re.end();
+    }
+  return matches;
+}
+
+RangeLimit ReadLimitDesc(const char *text)
+{
+  RegularExpression reLim("([a-zA-Z]+):(FIRST|LAST)([+-][0-9]+|)");
+  RegularExpression reEnd("^END$");
+  RangeLimit rl;
+
+  if(reEnd.find(text))
+    {
+    rl.end = true;
+    }
+  else if(reLim.find(text))
+    {
+    rl.end = false;
+    rl.cls = reLim.match(1);
+    rl.pos = (reLim.match(2) == "FIRST" ? FIRST : LAST);
+    rl.offset = atoi(reLim.match(3).c_str());  
+    }
+  else throw Exc("Unable to parse limit descriptor %s", text);
+  return rl;
+}
+
+
+RuleCollection parseRules(const char *rulesFile)
+{
+  // The output collection
+  RuleCollection rc;
+
+  // Open the file
+  FILE *f = fopen(rulesFile, "rt");
+  if(!f)
+    throw Exc("Unable to read rules file %s", rulesFile);
+
+  // Read each line
+  char buffer[4096];
+  while(fgets(buffer, 4096, f))
+    {
+    // Get rid of the newline
+    char *pendl = strchr(buffer,'\n');
+    if(pendl) *pendl = 0;
+
+    // Replace tabs with spaces to shorten regex
+    replace(buffer, buffer+strlen(buffer), '\t', ' ');
+
+    // Skip empty lines and comment lines
+    if(RegularExpression("^ *$").find(buffer) || RegularExpression("^ *#").find(buffer))
+      continue;
+
+    // Recognizable commands
+    RegularExpression reClass("^ *CLASS +([a-zA-Z]+) *= *(.*) *$");
+    RegularExpression reRule("^ *RULE +([a-zA-Z]+) +EXCLUDES +(.*) *$");
+    RegularExpression reRange("^ *RANGE_RULE *([a-zA-Z0-9:\\+\\-]+) +TO +([a-zA-Z0-9:\\+\\-]+) +EXCLUDES +(.*)$");
+    RegularExpression reGroup("^ *GROUP +(.*)$");
+    
+    // Check if this is a class line
+    if(reClass.find(buffer))
+      {
+      // Found a class declaration
+      string clsName = reClass.match(1);
+
+      // Get the list of labels
+      LabelSet labels = ReadCommaSeparatedIntegerSet(reClass.match(2).c_str());
+      if(labels.size() == 0)
+        throw Exc("Bad label specification %s", reClass.match(2).c_str());
+
+      // Save to the list of classes
+      rc.cls[clsName] = labels;
+      }
+
+    // Check if this is a group line
+    else if(reGroup.find(buffer))
+      {
+      // Get the names
+      list<string> classes = ReadCommaSeparatedList(reGroup.match(1).c_str());
+      if(classes.size() == 0)
+        throw Exc("Bad class list specification %s", reGroup.match(1).c_str());
+
+      // Store the group spec
+      ClassGroup grp;
+      for(list<string>::iterator it = classes.begin(); it!=classes.end();it++)
+        {
+        if(rc.cls.find(*it) == rc.cls.end())
+          throw Exc("Bad class specification %s in GROUP command %s", it->c_str(), buffer);
+        grp.insert(*it);
+        }
+      rc.grp.push_back(grp);
+      }
+
+    // Check if this is a rule line
+    else if(reRule.find(buffer))
+      {
+      Rule rule;
+      rule.cls = reRule.match(1);
+      rule.rhs = ReadCommaSeparatedIntegerAndClassSet(reRule.match(2).c_str(), rc.cls);
+      rc.rules.push_back(rule);
+      }
+
+    // Check if this is a range rule line
+    else if(reRange.find(buffer))
+      {
+      Rule rule;
+      rule.rhs = ReadCommaSeparatedIntegerAndClassSet(reRange.match(3).c_str(), rc.cls);
+      string lim1 = reRange.match(1), lim2 = reRange.match(2);
+      
+      // Read the range descriptor
+      rule.rl = ReadLimitDesc(lim1.c_str());
+      rule.ru = ReadLimitDesc(lim2.c_str());
+      rc.rules.push_back(rule);
+      }
+
+    else 
+      {
+      throw Exc("Unable to parse command %s", buffer);
+      }
+    }
+  
+  fclose(f);
+  return rc;
 }
 
 int main(int argc, char *argv[])
@@ -52,134 +351,273 @@ int main(int argc, char *argv[])
   typedef itk::Image<short, 3> ImageType;
   typedef itk::ImageFileReader<ImageType> ReaderType;
 
-  if(argc < 4) return usage();
+  string fnRules, fnInput, fnOutPattern;
+  bool checkOnly = false;
 
-  // Read reference segmentation
-  ReaderType::Pointer fReader = ReaderType::New();
-  fReader->SetFileName(argv[1]);
-  fReader->Update();
-  ImageType::Pointer ref = fReader->GetOutput();
-
-  // Read the rules files
-  FILE *f = fopen(argv[2],"rt");
-  if(!f)
+  if(argc == 3 && !strcmp(argv[1], "--check-rules"))
     {
-    cerr << "Can't open rules file" << argv[2] << endl;
+    // Special case - checking rules
+    checkOnly = true;
+    fnRules = argv[2];
+    }
+  else if(argc == 4)
+    {
+    fnInput = argv[1];
+    fnRules = argv[2];
+    fnOutPattern = argv[3];
+    }
+  else return usage();
+
+  // Parse the rules
+  RuleCollection rc;
+  try
+    {
+    rc = parseRules(fnRules.c_str());
+    printf("Success parsing rules file. The rules follow:\n");
+    }
+  catch(Exc &exc)
+    {
+    cout << "EXCEPTION parsing rules: " << exc.what() << endl;
     return -1;
     }
 
-  typedef std::set<int> Exclusion;
-  typedef std::map<int, Exclusion> Rules;
-  Rules rules;
-  Exclusion allRHS;
-
-  char buffer[1024];
-  while(fgets(buffer, 1024, f))
+  // Describe the rules
+  printf("  [CLASSES]\n");
+  for(ClassMap::iterator itmap = rc.cls.begin(); itmap!=rc.cls.end(); itmap++)
     {
-    cout << "Read rule '" << buffer << endl;
-    char *pColon = strchr(buffer,':');
-    if(!pColon)
-      {
-      cerr << "Invalid rule!" << endl;
-      return -1;
-      }
+    printf("  %10s   :", itmap->first.c_str());
+    for(LabelSet::iterator itset = itmap->second.begin(); itset != itmap->second.end(); itset++)
+      printf(" %d", *itset);
+    printf("\n");
+    }
 
-    // Each entry on the left is treated as a separate rule
-    *pColon = 0;
+  printf("  [GROUPS]\n");
+  int igrp = 0;
+  for(list<ClassGroup>::iterator it = rc.grp.begin(); it!=rc.grp.end(); it++)
+    {
+    printf("  %10d   :", ++igrp);
+    for(ClassGroup::iterator itg = it->begin(); itg!=it->end();itg++)
+      printf(" %s", itg->c_str());
+    printf("\n");
+    }
 
-    // Read the right hand side of the rule
-    Exclusion ruleRHS;
-    char *pTok = strtok(pColon+1," \t\n,");
-    while(pTok)
+  printf("  [RULES]\n");
+  int irule = 0;
+  for(list<Rule>::iterator it = rc.rules.begin(); it!=rc.rules.end(); it++)
+    {
+    printf("  %10d   :", ++irule);
+    Rule r = *it;
+    if(r.cls.size())
       {
-      int rhs = atoi(pTok);
-      if(rhs == 0)
-        {
-        cerr << "Bad rule RHS: " << pTok << endl;
-        return -1;
-        }
-      ruleRHS.insert(rhs);
-      allRHS.insert(rhs);
-      pTok = strtok(NULL, " \t\n,");
+      printf(" %s EXCLUDES", r.cls.c_str());
       }
+    else
+      {
+      printf(" RANGE ");
+      if(r.rl.end)
+        printf(" END ");
+      else
+        printf(" %s:%s%c%d ", r.rl.cls.c_str(), (r.rl.pos == FIRST ? "FIRST" : "LAST"), r.rl.offset < 0 ? '-' : '+', abs(r.rl.offset));
+      printf("TO");
+      if(r.ru.end)
+        printf(" END ");
+      else
+        printf(" %s:%s%c%d ", r.ru.cls.c_str(), (r.ru.pos == FIRST ? "FIRST" : "LAST"), r.ru.offset < 0 ? '-' : '+', abs(r.ru.offset));
+      printf("EXCLUDES");
+      }
+    for(LabelSet::iterator lit = r.rhs.begin(); lit != r.rhs.end(); lit++)
+      printf(" %d", *lit);
+    printf("\n");
+    }
+
+  // We now actually have the rules!
+  if(checkOnly)
+    {
+    return 0;
+    }
     
-    pTok = strtok(buffer, " \t\n,");
-    while(pTok)
+  // Read reference segmentation
+  ReaderType::Pointer fReader = ReaderType::New();
+  fReader->SetFileName(fnInput.c_str());
+  try 
+    {
+    fReader->Update();
+    }
+  catch(exception &exc)
+    {
+    cerr << "Exception reading input image " << fnInput << ": " << exc.what() << endl;
+    return -1;
+    }
+  ImageType::Pointer ref = fReader->GetOutput();
+
+  // Get the union of all the classes covered by the exclusions
+  LabelSet allex;
+  for(list<Rule>::iterator it = rc.rules.begin(); it!=rc.rules.end(); it++)
+    {
+    Rule r = *it;
+    for(LabelSetIter qt = r.rhs.begin(); qt != r.rhs.end(); qt++)
       {
-      int lhs = atoi(pTok);
-      if(lhs == 0)
-        {
-        cerr << "Bad rule LHS: " << pTok << endl;
-        return -1;
-        }
-
-      for(Exclusion::iterator it = ruleRHS.begin(); it!=ruleRHS.end(); ++it)
-        {
-        rules[lhs].insert(*it);
-        }
-
-      pTok = strtok(NULL, " \t\n,");
+      allex.insert(*qt);
       }
     }
-  fclose(f);
 
-  // Create output images for all the RHS labels
-  typedef std::map<int, ImageType::Pointer> PriorMap;
-  PriorMap pm;
 
-  for(Exclusion::iterator it = allRHS.begin(); it!=allRHS.end(); ++it)
-    {
-    pm[*it] = ImageType::New();
-    pm[*it]->CopyInformation(ref);
-    pm[*it]->SetRegions(ref->GetLargestPossibleRegion());
-    pm[*it]->Allocate();
-    pm[*it]->FillBuffer(0);
-    }
-
+  // The slicing dimension, by default 2. Could be specified from command line
   int slice_dim = 2;
-  std::vector<Exclusion> sliceIdx(ref->GetBufferedRegion().GetSize()[slice_dim]);
+  int ns = ref->GetBufferedRegion().GetSize()[slice_dim]; 
 
-  // For each z-slice, determine what unique voxels it has
+  // For each slice, we need to pick the dominant class in each group. For that we
+  // count the number of voxels of each label in each slice. This is done using a 
+  // simple list of maps
+  typedef map<int, long> Histogram;
+  vector<Histogram> sliceHist(ns);
+
+  // Build the slice histograms
   typedef itk::ImageRegionIteratorWithIndex<ImageType> IteratorType;
   for(IteratorType it(ref, ref->GetBufferedRegion()); !it.IsAtEnd(); ++it)
     {
-    sliceIdx[it.GetIndex()[slice_dim]].insert(it.Get());
+    int slice = it.GetIndex()[slice_dim];
+    int label = it.Get();
+    Histogram::iterator qt = sliceHist[slice].find(label);
+    if(qt == sliceHist[slice].end())
+      sliceHist[slice][label] = 1;
+    else
+      qt->second++;
     }
 
-  // For each slice, determine which labels are excluded
-  std::vector<Exclusion> sliceExclude(sliceIdx.size());
-  for(int k = 0; k < (int) sliceIdx.size(); k++)
+  // A list of classes assigned to each slice. A slice can have multiple
+  // classes if there are multiple groups
+  vector< set<string> > sliceCls(ns);
+
+  // We will compute the extent of each of the classes
+  map<string, int> clsFirst, clsLast;
+
+  // Within each group, within each slice, find the dominant class
+  for(int i = 0; i < ns; i++)
     {
-    for(Exclusion::iterator it = sliceIdx[k].begin(); it != sliceIdx[k].end(); ++it)
+    for(list<ClassGroup>::iterator it = rc.grp.begin(); it != rc.grp.end(); it++)
       {
-      int lhs = *it;
-      for(Exclusion::iterator qt = rules[lhs].begin(); qt!=rules[lhs].end(); ++qt)
+      // Find the dominant class for this group in this slice
+      string bestClass = "";
+      int bestClassSize = 0;
+      for(ClassGroup::iterator qt = it->begin(); qt != it->end(); qt++)
         {
-        sliceExclude[k].insert(*qt);
+        // Set of labels in that class
+        LabelSet clab = rc.cls[*qt];
+        int myClassSize = 0;
+        for(LabelSetIter gt = clab.begin(); gt != clab.end(); gt++)
+          myClassSize += sliceHist[i][*gt];
+        if(myClassSize > bestClassSize)
+          {
+          bestClassSize = myClassSize;
+          bestClass = *qt;
+          }
+        }
+
+      // Store this information
+      if(bestClassSize > 0)
+        {
+        // Set the class for the slice
+        sliceCls[i].insert(bestClass);
+
+        // Update the extents of the class
+        if(clsFirst.find(bestClass) == clsFirst.end())
+          clsFirst[bestClass] = i;
+
+        clsLast[bestClass] = i;
         }
       }
     }
 
-  // Now paint all the slices
-  for(IteratorType it(ref, ref->GetBufferedRegion()); !it.IsAtEnd(); ++it)
+  // Print the classification for all the slices
+  printf("Slice Classification:\n");
+  igrp = 0;
+  for(list<ClassGroup>::iterator it = rc.grp.begin(); it != rc.grp.end(); it++)
     {
-    int k = it.GetIndex()[slice_dim];
-    for(Exclusion::iterator qt = sliceExclude[k].begin(); qt != sliceExclude[k].end(); ++qt)
+    printf("  Group %d\n", ++igrp);
+    for(ClassGroup::iterator qt = it->begin(); qt != it->end(); qt++)
       {
-      pm[*qt]->SetPixel(it.GetIndex(), 1);
+      printf("    %10s: |", qt->c_str());
+      for(int i = 0; i < ns; i++)
+        printf(sliceCls[i].count(*qt) ? "+" : " ");
+      printf("|\n");
       }
     }
 
-  // Save the result
-  for(Exclusion::iterator qt = allRHS.begin(); qt!=allRHS.end(); ++qt)
-    {
-    char fname[1024];
-    int rhs = *qt;
-    sprintf(fname, argv[3], rhs);
+  // Now, we can apply the rules for each slice and each excluded label. We just need
+  // a boolean for each label as to whether it is excluded or not
+  vector< set<int> > sliceExcl(ns);
 
+  // Go over all the slices
+  for(int i = 0; i < ns; i++)
+    {
+    // Apply all the rules
+    for(list<Rule>::iterator it = rc.rules.begin(); it != rc.rules.end(); it++)
+      {
+      Rule rule = *it;
+      bool met = false;
+
+      // Normal exclusion rule?
+      if(rule.cls.size() && sliceCls[i].count(rule.cls))
+        {
+        met = true;
+        }
+
+      // Range rule
+      else if(rule.cls.size() == 0) 
+        {
+        // Check if we are above or equal to the lower bound
+        int lpos = rule.rl.end ? 0 : 
+          (rule.rl.pos == FIRST ? clsFirst[rule.rl.cls] : clsLast[rule.rl.cls]) + rule.rl.offset;
+
+        int upos = rule.ru.end ? ns : 
+          (rule.ru.pos == FIRST ? clsFirst[rule.ru.cls] : clsLast[rule.ru.cls]) + rule.ru.offset;
+
+        met = (i >= lpos) && (i <= upos);
+        }
+
+      if(met)
+        {
+        // Apply all of the rule exclusions to this slice
+        sliceExcl[i].insert(rule.rhs.begin(), rule.rhs.end());
+        }
+      }
+    }
+
+  // Print a map of slices and exclusions
+  printf("Slice Exclusions:\n");
+  for(LabelSetIter it = allex.begin(); it != allex.end(); it++)
+    {
+    printf("    %10d: |", *it);
+    for(int i = 0; i < ns; i++)
+      printf(sliceExcl[i].count(*it) ? "*" : " ");
+    printf("|\n");
+    }
+
+  // Generate an image for each of the exclusion classes
+  for(LabelSetIter it = allex.begin(); it!=allex.end(); ++it)
+    {
+    // Create the exclusion image
+    ImageType::Pointer exim = ImageType::New();
+    exim->CopyInformation(ref);
+    exim->SetRegions(ref->GetLargestPossibleRegion());
+    exim->Allocate();
+    exim->FillBuffer(0);
+
+    // Iterate over the exclusion image
+    for(itk::ImageRegionIteratorWithIndex<ImageType> qt(exim, exim->GetBufferedRegion());
+      !qt.IsAtEnd(); ++qt)
+      {
+      int s = (int) qt.GetIndex()[slice_dim];
+      qt.Set(sliceExcl[s].count(*it));
+      }
+
+    // Write the exclusion image
+    char fname[4096];
+    sprintf(fname, fnOutPattern.c_str(), *it);
     typedef itk::ImageFileWriter<ImageType> WriterType;
     WriterType::Pointer fWriter = WriterType::New();
-    fWriter->SetInput(pm[rhs]);
+    fWriter->SetInput(exim);
     fWriter->SetFileName(fname);
     fWriter->Update();
     }
