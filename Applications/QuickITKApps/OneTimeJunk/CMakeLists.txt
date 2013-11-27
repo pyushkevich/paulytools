@@ -1,6 +1,7 @@
 PROJECT(ONE_TIME_JUNK)
 
-ADD_EXECUTABLE(eraseme eraseme.cxx)
+ADD_EXECUTABLE(shrink_warp CompressWarp.cxx)
+ADD_EXECUTABLE(unshrink_warp UncompressWarp.cxx)
 ADD_EXECUTABLE(subfield_slice_rules SubfieldSliceRules.cxx)
 ADD_EXECUTABLE(ashs_affine_vol2slice ASHSAffineVolumeToSlice.cxx)
 ADD_EXECUTABLE(subfield_mask_slices SubfieldSliceMask.cxx)
@@ -24,7 +25,8 @@ SET(COMMON_LIBS
   ITKStatistics
   ITKVoxBoIO)
 
-TARGET_LINK_LIBRARIES(eraseme ${COMMON_LIBS})
+TARGET_LINK_LIBRARIES(shrink_warp ${COMMON_LIBS})
+TARGET_LINK_LIBRARIES(unshrink_warp ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(subfield_slice_rules ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(subfield_mask_slices ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(subfield_leveler ${COMMON_LIBS})
@@ -40,7 +42,7 @@ TARGET_LINK_LIBRARIES(pmatlas_ibn_origin_shift ${COMMON_LIBS})
 TARGET_LINK_LIBRARIES(ashs_affine_vol2slice ${COMMON_LIBS})
 
 INSTALL_TARGETS("/bin" 
-  convert3d coordinate_images randfx 
+  shrink_warp unshrink_warp convert3d coordinate_images randfx 
   tempfile maskmunge findpeaks
   overlaps pmatlas_ibn_origin_shift subfield_leveler subfield_mask_slices
   ashs_affine_vol2slice subfield_slice_rules)
