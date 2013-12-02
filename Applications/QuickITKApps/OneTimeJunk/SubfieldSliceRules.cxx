@@ -93,11 +93,25 @@ int usage()
     "The GROUP declaration states that a list of classes are exclusive, i.e., a slice\n"
     "can only belong to one of the classes in the group. There can be multiple groups\n"
     "\n"
-    "    GROUP class_names\n"
+    "    GROUP class_names [BACKGROUND fraction]\n"
     "\n"
-    "where class_names is a comma-separated list. Rules (see below) are automatically \n"
-    "generated for classes in a group\n"
-    "\n"                                                                            
+    "where class_names is a comma-separated list. Within each group, slices will be\n"
+    "assigned to one of the classes. However, putting classes in a group does\n"
+    "not automatically set up any exclusion rules -- these rules must be supplied\n"
+    "separately (see below).\n"
+    "\n"
+    "The optional BACKGROUND keyword followed by the fraction (between 0.0 and 1.0)\n"
+    "specified that some slices in the group may be assigned the special BACKGROUND\n"
+    "label if the number of foreground voxels in that slice is smaller than a certain\n"
+    "threshold. Foreground voxels are voxels assigned any of the classes in the group, \n"
+    "and the threshold is calculated as the fraction times the median number of foreground\n"
+    "voxels for the group (slices that have zero foreground voxels are not used in the\n"
+    "background calculation). \n"
+    "\n"
+    "Using the background keyword makes it possible to mask out slices where there are\n"
+    "very few straddler foreground voxels. This is useful when the manual segmentation is\n"
+    "restricted to somewhat arbitrary slice boundaries.\n"
+    "\n"
     "RULE declaration\n"
     "================\n"
     "\n"
@@ -130,7 +144,52 @@ int usage()
     "For example:\n"
     "\n"
     "    RANGE_RULE body:FIRST+1 TO body:LAST-1 EXCLUDES 9\n"
-    "    RANGE_RULE END TO body:LAST EXCLUDES 8\n");
+    "    RANGE_RULE END TO body:LAST EXCLUDES 8\n"
+    "\n"
+    "EXAMPLE OF EXCLUDING STRADDLERS\n"
+    "===============================\n"
+    "\n"
+    "This example rule file demonstrates how to 'clean up' straddler slices in the \n"
+    "extra-hippocampal structures.\n"
+    "\n"
+    "CLASS ehmtl 9,10,11,12\n"
+    "GROUP ehmtl BACKGROUND 0.25\n"
+    "RULE BACKGROUND excludes ehmtl\n"
+    "\n"
+    "A class for extrahippocampal structures is first established. Next, we specify that\n"
+    "a slice is classified as ehmtl only if there are more than 0.25 * N voxels in that\n"
+    "slice labeled as ehmtl, where N is the median number of ehmtl voxels per slice that\n"
+    "includes the ehmtl label. For instance, if there are eight slices and the number of\n"
+    "ehmtl voxels per slice are 0,0,10,100,120,95,20,0 then N=95, and the cutoff will be\n"
+    "0.25 * 95. The slices with 10 and 20 voxels will be marked as background. Last the\n"
+    "RULE specifies that any slice marked as background should exclude the ehmtl class.\n"
+    "\n"
+    "EXAMPLE OF A COMPLEX RULE FOR HEAD/BODY/TAIL SEGMENTATION\n"
+    "=========================================================\n"
+    "\n"
+    "# Three classes into which we partition the slices\n"
+    "CLASS body = 1,2,3,4\n"
+    "CLASS head = 5\n"
+    "CLASS tail = 6\n"
+    "CLASS sub = 8\n"
+    "CLASS ercp = 9\n"
+    "CLASS erca = 10\n"
+    "CLASS prc = 11,12\n"
+    "\n"
+    "# These classes form a single mutually exclusive group\n"
+    "GROUP body, head, tail\n"
+    "GROUP erca, ercp\n"
+    "\n"
+    "# Additional exclusion rules applied\n"
+    "RULE head EXCLUDES body tail\n"
+    "RULE body EXCLUDES head tail\n"
+    "RULE tail EXCLUDES head body\n"
+    "\n"
+    "# Additional range rules for ERC and PHG\n"
+    "RANGE_RULE END TO head:LAST-2 EXCLUDES ercp\n"
+    "RANGE_RULE head:LAST+2 TO END EXCLUDES erca,ercp,prc\n"
+    "RANGE_RULE head:LAST-1 TO head:LAST+1 EXCLUDES erca\n"
+    " \n");
 
   return -1;
 }
@@ -167,13 +226,22 @@ struct Rule
   RangeLimit rl, ru;
 };
 
+struct Group
+{
+  // List of classes 
+  ClassGroup clsgrp;
+
+  // Background level (for cutting off straddlers)
+  double bkg;
+};
+
 struct RuleCollection
 {
   // Set of classes in the rules
   ClassMap cls;
 
   // Set of groups formed by the classes
-  list<ClassGroup> grp;
+  list<Group> grp;
 
   // Set of rules
   list<Rule> rules;
@@ -279,6 +347,7 @@ RuleCollection parseRules(const char *rulesFile)
     RegularExpression reRule("^ *RULE +([a-zA-Z]+) +EXCLUDES +(.*) *$");
     RegularExpression reRange("^ *RANGE_RULE *([a-zA-Z0-9:\\+\\-]+) +TO +([a-zA-Z0-9:\\+\\-]+) +EXCLUDES +(.*)$");
     RegularExpression reGroup("^ *GROUP +(.*)$");
+    RegularExpression reGroupBkg("^ *GROUP +(.*) +BACKGROUND +(.*)$");
     
     // Check if this is a class line
     if(reClass.find(buffer))
@@ -295,6 +364,30 @@ RuleCollection parseRules(const char *rulesFile)
       rc.cls[clsName] = labels;
       }
 
+    else if(reGroupBkg.find(buffer))
+      {
+      // Get the names
+      list<string> classes = ReadCommaSeparatedList(reGroupBkg.match(1).c_str());
+      if(classes.size() == 0)
+        throw Exc("Bad class list specification %s", reGroupBkg.match(1).c_str());
+
+      // Get the background key
+      double background = atof(reGroupBkg.match(2).c_str());
+
+      // Store the group spec
+      Group grp;
+      grp.bkg = background;
+      for(list<string>::iterator it = classes.begin(); it!=classes.end();it++)
+        {
+        if(rc.cls.find(*it) == rc.cls.end())
+          throw Exc("Bad class specification %s in GROUP command %s", it->c_str(), buffer);
+        grp.clsgrp.insert(*it);
+        }
+
+
+      rc.grp.push_back(grp);
+      }
+
     // Check if this is a group line
     else if(reGroup.find(buffer))
       {
@@ -304,12 +397,13 @@ RuleCollection parseRules(const char *rulesFile)
         throw Exc("Bad class list specification %s", reGroup.match(1).c_str());
 
       // Store the group spec
-      ClassGroup grp;
+      Group grp;
+      grp.bkg = 0.0;
       for(list<string>::iterator it = classes.begin(); it!=classes.end();it++)
         {
         if(rc.cls.find(*it) == rc.cls.end())
           throw Exc("Bad class specification %s in GROUP command %s", it->c_str(), buffer);
-        grp.insert(*it);
+        grp.clsgrp.insert(*it);
         }
       rc.grp.push_back(grp);
       }
@@ -393,11 +487,12 @@ int main(int argc, char *argv[])
 
   printf("  [GROUPS]\n");
   int igrp = 0;
-  for(list<ClassGroup>::iterator it = rc.grp.begin(); it!=rc.grp.end(); it++)
+  for(list<Group>::iterator it = rc.grp.begin(); it!=rc.grp.end(); it++)
     {
     printf("  %10d   :", ++igrp);
-    for(ClassGroup::iterator itg = it->begin(); itg!=it->end();itg++)
+    for(ClassGroup::iterator itg = it->clsgrp.begin(); itg!=it->clsgrp.end();itg++)
       printf(" %s", itg->c_str());
+    printf(" BACKGROUND %f", it->bkg);
     printf("\n");
     }
 
@@ -492,15 +587,49 @@ int main(int argc, char *argv[])
   // We will compute the extent of each of the classes
   map<string, int> clsFirst, clsLast;
 
+  // For each group, we will compute the median number of voxels per slice
+  // assigned to that group. This is used for setting the background 
+  std::vector<int> grpMedVox;
+
+  for(list<Group>::iterator it = rc.grp.begin(); it != rc.grp.end(); it++)
+    {
+    std::vector<int> vox_count;
+    for(int i = 0; i < ns; i++)
+      {
+      int slice_vox_count = 0;
+
+      // Find the number of voxels in this slice that belong to one of the classes in the group
+      for(ClassGroup::iterator qt = it->clsgrp.begin(); qt != it->clsgrp.end(); qt++)
+        {
+        LabelSet clab = rc.cls[*qt];
+        for(LabelSetIter gt = clab.begin(); gt != clab.end(); gt++)
+          {
+          slice_vox_count += sliceHist[i][*gt];
+          }
+        }
+
+      // If this number is greater than zero, include it for median computation
+      if(slice_vox_count > 0)
+        vox_count.push_back(slice_vox_count);
+      }
+
+    // Find the median value
+    std::sort(vox_count.begin(), vox_count.end());
+    int median = vox_count[vox_count.size() / 2];
+    grpMedVox.push_back(median);
+    }
+
   // Within each group, within each slice, find the dominant class
   for(int i = 0; i < ns; i++)
     {
-    for(list<ClassGroup>::iterator it = rc.grp.begin(); it != rc.grp.end(); it++)
+    int igrp = 0;
+    for(list<Group>::iterator it = rc.grp.begin(); it != rc.grp.end(); it++, igrp++)
       {
+
       // Find the dominant class for this group in this slice
-      string bestClass = "";
-      int bestClassSize = 0;
-      for(ClassGroup::iterator qt = it->begin(); qt != it->end(); qt++)
+      string bestClass = "BACKGROUND";
+      int bestClassSize = (int) (grpMedVox[igrp] * it->bkg);
+      for(ClassGroup::iterator qt = it->clsgrp.begin(); qt != it->clsgrp.end(); qt++)
         {
         // Set of labels in that class
         LabelSet clab = rc.cls[*qt];
@@ -532,10 +661,10 @@ int main(int argc, char *argv[])
   // Print the classification for all the slices
   printf("Slice Classification:\n");
   igrp = 0;
-  for(list<ClassGroup>::iterator it = rc.grp.begin(); it != rc.grp.end(); it++)
+  for(list<Group>::iterator it = rc.grp.begin(); it != rc.grp.end(); it++)
     {
     printf("  Group %d\n", ++igrp);
-    for(ClassGroup::iterator qt = it->begin(); qt != it->end(); qt++)
+    for(ClassGroup::iterator qt = it->clsgrp.begin(); qt != it->clsgrp.end(); qt++)
       {
       printf("    %10s: |", qt->c_str());
       for(int i = 0; i < ns; i++)
