@@ -13,6 +13,8 @@
 #include <vtkPointData.h>
 #include <vtkCell.h>
 #include <vtkCellData.h>
+#include <vtkCleanPolyData.h>
+#include <vtkTriangleFilter.h>
 #include <itkImageFileReader.h>
 #include <itkLinearInterpolateImageFunction.h>
 //#include <itkOrientedRASImage.h>
@@ -60,6 +62,22 @@ int main(int argc, char **argv)
 
   // Read the mesh
   vtkPolyData *mesh = ReadVTKData(argv[1]);
+
+  // Clean the mesh
+  vtkTriangleFilter *triangulator = vtkTriangleFilter::New();
+  triangulator->SetInput(mesh);
+  triangulator->PassLinesOff();
+  triangulator->PassVertsOff();
+  triangulator->Update();
+  vtkCleanPolyData *cleaner = vtkCleanPolyData::New();
+  cleaner->SetInput(triangulator->GetOutput());
+  cleaner->Update();
+  vtkTriangleFilter *triangulator2 = vtkTriangleFilter::New();
+  triangulator2->SetInput(cleaner->GetOutput());
+  triangulator2->PassLinesOff();
+  triangulator2->PassVertsOff();
+  triangulator2->Update();
+  mesh = triangulator2->GetOutput();
 
   // Cast mesh into tetgen format
   // All indices start from 0.

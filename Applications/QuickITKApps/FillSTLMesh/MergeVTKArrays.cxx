@@ -11,6 +11,7 @@
 #include <vtkPointData.h>
 #include <vtkCellData.h>
 #include <vtkDataArray.h>
+#include <vtkFloatArray.h>
 
 using namespace std;
 using namespace vtksys;
@@ -20,15 +21,10 @@ int usage()
   cout <<
     "vtkmergearr: merge arrays across many VTK meshes\n"
     "usage:\n"
-    "  vtkmergearr ref.vtk out.vtk list_file
+    "  vtkmergearr ref.vtk out.vtk ArrayName [cell|point] mesh1.vtk mesh2.vtk ... meshN.vtk\n"
     "parameters:\n"
     "  ref.vtk  Mesh that will be used as reference. Must match all inputs\n"
-    "  out.vtk  Output filename\n"
-    "list_file format:\n"
-    "  filename.vtk source_array target_array [source_array target_array] ... \n"
-    "array specification format:\n"
-    "  
-      
+    "  out.vtk  Output filename\n";
   return -1;
 }
 
@@ -78,16 +74,6 @@ void WriteMesh<>(vtkPolyData *mesh, const char *fname)
   writer->Update();
 }
 
-struct MergeParms
-{
-  const char *target, *source, *output;
-  const char *target_arr, *source_arr;
-}
-
-template <class TMeshType>
-int MergeArrays
-
-
 template <class TMeshType>
 int MyMain(int argc, char *argv[])
 {
@@ -97,12 +83,9 @@ int MyMain(int argc, char *argv[])
   const char *fn_ref = argv[1];
   const char *fn_out = argv[2];
   const char *nm_array = argv[3];
-  const char *regex = argv[4];
+  const char *type = argv[4];
 
   size_t ifarg = 5;
-
-  // Set up the regular expression search
-  RegularExpression re(regex);
 
   // Array of vtk objects
   std::vector<TMeshType *> mesh;
@@ -110,37 +93,48 @@ int MyMain(int argc, char *argv[])
   // Read the reference object
   TMeshType *mref = ReadMesh<TMeshType>(fn_ref);
 
-  // Search all filenames
+  // Read each of the meshes
   for(size_t i = ifarg; i < argc; i++)
+    mesh.push_back(ReadMesh<TMeshType>(argv[i]));
+
+  // Find the reference array
+  vtkDataArray *arr0 = NULL;
+  if(strcmp(type,"cell")==0)
+    arr0 = mesh.front()->GetCellData()->GetArray(nm_array);
+  else if(strcmp(type,"point")==0)
+    arr0 = mesh.front()->GetPointData()->GetArray(nm_array);
+
+  std::cout << "Array " << arr0->GetName() << " with " << arr0->GetNumberOfTuples() << " tuples" << std::endl;
+
+  if(!arr0)
+    return usage();
+
+  // Create an output array in the object
+  vtkFloatArray *arr = vtkFloatArray::New();
+  arr->SetNumberOfComponents(mesh.size());
+  arr->SetNumberOfTuples(arr0->GetNumberOfTuples());
+  arr->SetName(arr0->GetName());
+
+  // Search all filenames
+  for(int i = 0; i < mesh.size(); i++)
+  {
+    vtkDataArray *arri = NULL;
+    if(strcmp(type,"cell")==0)
+      arri = mesh[i]->GetCellData()->GetArray(nm_array);
+    else if(strcmp(type,"point")==0)
+      arri = mesh[i]->GetPointData()->GetArray(nm_array);
+
+    for(int k = 0; k < arr0->GetNumberOfTuples(); k++)
     {
-    // Read the file as a mesh
-    TMeshType *m = ReadMesh<TMeshType>(argv[i]);
-    if(!m || m->GetNumberOfPoints() == 0)
-      cerr << "File " << argv[i] << " does not contain a valid mesh\n";
-   
-    // Process the regular expression
-    re.find(argv[i]);
-    printf("Matched %s in %s\n", re.match(1).c_str(), argv[i]);
-
-    // Get the array from the file
-    if(m->GetPointData()->HasArray(nm_array))
-      {
-      // Create the corresponding array in the reference mesh
-      vtkDataArray *arr = m->GetPointData()->GetArray(nm_array);
-      arr->SetName(re.match(1).c_str());
-      mref->GetPointData()->AddArray(arr);
-      }
-    if(m->GetCellData()->HasArray(nm_array))
-      {
-      // Create the corresponding array in the reference mesh
-      vtkDataArray *arr = m->GetCellData()->GetArray(nm_array);
-      arr->SetName(re.match(1).c_str());
-      mref->GetCellData()->AddArray(arr);
-      }
-
-    // Clear memory
-    m->Delete();
+    arr->SetComponent(k, i, arri->GetComponent(k, 0));
     }
+  }
+
+  // Attach the new array to the reference dataset
+  if(strcmp(type,"cell")==0)
+    mref->GetCellData()->AddArray(arr);
+  else if(strcmp(type,"point")==0)
+    mref->GetPointData()->AddArray(arr);
 
   // Save the reference mesh
   WriteMesh<TMeshType>(mref, fn_out);
